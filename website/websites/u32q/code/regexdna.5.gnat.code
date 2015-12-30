@@ -1,0 +1,550 @@
+<span class="slc">--  The Computer Language Benchmarks Game</span>
+<span class="slc">--  http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">--  Contributed by Jim Rogers</span>
+<span class="slc">--  Modified by Georg Bauhaus</span>
+<span class="slc">--  Updated by Georg Bauhaus in July 2012</span>
+<span class="slc">--</span>
+<span class="slc">--  Some ideas are from Fancois Fabien's program</span>
+<span class="slc">--  This version uses the GNAT Spitbol Pattern matching libraries</span>
+<span class="slc">--  rather than the more commonly used Unix-style regex libraries</span>
+
+<span class="kwa">with</span> GNAT.Spitbol.Patterns;     <span class="kwa">use</span> GNAT.Spitbol.Patterns,
+                                    GNAT.Spitbol;
+
+<span class="kwa">package</span> DNA <span class="kwa">is</span>
+
+   <span class="kwa">subtype</span> Variant_Index <span class="kwa">is</span> <span class="kwb">Positive</span> <span class="kwa">range</span> <span class="num">1</span> .. <span class="num">9</span>;
+   Variant_Labels : <span class="kwa">constant array</span> (Variant_Index) <span class="kwa">of</span> VString := (
+      V (<span class="str">&quot;agggtaaa|tttaccct&quot;</span>),
+      V (<span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>),
+      V (<span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>),
+      V (<span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>),
+      V (<span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>),
+      V (<span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>),
+      V (<span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>),
+      V (<span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>),
+      V (<span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>));
+
+   Variant_Patterns : <span class="kwa">constant array</span> (Variant_Index) <span class="kwa">of</span> Pattern :=
+     ( <span class="slc">--  corresponding alternations in SPITBOL notation</span>
+       <span class="num">1</span> =&gt; ((BreakX (<span class="str">&quot;a&quot;</span>) &amp; <span class="str">&quot;agggtaaa&quot;</span>) <span class="kwa">or</span>
+             (BreakX (<span class="str">&quot;t&quot;</span>) &amp; <span class="str">&quot;tttaccct&quot;</span>) <span class="kwa">or</span>
+             Cancel),
+       <span class="num">2</span> =&gt; ((BreakX (<span class="str">&quot;cgt&quot;</span>) &amp; Any (<span class="str">&quot;cgt&quot;</span>) &amp; <span class="str">&quot;gggtaaa&quot;</span>) <span class="kwa">or</span>
+             (BreakX (<span class="str">&quot;t&quot;</span>) &amp; <span class="str">&quot;tttaccc&quot;</span> &amp; Any (<span class="str">&quot;acg&quot;</span>)) <span class="kwa">or</span>
+             Cancel),
+       <span class="num">3</span> =&gt; ((BreakX (<span class="str">&quot;a&quot;</span>) &amp; <span class="str">&quot;a&quot;</span> &amp; Any (<span class="str">&quot;act&quot;</span>) &amp; <span class="str">&quot;ggtaaa&quot;</span>) <span class="kwa">or</span>
+             (BreakX (<span class="str">&quot;t&quot;</span>) &amp; <span class="str">&quot;tttacc&quot;</span> &amp; Any (<span class="str">&quot;agt&quot;</span>) &amp; <span class="str">&quot;t&quot;</span>) <span class="kwa">or</span>
+             Cancel),
+       <span class="num">4</span> =&gt; ((BreakX (<span class="str">&quot;a&quot;</span>) &amp; <span class="str">&quot;ag&quot;</span> &amp; Any (<span class="str">&quot;act&quot;</span>) &amp; <span class="str">&quot;gtaaa&quot;</span>) <span class="kwa">or</span>
+             (BreakX (<span class="str">&quot;t&quot;</span>) &amp; <span class="str">&quot;tttac&quot;</span> &amp; Any (<span class="str">&quot;agt&quot;</span>) &amp; <span class="str">&quot;ct&quot;</span>) <span class="kwa">or</span>
+             Cancel),
+       <span class="num">5</span> =&gt; ((BreakX (<span class="str">&quot;a&quot;</span>) &amp; <span class="str">&quot;agg&quot;</span> &amp; Any (<span class="str">&quot;act&quot;</span>) &amp; <span class="str">&quot;taaa&quot;</span>) <span class="kwa">or</span>
+             (BreakX (<span class="str">&quot;t&quot;</span>) &amp; <span class="str">&quot;ttta&quot;</span> &amp; Any (<span class="str">&quot;agt&quot;</span>) &amp; <span class="str">&quot;cct&quot;</span>) <span class="kwa">or</span>
+             Cancel),
+       <span class="num">6</span> =&gt; ((BreakX (<span class="str">&quot;a&quot;</span>) &amp; <span class="str">&quot;aggg&quot;</span> &amp; Any (<span class="str">&quot;acg&quot;</span>) &amp; <span class="str">&quot;aaa&quot;</span>) <span class="kwa">or</span>
+             (BreakX (<span class="str">&quot;t&quot;</span>) &amp; <span class="str">&quot;ttt&quot;</span> &amp; Any (<span class="str">&quot;cgt&quot;</span>) &amp; <span class="str">&quot;ccct&quot;</span>) <span class="kwa">or</span>
+             Cancel),
+       <span class="num">7</span> =&gt; ((BreakX (<span class="str">&quot;a&quot;</span>) &amp; <span class="str">&quot;agggt&quot;</span> &amp; Any (<span class="str">&quot;cgt&quot;</span>) &amp; <span class="str">&quot;aa&quot;</span>) <span class="kwa">or</span>
+             (BreakX (<span class="str">&quot;t&quot;</span>) &amp; <span class="str">&quot;tt&quot;</span> &amp; Any (<span class="str">&quot;acg&quot;</span>) &amp; <span class="str">&quot;accct&quot;</span>) <span class="kwa">or</span>
+             Cancel),
+       <span class="num">8</span> =&gt; ((BreakX (<span class="str">&quot;a&quot;</span>) &amp; <span class="str">&quot;agggta&quot;</span> &amp; Any (<span class="str">&quot;cgt&quot;</span>) &amp; <span class="str">&quot;a&quot;</span>) <span class="kwa">or</span>
+             (BreakX (<span class="str">&quot;t&quot;</span>) &amp; <span class="str">&quot;t&quot;</span> &amp; Any (<span class="str">&quot;acg&quot;</span>) &amp; <span class="str">&quot;taccct&quot;</span>) <span class="kwa">or</span>
+             Cancel),
+       <span class="num">9</span> =&gt; ((BreakX (<span class="str">&quot;a&quot;</span>) &amp; <span class="str">&quot;agggtaa&quot;</span> &amp; Any (<span class="str">&quot;cgt&quot;</span>)) <span class="kwa">or</span>
+             (BreakX (<span class="str">&quot;acg&quot;</span>) &amp; Any (<span class="str">&quot;acg&quot;</span>) &amp; <span class="str">&quot;ttaccct&quot;</span>) <span class="kwa">or</span>
+             Cancel));
+
+   <span class="kwa">type</span> Iub <span class="kwa">is</span>
+      <span class="kwa">record</span>
+         Code         : <span class="kwb">Character</span>;
+         Alternatives : VString;
+         Size         : <span class="kwb">Positive</span>;
+      <span class="kwa">end record</span>;
+
+   <span class="kwa">type</span> Codes_Index <span class="kwa">is</span>
+     (<span class="str">'B'</span>, <span class="str">'D'</span>, <span class="str">'H'</span>, <span class="str">'K'</span>, <span class="str">'M'</span>, <span class="str">'N'</span>, <span class="str">'R'</span>, <span class="str">'S'</span>, <span class="str">'V'</span>, <span class="str">'W'</span>, <span class="str">'Y'</span>);
+   <span class="kwa">for</span> Codes_Index<span class="kwd">'Size</span> <span class="kwa">use</span> <span class="kwb">Character</span><span class="kwd">'Size</span>;
+   <span class="kwa">for</span> Codes_Index <span class="kwa">use</span>
+     (<span class="kwb">Character</span><span class="kwd">'Pos</span> (<span class="str">'B'</span>),
+      <span class="kwb">Character</span><span class="kwd">'Pos</span> (<span class="str">'D'</span>),
+      <span class="kwb">Character</span><span class="kwd">'Pos</span> (<span class="str">'H'</span>),
+      <span class="kwb">Character</span><span class="kwd">'Pos</span> (<span class="str">'K'</span>),
+      <span class="kwb">Character</span><span class="kwd">'Pos</span> (<span class="str">'M'</span>),
+      <span class="kwb">Character</span><span class="kwd">'Pos</span> (<span class="str">'N'</span>),
+      <span class="kwb">Character</span><span class="kwd">'Pos</span> (<span class="str">'R'</span>),
+      <span class="kwb">Character</span><span class="kwd">'Pos</span> (<span class="str">'S'</span>),
+      <span class="kwb">Character</span><span class="kwd">'Pos</span> (<span class="str">'V'</span>),
+      <span class="kwb">Character</span><span class="kwd">'Pos</span> (<span class="str">'W'</span>),
+      <span class="kwb">Character</span><span class="kwd">'Pos</span> (<span class="str">'Y'</span>));
+   <span class="kwa">type</span> Codes_Array <span class="kwa">is array</span> (Codes_Index) <span class="kwa">of</span> Iub;
+   Codes : <span class="kwa">constant</span> Codes_Array := (
+      (<span class="str">'B'</span>, V (<span class="str">&quot;(c|g|t)&quot;</span>), <span class="num">7</span>),
+      (<span class="str">'D'</span>, V (<span class="str">&quot;(a|g|t)&quot;</span>), <span class="num">7</span>),
+      (<span class="str">'H'</span>, V (<span class="str">&quot;(a|c|t)&quot;</span>), <span class="num">7</span>),
+      (<span class="str">'K'</span>, V (<span class="str">&quot;(g|t)&quot;</span>), <span class="num">5</span>),
+      (<span class="str">'M'</span>, V (<span class="str">&quot;(a|c)&quot;</span>), <span class="num">5</span>),
+      (<span class="str">'N'</span>, V (<span class="str">&quot;(a|c|g|t)&quot;</span>), <span class="num">9</span>),
+      (<span class="str">'R'</span>, V (<span class="str">&quot;(a|g)&quot;</span>), <span class="num">5</span>),
+      (<span class="str">'S'</span>, V (<span class="str">&quot;(c|g)&quot;</span>), <span class="num">5</span>),
+      (<span class="str">'V'</span>, V (<span class="str">&quot;(a|c|g)&quot;</span>), <span class="num">7</span>),
+      (<span class="str">'W'</span>, V (<span class="str">&quot;(a|t)&quot;</span>), <span class="num">5</span>),
+      (<span class="str">'Y'</span>, V (<span class="str">&quot;(c|t)&quot;</span>), <span class="num">5</span>));
+
+<span class="kwa">end</span> DNA;
+
+<span class="kwa">with</span> Ada.Text_IO;          <span class="kwa">use</span> Ada.Text_IO;
+<span class="kwa">with</span> Ada.Integer_Text_IO;  <span class="kwa">use</span> Ada.Integer_Text_IO;
+<span class="kwa">with</span> Ada.Strings.Unbounded;
+<span class="kwa">with</span> GNAT.Spitbol;         <span class="kwa">use</span> GNAT.Spitbol;
+
+<span class="kwa">with</span> DNA.Aux;
+<span class="kwa">with</span> DNA.Matching;
+<span class="kwa">with</span> DNA.Replacing;        <span class="kwa">use</span> DNA;
+<span class="kwa">with</span> Block_Input;
+<span class="kwa">with</span> Preprocessing;        <span class="kwa">use</span> Preprocessing;
+
+<span class="kwa">procedure</span> Regexdna <span class="kwa">is</span>
+
+   <span class="kwa">package</span> U <span class="kwa">renames</span> Ada.Strings.Unbounded;
+
+   <span class="kwa">function</span> Length (Item : Aux.Lines) <span class="kwa">return</span> <span class="kwb">Natural</span>;
+   <span class="slc">--  length after replacements have been done</span>
+
+   Max_Size : <span class="kwa">constant</span> <span class="kwb">Positive</span> := <span class="num">51</span>_000_000;
+
+   Initial_Length : <span class="kwb">Natural</span> := <span class="num">0</span>;
+   Code_Length : <span class="kwb">Natural</span>;
+   Num_Lines : <span class="kwb">Natural</span>;
+   Input_Text : String_Access;
+   Sequence : String_Access;
+
+   <span class="kwa">function</span> Length (Item : Aux.Lines) <span class="kwa">return</span> <span class="kwb">Natural</span> <span class="kwa">is</span>
+      Sum : <span class="kwb">Natural</span> := <span class="num">0</span>;
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> I <span class="kwa">in</span> Item<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         Sum := Sum + Item (I).Last;
+      <span class="kwa">end loop</span>;
+      <span class="kwa">return</span> Sum;
+   <span class="kwa">end</span> Length;
+
+<span class="kwa">begin</span>  <span class="slc">-- Regexdna</span>
+   Input_Text := <span class="kwa">new</span> <span class="kwb">String</span> (<span class="num">1</span> .. Max_Size);
+
+   <span class="slc">--  Read FASTA Sequence</span>
+   Block_Input.Open_Stdin;
+   Block_Input.Read (Input_Text.<span class="kwa">all</span>, Last =&gt; Initial_Length);
+   Block_Input.Close_Stdin;
+
+   Sequence := <span class="kwa">new</span> <span class="kwb">String</span> (<span class="num">1</span> .. Initial_Length);
+
+   <span class="slc">--  remove unwanted elements</span>
+   Removal.Run (Raw =&gt; Aux.Read_Only_String (Input_Text),
+                Clean =&gt; Sequence,
+                Last =&gt; Initial_Length);
+   Removal.Done (Last =&gt; Code_Length);
+
+   U.Free (Input_Text);
+
+   Matching_Part :
+   <span class="kwa">declare</span>
+      Worker : <span class="kwa">array</span> (Variant_Index) <span class="kwa">of</span> Matching.Service
+        (Sequence =&gt; Aux.Read_Only_String (Sequence));
+      Count  : <span class="kwb">Natural</span>;
+   <span class="kwa">begin</span>
+      <span class="slc">--  assign tasks</span>
+      <span class="kwa">for</span> Variant <span class="kwa">in</span> Variant_Index <span class="kwa">loop</span>
+         Worker (Variant).Match_Variant (Variant);
+      <span class="kwa">end loop</span>;
+
+      <span class="slc">--  print counts for patterns</span>
+      <span class="kwa">for</span> Variant <span class="kwa">in</span> Variant_Index <span class="kwa">loop</span>
+         Worker (Variant).Done (Count);
+         Put (S (Variant_Labels (Variant)) &amp; <span class="str">&quot; &quot;</span>);
+         Put (Item =&gt; Count, Width =&gt; <span class="num">1</span>);
+         New_Line;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Matching_Part;
+
+   <span class="slc">--  regex substitution</span>
+
+   Num_Lines := Code_Length / Aux.Split_Length;
+   <span class="kwa">if</span> Code_Length <span class="kwa">mod</span> Aux.Split_Length &gt; <span class="num">1</span> <span class="kwa">then</span>
+      Num_Lines := Num_Lines + <span class="num">1</span>;
+   <span class="kwa">end if</span>;
+
+   Replacing_Part :
+   <span class="kwa">declare</span>
+      Number_Of_Cores : <span class="kwa">constant</span> <span class="kwb">Positive</span> := Replacing.Number_Of_Tasks;
+      <span class="kwa">type</span> Sequence_Lines_Access <span class="kwa">is access</span> Aux.Lines;
+      Sequence_Lines_Pointer : <span class="kwa">constant</span> Sequence_Lines_Access :=
+        <span class="kwa">new</span> Aux.Lines (<span class="num">1</span> .. Num_Lines);
+      Sequence_Lines : Aux.Lines <span class="kwa">renames</span> Sequence_Lines_Pointer.<span class="kwa">all</span>;
+      Worker : <span class="kwa">array</span> (<span class="num">1</span> .. Number_Of_Cores) <span class="kwa">of</span> Replacing.Service
+        (Sequence_Lines =&gt; Sequence_Lines_Pointer);
+
+      <span class="kwa">procedure</span> Distribute_Sequence;
+      <span class="slc">--  places subsequences for Worker tasks in Sequence_Lines</span>
+
+      <span class="kwa">procedure</span> Distribute_Sequence <span class="kwa">is</span>
+         Low, Sub_Len : <span class="kwb">Natural</span>;
+      <span class="kwa">begin</span>
+         Low := <span class="num">1</span>;
+         Sub_Len := Aux.Split_Length;
+         <span class="kwa">for</span> I <span class="kwa">in</span> Sequence_Lines<span class="kwd">'Range</span> <span class="kwa">loop</span>
+            <span class="kwa">declare</span>
+               S : Aux.String_Pointer <span class="kwa">renames</span> Sequence_Lines (I);
+            <span class="kwa">begin</span>
+               <span class="kwa">if</span> Low + Sub_Len &gt; Code_Length <span class="kwa">then</span>
+                  Sub_Len := Code_Length - Low + <span class="num">1</span>;
+               <span class="kwa">end if</span>;
+               S.Data (<span class="num">1</span> .. Sub_Len) := Sequence (Low .. Low + Sub_Len - <span class="num">1</span>);
+               S.Last := Sub_Len;
+               Low := Low + Sub_Len;
+            <span class="kwa">end</span>;
+         <span class="kwa">end loop</span>;
+         U.Free (Sequence);
+      <span class="kwa">end</span> Distribute_Sequence;
+
+   <span class="kwa">begin</span>
+      Distribute_Sequence;
+
+      <span class="slc">--  assign tasks</span>
+      <span class="kwa">for</span> X <span class="kwa">in</span> Worker<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         Worker (X).Replace
+           (First =&gt; X,
+            Step =&gt; Worker<span class="kwd">'Length</span>);
+      <span class="kwa">end loop</span>;
+
+      <span class="slc">--  wait for results and report</span>
+      <span class="kwa">for</span> X <span class="kwa">in</span> Worker<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         Worker (X).Done;
+      <span class="kwa">end loop</span>;
+      New_Line;
+      Put (Item =&gt; Initial_Length, Width =&gt; <span class="num">1</span>);
+      New_Line;
+      Put (Item =&gt; Code_Length, Width =&gt; <span class="num">1</span>);
+      New_Line;
+      Put (Item =&gt; Length (Sequence_Lines), Width =&gt; <span class="num">1</span>);
+      New_Line;
+   <span class="kwa">end</span> Replacing_Part;
+
+<span class="kwa">end</span> Regexdna;
+
+<span class="kwa">package</span> DNA.Aux <span class="kwa">is</span>
+
+   <span class="kwa">type</span> Read_Only_String <span class="kwa">is access constant</span> <span class="kwb">String</span>;
+
+   Split_Length : <span class="kwa">constant</span> := <span class="num">40000</span>;
+   Max_Length : <span class="kwa">constant</span> := <span class="num">2</span> * Split_Length + Split_Length / <span class="num">2</span>;
+
+   <span class="kwa">type</span> String_Pointer <span class="kwa">is limited</span>
+     <span class="kwa">record</span>
+        Data : <span class="kwb">String</span> (<span class="num">1</span> .. Max_Length);
+        Last : <span class="kwb">Natural</span> := <span class="num">0</span>;
+     <span class="kwa">end record</span>;
+
+   <span class="kwa">type</span> Lines <span class="kwa">is array</span> (<span class="kwb">Positive</span> <span class="kwa">range</span> &lt;&gt;) <span class="kwa">of</span> String_Pointer;
+
+<span class="kwa">end</span> DNA.Aux;
+
+<span class="kwa">with</span> Ada.Strings.Unbounded;
+<span class="kwa">with</span> DNA.Aux;
+<span class="kwa">package</span> Preprocessing <span class="kwa">is</span>
+
+   <span class="slc">--  removal of line feeds and FASTA sequence descriptions</span>
+
+   <span class="kwa">subtype</span> String_Access <span class="kwa">is</span> Ada.Strings.Unbounded.String_Access;
+
+   Separator  : <span class="kwa">constant</span> <span class="kwb">String</span> := (<span class="num">1</span> =&gt; ASCII.LF);
+
+   <span class="kwa">task</span> Removal <span class="kwa">is</span>
+      <span class="kwa">pragma</span> Storage_Size (<span class="num">2</span>**<span class="num">16</span>);
+      <span class="kwa">entry</span> Run (Raw   : DNA.Aux.Read_Only_String;
+                 Clean : String_Access;
+                 Last  : <span class="kwb">Natural</span>);
+      <span class="kwa">entry</span> Done (Last : <span class="kwa">out</span> <span class="kwb">Natural</span>);
+      <span class="slc">--  number of characters after removal</span>
+   <span class="kwa">end</span> Removal;
+
+<span class="kwa">end</span> Preprocessing;
+
+<span class="kwa">with</span> GNAT.Spitbol.Patterns;    <span class="kwa">use</span> GNAT.Spitbol.Patterns;
+
+<span class="kwa">package body</span> Preprocessing <span class="kwa">is</span>
+
+   <span class="kwa">task body</span> Removal <span class="kwa">is</span>
+
+      <span class="kwa">function</span> Transfer <span class="kwa">return</span> <span class="kwb">Boolean</span>;
+      <span class="slc">--  transfers &quot;good&quot; substrings to the resulting sequence</span>
+
+      Input_Text : DNA.Aux.Read_Only_String;
+      Sequence   : String_Access;
+      Start, Stop : <span class="kwa">aliased</span> <span class="kwb">Natural</span> := <span class="num">0</span>;
+      Last : <span class="kwb">Natural</span> := <span class="num">0</span>;
+      Tail : <span class="kwb">Natural</span> := <span class="num">0</span>;
+      <span class="slc">--  Tail is also the value for Removal.Done.Last</span>
+      Limit : <span class="kwb">Natural</span>;
+
+      <span class="kwa">function</span> Transfer <span class="kwa">return</span> <span class="kwb">Boolean</span> <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         <span class="kwa">if</span> Start &gt; Last <span class="kwa">then</span>
+            Sequence (Tail + <span class="num">1</span> ..
+                      Tail + <span class="num">1</span> + (Start - Last) - <span class="num">1</span>) :=
+              Input_Text (Last + <span class="num">1</span> .. Start);
+            Tail := Tail + (Start - Last);
+         <span class="kwa">end if</span>;
+         Last := Stop;
+         <span class="kwa">return</span> Stop &gt;= Limit;
+      <span class="kwa">end</span> Transfer;
+
+      Unwanted : <span class="kwa">constant</span> Pattern :=
+        Setcur (Start<span class="kwd">'Access</span>)
+        &amp; ((<span class="str">'&gt;'</span> &amp; Break (Separator)) <span class="kwa">or</span> Separator)
+        &amp; Setcur (Stop<span class="kwd">'Access</span>)
+        &amp; (+Transfer<span class="kwd">'Unrestricted_Access</span>);
+
+   <span class="kwa">begin</span>
+      <span class="kwa">accept</span> Run
+        (Raw   : DNA.Aux.Read_Only_String;
+         Clean : String_Access;
+         Last  : <span class="kwb">Natural</span>)
+      <span class="kwa">do</span>
+         Input_Text := Raw;
+         Sequence := Clean;
+         Limit := Last;
+      <span class="kwa">end</span> Run;
+
+      Match (Subject =&gt; Input_Text (<span class="num">1</span> .. Limit),
+             Pat =&gt; Unwanted);
+
+      <span class="kwa">accept</span> Done (Last : <span class="kwa">out</span> <span class="kwb">Natural</span>) <span class="kwa">do</span>
+         Last := Tail;
+      <span class="kwa">end</span> Done;
+   <span class="kwa">end</span> Removal;
+
+<span class="kwa">end</span> Preprocessing;
+
+<span class="kwa">with</span> DNA.Aux;
+
+<span class="kwa">package</span> DNA.Matching <span class="kwa">is</span>
+
+   <span class="kwa">task type</span> Service (Sequence : Aux.Read_Only_String) <span class="kwa">is</span>
+      <span class="slc">--  perform matching one pattern concurrently</span>
+
+      <span class="kwa">entry</span> Match_Variant (Variant : Variant_Index);
+      <span class="kwa">entry</span> Done (Count : <span class="kwa">out</span> <span class="kwb">Natural</span>);
+   <span class="kwa">end</span> Service;
+
+<span class="kwa">end</span> DNA.Matching;
+
+<span class="kwa">package body</span> DNA.Matching <span class="kwa">is</span>
+
+   <span class="kwa">task body</span> Service <span class="kwa">is</span>
+
+      <span class="kwa">function</span> Inc_Count <span class="kwa">return</span> <span class="kwb">Boolean</span>;
+      <span class="slc">--  count another occurrence of a pattern</span>
+
+      Count : <span class="kwb">Natural</span>;
+
+      <span class="kwa">function</span> Inc_Count <span class="kwa">return</span> <span class="kwb">Boolean</span> <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Count := Count + <span class="num">1</span>;
+         <span class="kwa">return</span> <span class="kwd">False</span>;
+      <span class="kwa">end</span> Inc_Count;
+
+      Variant : Variant_Index;
+
+   <span class="kwa">begin</span>  <span class="slc">--  Service</span>
+      <span class="kwa">accept</span> Match_Variant (Variant : Variant_Index) <span class="kwa">do</span>
+         Service.Variant := Variant;
+      <span class="kwa">end</span> Match_Variant;
+
+      Count := <span class="num">0</span>;
+      Match (Subject =&gt; Sequence.<span class="kwa">all</span>,
+             Pat =&gt; (Variant_Patterns (Variant)
+                     &amp; (+Inc_Count<span class="kwd">'Unrestricted_Access</span>)));
+
+      <span class="kwa">accept</span> Done (Count : <span class="kwa">out</span> <span class="kwb">Natural</span>) <span class="kwa">do</span>
+         Done.Count := Service.Count;
+      <span class="kwa">end</span> Done;
+   <span class="kwa">end</span> Service;
+
+<span class="kwa">end</span> DNA.Matching;
+
+<span class="kwa">with</span> DNA.Aux;
+<span class="kwa">package</span> DNA.Replacing <span class="kwa">is</span>
+
+   <span class="kwa">task type</span> Service (Sequence_Lines : <span class="kwa">access</span> Aux.Lines) <span class="kwa">is</span>
+      <span class="slc">--  replace in one bunch of lines</span>
+
+      <span class="kwa">entry</span> Replace (First, Step : <span class="kwb">Positive</span>);
+      <span class="kwa">entry</span> Done;
+   <span class="kwa">end</span> Service;
+
+   Number_Of_Tasks : <span class="kwa">constant</span> := <span class="num">4</span>;
+
+<span class="kwa">end</span> DNA.Replacing;
+
+<span class="kwa">with</span> Ada.Strings.Unbounded;
+<span class="kwa">with</span> Ada.Unchecked_Conversion;
+
+<span class="kwa">package body</span> DNA.Replacing <span class="kwa">is</span>
+
+   <span class="kwa">function</span> To_Code <span class="kwa">is new</span> Ada.Unchecked_Conversion
+     (Source =&gt; <span class="kwb">Character</span>,
+      Target =&gt; Codes_Index);
+
+   <span class="kwa">function</span> Code_Set <span class="kwa">return</span> <span class="kwb">String</span>;
+   <span class="slc">--  &quot;BDHKMNRSVWY&quot;, made from the actual Codes table</span>
+
+   <span class="kwa">function</span> Code_Set <span class="kwa">return</span> <span class="kwb">String</span> <span class="kwa">is</span>
+      Result : <span class="kwb">String</span> (<span class="num">1</span> .. Codes_Index<span class="kwd">'Pos</span> (Codes<span class="kwd">'Last</span>) + <span class="num">1</span>);
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> C <span class="kwa">in</span> Codes<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         Result (Codes_Index<span class="kwd">'Pos</span> (C) + <span class="num">1</span>) := Codes (C).Code;
+      <span class="kwa">end loop</span>;
+      <span class="kwa">return</span> Result;
+   <span class="kwa">end</span> Code_Set;
+
+   <span class="kwa">task body</span> Service <span class="kwa">is</span>
+
+      <span class="kwa">function</span> Next_Replacement <span class="kwa">return</span> <span class="kwb">Boolean</span>;
+      <span class="slc">--  transfers the replacement text for the next match</span>
+
+      <span class="kwa">function</span> Final_Replacement <span class="kwa">return</span> <span class="kwb">Boolean</span>;
+      <span class="slc">--  transfers remaining text after the last match</span>
+
+      <span class="kwa">use</span> Ada.Strings.Unbounded;
+
+      Tail        : <span class="kwb">Positive</span>;
+      Start, Stop : <span class="kwa">aliased</span> <span class="kwb">Natural</span>;
+      Substitute  : <span class="kwa">constant</span> String_Access := <span class="kwa">new</span> <span class="kwb">String</span> (<span class="num">1</span> .. Aux.Max_Length);
+      I : <span class="kwb">Positive</span>;
+      First, Step : <span class="kwb">Positive</span>;
+
+      <span class="kwa">function</span> Next_Replacement <span class="kwa">return</span> <span class="kwb">Boolean</span>
+      <span class="kwa">is</span>
+         C : <span class="kwa">constant</span> Codes_Index := To_Code (Sequence_Lines (I).Data (Stop));
+         L : <span class="kwa">constant</span> <span class="kwb">Positive</span> := Codes (C).Size;
+      <span class="kwa">begin</span>
+         Substitute (Tail .. Tail + (Stop - <span class="num">1</span> - Start) - <span class="num">1</span>) :=
+           Sequence_Lines (I).Data (Start + <span class="num">1</span> .. Stop - <span class="num">1</span>);
+         Tail  := Tail + (Stop - <span class="num">1</span> - Start);
+
+         Substitute (Tail .. Tail + L - <span class="num">1</span>) := S (Codes (C).Alternatives);
+         Tail  := Tail + L;
+         Start := Stop;
+
+         <span class="kwa">return</span> <span class="kwd">False</span>;
+      <span class="kwa">end</span> Next_Replacement;
+
+      <span class="kwa">function</span> Final_Replacement <span class="kwa">return</span> <span class="kwb">Boolean</span> <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Substitute (Tail .. Tail + (Stop - Start) - <span class="num">1</span>) :=
+           Sequence_Lines (I).Data (Start + <span class="num">1</span> .. Stop);
+         Tail := Tail + (Stop - Start);
+         <span class="kwa">return</span> <span class="kwd">True</span>;
+      <span class="kwa">end</span> Final_Replacement;
+
+      Suffix : <span class="kwa">constant</span> Pattern :=
+        Rest
+        &amp; Setcur (Stop<span class="kwd">'Access</span>)
+        &amp; (+Final_Replacement<span class="kwd">'Unrestricted_Access</span>);
+
+      Code : <span class="kwa">constant</span> Pattern :=
+        (BreakX (Code_Set)
+         &amp; Len (<span class="num">1</span>)
+         &amp; Setcur (Stop<span class="kwd">'Access</span>)
+         &amp; (+Next_Replacement<span class="kwd">'Unrestricted_Access</span>)) <span class="kwa">or</span> (Suffix &amp; Cancel);
+
+   <span class="kwa">begin</span>  <span class="slc">-- Service</span>
+      <span class="kwa">accept</span> Replace (First, Step : <span class="kwb">Positive</span>) <span class="kwa">do</span>
+         Service.First := First;
+         Service.Step := Step;
+      <span class="kwa">end</span> Replace;
+
+      I := First;
+      <span class="kwa">while</span> I &lt;= Sequence_Lines<span class="kwd">'Last</span> <span class="kwa">loop</span>
+         <span class="kwa">declare</span>
+            S : Aux.String_Pointer <span class="kwa">renames</span> Sequence_Lines (I);
+         <span class="kwa">begin</span>
+            Tail := Substitute<span class="kwd">'First</span>;
+            Start := <span class="num">0</span>;
+            Stop := <span class="num">0</span>;
+            Match (Subject =&gt; S.Data (<span class="num">1</span> .. S.Last), Pat =&gt; Code);
+            S.Data (<span class="num">1</span> .. Tail - <span class="num">1</span>) := Substitute (<span class="num">1</span> .. Tail - <span class="num">1</span>);
+            S.Last := Tail - <span class="num">1</span>;
+            I := I + Step;
+         <span class="kwa">end</span>;
+      <span class="kwa">end loop</span>;
+
+      <span class="kwa">accept</span> Done;
+   <span class="kwa">end</span> Service;
+
+<span class="kwa">end</span> DNA.Replacing;
+
+<span class="kwa">package</span> Block_Input <span class="kwa">is</span>
+
+   <span class="kwa">procedure</span> Read (Item : <span class="kwa">in out</span> <span class="kwb">String</span>; Last : <span class="kwa">out</span> <span class="kwb">Natural</span>);
+
+   <span class="kwa">procedure</span> Open_Stdin;
+
+   <span class="kwa">procedure</span> Close_Stdin;
+
+   <span class="kwa">pragma</span> Inline (Read);
+
+<span class="kwa">end</span> Block_Input;
+
+<span class="kwa">with</span> Ada.Streams.Stream_IO;
+<span class="kwa">with</span> Unchecked_Conversion;
+
+<span class="kwa">package body</span> Block_Input <span class="kwa">is</span>
+
+   <span class="kwa">use</span> Ada.Streams;
+
+   Stdin : Stream_IO.File_Type;
+
+   <span class="kwa">procedure</span> Read (Item : <span class="kwa">in out</span> <span class="kwb">String</span>; Last : <span class="kwa">out</span> <span class="kwb">Natural</span>) <span class="kwa">is</span>
+
+      Block_Size : <span class="kwa">constant</span> := <span class="num">16</span> * <span class="num">1024</span>;
+
+      <span class="kwa">subtype</span> Index <span class="kwa">is</span> Stream_Element_Offset <span class="kwa">range</span>
+        Stream_Element_Offset (<span class="num">1</span>) .. Stream_Element_Offset (Block_Size);
+      <span class="kwa">subtype</span> XString <span class="kwa">is</span> <span class="kwb">String</span> (<span class="num">1</span> .. Block_Size);
+      <span class="kwa">subtype</span> XBytes <span class="kwa">is</span> Stream_Element_Array (Index);
+      <span class="kwa">function</span> To_String <span class="kwa">is new</span> Unchecked_Conversion (
+                                                      Source =&gt; XBytes,
+                                                      Target =&gt; XString);
+
+      One_Block : XBytes;
+      Str_Block : XString;
+      Final     : Stream_Element_Offset;
+      Start     : <span class="kwb">Natural</span> := Item<span class="kwd">'First</span>;
+      Stop      : <span class="kwb">Natural</span> := <span class="num">0</span>;
+   <span class="kwa">begin</span>
+      <span class="kwa">while not</span> Stream_IO.End_Of_File (Stdin) <span class="kwa">loop</span>
+         Stream_IO.Read (Stdin, One_Block, Final);
+         Str_Block            := To_String (One_Block);
+         Stop                 := Start + <span class="kwb">Natural</span> (Final) - <span class="num">1</span>;
+         Item (Start .. Stop) := Str_Block (<span class="num">1</span> .. <span class="kwb">Natural</span> (Final));
+         Start                := Stop + <span class="num">1</span>;
+      <span class="kwa">end loop</span>;
+      Last := Stop;
+   <span class="kwa">end</span> Read;
+
+   <span class="kwa">procedure</span> Open_Stdin <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      Stream_IO.Open
+        (File =&gt; Stdin,
+         Mode =&gt; Stream_IO.In_File,
+         Name =&gt; <span class="str">&quot;/dev/stdin&quot;</span>);
+   <span class="kwa">end</span> Open_Stdin;
+
+   <span class="kwa">procedure</span> Close_Stdin <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      Stream_IO.Close (Stdin);
+   <span class="kwa">end</span> Close_Stdin;
+
+<span class="kwa">end</span> Block_Input;

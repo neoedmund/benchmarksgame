@@ -1,0 +1,75 @@
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;; Michael Weber 2006-07-18</span>
+<span class="slc">;;; Changes by Stefan Lang 2007-02-08</span>
+
+(<span class="kwa">defconstant</span> +buffer-size+ (<span class="kwa">expt</span> <span class="num">2 15</span>))
+(<span class="kwa">defconstant</span> +newline+ (<span class="kwa">char-code</span> #\Newline))
+(<span class="kwa">defconstant</span> +ub+ '(<span class="kwa">unsigned-byte</span> <span class="num">8</span>))
+
+(<span class="kwa">defconstant</span> +lut+
+  (<span class="kwa">let</span> ((<span class="kwa">lut</span> (<span class="kwa">make-array</span> <span class="num">256</span> :element-type +ub+)))
+    (<span class="kwa">loop</span> for a across <span class="str">&quot;wsatugcyrkmbdhvnWSATUGCYRKMBDHVN&quot;</span>
+          for b across <span class="str">&quot;WSTAACGRYMKVHDBNWSTAACGRYMKVHDBN&quot;</span>
+          do (<span class="kwa">setf</span> (<span class="kwa">aref</span> lut (<span class="kwa">char-code</span> a)) (<span class="kwa">char-code</span> b)))
+    lut))
+
+(<span class="kwa">defun</span> slice (<span class="kwa">array</span> start end)
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>))
+           ((<span class="kwa">simple-array</span> #.+ub+) array)
+           (<span class="kwa">fixnum</span> start end))
+  (<span class="kwa">let</span> ((<span class="kwa">res</span> (<span class="kwa">make-array</span> (<span class="kwa">-</span> end start) :element-type +ub+)))
+    (<span class="kwa">loop</span> for i from start below end
+          for j from <span class="num">0</span>
+          do (<span class="kwa">setf</span> (<span class="kwa">aref</span> res j) (<span class="kwa">aref</span> array i)))
+    res))
+
+(<span class="kwa">defun</span> main ()
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>)))
+  (<span class="kwa">with-open-file</span> (<span class="kwa">in</span> <span class="str">&quot;/dev/stdin&quot;</span> :element-type +ub+)
+    (<span class="kwa">with-open-file</span> (<span class="kwa">out</span> <span class="str">&quot;/dev/stdout&quot;</span> :element-type +ub+ :direction :output :if-exists :append)
+      (<span class="kwa">let</span> ((<span class="kwa">i-buf</span> (<span class="kwa">make-array</span> +buffer-size+ :element-type +ub+))
+            (<span class="kwa">o-buf</span> (<span class="kwa">make-array</span> +buffer-size+ :element-type +ub+))
+            (<span class="kwa">chunks</span> nil))
+        (<span class="kwa">declare</span> (<span class="kwa">list</span> chunks))
+        (<span class="kwa">flet</span> ((<span class="kwa">flush-chunks</span> ()
+                 (<span class="kwa">let</span> ((<span class="kwa">j</span> <span class="num">0</span>) (<span class="kwa">k</span> <span class="num">0</span>))
+                   (<span class="kwa">declare</span> (<span class="kwa">fixnum</span> j k))
+                   <span class="slc">;; reverse, complement, filter out old newlines, put newlines back in after 60 chars,</span>
+                   <span class="slc">;; buffer output, and write buffers.  all in one go :(</span>
+                   (<span class="kwa">loop</span> for chunk in chunks
+                         do (<span class="kwa">loop</span> for i from (<span class="kwa">1-</span> (<span class="kwa">length</span> (<span class="kwa">the</span> (<span class="kwa">simple-array</span> #.+ub+) chunk))) downto <span class="num">0</span>
+                                  for byte = (<span class="kwa">aref</span> chunk i)
+                                  unless (= byte +newline+)
+				  do (<span class="kwa">setf</span> (<span class="kwa">aref</span> o-buf k) (<span class="kwa">aref</span> +lut+ byte) j (<span class="kwa">1</span>+ j) k (<span class="kwa">1</span>+ k))
+                                  if (= j <span class="num">60</span>) do (<span class="kwa">setf</span> (<span class="kwa">aref</span> o-buf k) +newline+ j <span class="num">0</span> k (<span class="kwa">1</span>+ k))
+                                  if (&gt; k (<span class="kwa">-</span> +buffer-size+ <span class="num">2</span>)) do (<span class="kwa">write-sequence</span> o-buf out :end (<span class="kwa">shiftf</span> k <span class="num">0</span>)))
+                         finally (<span class="kwa">when</span> (<span class="kwa">plusp</span> k)
+                                   (<span class="kwa">write-sequence</span> o-buf out :end k))
+                                 (<span class="kwa">when</span> (<span class="kwa">plusp</span> j)
+                                   (<span class="kwa">write-byte</span> +newline+ out)))
+                   (<span class="kwa">setf</span> chunks nil))))
+          (<span class="kwa">prog</span> ((<span class="kwa">start</span> <span class="num">0</span>) (<span class="kwa">end</span> <span class="num">0</span>))
+           read-chunk
+             (<span class="kwa">setf</span> end (<span class="kwa">read-sequence</span> i-buf in))
+             (<span class="kwa">when</span> (<span class="kwa">zerop</span> end) (<span class="kwa">go</span> end-of-input))
+           parse-chunk
+             (<span class="kwa">let</span> ((<span class="kwa">bod</span> (<span class="kwa">position</span> #.(<span class="kwa">char-code</span> #\&gt;) i-buf :start start :end end)))
+               (<span class="kwa">cond</span> ((<span class="kwa">numberp</span> bod)
+                      (<span class="kwa">push</span> (<span class="kwa">slice</span> i-buf start bod) chunks)
+                      (<span class="kwa">setf</span> start bod)
+                      (<span class="kwa">flush-chunks</span>)
+                      <span class="slc">;; parse description</span>
+                      (<span class="kwa">loop</span> for eod = (<span class="kwa">position</span> +newline+ i-buf :start start :end end)
+                            do (<span class="kwa">cond</span> ((<span class="kwa">numberp</span> eod)
+                                      (<span class="kwa">write-sequence</span> i-buf out :start start :end (<span class="kwa">incf</span> eod))
+                                      (<span class="kwa">setf</span> start eod)
+                                      (<span class="kwa">go</span> parse-chunk))
+                                     (<span class="kwa">t</span> (<span class="kwa">write-sequence</span> i-buf out :start start :end end)
+                                        (<span class="kwa">setf</span> start <span class="num">0</span>)
+                                        (<span class="kwa">setf</span> end (<span class="kwa">read-sequence</span> i-buf in))))))
+                     (<span class="kwa">t</span> (<span class="kwa">push</span> (<span class="kwa">slice</span> i-buf start end) chunks)
+                        (<span class="kwa">setf</span> start <span class="num">0</span>)
+                        (<span class="kwa">go</span> read-chunk))))
+           end-of-input
+             (<span class="kwa">flush-chunks</span>)))))))

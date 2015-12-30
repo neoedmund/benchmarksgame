@@ -1,0 +1,96 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by The Go Authors.</span>
+<span class="com"> * modified by Tylor Arndt.</span>
+<span class="com"> * modified by Chandra Sekar S to use optimized PCRE binding.</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;io/ioutil&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+
+   <span class="str">&quot;github.com/tuxychandru/golang-pkg-pcre/src/pkg/pcre&quot;</span>
+)
+
+<span class="kwa">var</span> variants = []<span class="kwb">string</span>{
+   <span class="str">&quot;agggtaaa|tttaccct&quot;</span>,
+   <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+   <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+   <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+   <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+   <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+   <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+   <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+   <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>,
+}
+
+<span class="kwa">type</span> Subst <span class="kwa">struct</span> {
+   pat, repl <span class="kwb">string</span>
+}
+
+<span class="kwa">var</span> substs = []Subst{
+   {<span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>},
+   {<span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>},
+   {<span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>},
+   {<span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>},
+   {<span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>},
+   {<span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>},
+   {<span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>},
+   {<span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>},
+   {<span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>},
+   {<span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>},
+   {<span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>},
+}
+
+<span class="kwa">func</span> <span class="kwd">countMatches</span>(pat <span class="kwb">string</span>, bytes []<span class="kwb">byte</span>) <span class="kwb">int</span> {
+   m := pcre.<span class="kwd">MustCompile</span>(pat, <span class="num">0</span>).<span class="kwd">Matcher</span>(bytes, <span class="num">0</span>)
+   n := <span class="num">0</span>
+   <span class="kwa">for</span> f := m.<span class="kwd">Matches</span>(); f; f = m.<span class="kwd">Match</span>(bytes, <span class="num">0</span>) {
+      n++
+      bytes = bytes[m.<span class="kwd">Index</span>()[<span class="num">1</span>]:]
+   }
+   <span class="kwa">return</span> n
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   runtime.<span class="kwd">GOMAXPROCS</span>(runtime.<span class="kwd">NumCPU</span>())
+   bytes, err := ioutil.<span class="kwd">ReadAll</span>(os.Stdin)
+   <span class="kwa">if</span> err != <span class="kwb">nil</span> {
+      fmt.<span class="kwd">Fprintf</span>(os.Stderr, <span class="str">&quot;can't read input:</span> <span class="ipl">%s</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, err)
+      os.<span class="kwd">Exit</span>(<span class="num">2</span>)
+   }
+   ilen := <span class="kwb">len</span>(bytes)
+   <span class="slc">// Delete the comment lines and newlines</span>
+   bytes = pcre.<span class="kwd">MustCompile</span>(<span class="str">&quot;(&gt;[^</span><span class="esc">\n</span><span class="str">]+)?</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="num">0</span>).<span class="kwd">ReplaceAll</span>(bytes, []<span class="kwb">byte</span>{}, <span class="num">0</span>)
+   clen := <span class="kwb">len</span>(bytes)
+
+   mresults := <span class="kwb">make</span>([]<span class="kwa">chan</span> <span class="kwb">int</span>, <span class="kwb">len</span>(variants))
+   <span class="kwa">var</span> i <span class="kwb">int</span>
+   <span class="kwa">var</span> s <span class="kwb">string</span>
+   <span class="kwa">for</span> i, s = <span class="kwa">range</span> variants {
+      ch := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">int</span>)
+      mresults[i] = ch
+      <span class="kwa">go func</span>(intch <span class="kwa">chan</span> <span class="kwb">int</span>, ss <span class="kwb">string</span>) {
+         intch &lt;- <span class="kwd">countMatches</span>(ss, bytes)
+      }(ch, s)
+   }
+
+   lenresult := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">int</span>)
+   bb := bytes
+   <span class="kwa">go func</span>() {
+      <span class="kwa">for</span> _, sub := <span class="kwa">range</span> substs {
+         bb = pcre.<span class="kwd">MustCompile</span>(sub.pat, <span class="num">0</span>).<span class="kwd">ReplaceAll</span>(bb, []<span class="kwb">byte</span>(sub.repl), <span class="num">0</span>)
+      }
+      lenresult &lt;- <span class="kwb">len</span>(bb)
+   }()
+
+   <span class="kwa">for</span> i, s = <span class="kwa">range</span> variants {
+      fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%s %d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, s, &lt;-mresults[i])
+   }
+   fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, ilen, clen, &lt;-lenresult)
+}

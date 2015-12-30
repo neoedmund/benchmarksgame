@@ -1,0 +1,68 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Anthony Donnefort</span>
+<span class="com"> * slightly modified to read 82 bytes at a time by Razii</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.io.*;
+<span class="kwa">public class</span> revcomp {
+   <span class="kwa">static final</span> <span class="kwb">byte</span>[] cmp = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">128</span>];
+   <span class="kwa">static</span> {
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; cmp.length; i++) cmp[i] = (<span class="kwb">byte</span>) i;
+      cmp[<span class="str">'t'</span>] = cmp[<span class="str">'T'</span>] = <span class="str">'A'</span>;
+      cmp[<span class="str">'a'</span>] = cmp[<span class="str">'A'</span>] = <span class="str">'T'</span>;
+      cmp[<span class="str">'g'</span>] = cmp[<span class="str">'G'</span>] = <span class="str">'C'</span>;
+      cmp[<span class="str">'c'</span>] = cmp[<span class="str">'C'</span>] = <span class="str">'G'</span>;
+      cmp[<span class="str">'v'</span>] = cmp[<span class="str">'V'</span>] = <span class="str">'B'</span>;
+      cmp[<span class="str">'h'</span>] = cmp[<span class="str">'H'</span>] = <span class="str">'D'</span>;
+      cmp[<span class="str">'r'</span>] = cmp[<span class="str">'R'</span>] = <span class="str">'Y'</span>;
+      cmp[<span class="str">'m'</span>] = cmp[<span class="str">'M'</span>] = <span class="str">'K'</span>;
+      cmp[<span class="str">'y'</span>] = cmp[<span class="str">'Y'</span>] = <span class="str">'R'</span>;
+      cmp[<span class="str">'k'</span>] = cmp[<span class="str">'K'</span>] = <span class="str">'M'</span>;
+      cmp[<span class="str">'b'</span>] = cmp[<span class="str">'B'</span>] = <span class="str">'V'</span>;
+      cmp[<span class="str">'d'</span>] = cmp[<span class="str">'D'</span>] = <span class="str">'H'</span>;
+      cmp[<span class="str">'u'</span>] = cmp[<span class="str">'U'</span>] = <span class="str">'A'</span>;
+   }
+
+   <span class="kwa">static class</span> ReversibleByteArray <span class="kwa">extends</span> java.io.ByteArrayOutputStream {
+      <span class="kwb">void</span> <span class="kwd">reverse</span>() <span class="kwa">throws</span> Exception {
+         <span class="kwa">if</span> (count &gt; <span class="num">0</span>) {
+            <span class="kwb">int</span> begin = <span class="num">0</span>, end = count - <span class="num">1</span>;
+            <span class="kwa">while</span> (buf[begin++] != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>);
+            <span class="kwa">while</span> (begin &lt;= end) {
+               <span class="kwa">if</span> (buf[begin] == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) begin++;
+               <span class="kwa">if</span> (buf[end] == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) end--;
+               <span class="kwa">if</span> (begin &lt;= end) {
+                  <span class="kwb">byte</span> tmp = buf[begin];
+                  buf[begin++] = cmp[buf[end]];
+                  buf[end--] = cmp[tmp];
+               }
+            }
+            System.out.<span class="kwd">write</span>(buf, <span class="num">0</span>, count);
+         }
+      }
+   }
+
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) <span class="kwa">throws</span> Exception {
+      <span class="kwb">byte</span>[] line = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">82</span>];
+      <span class="kwb">int</span> read;
+      ReversibleByteArray buf = <span class="kwa">new</span> <span class="kwd">ReversibleByteArray</span>();
+      <span class="kwa">while</span> ((read = System.<span class="kwa">in</span>.<span class="kwd">read</span>(line)) != -<span class="num">1</span>) {
+         <span class="kwb">int</span> i = <span class="num">0</span>, last = <span class="num">0</span>;
+         <span class="kwa">while</span> (i &lt; read) {
+            <span class="kwa">if</span> (line[i] == <span class="str">'&gt;'</span>) {
+               buf.<span class="kwd">write</span>(line, last, i - last);
+               buf.<span class="kwd">reverse</span>();
+               buf.<span class="kwd">reset</span>();
+               last = i;
+            }
+            i++;
+         }
+         buf.<span class="kwd">write</span>(line, last, read - last);
+      }
+      buf.<span class="kwd">reverse</span>();
+   }
+}
+
+  

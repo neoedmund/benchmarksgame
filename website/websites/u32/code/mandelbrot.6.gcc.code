@@ -1,0 +1,118 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">  contributed by Paolo Bonzini</span>
+<span class="com">  further optimized by Jason Garrett-Glaser</span>
+<span class="com">  pthreads added by Eckehard Berns</span>
+<span class="com">  further optimized by Ryan Henszey</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+
+<span class="kwc">typedef</span> <span class="kwb">double</span> v2df <span class="kwd">__attribute__</span> ((<span class="kwd">vector_size</span>(<span class="num">16</span>))); <span class="com">/* vector of two doubles */</span>
+<span class="kwc">typedef</span> <span class="kwb">int</span> v4si <span class="kwd">__attribute__</span> ((<span class="kwd">vector_size</span>(<span class="num">16</span>))); <span class="com">/* vector of four ints */</span>
+
+<span class="slc">// 4 works best on a quiet machine at nice -20</span>
+<span class="slc">// 8 on a noisy machine at default priority </span>
+<span class="ppc">#define NWORKERS 8</span>
+
+<span class="kwb">int</span> w, h;
+v2df zero = { <span class="num">0.0</span>, <span class="num">0.0</span> };
+v2df four = { <span class="num">4.0</span>, <span class="num">4.0</span> };
+v2df nzero;
+<span class="kwb">double</span> inverse_w;
+<span class="kwb">double</span> inverse_h;
+
+<span class="kwb">char</span> *whole_data;
+<span class="kwb">int</span> y_pick;
+pthread_mutex_t y_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+<span class="kwb">static void</span> * <span class="kwd">worker</span>(<span class="kwb">void</span> *_args) {
+    <span class="kwb">char</span> *data;
+    <span class="kwb">double</span> x, y;
+    <span class="kwb">int</span> bit_num;
+    <span class="kwb">char</span> byte_acc = <span class="num">0</span>;
+
+    <span class="kwa">for</span> (;;) {
+        <span class="kwd">pthread_mutex_lock</span>(&amp;y_mutex);
+        y = y_pick;
+        y_pick++;
+        <span class="kwd">pthread_mutex_unlock</span>(&amp;y_mutex);
+        <span class="kwa">if</span> (y &gt;= h)
+            <span class="kwa">return</span> NULL;
+        data = &amp;whole_data[(w &gt;&gt; <span class="num">3</span>) * (<span class="kwb">int</span>)y];
+
+        <span class="kwa">for</span>(bit_num=<span class="num">0</span>,x=<span class="num">0</span>;x&lt;w;x+=<span class="num">2</span>)
+        {
+            v2df Crv = { (x+<span class="num">1.0</span>)*inverse_w-<span class="num">1.5</span>, (x)*inverse_w-<span class="num">1.5</span> };
+            v2df Civ = { y*inverse_h-<span class="num">1.0</span>, y*inverse_h-<span class="num">1.0</span> };
+            v2df Zrv = { <span class="num">0.0</span>, <span class="num">0.0</span> };
+            v2df Ziv = { <span class="num">0.0</span>, <span class="num">0.0</span> };
+            v2df Trv = { <span class="num">0.0</span>, <span class="num">0.0</span> };
+            v2df Tiv = { <span class="num">0.0</span>, <span class="num">0.0</span> };
+
+            <span class="kwb">int</span> i = <span class="num">0</span>;
+	    <span class="kwb">int</span> mask;
+            <span class="kwa">do</span> {
+                Ziv = (Zrv*Ziv) + (Zrv*Ziv) + Civ;
+                Zrv = Trv - Tiv + Crv;
+                Trv = Zrv * Zrv;
+                Tiv = Ziv * Ziv;
+
+                <span class="com">/* from mandelbrot C++ GNU g++ #5 program  */</span>
+		v2df delta = (v2df)<span class="kwd">__builtin_ia32_cmplepd</span>( (Trv + Tiv), four );
+		mask = <span class="kwd">__builtin_ia32_movmskpd</span>(delta);
+
+            } <span class="kwa">while</span> (++i &lt; <span class="num">50</span> &amp;&amp; (mask));
+
+            byte_acc &lt;&lt;= <span class="num">2</span>;
+	    byte_acc |= mask;
+            bit_num+=<span class="num">2</span>;
+
+            <span class="kwa">if</span>(!(bit_num&amp;<span class="num">7</span>)) {
+                data[(bit_num&gt;&gt;<span class="num">3</span>) - <span class="num">1</span>] = byte_acc;
+                byte_acc = <span class="num">0</span>;
+            }
+        }
+
+        <span class="kwa">if</span>(bit_num&amp;<span class="num">7</span>) {
+            byte_acc &lt;&lt;= (<span class="num">8</span>-w%<span class="num">8</span>);
+            bit_num += <span class="num">8</span>;
+            data[bit_num&gt;&gt;<span class="num">3</span>] = byte_acc;
+            byte_acc = <span class="num">0</span>;
+        }
+    }
+}
+
+
+<span class="kwb">int</span> <span class="kwd">main</span> (<span class="kwb">int</span> argc, <span class="kwb">char</span> **argv)
+{
+    pthread_t ids[NWORKERS];
+    <span class="kwb">int</span> i;
+
+    nzero = -zero;
+
+    w = h = <span class="kwd">atoi</span>(argv[<span class="num">1</span>]);
+
+    inverse_w = <span class="num">2.0</span> / w;
+    inverse_h = <span class="num">2.0</span> / h;
+
+    y_pick = <span class="num">0</span>;
+    whole_data = <span class="kwd">malloc</span>(w * (w &gt;&gt; <span class="num">3</span>));
+
+    <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; NWORKERS; i++)
+        <span class="kwd">pthread_create</span>(&amp;ids[i], NULL, worker, NULL);
+    <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; NWORKERS; i++)
+        <span class="kwd">pthread_join</span>(ids[i], NULL);
+    <span class="kwd">pthread_mutex_destroy</span>(&amp;y_mutex);
+
+    <span class="kwd">printf</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">%d %d</span><span class="esc">\n</span><span class="str">&quot;</span>,w,h);
+    <span class="kwd">fwrite</span>(whole_data, h, w &gt;&gt; <span class="num">3</span>, stdout);
+
+    <span class="kwd">free</span>(whole_data);
+
+    <span class="kwa">return</span> <span class="num">0</span>;
+}
+

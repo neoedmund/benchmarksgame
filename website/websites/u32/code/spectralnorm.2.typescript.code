@@ -1,0 +1,56 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Isaac Gouy </span>
+<span class="com">*/</span>
+
+<span class="slc">/// &lt;reference path=&quot;/usr/local/src/typescript/node.d.ts&quot; /&gt;</span>
+
+
+<span class="kwa">function</span> <span class="kwd">approximate</span>(n: <span class="kwb">number</span>): <span class="kwb">number</span> {
+   <span class="kwa">let</span> u = <span class="kwd">Array</span>(n), v = <span class="kwd">Array</span>(n)
+   <span class="kwa">for</span> (<span class="kwa">let</span> i=<span class="num">0</span>; i&lt;n; ++i) {
+      u[i] = <span class="num">1.0</span>     
+   }
+   <span class="kwa">for</span> (<span class="kwa">let</span> i=<span class="num">0</span>; i&lt;<span class="num">10</span>; ++i) {
+      <span class="kwd">multiplyAtAv</span>(n,u,v)
+      <span class="kwd">multiplyAtAv</span>(n,v,u)
+   }
+   <span class="kwa">let</span> vBv = <span class="num">0.0</span>, vv = <span class="num">0.0</span>
+   <span class="kwa">for</span> (<span class="kwa">let</span> i=<span class="num">0</span>; i&lt;<span class="num">10</span>; ++i) {
+      vBv += u[i]*v[i]
+      vv  += v[i]*v[i]
+   }
+   <span class="kwa">return</span> Math.<span class="kwd">sqrt</span>(vBv/vv)
+}
+
+<span class="kwa">function</span> <span class="kwd">a</span>(i,j: <span class="kwb">number</span>): <span class="kwb">number</span> {
+   <span class="kwa">return</span> <span class="num">1.0</span> / ( (i+j) * ((i+j) +<span class="num">1</span>)/<span class="num">2</span> + i+<span class="num">1</span> ) 
+}
+
+<span class="kwa">function</span> <span class="kwd">multiplyAv</span>(n: <span class="kwb">number</span>, v: <span class="kwb">number</span>[], av: <span class="kwb">number</span>[]) {
+   <span class="kwa">for</span> (<span class="kwa">let</span> i=<span class="num">0</span>; i&lt;n-<span class="num">1</span>; ++i) {
+      av[i] = <span class="num">0.0</span>
+      v.<span class="kwd">forEach</span>((each,j) =&gt; {
+         av[i] += <span class="kwd">a</span>(i,j) * each 
+      })
+   }
+}
+
+<span class="kwa">function</span> <span class="kwd">multiplyAtv</span>(n: <span class="kwb">number</span>, v: <span class="kwb">number</span>[], atv: <span class="kwb">number</span>[]) {
+   <span class="kwa">for</span> (<span class="kwa">let</span> i=<span class="num">0</span>; i&lt;n-<span class="num">1</span>; ++i) {
+      atv[i] = <span class="num">0.0</span>
+      v.<span class="kwd">forEach</span>((each,j) =&gt; {
+         atv[i] += <span class="kwd">a</span>(j,i) * each 
+      })
+   }
+}
+
+<span class="kwa">function</span> <span class="kwd">multiplyAtAv</span>(n: <span class="kwb">number</span>, v: <span class="kwb">number</span>[], atAv: <span class="kwb">number</span>[]) {
+   <span class="kwa">let</span> u = <span class="kwa">new</span> <span class="kwd">Array</span>(n) 
+   <span class="kwd">multiplyAv</span>(n,v,u)
+   <span class="kwd">multiplyAtv</span>(n,u,atAv)
+}
+
+
+console.<span class="kwd">log</span>( <span class="kwd">approximate</span>(+process.argv[<span class="num">2</span>]).<span class="kwd">toFixed</span>(<span class="num">9</span>) )
+

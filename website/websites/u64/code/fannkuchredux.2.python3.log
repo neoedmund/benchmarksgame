@@ -1,0 +1,14 @@
+
+Sat, 04 Apr 2015 17:49:35 GMT
+
+MAKE:
+mv fannkuchredux.python3-2.python3 fannkuchredux.python3-2.py
+/usr/local/src/Python-3.4.3/bin/python3.4 -OO -c "from py_compile import compile; compile('fannkuchredux.python3-2.py')"
+0.08s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/Python-3.4.3/bin/python3.4 fannkuchredux.python3-2.py 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

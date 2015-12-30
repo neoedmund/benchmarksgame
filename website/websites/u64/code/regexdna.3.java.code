@@ -1,0 +1,240 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Enotus 2010-11-26</span>
+<span class="com"> *</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.io.*;
+<span class="kwa">import</span> java.util.*;
+<span class="kwa">import</span> java.util.concurrent.atomic.AtomicInteger;
+
+<span class="kwa">public final class</span> regexdna {
+
+   <span class="kwa">static final class</span> ByteString{
+      <span class="kwa">final</span> <span class="kwb">byte</span>[] data;
+      <span class="kwd">ByteString</span>(<span class="kwb">int</span> size){data=<span class="kwa">new</span> <span class="kwb">byte</span>[size];}
+      <span class="kwd">ByteString</span>(String s){data=s.<span class="kwd">getBytes</span>();}
+      <span class="kwd">ByteString</span>(<span class="kwb">byte</span>[] od,<span class="kwb">int</span> op,<span class="kwb">int</span> ol){data=<span class="kwa">new</span> <span class="kwb">byte</span>[ol];System.<span class="kwd">arraycopy</span>(od, op, data, <span class="num">0</span>, ol);}
+      <span class="kwb">int</span> <span class="kwd">length</span>(){<span class="kwa">return</span> data.length;}
+      <span class="kwa">public</span> String <span class="kwd">toString</span>(){<span class="kwa">return new</span> <span class="kwd">String</span>(data);}
+      <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">hashCode</span>(){<span class="kwa">return</span> Arrays.<span class="kwd">hashCode</span>(data);}
+      <span class="kwa">public</span> <span class="kwb">boolean</span> <span class="kwd">equals</span>(Object obj){
+         <span class="kwa">if</span>(obj!=null &amp;&amp; <span class="kwd">getClass</span>()==obj.<span class="kwd">getClass</span>() &amp;&amp; Arrays.<span class="kwd">equals</span>(data, ((ByteString) obj).data)) <span class="kwa">return</span> true;
+         <span class="kwa">else return</span> false;
+      }
+   }
+   <span class="kwa">static final class</span> ByteBuilder{
+      <span class="kwb">byte</span>[] data;<span class="kwb">int</span> size=<span class="num">0</span>;
+      <span class="kwd">ByteBuilder</span>(<span class="kwb">int</span> size){data=<span class="kwa">new</span> <span class="kwb">byte</span>[size];}
+      <span class="kwb">int</span> <span class="kwd">length</span>(){<span class="kwa">return</span> size;}
+      <span class="kwb">void</span> <span class="kwd">append</span>(<span class="kwb">byte</span>[] od,<span class="kwb">int</span> op,<span class="kwb">int</span> ol){
+         <span class="kwa">if</span>(data.length&lt;(size+=ol)) data=Arrays.<span class="kwd">copyOf</span>(data,size*<span class="num">2</span>);
+         System.<span class="kwd">arraycopy</span>(od,op,data,size-ol,ol);
+      }
+      ByteString <span class="kwd">toByteString</span>(){<span class="kwa">return new</span> <span class="kwd">ByteString</span>(data,<span class="num">0</span>,size);}
+   }
+
+   <span class="kwa">static final class</span> Matcher{
+      <span class="kwa">static final</span> <span class="kwb">int</span> transSize=<span class="num">128</span>;
+      <span class="kwa">static final class</span> State{
+         <span class="kwa">final</span> State[] trans=<span class="kwa">new</span> State[transSize];<span class="kwb">boolean</span> isFinal;<span class="kwb">int</span> start;
+         <span class="kwb">void</span> <span class="kwd">copyFrom</span>(State o){System.<span class="kwd">arraycopy</span>(o.trans, <span class="num">0</span>, trans, <span class="num">0</span>, transSize);isFinal=o.isFinal;}
+      }
+
+      <span class="kwa">final</span> <span class="kwb">byte</span>[] inData;<span class="kwa">final</span> <span class="kwb">int</span> inSize;
+      <span class="kwa">final</span> State rootState=<span class="kwa">new</span> <span class="kwd">State</span>();<span class="kwa">final</span> State[] root=rootState.trans;
+      <span class="kwa">final</span> State[] active;<span class="kwb">int</span> act=<span class="num">0</span>;
+
+      <span class="kwa">private</span> List&lt;Character&gt; <span class="kwd">getCharList</span>(<span class="kwb">char</span> c){
+         List&lt;Character&gt; cc=<span class="kwa">new</span> ArrayList&lt;Character&gt;();
+         <span class="kwa">if</span>(c==<span class="str">'.'</span>){
+            <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;transSize;i++) <span class="kwa">if</span>(i!=<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) cc.<span class="kwd">add</span>((<span class="kwb">char</span>)i);
+         }<span class="kwa">else if</span>(Character.<span class="kwd">isLetter</span>(c)){
+            cc.<span class="kwd">add</span>(Character.<span class="kwd">toLowerCase</span>(c));
+            cc.<span class="kwd">add</span>(Character.<span class="kwd">toUpperCase</span>(c));
+         }<span class="kwa">else</span>{
+            cc.<span class="kwd">add</span>(c);
+         }
+         <span class="kwa">return</span> cc;
+      }
+      
+      <span class="kwb">int</span> <span class="kwd">addBar</span>(String pattern,<span class="kwb">int</span> index,List&lt;State&gt; ss){
+         <span class="kwa">for</span>(State s:ss)s.isFinal=true;
+         ss.<span class="kwd">clear</span>();ss.<span class="kwd">add</span>(rootState);
+         <span class="kwa">return</span> index+<span class="num">1</span>;
+      }
+      <span class="kwb">int</span> <span class="kwd">addPar</span>(String pattern,<span class="kwb">int</span> index,List&lt;State&gt; ss){
+         State ns=<span class="kwa">new</span> <span class="kwd">State</span>();
+         List&lt;State&gt; nss=<span class="kwa">new</span> ArrayList&lt;State&gt;();nss.<span class="kwd">add</span>(ns);
+         index++;
+         <span class="kwb">char</span> pc;
+         <span class="kwa">while</span>((pc=pattern.<span class="kwd">charAt</span>(index++))!=<span class="str">']'</span>){
+            <span class="kwa">for</span>(<span class="kwb">char</span> c:<span class="kwd">getCharList</span>(pc))
+               <span class="kwa">for</span>(State s:ss)
+                  <span class="kwa">if</span>(s.trans[c]!=null)nss.<span class="kwd">add</span>(s.trans[c]);
+                  <span class="kwa">else</span> s.trans[c]=ns;
+         }
+         ss.<span class="kwd">clear</span>();ss.<span class="kwd">addAll</span>(nss);
+         <span class="kwa">return</span> index;
+      }
+      <span class="kwb">int</span> <span class="kwd">addPointStar</span>(String pattern,<span class="kwb">int</span> index,List&lt;State&gt; ss){
+         State ns=<span class="kwa">new</span> <span class="kwd">State</span>();
+         ss.<span class="kwd">add</span>(ns);
+         <span class="kwa">for</span>(<span class="kwb">char</span> c:<span class="kwd">getCharList</span>(pattern.<span class="kwd">charAt</span>(index)))
+            <span class="kwa">for</span>(State s:ss){
+               <span class="kwa">if</span>(s.trans[c]!=null)ns.<span class="kwd">copyFrom</span>(s.trans[c]);
+               s.trans[c]=ns;
+            }
+         <span class="kwa">return</span> index+<span class="num">2</span>;
+      }
+      <span class="kwb">int</span> <span class="kwd">addCharConcat</span>(String pattern,<span class="kwb">int</span> index,List&lt;State&gt; ss){
+         State ns=<span class="kwa">new</span> <span class="kwd">State</span>();
+         <span class="kwa">for</span>(<span class="kwb">char</span> c:<span class="kwd">getCharList</span>(pattern.<span class="kwd">charAt</span>(index)))
+            <span class="kwa">for</span>(State s:ss){
+               <span class="kwa">if</span>(s.trans[c]!=null)ns.<span class="kwd">copyFrom</span>(s.trans[c]);
+               s.trans[c]=ns;
+            }
+         ss.<span class="kwd">clear</span>();ss.<span class="kwd">add</span>(ns);
+         <span class="kwa">return</span> index+<span class="num">1</span>;
+      }
+      <span class="kwd">Matcher</span>(String pattern,ByteString ins){
+         List&lt;State&gt; ss=<span class="kwa">new</span> ArrayList&lt;State&gt;();
+         ss.<span class="kwd">add</span>(rootState);
+         
+         <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;pattern.<span class="kwd">length</span>();){
+            <span class="kwa">if</span>(pattern.<span class="kwd">charAt</span>(i)==<span class="str">'|'</span>){
+               i=<span class="kwd">addBar</span>(pattern,i,ss);
+            }<span class="kwa">else if</span>(pattern.<span class="kwd">charAt</span>(i)==<span class="str">'['</span>){
+               i=<span class="kwd">addPar</span>(pattern,i,ss);
+            }<span class="kwa">else if</span>(pattern.<span class="kwd">charAt</span>(i)==<span class="str">'.'</span> &amp;&amp; i+<span class="num">1</span>&lt;pattern.<span class="kwd">length</span>() &amp;&amp; pattern.<span class="kwd">charAt</span>(i+<span class="num">1</span>)==<span class="str">'*'</span>){
+               i=<span class="kwd">addPointStar</span>(pattern,i,ss);
+            }<span class="kwa">else</span>{
+               i=<span class="kwd">addCharConcat</span>(pattern,i,ss);
+            }
+         }
+         <span class="kwd">addBar</span>(pattern,<span class="num">0</span>,ss);
+
+         active=<span class="kwa">new</span> State[pattern.<span class="kwd">length</span>()];
+         inData=ins.data;inSize=inData.length;
+      }
+
+      <span class="kwb">int</span> start=-<span class="num">1</span>;
+      <span class="kwb">int</span> <span class="kwd">startFind</span>(<span class="kwb">int</span> index){
+         <span class="kwa">while</span>(index&lt;inSize){
+            <span class="kwb">int</span> c=inData[index++];
+
+            <span class="kwb">int</span> nct=<span class="num">0</span>;
+            <span class="kwa">for</span>(<span class="kwb">int</span> ct=<span class="num">0</span>;ct&lt;act;ct++){
+               State s=active[ct];State ns=s.trans[c];
+               <span class="kwa">if</span>(ns!=null)   <span class="kwa">if</span>(ns.isFinal){act=<span class="num">0</span>;start=s.start;<span class="kwa">return</span> index;}
+                           <span class="kwa">else</span>{ns.start=s.start;active[nct++]=ns;}
+            }
+            act=nct;
+
+            State ns=root[c];
+            <span class="kwa">if</span>(ns!=null)   <span class="kwa">if</span>(ns.isFinal){act=<span class="num">0</span>;start=index-<span class="num">1</span>;<span class="kwa">return</span> index;}
+                        <span class="kwa">else</span>{ns.start=index-<span class="num">1</span>;active[act++]=ns;}
+         }
+         <span class="kwa">return</span> -<span class="num">1</span>;
+      }
+      
+      <span class="kwb">int</span> <span class="kwd">find</span>(<span class="kwb">int</span> index){
+         <span class="kwa">while</span>(index&lt;inSize){
+            <span class="kwb">int</span> c0=inData[index++];
+
+            <span class="kwb">int</span> nct=<span class="num">0</span>;
+            <span class="kwa">for</span>(<span class="kwb">int</span> ct=<span class="num">0</span>;ct&lt;act;ct++){
+               State ns=active[ct].trans[c0];
+               <span class="kwa">if</span>(ns!=null)   <span class="kwa">if</span>(ns.isFinal){act=<span class="num">0</span>; <span class="kwa">return</span> index;}
+                           <span class="kwa">else</span> active[nct++]=ns;
+            }
+            act=nct;
+
+            State ns=root[c0];
+            <span class="kwa">if</span>(ns!=null)   <span class="kwa">if</span>(ns.isFinal){act=<span class="num">0</span>; <span class="kwa">return</span> index;}
+                        <span class="kwa">else</span> active[act++]=ns;
+         }
+         <span class="kwa">return</span> -<span class="num">1</span>;
+      }
+   }
+
+
+   <span class="kwa">static final</span> String[] pat1={<span class="str">&quot;agggtaaa|tttaccct&quot;</span>, <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+      <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>, <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+      <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>, <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+      <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>, <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+      <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>};
+   <span class="kwa">static final</span> Map&lt;ByteString,ByteString&gt; pat2 = <span class="kwa">new</span> HashMap&lt;ByteString,ByteString&gt;();
+      <span class="kwa">static</span>{
+      pat2.<span class="kwd">put</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;W&quot;</span>), <span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;(a|t)&quot;</span>));
+      pat2.<span class="kwd">put</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;Y&quot;</span>), <span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;(c|t)&quot;</span>));
+      pat2.<span class="kwd">put</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;K&quot;</span>), <span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;(g|t)&quot;</span>));
+      pat2.<span class="kwd">put</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;M&quot;</span>), <span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;(a|c)&quot;</span>));
+      pat2.<span class="kwd">put</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;S&quot;</span>), <span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;(c|g)&quot;</span>));
+      pat2.<span class="kwd">put</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;R&quot;</span>), <span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;(a|g)&quot;</span>));
+      pat2.<span class="kwd">put</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;B&quot;</span>), <span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;(c|g|t)&quot;</span>));
+      pat2.<span class="kwd">put</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;D&quot;</span>), <span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;(a|g|t)&quot;</span>));
+      pat2.<span class="kwd">put</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;V&quot;</span>), <span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;(a|c|g)&quot;</span>));
+      pat2.<span class="kwd">put</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;H&quot;</span>), <span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;(a|c|t)&quot;</span>));
+      pat2.<span class="kwd">put</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;N&quot;</span>), <span class="kwa">new</span> <span class="kwd">ByteString</span>(<span class="str">&quot;(a|c|g|t)&quot;</span>));
+   }
+   <span class="kwa">static final</span> AtomicInteger pat1Ct=<span class="kwa">new</span> <span class="kwd">AtomicInteger</span>();
+   
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) <span class="kwa">throws</span> Exception {
+      <span class="kwa">final</span> ByteString s1;<span class="kwb">int</span> s1Size;{
+         s1Size=System.<span class="kwa">in</span>.<span class="kwd">available</span>();
+         s1=<span class="kwa">new</span> <span class="kwd">ByteString</span>(s1Size);
+         System.<span class="kwa">in</span>.<span class="kwd">read</span>(s1.data);
+      }
+
+      <span class="kwa">final</span> ByteString s2;<span class="kwb">int</span> s2Size;{
+         ByteBuilder bb=<span class="kwa">new</span> <span class="kwd">ByteBuilder</span>(s1Size);
+         Matcher m=<span class="kwa">new</span> <span class="kwd">Matcher</span>(<span class="str">&quot;&gt;.*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;</span>, s1);
+         <span class="kwb">int</span> inPos=<span class="num">0</span>,index=<span class="num">0</span>;
+         <span class="kwa">while</span>((index=m.<span class="kwd">startFind</span>(index))&gt;=<span class="num">0</span>){
+            bb.<span class="kwd">append</span>(s1.data, inPos, m.start-inPos);
+            inPos=index;
+         }
+         bb.<span class="kwd">append</span>(s1.data, inPos, s1.<span class="kwd">length</span>()-inPos);
+         s2=bb.<span class="kwd">toByteString</span>();
+         s2Size=s2.<span class="kwd">length</span>();
+      }
+
+      <span class="kwa">final</span> <span class="kwb">int</span>[] pat1res=<span class="kwa">new</span> <span class="kwb">int</span>[pat1.length];{
+         Thread[] pool=<span class="kwa">new</span> Thread[pat1.length];
+         <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;pool.length;i++)
+            pool[i]=<span class="kwa">new</span> <span class="kwd">Thread</span>(){
+               <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+                   <span class="kwb">int</span> r; <span class="kwa">while</span>((r=pat1Ct.<span class="kwd">getAndIncrement</span>())&lt;pat1res.length){
+                     Matcher m=<span class="kwa">new</span> <span class="kwd">Matcher</span>(pat1[r],s2);
+                     <span class="kwb">int</span> count=<span class="num">0</span>,index=<span class="num">0</span>;<span class="kwa">while</span>((index=m.<span class="kwd">find</span>(index))&gt;=<span class="num">0</span>) count++;
+                     pat1res[r]=count;
+                   }
+               }
+            };
+         <span class="kwa">for</span> (Thread t:pool) t.<span class="kwd">start</span>();
+         <span class="kwa">for</span> (Thread t:pool) t.<span class="kwd">join</span>();
+      }
+
+      <span class="kwb">int</span> s3Size;{
+         ByteBuilder bb=<span class="kwa">new</span> <span class="kwd">ByteBuilder</span>(s1Size*<span class="num">3</span>/<span class="num">2</span>);
+         Matcher m=<span class="kwa">new</span> <span class="kwd">Matcher</span>(<span class="str">&quot;[WYKMSRBDVHN]&quot;</span>, s2);
+         <span class="kwb">int</span> inPos=<span class="num">0</span>,index=<span class="num">0</span>;
+         <span class="kwa">while</span>((index=m.<span class="kwd">startFind</span>(index))&gt;=<span class="num">0</span>){
+            bb.<span class="kwd">append</span>(s2.data, inPos, m.start-inPos);
+            ByteString rep=pat2.<span class="kwd">get</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(s2.data,m.start,index-m.start));
+            bb.<span class="kwd">append</span>(rep.data, <span class="num">0</span>, rep.<span class="kwd">length</span>());
+            inPos=index;
+         }
+         bb.<span class="kwd">append</span>(s2.data, inPos, s2.<span class="kwd">length</span>()-inPos);
+         s3Size=bb.<span class="kwd">length</span>();
+      }
+
+      <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;pat1.length;i++)System.out.<span class="kwd">println</span>(pat1[i]+<span class="str">&quot; &quot;</span>+pat1res[i]);
+      System.out.<span class="kwd">println</span>();
+      System.out.<span class="kwd">println</span>(s1Size);
+      System.out.<span class="kwd">println</span>(s2Size);
+      System.out.<span class="kwd">println</span>(s3Size);
+   }
+}

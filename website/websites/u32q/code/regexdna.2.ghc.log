@@ -1,0 +1,100 @@
+
+Tue, 22 Sep 2015 03:34:17 GMT
+
+MAKE:
+mv regexdna.ghc-2.ghc regexdna.ghc-2.hs
+/usr/local/src/ghc-7.10.2/bin/ghc --make -fllvm -O2 -XBangPatterns -threaded -rtsopts  regexdna.ghc-2.hs -o regexdna.ghc-2.ghc_run
+[1 of 1] Compiling Main             ( regexdna.ghc-2.hs, regexdna.ghc-2.o )
+
+regexdna.ghc-2.hs:49:1: Warning: Tab character
+
+regexdna.ghc-2.hs:50:1: Warning: Tab character
+
+regexdna.ghc-2.hs:51:1: Warning: Tab character
+
+regexdna.ghc-2.hs:52:1: Warning: Tab character
+
+regexdna.ghc-2.hs:53:1: Warning: Tab character
+
+regexdna.ghc-2.hs:54:1: Warning: Tab character
+
+regexdna.ghc-2.hs:55:1: Warning: Tab character
+
+regexdna.ghc-2.hs:56:1: Warning: Tab character
+
+regexdna.ghc-2.hs:57:1: Warning: Tab character
+
+regexdna.ghc-2.hs:62:7: Warning: Tab character
+
+regexdna.ghc-2.hs:71:3: Warning: Tab character
+
+regexdna.ghc-2.hs:72:3: Warning: Tab character
+
+regexdna.ghc-2.hs:92:5: Warning: Tab character
+
+regexdna.ghc-2.hs:96:48: Warning: Tab character
+
+regexdna.ghc-2.hs:101:1: Warning: Tab character
+
+regexdna.ghc-2.hs:102:1: Warning: Tab character
+
+regexdna.ghc-2.hs:106:1: Warning: Tab character
+
+regexdna.ghc-2.hs:107:1: Warning: Tab character
+
+regexdna.ghc-2.hs:108:1: Warning: Tab character
+
+regexdna.ghc-2.hs:116:5: Warning: Tab character
+
+regexdna.ghc-2.hs:117:5: Warning: Tab character
+
+regexdna.ghc-2.hs:118:8: Warning: Tab character
+
+regexdna.ghc-2.hs:119:8: Warning: Tab character
+
+regexdna.ghc-2.hs:120:8: Warning: Tab character
+
+regexdna.ghc-2.hs:127:1: Warning: Tab character
+
+regexdna.ghc-2.hs:128:1: Warning: Tab character
+
+regexdna.ghc-2.hs:129:1: Warning: Tab character
+
+regexdna.ghc-2.hs:130:1: Warning: Tab character
+
+regexdna.ghc-2.hs:131:1: Warning: Tab character
+
+regexdna.ghc-2.hs:132:1: Warning: Tab character
+
+regexdna.ghc-2.hs:133:1: Warning: Tab character
+
+regexdna.ghc-2.hs:134:1: Warning: Tab character
+
+regexdna.ghc-2.hs:135:1: Warning: Tab character
+
+regexdna.ghc-2.hs:136:1: Warning: Tab character
+
+regexdna.ghc-2.hs:137:1: Warning: Tab character
+
+regexdna.ghc-2.hs:138:1: Warning: Tab character
+Linking regexdna.ghc-2.ghc_run ...
+rm regexdna.ghc-2.hs
+2.26s to complete and log all make actions
+
+COMMAND LINE:
+./regexdna.ghc-2.ghc_run +RTS -N4 -H250M -RTS 0 < regexdna-input5000000.txt
+
+PROGRAM OUTPUT:
+agggtaaa|tttaccct 356
+[cgt]gggtaaa|tttaccc[acg] 1250
+a[act]ggtaaa|tttacc[agt]t 4252
+ag[act]gtaaa|tttac[agt]ct 2894
+agg[act]taaa|ttta[agt]cct 5435
+aggg[acg]aaa|ttt[cgt]ccct 1537
+agggt[cgt]aa|tt[acg]accct 1431
+agggta[cgt]a|t[acg]taccct 1608
+agggtaa[cgt]|[acg]ttaccct 2178
+
+50833411
+50000000
+66800214

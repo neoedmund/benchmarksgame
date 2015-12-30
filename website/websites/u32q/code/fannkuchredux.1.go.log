@@ -1,0 +1,13 @@
+
+Thu, 20 Aug 2015 00:45:36 GMT
+
+MAKE:
+/usr/local/src/go/bin/go build -o fannkuchredux.go_run
+0.56s to complete and log all make actions
+
+COMMAND LINE:
+./fannkuchredux.go_run 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

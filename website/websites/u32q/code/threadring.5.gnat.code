@@ -1,0 +1,292 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">--  Contributed by Brad Moore (13 Aug 2012)</span>
+<span class="slc">--</span>
+<span class="slc">-- Creates 503 lightweight &quot;virtual&quot; threads, and 503 OS threads which</span>
+<span class="slc">-- map to Ada tasks. The Ada tasks are managed by a task pool object.</span>
+<span class="slc">-- The task pool implements a work-sharing strategy whereby the current</span>
+<span class="slc">-- OS worker thread will try to assign a new work item to itself if no other</span>
+<span class="slc">-- work has yet been assigned to the worker, otherwise offers the new work</span>
+<span class="slc">-- item to another OS thread.</span>
+
+
+<span class="kwa">pragma</span> Suppress (All_Checks);
+
+<span class="kwa">with</span> Ada.Command_Line; <span class="kwa">use</span> Ada;
+<span class="kwa">with</span> Ada.Integer_Text_IO; <span class="kwa">use</span> Ada.Integer_Text_IO;
+<span class="kwa">with</span> Task_Pools;
+
+<span class="kwa">with</span> Ada.Text_IO; <span class="kwa">use</span> Ada.Text_IO;
+<span class="kwa">procedure</span> ThreadRing <span class="kwa">is</span>
+
+   Worker_Count : <span class="kwa">constant</span> := <span class="num">503</span>;
+   Token_Count : <span class="kwb">Natural</span> := <span class="num">1000</span>;  <span class="slc">-- Default value</span>
+
+   <span class="slc">--  Note: Worker_Id wraps around, i.e. 502 links to 0</span>
+   <span class="kwa">type</span> Worker_Id <span class="kwa">is mod</span> Worker_Count;
+
+   <span class="slc">-- The following type is used for checking completion of the test.</span>
+   <span class="kwa">protected</span> Thread_Ring_Benchmark <span class="kwa">is</span>
+      <span class="kwa">procedure</span> All_Done;
+      <span class="kwa">entry</span> Wait_For_Completion;
+   <span class="kwa">private</span>
+      Done : <span class="kwb">Boolean</span> := <span class="kwd">False</span>;
+   <span class="kwa">end</span> Thread_Ring_Benchmark;
+
+   <span class="kwa">protected body</span> Thread_Ring_Benchmark <span class="kwa">is</span>
+
+      <span class="kwa">procedure</span> All_Done <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Done := <span class="kwd">True</span>;
+      <span class="kwa">end</span> All_Done;
+
+      <span class="kwa">entry</span> Wait_For_Completion <span class="kwa">when</span> Done <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         <span class="kwa">null</span>;
+      <span class="kwa">end</span> Wait_For_Completion;
+   <span class="kwa">end</span> Thread_Ring_Benchmark;
+
+   <span class="slc">--  Client specified virtual thread state information.</span>
+   <span class="slc">--  Note this code is actually passing the token between the virtual</span>
+   <span class="slc">--  threads, as opposed to each thread inspecting and modifying a global</span>
+   <span class="slc">--  variable.</span>
+   <span class="kwa">type</span> Thread_State <span class="kwa">is new</span> Task_Pools.Work_Item <span class="kwa">with</span>
+      <span class="kwa">record</span>
+         Current_Worker : Worker_Id;
+         Token : <span class="kwb">Natural</span>;
+      <span class="kwa">end record</span>;
+
+   overriding
+   <span class="kwa">procedure</span> Process (Work : <span class="kwa">in out</span> Thread_State;
+                      Context : Task_Pools.Context_Handle);
+
+   <span class="slc">-- The actual worker tasks (OS threads) to do the work</span>
+   Threads : Task_Pools.Task_Pool (Number_Of_Tasks =&gt; Worker_Count);
+
+   Next_Worker : Worker_Id := Worker_Id<span class="kwd">'First</span>;
+
+   <span class="kwa">function</span> Create_Thread <span class="kwa">return</span> Thread_State <span class="kwa">is</span>
+      Current_Worker : <span class="kwa">constant</span> Worker_Id := Next_Worker;
+   <span class="kwa">begin</span>
+      Next_Worker := Next_Worker + <span class="num">1</span>;
+      <span class="kwa">return</span> (Current_Worker =&gt; Current_Worker,
+              Token =&gt; &lt;&gt;);
+   <span class="kwa">end</span> Create_Thread;
+
+   <span class="slc">--  An array of virtual threads (or strands) linked in a circular chain</span>
+   Fibers : <span class="kwa">array</span> (Worker_Id) <span class="kwa">of aliased</span> Thread_State
+     := (<span class="kwa">others</span> =&gt; Create_Thread);
+
+   overriding
+   <span class="kwa">procedure</span> Process (Work : <span class="kwa">in out</span> Thread_State;
+                      Context : Task_Pools.Context_Handle) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+
+      <span class="kwa">if</span> Work.Token = <span class="num">0</span> <span class="kwa">then</span>
+         Put (Item =&gt; <span class="kwb">Natural</span> (Work.Current_Worker) + <span class="num">1</span>, Width =&gt; <span class="num">1</span>);
+         Thread_Ring_Benchmark.All_Done;
+      <span class="kwa">else</span>
+
+         <span class="slc">-- Pass the token</span>
+         Fibers (Work.Current_Worker + <span class="num">1</span>).Token := Work.Token - <span class="num">1</span>;
+
+         <span class="slc">--  Note: Current_Worker wraps around from 502 to 0</span>
+         Threads.Submit
+           (Current_Context =&gt; Context,
+            Next_Context =&gt; Fibers (Work.Current_Worker + <span class="num">1</span>)<span class="kwd">'Unchecked_Access</span>);
+      <span class="kwa">end if</span>;
+
+   <span class="kwa">end</span> Process;
+
+<span class="kwa">begin</span> <span class="slc">-- ThreadRing</span>
+
+   <span class="kwa">if</span> Command_Line.Argument_Count &gt;= <span class="num">1</span> <span class="kwa">then</span>
+      Token_Count := <span class="kwb">Natural</span><span class="kwd">'Value</span> (Command_Line.Argument (<span class="num">1</span>));
+   <span class="kwa">end if</span>;
+
+   Fibers (Fibers<span class="kwd">'First</span>).Token := Token_Count;
+
+   Threads.Submit (Next_Context =&gt; Fibers (Fibers<span class="kwd">'First</span>)<span class="kwd">'Unchecked_Access</span>);
+
+   Thread_Ring_Benchmark.Wait_For_Completion;
+   Threads.Destruct;
+
+<span class="kwa">end</span> ThreadRing;
+<span class="kwa">package</span> Task_Pools <span class="kwa">is</span>
+
+   <span class="kwa">type</span> Work_Item <span class="kwa">is abstract tagged</span>;
+   <span class="kwa">type</span> Work_Handle <span class="kwa">is access all</span> Work_Item<span class="kwd">'Class</span>;
+
+   <span class="kwa">type</span> Work_Item <span class="kwa">is abstract tagged null record</span>;
+
+   <span class="kwa">type</span> Context_Handle <span class="kwa">is access all</span> Work_Handle;
+
+   <span class="kwa">procedure</span> Process
+     (Work : <span class="kwa">in out</span> Work_Item;
+      Context : Context_Handle) <span class="kwa">is abstract</span>;
+   <span class="slc">--  A thread context that can include client specified state information</span>
+
+   <span class="kwa">type</span> Task_Pool (Number_Of_Tasks : <span class="kwb">Positive</span>) <span class="kwa">is</span>
+     <span class="kwa">tagged limited private</span>;
+   <span class="slc">--  task pool object type that has a pool of real Ada tasks to</span>
+   <span class="slc">--  process virtual thread fibers that are submitted to the pool for</span>
+   <span class="slc">--  processing. Each Ada task in the task pool corresponds to an OS threads</span>
+   <span class="slc">--  in GNAT</span>
+
+   <span class="kwa">procedure</span> Submit
+     (Pool : <span class="kwa">in out</span> Task_Pool;
+      Next_Context : Work_Handle;
+      Current_Context : Context_Handle := <span class="kwa">null</span>);
+   <span class="slc">--  Submit a work item (virtual thread) to the task pool for processing.</span>
+   <span class="slc">--  Context should be null unless Submit was invoked from a Work_Item.</span>
+   <span class="slc">--  (i.e. Called from a task in the task pool)</span>
+   <span class="slc">--  Otherwise, it may be specified as null to signify that the virtual</span>
+   <span class="slc">--  thread is to be assigned to a new task in the task pool, or if not</span>
+   <span class="slc">--  null should be the current context as passed in to the virtual thread.</span>
+   <span class="slc">--  In this case, the new virtual thread will be processed by the same</span>
+   <span class="slc">--  Ada task from the task pool that invoked the current virtual thread.</span>
+
+   <span class="kwa">procedure</span> Destruct (Pool : <span class="kwa">in out</span> Task_Pool);
+   <span class="slc">--  Terminates all tasks in the task pool object. No further Submit calls</span>
+   <span class="slc">--  can be issued against the specified task pool object.</span>
+
+<span class="kwa">private</span>
+
+   <span class="kwa">subtype</span> Worker_Id <span class="kwa">is</span> <span class="kwb">Natural</span>;
+
+   <span class="kwa">task type</span> Worker (Pool : <span class="kwa">access</span> Task_Pool := <span class="kwa">null</span>) <span class="kwa">is</span>
+   <span class="kwa">end</span> Worker;
+
+   <span class="kwa">function</span> Create_Worker (Pool : <span class="kwa">access</span> Task_Pool) <span class="kwa">return</span> Worker;
+   <span class="slc">--  Creates a task in the task pool</span>
+
+   <span class="kwa">type</span> Worker_Array <span class="kwa">is array</span> (Worker_Id <span class="kwa">range</span> &lt;&gt;) <span class="kwa">of</span> Worker;
+   <span class="slc">--  The Ada tasks in the task pool</span>
+
+   <span class="slc">--  A manager to hand off work requests from the client to the task pool</span>
+   <span class="kwa">protected type</span> Work_Manager <span class="kwa">is</span>
+
+      <span class="kwa">entry</span> Wait_For_Work (Work : <span class="kwa">out</span> Work_Handle);
+      <span class="kwa">entry</span> Offer_Work (Work : Work_Handle);
+      <span class="kwa">procedure</span> Shutdown;
+      <span class="kwa">entry</span> Wait_For_Termination;
+
+   <span class="kwa">private</span>
+      Offered_Item : Work_Handle := <span class="kwa">null</span>;
+      Shutting_Down : <span class="kwb">Boolean</span> := <span class="kwd">False</span>;
+   <span class="kwa">end</span> Work_Manager;
+
+   <span class="kwa">type</span> Task_Pool (Number_Of_Tasks : <span class="kwb">Positive</span>) <span class="kwa">is tagged limited</span>
+      <span class="kwa">record</span>
+         Manager : Work_Manager;
+         Workers : Worker_Array (<span class="num">1</span> .. Number_Of_Tasks)
+           := (<span class="kwa">others</span> =&gt; Create_Worker (Task_Pool<span class="kwd">'Access</span>));
+      <span class="kwa">end record</span>;
+<span class="kwa">end</span> Task_Pools;
+<span class="kwa">package body</span> Task_Pools <span class="kwa">is</span>
+
+   <span class="kwa">protected body</span> Work_Manager <span class="kwa">is</span>
+      <span class="kwa">entry</span> Offer_Work (Work : Work_Handle)
+        <span class="kwa">when</span> Offered_Item = <span class="kwa">null is</span>
+      <span class="kwa">begin</span>
+         Offered_Item := Work;
+      <span class="kwa">end</span> Offer_Work;
+
+      <span class="kwa">procedure</span> Shutdown <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Shutting_Down := <span class="kwd">True</span>;
+         Offered_Item := <span class="kwa">null</span>;
+      <span class="kwa">end</span> Shutdown;
+
+      <span class="kwa">entry</span> Wait_For_Work (Work : <span class="kwa">out</span> Work_Handle)
+        <span class="kwa">when</span> Shutting_Down <span class="kwa">or else</span> Offered_Item /= <span class="kwa">null is</span>
+      <span class="kwa">begin</span>
+         Work := Offered_Item;
+         Offered_Item := <span class="kwa">null</span>;
+      <span class="kwa">end</span> Wait_For_Work;
+
+      <span class="kwa">entry</span> Wait_For_Termination <span class="kwa">when</span> Wait_For_Work<span class="kwd">'Count</span> = <span class="num">0</span> <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         <span class="kwa">null</span>;
+      <span class="kwa">end</span> Wait_For_Termination;
+
+   <span class="kwa">end</span> Work_Manager;
+
+   <span class="kwa">task body</span> Worker <span class="kwa">is</span>
+      Current_Item : Work_Handle := <span class="kwa">null</span>;
+      Work_Plan : <span class="kwa">aliased</span> Work_Handle := <span class="kwa">null</span>;
+   <span class="kwa">begin</span>
+
+      Pool.Manager.Wait_For_Work (Work_Plan);
+
+      <span class="kwa">while</span> Work_Plan /= <span class="kwa">null loop</span>
+
+         Current_Item := Work_Plan;
+         <span class="slc">--  Save the virtual thread to be invoked</span>
+
+         Work_Plan := <span class="kwa">null</span>;
+         <span class="slc">--  Clear the virtual thread so we can tell if further</span>
+         <span class="slc">--  work was been assigned to the same task</span>
+
+         Current_Item.<span class="kwa">all</span>.Process (Work_Plan<span class="kwd">'Unchecked_Access</span>);
+         <span class="slc">--  Invoke the virtual thread, passing it the context and</span>
+         <span class="slc">--  client specified state</span>
+
+         <span class="kwa">if</span> Work_Plan = <span class="kwa">null then</span>
+            <span class="slc">-- If the Work_Plan does not have any work, we have to wait</span>
+            <span class="slc">-- for another task to offer some work, otherwise, we can</span>
+            <span class="slc">-- skip this and proceed directly to process the virtual thread</span>
+            <span class="slc">-- that was submitted by the previous invocation of the client</span>
+            <span class="slc">-- virtual thread.</span>
+            Pool.Manager.Wait_For_Work (Work_Plan);
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Worker;
+
+   <span class="kwa">function</span> Create_Worker (Pool : <span class="kwa">access</span> Task_Pool) <span class="kwa">return</span> Worker <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">return</span> New_Worker : Worker (Pool)
+      <span class="kwa">do</span>
+         <span class="kwa">null</span>;
+      <span class="kwa">end return</span>;
+   <span class="kwa">end</span> Create_Worker;
+
+   <span class="slc">-------------</span>
+   <span class="slc">-- Submit --</span>
+   <span class="slc">-------------</span>
+
+   <span class="kwa">procedure</span> Submit
+     (Pool : <span class="kwa">in out</span> Task_Pool;
+      Next_Context : Work_Handle;
+      Current_Context : Context_Handle := <span class="kwa">null</span>) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">if</span> Current_Context = <span class="kwa">null then</span>
+         <span class="slc">--  Work is either being enqueued by a client (non-worker) task,</span>
+         <span class="slc">--  or the client is requesting that a new task from the task pool</span>
+         <span class="slc">--  should process the virtual thread, so offer the work to a new</span>
+         <span class="slc">--  worker</span>
+         Pool.Manager.Offer_Work (Next_Context);
+      <span class="kwa">else</span>
+         <span class="slc">--  The current task is a worker task</span>
+
+         <span class="kwa">if</span> Current_Context.<span class="kwa">all</span> = <span class="kwa">null then</span>
+            <span class="slc">--  No further work has yet been assigned to the current task, so</span>
+            <span class="slc">--  give the work to the same task. Note: no synchronization needed</span>
+            <span class="slc">--  since current task owns its work.</span>
+            Current_Context.<span class="kwa">all</span> := Next_Context;
+         <span class="kwa">else</span>
+            <span class="slc">--  Since this task already has something to do next, offer</span>
+            <span class="slc">--  the work to another idle worker</span>
+            Pool.Manager.Offer_Work (Next_Context);
+         <span class="kwa">end if</span>;
+      <span class="kwa">end if</span>;
+   <span class="kwa">end</span> Submit;
+
+   <span class="kwa">procedure</span> Destruct (Pool : <span class="kwa">in out</span> Task_Pool) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      Pool.Manager.Shutdown;
+      Pool.Manager.Wait_For_Termination;
+   <span class="kwa">end</span> Destruct;
+
+<span class="kwa">end</span> Task_Pools;

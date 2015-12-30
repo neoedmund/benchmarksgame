@@ -1,0 +1,147 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Isaac Gouy</span>
+<span class="com">   modified by Meiko Rachimow</span>
+<span class="com">   updated for 2.8 by Rex Kerr</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> math._
+
+<span class="kwa">object</span> nbody {
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) = {
+    <span class="kwa">var</span> n = <span class="kwd">args</span>(<span class="num">0</span>).toInt
+
+    <span class="kwd">printf</span>(<span class="str">&quot;%.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, JovianSystem.energy )
+    <span class="kwa">while</span> (n &gt; <span class="num">0</span>) { JovianSystem.<span class="kwd">advance</span>(<span class="num">0.01</span>); n -= <span class="num">1</span> }
+    <span class="kwd">printf</span>(<span class="str">&quot;%.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, JovianSystem.energy )
+  }
+}
+
+
+<span class="kwa">abstract class</span> NBodySystem {
+
+  <span class="kwa">def</span> <span class="kwd">energy</span>() = {
+    <span class="kwa">var</span> e = <span class="num">0.0</span>
+    <span class="kwa">for</span> (i &lt;- <span class="num">0</span> until bodies.length) {
+      e += <span class="num">0.5</span> * <span class="kwd">bodies</span>(i).mass * <span class="kwd">bodies</span>(i).speedSq
+      
+      <span class="kwa">for</span> (j &lt;- i+<span class="num">1</span> until bodies.length) {
+        <span class="kwa">val</span> dx = <span class="kwd">bodies</span>(i).x - <span class="kwd">bodies</span>(j).x
+        <span class="kwa">val</span> dy = <span class="kwd">bodies</span>(i).y - <span class="kwd">bodies</span>(j).y
+        <span class="kwa">val</span> dz = <span class="kwd">bodies</span>(i).z - <span class="kwd">bodies</span>(j).z
+        <span class="kwa">val</span> distance = <span class="kwd">sqrt</span>(dx*dx + dy*dy + dz*dz)
+        e -= (<span class="kwd">bodies</span>(i).mass * <span class="kwd">bodies</span>(j).mass) / distance
+      }
+    }
+    e
+  }
+
+  <span class="kwa">def</span> <span class="kwd">advance</span>(dt: Double) = {
+    <span class="kwa">var</span> i = <span class="num">0</span>
+    <span class="kwa">while</span> (i &lt; bodies.length){
+      <span class="kwa">var</span> j = i+<span class="num">1</span>
+      <span class="kwa">while</span> (j &lt; bodies.length){
+        <span class="kwa">val</span> dx = <span class="kwd">bodies</span>(i).x - <span class="kwd">bodies</span>(j).x
+        <span class="kwa">val</span> dy = <span class="kwd">bodies</span>(i).y - <span class="kwd">bodies</span>(j).y
+        <span class="kwa">val</span> dz = <span class="kwd">bodies</span>(i).z - <span class="kwd">bodies</span>(j).z
+
+        <span class="kwa">val</span> distance = <span class="kwd">sqrt</span>(dx*dx + dy*dy + dz*dz)
+        <span class="kwa">val</span> mag = dt / (distance * distance * distance)
+
+        <span class="kwd">bodies</span>(i).<span class="kwd">advance</span>(dx,dy,dz,-<span class="kwd">bodies</span>(j).mass*mag)
+        <span class="kwd">bodies</span>(j).<span class="kwd">advance</span>(dx,dy,dz,<span class="kwd">bodies</span>(i).mass*mag)
+
+        j += <span class="num">1</span>
+      }
+      i += <span class="num">1</span>
+    }
+
+    i = <span class="num">0</span>
+    <span class="kwa">while</span> (i &lt; bodies.length){
+      <span class="kwd">bodies</span>(i).<span class="kwd">move</span>(dt)
+      i += <span class="num">1</span>
+    }
+  }
+
+  <span class="kwa">protected val</span> bodies: Array[Body]
+
+  <span class="kwa">class</span> <span class="kwd">Body</span>(){
+    <span class="kwa">var</span> x,y,z = <span class="num">0.0</span>
+    <span class="kwa">var</span> vx,vy,vz = <span class="num">0.0</span>
+    <span class="kwa">var</span> mass = <span class="num">0.0</span>
+    <span class="kwa">def</span> speedSq = vx*vx + vy*vy + vz*vz
+    <span class="kwa">def</span> <span class="kwd">move</span>(dt: Double) {
+      x += dt*vx
+      y += dt*vy
+      z += dt*vz
+    }
+    <span class="kwa">def</span> <span class="kwd">advance</span>(dx: Double, dy: Double, dz: Double, delta: Double) {
+      vx += dx*delta
+      vy += dy*delta
+      vz += dz*delta
+    }
+  }
+}
+
+<span class="kwa">object</span> JovianSystem <span class="kwa">extends</span> NBodySystem {
+   <span class="kwa">protected val</span> bodies = initialValues
+
+   <span class="kwa">private def</span> <span class="kwd">initialValues</span>() = {
+      <span class="kwa">val</span> SOLAR_MASS = <span class="num">4</span> * Pi * Pi
+      <span class="kwa">val</span> DAYS_PER_YEAR = <span class="num">365.24</span>
+
+      <span class="kwa">val</span> sun = <span class="kwa">new</span> Body
+      sun.mass = SOLAR_MASS
+
+      <span class="kwa">val</span> jupiter = <span class="kwa">new</span> Body
+      jupiter.x = <span class="num">4.84143144246472090e+00</span>
+      jupiter.y = -<span class="num">1.16032004402742839e+00</span>
+      jupiter.z = -<span class="num">1.03622044471123109e-01</span>
+      jupiter.vx = <span class="num">1.66007664274403694e-03</span> * DAYS_PER_YEAR
+      jupiter.vy = <span class="num">7.69901118419740425e-03</span> * DAYS_PER_YEAR
+      jupiter.vz = -<span class="num">6.90460016972063023e-05</span> * DAYS_PER_YEAR
+      jupiter.mass = <span class="num">9.54791938424326609e-04</span> * SOLAR_MASS
+
+      <span class="kwa">val</span> saturn = <span class="kwa">new</span> Body
+      saturn.x = <span class="num">8.34336671824457987e+00</span>
+      saturn.y = <span class="num">4.12479856412430479e+00</span>
+      saturn.z = -<span class="num">4.03523417114321381e-01</span>
+      saturn.vx = -<span class="num">2.76742510726862411e-03</span> * DAYS_PER_YEAR
+      saturn.vy = <span class="num">4.99852801234917238e-03</span> * DAYS_PER_YEAR
+      saturn.vz = <span class="num">2.30417297573763929e-05</span> * DAYS_PER_YEAR
+      saturn.mass = <span class="num">2.85885980666130812e-04</span> * SOLAR_MASS
+
+      <span class="kwa">val</span> uranus = <span class="kwa">new</span> Body
+      uranus.x = <span class="num">1.28943695621391310e+01</span>
+      uranus.y = -<span class="num">1.51111514016986312e+01</span>
+      uranus.z = -<span class="num">2.23307578892655734e-01</span>
+      uranus.vx = <span class="num">2.96460137564761618e-03</span> * DAYS_PER_YEAR
+      uranus.vy = <span class="num">2.37847173959480950e-03</span> * DAYS_PER_YEAR
+      uranus.vz = -<span class="num">2.96589568540237556e-05</span> * DAYS_PER_YEAR
+      uranus.mass = <span class="num">4.36624404335156298e-05</span> * SOLAR_MASS
+
+      <span class="kwa">val</span> neptune = <span class="kwa">new</span> Body
+      neptune.x = <span class="num">1.53796971148509165e+01</span>
+      neptune.y = -<span class="num">2.59193146099879641e+01</span>
+      neptune.z = <span class="num">1.79258772950371181e-01</span>
+      neptune.vx = <span class="num">2.68067772490389322e-03</span> * DAYS_PER_YEAR
+      neptune.vy = <span class="num">1.62824170038242295e-03</span> * DAYS_PER_YEAR
+      neptune.vz = -<span class="num">9.51592254519715870e-05</span> * DAYS_PER_YEAR
+      neptune.mass = <span class="num">5.15138902046611451e-05</span>  * SOLAR_MASS
+
+
+      <span class="kwa">val</span> initialValues = <span class="kwd">Array</span> ( sun, jupiter, saturn, uranus, neptune )
+
+      <span class="kwa">var</span> px = <span class="num">0.0</span>; <span class="kwa">var</span> py = <span class="num">0.0</span>; <span class="kwa">var</span> pz = <span class="num">0.0</span>;
+      <span class="kwa">for</span> (b &lt;- initialValues){
+         px += (b.vx * b.mass)
+         py += (b.vy * b.mass)
+         pz += (b.vz * b.mass)
+      }
+      sun.vx = -px / SOLAR_MASS
+      sun.vy = -py / SOLAR_MASS
+      sun.vz = -pz / SOLAR_MASS
+
+      initialValues
+   }
+}

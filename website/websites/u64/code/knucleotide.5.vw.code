@@ -1,0 +1,115 @@
+<span class="com">&quot;* The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">    contributed by Andres Valloud *&quot;</span>!
+
+
+!<span class="kwc">SequenceableCollection</span> <span class="kwb">methodsFor:</span> <span class="str">'computer language shootout'</span>!
+<span class="kwb">substringFrequencies5:</span> aLength <span class="kwb">using:</span> aDictionary
+
+   <span class="kwd">| buffer |</span>
+   buffer :<span class="kwb">=</span> <span class="kwc">String</span> <span class="kwb">new:</span> aLength.
+   <span class="num">1</span> <span class="kwb">to:</span> <span class="kwa">self</span> size <span class="kwb">-</span> aLength <span class="kwb">+</span> <span class="num">1</span> <span class="kwb">do:</span>
+      [<span class="kwd">:i</span> |
+         <span class="kwd">| answer |</span>
+         buffer <span class="kwb">replaceFrom:</span> <span class="num">1</span> <span class="kwb">to:</span> aLength <span class="kwb">with:</span> <span class="kwa">self</span> <span class="kwb">startingAt:</span> i.
+         answer :<span class="kwb">=</span> aDictionary
+            <span class="kwb">at:</span> buffer
+            <span class="kwb">putValueOf:</span> [<span class="kwd">:sum</span> | sum <span class="kwb">+</span> <span class="num">1</span>]
+            <span class="kwb">ifAbsentPutValueOf:</span> <span class="num">1</span>.
+         answer <span class="kwb">=</span> <span class="num">1</span> <span class="kwb">ifTrue:</span> [buffer :<span class="kwb">=</span> <span class="kwc">String</span> <span class="kwb">new:</span> aLength].
+      ].
+   ^aDictionary! !
+
+
+!<span class="kwc">Dictionary</span> <span class="kwb">methodsFor:</span> <span class="str">'computer language shootout'</span>!
+<span class="kwb">at:</span> key <span class="kwb">putValueOf:</span> putBlock <span class="kwb">ifAbsentPutValueOf:</span> absentBlock
+   <span class="com">&quot;* Set the value at key to be the value of evaluating putBlock</span>
+<span class="com">    with the existing value. If key is not found, create a new</span>
+<span class="com">    entry for key and set is value to the evaluation of</span>
+<span class="com">    absentBlock. Answer the result of evaluating either block. *&quot;</span>
+
+   <span class="kwd">| index element anObject |</span>
+   key <span class="kwb">==</span> <span class="kwa">nil</span> <span class="kwb">ifTrue:</span>
+      [^<span class="kwa">self</span>
+         <span class="kwb">subscriptBoundsErrorFor:</span> <span class="kwd">#at:putValueOf:ifAbsentPutValueOf:</span>
+         <span class="kwb">index:</span> key
+         <span class="kwb">value:</span> absentBlock value].
+   index :<span class="kwb">=</span> <span class="kwa">self</span> <span class="kwb">findKeyOrNil:</span> key.
+   element :<span class="kwb">=</span> <span class="kwa">self</span> <span class="kwb">basicAt:</span> index.
+   element <span class="kwb">==</span> <span class="kwa">nil</span>
+      <span class="kwb">ifTrue:</span> [<span class="kwa">self</span> <span class="kwb">atNewIndex:</span> index <span class="kwb">put:</span>
+         (<span class="kwa">self</span> <span class="kwb">createKey:</span> key <span class="kwb">value:</span> (anObject :<span class="kwb">=</span> absentBlock value))]
+      <span class="kwb">ifFalse:</span> [element <span class="kwb">value:</span> (anObject :<span class="kwb">=</span> putBlock <span class="kwb">value:</span> element value)].
+   ^anObject ! !
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">readFasta:</span> sequenceName <span class="kwb">from:</span> input
+   <span class="kwd">| prefix newline buffer description line char |</span>
+   prefix :<span class="kwb">=</span> <span class="str">'&gt;'</span>,sequenceName.
+   newline :<span class="kwb">=</span> <span class="kwc">Character</span> lf.
+
+   <span class="com">&quot;* find start of particular fasta sequence *&quot;</span>
+   [(input atEnd) <span class="kwb">or:</span> [
+         (input peek <span class="kwb">=</span> $&gt;)
+            <span class="kwb">ifTrue:</span> [((line :<span class="kwb">=</span> input <span class="kwb">upTo:</span> newline)
+               <span class="kwb">indexOfSubCollection:</span> prefix <span class="kwb">startingAt:</span> <span class="num">1</span>) <span class="kwb">=</span> <span class="num">1</span>]
+            <span class="kwb">ifFalse:</span> [input <span class="kwb">skipThrough:</span> newline. <span class="kwa">false</span>]]
+      ] whileFalse.
+
+   <span class="com">&quot;* line-by-line read - it would be a lot faster to block read *&quot;</span>
+   description :<span class="kwb">=</span> line.
+   buffer :<span class="kwb">=</span> <span class="kwc">ReadWriteStream</span> <span class="kwb">on:</span> (<span class="kwc">String</span> <span class="kwb">new:</span> <span class="num">1028</span>).
+   [(input atEnd) <span class="kwb">or:</span> [(char :<span class="kwb">=</span> input peek) <span class="kwb">=</span> $&gt;]] <span class="kwb">whileFalse:</span> [
+      (char <span class="kwb">=</span> $;)
+         <span class="kwb">ifTrue:</span> [input <span class="kwb">upTo:</span> newline]
+         <span class="kwb">ifFalse:</span> [buffer <span class="kwb">nextPutAll:</span> (input <span class="kwb">upTo:</span> newline)]
+      ].
+   ^<span class="kwc">Association</span> <span class="kwb">key:</span> description <span class="kwb">value:</span> buffer contents ! !
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">knucleotide5From:</span> input <span class="kwb">to:</span> output
+   <span class="com">&quot;Same as av3, but create less strings while updating the frequencies&quot;</span>
+
+   <span class="kwd">| sequence writeFrequencies writeCount |</span>
+
+   sequence :<span class="kwb">=</span> (<span class="kwa">self</span> <span class="kwb">readFasta:</span> <span class="str">'THREE'</span> <span class="kwb">from:</span> input) value asUppercase.
+
+   writeFrequencies :<span class="kwb">=</span>
+      [<span class="kwd">:k</span> | <span class="kwd">| frequencies count |</span>
+      frequencies :<span class="kwb">=</span> <span class="kwc">SortedCollection</span> <span class="kwb">sortBlock:</span> [<span class="kwd">:a :b</span>|
+      (a value <span class="kwb">=</span> b value) <span class="kwb">ifTrue:</span> [b key &lt; a key] <span class="kwb">ifFalse:</span> [b value &lt; a value]].
+
+   count :<span class="kwb">=</span> <span class="num">0.0</span>.
+   (sequence <span class="kwb">substringFrequencies5:</span> k <span class="kwb">using:</span> (<span class="kwc">Dictionary</span> <span class="kwb">new:</span> <span class="num">1024</span>))
+      <span class="kwb">associationsDo:</span> [<span class="kwd">:each</span>|
+         frequencies <span class="kwb">add:</span> each. count :<span class="kwb">=</span> count <span class="kwb">+</span> each value].
+
+   frequencies <span class="kwb">do:</span> [<span class="kwd">:each</span> | <span class="kwd">| percentage |</span>
+      percentage :<span class="kwb">=</span> (each value <span class="kwb">/</span> count) <span class="kwb">*</span> <span class="num">100.0</span>.
+      output
+         <span class="kwb">nextPutAll:</span> each key; space;
+         <span class="kwb">print:</span> percentage <span class="kwb">digits:</span> <span class="num">3</span>; nl]].
+
+   writeCount :<span class="kwb">=</span> [<span class="kwd">:nucleotideFragment</span> | <span class="kwd">| frequencies count |</span>
+      frequencies :<span class="kwb">=</span> sequence <span class="kwb">substringFrequencies5:</span> nucleotideFragment size
+         <span class="kwb">using:</span> (<span class="kwc">Dictionary</span> <span class="kwb">new:</span> <span class="num">1024</span>).
+      count :<span class="kwb">=</span> frequencies <span class="kwb">at:</span> nucleotideFragment <span class="kwb">ifAbsent:</span> [<span class="num">0</span>].
+      output <span class="kwb">print:</span> count; tab; <span class="kwb">nextPutAll:</span> nucleotideFragment; nl].
+
+   writeFrequencies <span class="kwb">value:</span> <span class="num">1</span>. output nl.
+   writeFrequencies <span class="kwb">value:</span> <span class="num">2</span>. output nl.
+
+   writeCount <span class="kwb">value:</span> <span class="str">'GGT'</span>.
+   writeCount <span class="kwb">value:</span> <span class="str">'GGTA'</span>.
+   writeCount <span class="kwb">value:</span> <span class="str">'GGTATT'</span>.
+   writeCount <span class="kwb">value:</span> <span class="str">'GGTATTTTAATT'</span>.
+   writeCount <span class="kwb">value:</span> <span class="str">'GGTATTTTAATTTATAGT'</span>.! !
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmark scripts'</span>!
+<span class="kwb">knucleotide5</span>
+
+   <span class="kwa">self</span> <span class="kwb">knucleotide5From:</span> <span class="kwa">self</span> stdinSpecial <span class="kwb">to:</span> <span class="kwa">self</span> stdout.
+   ^<span class="str">''</span>! !

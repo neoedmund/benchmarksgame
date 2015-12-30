@@ -1,0 +1,8 @@
+
+Tue, 24 Nov 2015 20:19:41 GMT
+
+COMMAND LINE:
+/usr/local/src/racket-6.3/bin/racket  spectralnorm.racket-3.racket 5500
+
+PROGRAM OUTPUT:
+1.274224153

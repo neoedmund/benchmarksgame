@@ -1,0 +1,26 @@
+
+Tue, 13 Jan 2015 01:18:20 GMT
+
+COMMAND LINE:
+/usr/local/src/lua-5.3.0/bin/lua  pidigits.lua-8.lua 2000
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+/usr/local/src/lua-5.3.0/bin/lua: pidigits.lua-8.lua:13: module 'c-gmp' not found:
+	no field package.preload['c-gmp']
+	no file '/usr/local/share/lua/5.3/c-gmp.lua'
+	no file '/usr/local/share/lua/5.3/c-gmp/init.lua'
+	no file '/usr/local/lib/lua/5.3/c-gmp.lua'
+	no file '/usr/local/lib/lua/5.3/c-gmp/init.lua'
+	no file './c-gmp.lua'
+	no file './c-gmp/init.lua'
+	no file '/usr/local/lib/lua/5.3/c-gmp.so'
+	no file '/usr/local/lib/lua/5.3/loadall.so'
+	no file './c-gmp.so'
+stack traceback:
+	[C]: in function 'require'
+	pidigits.lua-8.lua:13: in main chunk
+	[C]: in ?

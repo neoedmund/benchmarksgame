@@ -1,0 +1,217 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// contributed by the Rust Project Developers</span>
+<span class="hl slc">// contributed by TeXitoi</span>
+
+<span class="hl ppc">#![feature(slicing_syntax, unboxed_closures, overloaded_calls)]</span>
+
+<span class="hl kwc">extern</span> crate libc<span class="hl opt">;</span>
+
+use std<span class="hl opt">::</span>io<span class="hl opt">::</span>stdio<span class="hl opt">::{</span>stdin_raw<span class="hl opt">,</span> stdout_raw<span class="hl opt">};</span>
+use std<span class="hl opt">::</span>num<span class="hl opt">::{</span>div_rem<span class="hl opt">};</span>
+use std<span class="hl opt">::</span>ptr<span class="hl opt">::{</span>copy_memory<span class="hl opt">};</span>
+use std<span class="hl opt">::</span>io<span class="hl opt">::{</span>IoResult<span class="hl opt">,</span> EndOfFile<span class="hl opt">};</span>
+
+<span class="hl kwb">struct</span> Tables <span class="hl opt">{</span>
+    table8<span class="hl opt">: [</span>u8<span class="hl opt">, .</span><span class="hl num">.1</span> <span class="hl opt">&lt;&lt;</span> <span class="hl num">8</span><span class="hl opt">],</span>
+    table16<span class="hl opt">: [</span>u16<span class="hl opt">, .</span><span class="hl num">.1</span> <span class="hl opt">&lt;&lt;</span> <span class="hl num">16</span><span class="hl opt">]</span>
+<span class="hl opt">}</span>
+
+impl Tables <span class="hl opt">{</span>
+    fn <span class="hl kwa">new</span><span class="hl opt">() -&gt;</span> Tables <span class="hl opt">{</span>
+        let mut table8 <span class="hl opt">= [</span><span class="hl num">0</span><span class="hl opt">, .</span><span class="hl num">.1</span> <span class="hl opt">&lt;&lt;</span> <span class="hl num">8</span><span class="hl opt">];</span>
+        <span class="hl kwa">for</span> <span class="hl opt">(</span>i<span class="hl opt">,</span> v<span class="hl opt">)</span> in table8<span class="hl opt">.</span><span class="hl kwd">iter_mut</span><span class="hl opt">().</span><span class="hl kwd">enumerate</span><span class="hl opt">() {</span>
+            <span class="hl opt">*</span>v <span class="hl opt">=</span> Tables<span class="hl opt">::</span><span class="hl kwd">computed_cpl8</span><span class="hl opt">(</span>i as u8<span class="hl opt">);</span>
+        <span class="hl opt">}</span>
+        let mut table16 <span class="hl opt">= [</span><span class="hl num">0</span><span class="hl opt">, .</span><span class="hl num">.1</span> <span class="hl opt">&lt;&lt;</span> <span class="hl num">16</span><span class="hl opt">];</span>
+        <span class="hl kwa">for</span> <span class="hl opt">(</span>i<span class="hl opt">,</span> v<span class="hl opt">)</span> in table16<span class="hl opt">.</span><span class="hl kwd">iter_mut</span><span class="hl opt">().</span><span class="hl kwd">enumerate</span><span class="hl opt">() {</span>
+            <span class="hl opt">*</span>v <span class="hl opt">=</span> table8<span class="hl opt">[</span>i <span class="hl opt">&amp;</span> <span class="hl num">255</span><span class="hl opt">]</span> as u16 <span class="hl opt">&lt;&lt;</span> <span class="hl num">8</span> <span class="hl opt">|</span>
+                 table8<span class="hl opt">[</span>i <span class="hl opt">&gt;&gt;</span> <span class="hl num">8</span><span class="hl opt">]</span>  as u16<span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+        Tables <span class="hl opt">{</span> table8<span class="hl opt">:</span> table8<span class="hl opt">,</span> table16<span class="hl opt">:</span> table16 <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    fn <span class="hl kwd">computed_cpl8</span><span class="hl opt">(</span>c<span class="hl opt">:</span> u8<span class="hl opt">) -&gt;</span> u8 <span class="hl opt">{</span>
+        match c <span class="hl opt">{</span>
+            b<span class="hl str">'A'</span> <span class="hl opt">|</span> b<span class="hl str">'a'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'T'</span><span class="hl opt">,</span>
+            b<span class="hl str">'C'</span> <span class="hl opt">|</span> b<span class="hl str">'c'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'G'</span><span class="hl opt">,</span>
+            b<span class="hl str">'G'</span> <span class="hl opt">|</span> b<span class="hl str">'g'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'C'</span><span class="hl opt">,</span>
+            b<span class="hl str">'T'</span> <span class="hl opt">|</span> b<span class="hl str">'t'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'A'</span><span class="hl opt">,</span>
+            b<span class="hl str">'U'</span> <span class="hl opt">|</span> b<span class="hl str">'u'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'A'</span><span class="hl opt">,</span>
+            b<span class="hl str">'M'</span> <span class="hl opt">|</span> b<span class="hl str">'m'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'K'</span><span class="hl opt">,</span>
+            b<span class="hl str">'R'</span> <span class="hl opt">|</span> b<span class="hl str">'r'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'Y'</span><span class="hl opt">,</span>
+            b<span class="hl str">'W'</span> <span class="hl opt">|</span> b<span class="hl str">'w'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'W'</span><span class="hl opt">,</span>
+            b<span class="hl str">'S'</span> <span class="hl opt">|</span> b<span class="hl str">'s'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'S'</span><span class="hl opt">,</span>
+            b<span class="hl str">'Y'</span> <span class="hl opt">|</span> b<span class="hl str">'y'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'R'</span><span class="hl opt">,</span>
+            b<span class="hl str">'K'</span> <span class="hl opt">|</span> b<span class="hl str">'k'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'M'</span><span class="hl opt">,</span>
+            b<span class="hl str">'V'</span> <span class="hl opt">|</span> b<span class="hl str">'v'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'B'</span><span class="hl opt">,</span>
+            b<span class="hl str">'H'</span> <span class="hl opt">|</span> b<span class="hl str">'h'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'D'</span><span class="hl opt">,</span>
+            b<span class="hl str">'D'</span> <span class="hl opt">|</span> b<span class="hl str">'d'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'H'</span><span class="hl opt">,</span>
+            b<span class="hl str">'B'</span> <span class="hl opt">|</span> b<span class="hl str">'b'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'V'</span><span class="hl opt">,</span>
+            b<span class="hl str">'N'</span> <span class="hl opt">|</span> b<span class="hl str">'n'</span> <span class="hl opt">=&gt;</span> b<span class="hl str">'N'</span><span class="hl opt">,</span>
+            i <span class="hl opt">=&gt;</span> i<span class="hl opt">,</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl slc">/// Retreives the complement for `i`.</span>
+    fn <span class="hl kwd">cpl8</span><span class="hl opt">(&amp;</span>self<span class="hl opt">,</span> i<span class="hl opt">:</span> u8<span class="hl opt">) -&gt;</span> u8 <span class="hl opt">{</span>
+        self<span class="hl opt">.</span>table8<span class="hl opt">[</span>i as uint<span class="hl opt">]</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl slc">/// Retreives the complement for `i`.</span>
+    fn <span class="hl kwd">cpl16</span><span class="hl opt">(&amp;</span>self<span class="hl opt">,</span> i<span class="hl opt">:</span> u16<span class="hl opt">) -&gt;</span> u16 <span class="hl opt">{</span>
+        self<span class="hl opt">.</span>table16<span class="hl opt">[</span>i as uint<span class="hl opt">]</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+<span class="hl slc">/// Reads all remaining bytes from the stream.</span>
+fn read_to_end<span class="hl opt">&lt;</span>R<span class="hl opt">:</span> Reader<span class="hl opt">&gt;(</span>r<span class="hl opt">: &amp;</span>mut R<span class="hl opt">) -&gt;</span> IoResult<span class="hl opt">&lt;</span>Vec<span class="hl opt">&lt;</span>u8<span class="hl opt">&gt;&gt; {</span>
+    <span class="hl slc">// As reading the input stream in memory is a bottleneck, we tune</span>
+    <span class="hl slc">// Reader::read_to_end() with a fast growing policy to limit</span>
+    <span class="hl slc">// recopies.  If MREMAP_RETAIN is implemented in the linux kernel</span>
+    <span class="hl slc">// and jemalloc use it, this trick will become useless.</span>
+    <span class="hl kwb">const</span> CHUNK<span class="hl opt">:</span> uint <span class="hl opt">=</span> <span class="hl num">64</span> <span class="hl opt">*</span> <span class="hl num">1024</span><span class="hl opt">;</span>
+
+    let mut vec <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">with_capacity</span><span class="hl opt">(</span>CHUNK<span class="hl opt">);</span>
+    loop <span class="hl opt">{</span>
+        <span class="hl slc">// workaround: very fast growing</span>
+        <span class="hl kwa">if</span> vec<span class="hl opt">.</span><span class="hl kwd">capacity</span><span class="hl opt">() -</span> vec<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">() &lt;</span> CHUNK <span class="hl opt">{</span>
+            let cap <span class="hl opt">=</span> vec<span class="hl opt">.</span><span class="hl kwd">capacity</span><span class="hl opt">();</span>
+            let mult <span class="hl opt">=</span> <span class="hl kwa">if</span> cap <span class="hl opt">&lt;</span> <span class="hl num">256</span> <span class="hl opt">*</span> <span class="hl num">1024</span> <span class="hl opt">*</span> <span class="hl num">1024</span> <span class="hl opt">{</span>
+                <span class="hl num">16</span>
+            <span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{</span>
+                <span class="hl num">2</span>
+            <span class="hl opt">};</span>
+            vec<span class="hl opt">.</span><span class="hl kwd">reserve_exact</span><span class="hl opt">(</span>mult <span class="hl opt">*</span> cap<span class="hl opt">);</span>
+        <span class="hl opt">}</span>
+        match r<span class="hl opt">.</span><span class="hl kwd">push_at_least</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">,</span> CHUNK<span class="hl opt">, &amp;</span>mut vec<span class="hl opt">) {</span>
+            <span class="hl kwd">Ok</span><span class="hl opt">(</span>_<span class="hl opt">) =&gt; {}</span>
+            <span class="hl kwd">Err</span><span class="hl opt">(</span>ref e<span class="hl opt">)</span> <span class="hl kwa">if</span> e<span class="hl opt">.</span>kind <span class="hl opt">==</span> EndOfFile <span class="hl opt">=&gt;</span> <span class="hl kwa">break</span><span class="hl opt">,</span>
+            <span class="hl kwd">Err</span><span class="hl opt">(</span>e<span class="hl opt">) =&gt;</span> <span class="hl kwa">return</span> <span class="hl kwd">Err</span><span class="hl opt">(</span>e<span class="hl opt">)</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+    <span class="hl kwd">Ok</span><span class="hl opt">(</span>vec<span class="hl opt">)</span>
+<span class="hl opt">}</span>
+
+<span class="hl slc">/// Finds the first position at which `b` occurs in `s`.</span>
+fn <span class="hl kwd">memchr</span><span class="hl opt">(</span>h<span class="hl opt">: &amp;[</span>u8<span class="hl opt">],</span> n<span class="hl opt">:</span> u8<span class="hl opt">) -&gt;</span> Option<span class="hl opt">&lt;</span>uint<span class="hl opt">&gt; {</span>
+    use libc<span class="hl opt">::{</span>c_void<span class="hl opt">,</span> c_int<span class="hl opt">,</span> <span class="hl kwb">size_t</span><span class="hl opt">};</span>
+    let res <span class="hl opt">=</span> unsafe <span class="hl opt">{</span>
+        libc<span class="hl opt">::</span><span class="hl kwd">memchr</span><span class="hl opt">(</span>h<span class="hl opt">.</span><span class="hl kwd">as_ptr</span><span class="hl opt">()</span> as <span class="hl opt">*</span><span class="hl kwb">const</span> c_void<span class="hl opt">,</span> n as c_int<span class="hl opt">,</span> h<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">()</span> as <span class="hl kwb">size_t</span><span class="hl opt">)</span>
+    <span class="hl opt">};</span>
+    <span class="hl kwa">if</span> res<span class="hl opt">.</span><span class="hl kwd">is_null</span><span class="hl opt">() {</span>
+        None
+    <span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{</span>
+        <span class="hl kwd">Some</span><span class="hl opt">(</span>res as uint <span class="hl opt">-</span> h<span class="hl opt">.</span><span class="hl kwd">as_ptr</span><span class="hl opt">()</span> as uint<span class="hl opt">)</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+<span class="hl slc">/// A mutable iterator over DNA sequences</span>
+<span class="hl kwb">struct</span> MutDnaSeqs<span class="hl opt">&lt;</span><span class="hl str">'a&gt; { s: &amp;'</span>a mut <span class="hl opt">[</span>u8<span class="hl opt">] }</span>
+fn mut_dna_seqs<span class="hl opt">&lt;</span><span class="hl str">'a&gt;(s: &amp;'</span>a mut <span class="hl opt">[</span>u8<span class="hl opt">]) -&gt;</span> MutDnaSeqs<span class="hl opt">&lt;</span><span class="hl str">'a&gt; {</span>
+<span class="hl str">    MutDnaSeqs { s: s }</span>
+<span class="hl str">}</span>
+<span class="hl str">impl&lt;'</span>a<span class="hl opt">&gt;</span> Iterator<span class="hl opt">&lt;&amp;</span><span class="hl str">'a mut [u8]&gt; for MutDnaSeqs&lt;'</span>a<span class="hl opt">&gt; {</span>
+    fn <span class="hl kwd">next</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">) -&gt;</span> Option<span class="hl opt">&lt;&amp;</span><span class="hl str">'a mut [u8]&gt; {</span>
+<span class="hl str">        let tmp = std::mem::replace(&amp;mut self.s, &amp;mut []);</span>
+<span class="hl str">        let tmp = match memchr(tmp, b'</span><span class="hl esc">\n</span><span class="hl str">') {</span>
+<span class="hl str">            Some(i) =&gt; tmp.slice_from_mut(i + 1),</span>
+<span class="hl str">            None =&gt; return None,</span>
+<span class="hl str">        };</span>
+<span class="hl str">        let (seq, tmp) = match memchr(tmp, b'</span><span class="hl opt">&gt;</span><span class="hl str">') {</span>
+<span class="hl str">            Some(i) =&gt; tmp.split_at_mut(i),</span>
+<span class="hl str">            None =&gt; {</span>
+<span class="hl str">                let len = tmp.len();</span>
+<span class="hl str">                tmp.split_at_mut(len)</span>
+<span class="hl str">            }</span>
+<span class="hl str">        };</span>
+<span class="hl str">        self.s = tmp;</span>
+<span class="hl str">        Some(seq)</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">/// Length of a normal line without the terminating</span> <span class="hl esc">\n</span><span class="hl str">.</span>
+<span class="hl str">const LINE_LEN: uint = 60;</span>
+<span class="hl str"></span>
+<span class="hl str">/// Compute the reverse complement.</span>
+<span class="hl str">fn reverse_complement(seq: &amp;mut [u8], tables: &amp;Tables) {</span>
+<span class="hl str">    let seq = seq.init_mut();// Drop the last newline</span>
+<span class="hl str">    let len = seq.len();</span>
+<span class="hl str">    let off = LINE_LEN - len % (LINE_LEN + 1);</span>
+<span class="hl str">    let mut i = LINE_LEN;</span>
+<span class="hl str">    while i &lt; len {</span>
+<span class="hl str">        unsafe {</span>
+<span class="hl str">            copy_memory(seq.as_mut_ptr().offset((i - off + 1) as int),</span>
+<span class="hl str">                        seq.as_ptr().offset((i - off) as int), off);</span>
+<span class="hl str">            *seq.unsafe_mut(i - off) = b'</span><span class="hl esc">\n</span><span class="hl str">';</span>
+<span class="hl str">        }</span>
+<span class="hl str">        i += LINE_LEN + 1;</span>
+<span class="hl str">    }</span>
+<span class="hl str"></span>
+<span class="hl str">    let (div, rem) = div_rem(len, 4);</span>
+<span class="hl str">    unsafe {</span>
+<span class="hl str">        let mut left = seq.as_mut_ptr() as *mut u16;</span>
+<span class="hl str">        // This is slow if len % 2 != 0 but still faster than bytewise operations.</span>
+<span class="hl str">        let mut right = seq.as_mut_ptr().offset(len as int - 2) as *mut u16;</span>
+<span class="hl str">        let end = left.offset(div as int);</span>
+<span class="hl str">        while left != end {</span>
+<span class="hl str">            let tmp = tables.cpl16(*left);</span>
+<span class="hl str">            *left = tables.cpl16(*right);</span>
+<span class="hl str">            *right = tmp;</span>
+<span class="hl str">            left = left.offset(1);</span>
+<span class="hl str">            right = right.offset(-1);</span>
+<span class="hl str">        }</span>
+<span class="hl str"></span>
+<span class="hl str">        let end = end as *mut u8;</span>
+<span class="hl str">        match rem {</span>
+<span class="hl str">            1 =&gt; *end = tables.cpl8(*end),</span>
+<span class="hl str">            2 =&gt; {</span>
+<span class="hl str">                let tmp = tables.cpl8(*end);</span>
+<span class="hl str">                *end = tables.cpl8(*end.offset(1));</span>
+<span class="hl str">                *end.offset(1) = tmp;</span>
+<span class="hl str">            },</span>
+<span class="hl str">            3 =&gt; {</span>
+<span class="hl str">                *end.offset(1) = tables.cpl8(*end.offset(1));</span>
+<span class="hl str">                let tmp = tables.cpl8(*end);</span>
+<span class="hl str">                *end = tables.cpl8(*end.offset(2));</span>
+<span class="hl str">                *end.offset(2) = tmp;</span>
+<span class="hl str">            },</span>
+<span class="hl str">            _ =&gt; { },</span>
+<span class="hl str">        }</span>
+<span class="hl str">    }</span>
+<span class="hl str">}</span>
+<span class="hl str"></span>
+<span class="hl str">/// Executes a closure in parallel over the given iterator over mutable slice.</span>
+<span class="hl str">/// The closure `f` is run in parallel with an element of `iter`.</span>
+<span class="hl str">fn parallel&lt;'</span>a<span class="hl opt">,</span> I<span class="hl opt">,</span> T<span class="hl opt">,</span> F<span class="hl opt">&gt;(</span>mut iter<span class="hl opt">:</span> I<span class="hl opt">,</span> f<span class="hl opt">:</span> F<span class="hl opt">)</span>
+        where T<span class="hl opt">:</span> Send <span class="hl opt">+</span> Sync<span class="hl opt">,</span>
+              I<span class="hl opt">:</span> Iterator<span class="hl opt">&lt;&amp;</span><span class="hl str">'a mut [T]&gt;,</span>
+<span class="hl str">              F: Fn(&amp;'</span>a mut <span class="hl opt">[</span>T<span class="hl opt">]) +</span> Sync <span class="hl opt">{</span>
+    use std<span class="hl opt">::</span>mem<span class="hl opt">;</span>
+    use std<span class="hl opt">::</span>raw<span class="hl opt">::</span>Repr<span class="hl opt">;</span>
+
+    <span class="hl kwd">let</span> <span class="hl opt">(</span>tx<span class="hl opt">,</span> rx<span class="hl opt">) =</span> <span class="hl kwd">channel</span><span class="hl opt">();</span>
+    <span class="hl kwa">for</span> chunk in iter <span class="hl opt">{</span>
+        let tx <span class="hl opt">=</span> tx<span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">();</span>
+
+        <span class="hl slc">// Need to convert `f` and `chunk` to something that can cross the task</span>
+        <span class="hl slc">// boundary.</span>
+        let f <span class="hl opt">= &amp;</span>f as <span class="hl opt">*</span><span class="hl kwb">const</span> F as <span class="hl opt">*</span><span class="hl kwb">const</span> uint<span class="hl opt">;</span>
+        let raw <span class="hl opt">=</span> chunk<span class="hl opt">.</span><span class="hl kwd">repr</span><span class="hl opt">();</span>
+        <span class="hl kwd">spawn</span><span class="hl opt">(</span><span class="hl kwd">proc</span><span class="hl opt">() {</span>
+            let f <span class="hl opt">=</span> f as <span class="hl opt">*</span><span class="hl kwb">const</span> F<span class="hl opt">;</span>
+            unsafe <span class="hl opt">{ (*</span>f<span class="hl opt">)(</span>mem<span class="hl opt">::</span><span class="hl kwd">transmute</span><span class="hl opt">(</span>raw<span class="hl opt">)) }</span>
+            <span class="hl kwd">drop</span><span class="hl opt">(</span>tx<span class="hl opt">)</span>
+        <span class="hl opt">});</span>
+    <span class="hl opt">}</span>
+    <span class="hl kwd">drop</span><span class="hl opt">(</span>tx<span class="hl opt">);</span>
+    <span class="hl kwa">for</span> <span class="hl opt">()</span> in rx<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">() {}</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">main</span><span class="hl opt">() {</span>
+    let mut data <span class="hl opt">=</span> <span class="hl kwd">read_to_end</span><span class="hl opt">(&amp;</span>mut <span class="hl kwd">stdin_raw</span><span class="hl opt">()).</span><span class="hl kwd">unwrap</span><span class="hl opt">();</span>
+    let tables <span class="hl opt">= &amp;</span>Tables<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">();</span>
+    <span class="hl kwd">parallel</span><span class="hl opt">(</span><span class="hl kwd">mut_dna_seqs</span><span class="hl opt">(</span>data<span class="hl opt">[</span>mut<span class="hl opt">]), |&amp;:</span> seq<span class="hl opt">|</span> <span class="hl kwd">reverse_complement</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> tables<span class="hl opt">));</span>
+    <span class="hl kwd">stdout_raw</span><span class="hl opt">().</span><span class="hl kwd">write</span><span class="hl opt">(</span>data<span class="hl opt">.</span><span class="hl kwd">as_mut_slice</span><span class="hl opt">()).</span><span class="hl kwd">unwrap</span><span class="hl opt">();</span>
+<span class="hl opt">}</span>

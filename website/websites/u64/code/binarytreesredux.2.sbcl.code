@@ -1,0 +1,66 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; contributed by Manuel Giraud</span>
+<span class="slc">;;; modified by Nicolas Neuss</span>
+<span class="slc">;;; modified by Juho Snellman 2005-10-26</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; modified by Witali Kusnezow 2009-01-20</span>
+<span class="slc">;;;  * simplified structure of leaf nodes</span>
+<span class="slc">;;;  * optimize GC usage</span>
+<span class="slc">;;;  * optimize all functions</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; modified by Witali Kusnezow 2009-08-20</span>
+<span class="slc">;;;  * remove GC hacks to satisfy new versions of the sbcl</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; modified by Marko Kocic 2011-02-18</span>
+<span class="slc">;;;  * add declaim to optimize for speed</span>
+<span class="slc">;;;</span>
+
+<span class="slc">;;; Node is either (DATA) (for leaf nodes) or an improper list (DATA LEFT . RIGHT)</span>
+
+(<span class="kwa">declaim</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">debug</span> <span class="num">0</span>) (<span class="kwa">space</span> <span class="num">0</span>) (<span class="kwa">safety</span> <span class="num">0</span>)))
+
+(<span class="kwa">defun</span> build-btree (<span class="kwa">item</span> depth)
+  (<span class="kwa">declare</span> (<span class="kwa">fixnum</span> item depth))
+  (<span class="kwa">if</span> (<span class="kwa">zerop</span> depth) (<span class="kwa">list</span> item)
+      (<span class="kwa">let</span> ((<span class="kwa">item2</span> (+ item item))
+            (<span class="kwa">depth-1</span> (<span class="kwa">1-</span> depth)))
+        (<span class="kwa">declare</span> (<span class="kwa">fixnum</span> item2 depth-1))
+        (<span class="kwa">cons</span> item
+				(<span class="kwa">cons</span> (<span class="kwa">build-btree</span> (<span class="kwa">the</span> fixnum (<span class="kwa">1-</span> item2)) depth-1) 
+					  (<span class="kwa">build-btree</span> item2 depth-1))))))
+
+(<span class="kwa">defun</span> check-node (<span class="kwa">node</span>)
+  (<span class="kwa">declare</span> (<span class="kwa">values</span> fixnum))
+  (<span class="kwa">let</span> ((<span class="kwa">data</span> (<span class="kwa">car</span> node))
+        (<span class="kwa">kids</span> (<span class="kwa">cdr</span> node)))
+    (<span class="kwa">declare</span> (<span class="kwa">fixnum</span> data))
+    (<span class="kwa">if</span> kids
+        (<span class="kwa">-</span> (+ data (<span class="kwa">check-node</span> (<span class="kwa">car</span> kids)))
+           (<span class="kwa">check-node</span> (<span class="kwa">cdr</span> kids)))
+        data)))
+
+(<span class="kwa">defun</span> loop-depths (<span class="kwa">max-depth</span> &amp;key (<span class="kwa">min-depth</span> <span class="num">4</span>))
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum max-depth min-depth))
+  (<span class="kwa">loop</span> for d of-type fixnum from min-depth by <span class="num">2</span> upto max-depth do
+       (<span class="kwa">loop</span> with iterations of-type fixnum = (<span class="kwa">ash</span> <span class="num">1</span> (+ max-depth min-depth (<span class="kwa">-</span> d)))
+          for i of-type fixnum from <span class="num">1</span> upto iterations
+          sum (+ (<span class="kwa">the</span> fixnum (<span class="kwa">check-node</span> (<span class="kwa">build-btree</span> i d)))
+                 (<span class="kwa">the</span> fixnum (<span class="kwa">check-node</span> (<span class="kwa">build-btree</span> (<span class="kwa">-</span> i) d))))
+          into result of-type fixnum
+          finally
+            (<span class="kwa">format</span> t <span class="str">&quot;~D	 trees of depth ~D	 check: ~D~%&quot;</span>
+                    (<span class="kwa">the</span> fixnum (+ iterations iterations )) d result))))
+
+(<span class="kwa">defun</span> main (&amp;optional (<span class="kwa">n</span> (<span class="kwa">parse-integer</span>
+                           (<span class="kwa">or</span> (<span class="kwa">car</span> (<span class="kwa">last</span> #+sbcl sb-ext:*posix-argv*
+                                          #+cmu  extensions:*command-line-strings*
+                                          #+gcl  si::*command-args*))
+                               <span class="str">&quot;1&quot;</span>))))
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">integer</span> <span class="num">0 255</span>) n))
+  (<span class="kwa">format</span> t <span class="str">&quot;stretch tree of depth ~D	 check: ~D~%&quot;</span> (<span class="kwa">1</span>+ n) (<span class="kwa">check-node</span> (<span class="kwa">build-btree</span> <span class="num">0</span> (<span class="kwa">1</span>+ n))))
+  (<span class="kwa">let</span> ((*print-pretty* nil) (<span class="kwa">long-lived-tree</span> (<span class="kwa">build-btree</span> <span class="num">0</span> n)))
+    (<span class="kwa">purify</span>)
+    (<span class="kwa">loop-depths</span> n)
+    (<span class="kwa">format</span> t <span class="str">&quot;long lived tree of depth ~D	 check: ~D~%&quot;</span> n (<span class="kwa">check-node</span> long-lived-tree))))

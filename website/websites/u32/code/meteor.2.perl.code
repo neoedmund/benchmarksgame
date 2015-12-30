@@ -1,0 +1,234 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc"># contributed by Daniel Green, 2010-04-30</span>
+<span class="slc"># based on python 3 #3</span>
+<span class="slc"># modified by Christian Walde</span>
+
+<span class="kwa">use</span> <span class="num">5.10.1</span>;
+<span class="kwa">use</span> warnings;
+<span class="kwa">use</span> strict;
+<span class="kwa">use</span> integer;
+<span class="kwa">use</span> List::Util <span class="kwc">qw</span>(min);
+
+<span class="kwc">my</span> ( <span class="kwb">$w</span>, <span class="kwb">$h</span> ) = ( <span class="num">5</span>, <span class="num">10</span> );
+<span class="kwc">my</span> <span class="kwb">$dir_no</span> = <span class="num">6</span>;
+<span class="kwc">my</span> ( <span class="kwb">$S</span>, <span class="kwb">$E</span> ) = ( <span class="kwb">$w</span> * <span class="kwb">$h</span>, <span class="num">2</span> );
+<span class="kwc">my</span> <span class="kwb">$SE</span> = <span class="kwb">$S</span> + ( <span class="kwb">$E</span> / <span class="num">2</span> );
+<span class="kwc">my</span> <span class="kwb">$SW</span> = <span class="kwb">$SE</span> - <span class="kwb">$E</span>;
+<span class="kwc">my</span> ( <span class="kwb">$W</span>, <span class="kwb">$NW</span>, <span class="kwb">$NE</span> ) = ( -<span class="kwb">$E</span>, -<span class="kwb">$SE</span>, -<span class="kwb">$SW</span> );
+
+<span class="kwc">my</span> <span class="kwb">%rd</span> = ( <span class="kwb">$E</span> =&gt; <span class="kwb">$NE</span>, <span class="kwb">$NE</span> =&gt; <span class="kwb">$NW</span>, <span class="kwb">$NW</span> =&gt; <span class="kwb">$W</span>,  <span class="kwb">$W</span> =&gt; <span class="kwb">$SW</span>, <span class="kwb">$SW</span> =&gt; <span class="kwb">$SE</span>, <span class="kwb">$SE</span> =&gt; <span class="kwb">$E</span> );
+<span class="kwc">my</span> <span class="kwb">%fd</span> = ( <span class="kwb">$E</span> =&gt; <span class="kwb">$E</span>,  <span class="kwb">$NE</span> =&gt; <span class="kwb">$SE</span>, <span class="kwb">$NW</span> =&gt; <span class="kwb">$SW</span>, <span class="kwb">$W</span> =&gt; <span class="kwb">$W</span>,  <span class="kwb">$SW</span> =&gt; <span class="kwb">$NW</span>, <span class="kwb">$SE</span> =&gt; <span class="kwb">$NE</span> );
+
+<span class="kwc">my</span> ( <span class="kwb">$board</span>, <span class="kwb">$cti</span>, <span class="kwb">$pieces</span> ) = get_puzzle();
+<span class="kwc">my</span> <span class="kwb">&#64;fps</span> = get_footprints( <span class="kwb">$board</span>, <span class="kwb">$cti</span>, <span class="kwb">$pieces</span> );
+<span class="kwc">my</span> <span class="kwb">&#64;south_east_neighborhoods</span> = get_senh( <span class="kwb">$board</span>, <span class="kwb">$cti</span> );
+
+<span class="kwc">my</span> <span class="kwb">&#64;free</span>        = ( <span class="num">1</span> ) x &#64;{<span class="kwb">$board</span>};
+<span class="kwc">my</span> <span class="kwb">&#64;curr_board</span>  = ( -<span class="num">1</span> ) x &#64;{<span class="kwb">$board</span>};
+<span class="kwc">my</span> <span class="kwb">&#64;pieces_left</span> = <span class="num">0</span> .. &#64;{<span class="kwb">$pieces</span>} - <span class="num">1</span>;
+<span class="kwc">my</span> <span class="kwb">&#64;solutions</span>   = ();
+<span class="kwc">my</span> <span class="kwb">$needed</span>      = <span class="kwb">$ARGV</span>[<span class="num">0</span>];
+
+solve( <span class="num">0</span>, \<span class="kwb">&#64;free</span>, \<span class="kwb">&#64;pieces_left</span> );
+<span class="kwb">&#64;solutions</span> = <span class="kwc">sort</span> <span class="kwb">&#64;solutions</span>;
+
+<span class="kwc">say scalar</span> <span class="kwb">&#64;solutions</span>, <span class="str">' solutions found'</span>;
+print_board( <span class="kwb">$solutions</span>[<span class="num">0</span>] );
+print_board( <span class="kwb">$solutions</span>[-<span class="num">1</span>] );
+<span class="kwc">print</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+
+<span class="kwa">sub</span> rotate {
+    <span class="kwa">return</span> [ <span class="kwc">map</span> { <span class="kwb">$rd</span>{<span class="kwb">$_</span>} } &#64;{ <span class="kwb">$_</span>[<span class="num">0</span>] } ];
+}
+
+<span class="kwa">sub</span> flip {
+    <span class="kwa">return</span> [ <span class="kwc">map</span> { <span class="kwb">$fd</span>{<span class="kwb">$_</span>} } &#64;{ <span class="kwb">$_</span>[<span class="num">0</span>] } ];
+}
+
+<span class="kwa">sub</span> permute {
+    <span class="kwc">my</span> ( <span class="kwb">$ido</span>, <span class="kwb">$r_ido</span> ) = <span class="kwb">&#64;_</span>;
+
+    <span class="kwc">my</span> <span class="kwb">&#64;ps</span> = ( <span class="kwb">$ido</span> );
+    <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$r</span> ( <span class="num">0</span> .. <span class="kwb">$dir_no</span> - <span class="num">2</span> ) {
+        <span class="kwc">push</span> <span class="kwb">&#64;ps</span>, rotate( <span class="kwb">$ps</span>[-<span class="num">1</span>] );
+
+        <span class="kwa">if</span> ( &#64;{<span class="kwb">$ido</span>} ~~ &#64;{<span class="kwb">$r_ido</span>} ) {
+            <span class="kwc">my</span> <span class="kwb">$end</span> = min( <span class="kwc">scalar</span> <span class="kwb">&#64;ps</span>, <span class="kwc">int</span>( <span class="kwb">$dir_no</span> / <span class="num">2</span> ) );
+            <span class="kwc">splice</span> <span class="kwb">&#64;ps</span>, <span class="kwb">$end</span>;
+        }
+    }
+
+    <span class="kwc">push</span> <span class="kwb">&#64;ps</span>, <span class="kwc">map</span> { flip( <span class="kwb">$_</span> ) } <span class="kwb">&#64;ps</span>;
+
+    <span class="kwa">return</span> \<span class="kwb">&#64;ps</span>;
+}
+
+<span class="kwa">sub</span> convert {
+    <span class="kwc">my</span> ( <span class="kwb">$ido</span> ) = <span class="kwb">&#64;_</span>;
+
+    <span class="kwc">my</span> <span class="kwb">&#64;out</span> = ( <span class="num">0</span> );
+    <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$o</span> ( &#64;{<span class="kwb">$ido</span>} ) {
+        <span class="kwc">push</span> <span class="kwb">&#64;out</span>, <span class="kwb">$out</span>[-<span class="num">1</span>] + <span class="kwb">$o</span>;
+    }
+
+    <span class="kwc">my</span> <span class="kwb">%unique</span>;
+    <span class="kwa">return</span> [ <span class="kwc">grep</span> { !<span class="kwb">$unique</span>{<span class="kwb">$_</span>}++ } <span class="kwb">&#64;out</span> ];
+}
+
+<span class="kwa">sub</span> get_footprints {
+    <span class="kwc">my</span> ( <span class="kwb">$bd</span>, <span class="kwb">$ct</span>, <span class="kwb">$ps</span> ) = <span class="kwb">&#64;_</span>;
+
+    <span class="kwc">my</span> <span class="kwb">&#64;fp</span>;
+    <span class="kwa">foreach</span> <span class="kwc">my</span> <span class="kwb">$p</span> ( <span class="num">0</span> .. &#64;{<span class="kwb">$ps</span>} - <span class="num">1</span> ) {
+        <span class="kwa">foreach</span> <span class="kwc">my</span> <span class="kwb">$ci</span> ( <span class="num">0</span> .. &#64;{<span class="kwb">$bd</span>} - <span class="num">1</span> ) {
+            <span class="kwb">$fp</span>[<span class="kwb">$ci</span>]-&gt;[<span class="kwb">$p</span>] = [];
+        }
+    }
+
+    <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$c</span> ( &#64;{<span class="kwb">$bd</span>} ) {
+        <span class="kwa">for</span> ( <span class="kwc">my</span> <span class="kwb">$pi</span> = <span class="num">0</span> ; <span class="kwb">$pi</span> &lt; &#64;{<span class="kwb">$ps</span>} ; <span class="kwb">$pi</span>++ ) {
+            <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$pp</span> ( &#64;{ <span class="kwb">$ps</span>-&gt;[<span class="kwb">$pi</span>] } ) {
+                <span class="kwc">my</span> <span class="kwb">%f</span> = ();
+                <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$o</span> ( &#64;{<span class="kwb">$pp</span>} ) {
+                    <span class="kwa">if</span> ( <span class="kwc">exists</span> <span class="kwb">$ct</span>-&gt;{ <span class="kwb">$c</span> + <span class="kwb">$o</span> } ) {
+                        <span class="kwb">$f</span>{ <span class="kwb">$ct</span>-&gt;{ <span class="kwb">$c</span> + <span class="kwb">$o</span> } }++;
+                    }
+                }
+
+                <span class="kwa">if</span> ( <span class="kwc">keys</span> <span class="kwb">%f</span> == <span class="num">5</span> ) {
+                    <span class="kwc">push</span> &#64;{ <span class="kwb">$fp</span>[ min( <span class="kwc">keys</span> <span class="kwb">%f</span> ) ]-&gt;[<span class="kwb">$pi</span>] }, [ <span class="kwc">keys</span> <span class="kwb">%f</span> ];
+                }
+            }
+        }
+    }
+
+    <span class="kwa">return</span> <span class="kwb">&#64;fp</span>;
+}
+
+<span class="kwa">sub</span> get_senh {
+    <span class="kwc">my</span> ( <span class="kwb">$bd</span>, <span class="kwb">$ct</span> ) = <span class="kwb">&#64;_</span>;
+
+    <span class="kwc">my</span> <span class="kwb">&#64;se_nh2</span> = ();
+    <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$c</span> ( &#64;{<span class="kwb">$bd</span>} ) {
+        <span class="kwc">my</span> <span class="kwb">%f</span> = ();
+        <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$o</span> ( <span class="kwb">$E</span>, <span class="kwb">$SW</span>, <span class="kwb">$SE</span> ) {
+            <span class="kwa">if</span> ( <span class="kwc">exists</span> <span class="kwb">$ct</span>-&gt;{ <span class="kwb">$c</span> + <span class="kwb">$o</span> } ) {
+                <span class="kwb">$f</span>{ <span class="kwb">$ct</span>-&gt;{ <span class="kwb">$c</span> + <span class="kwb">$o</span> } }++;
+            }
+        }
+
+        <span class="kwc">push</span> <span class="kwb">&#64;se_nh2</span>, [ <span class="kwc">keys</span> <span class="kwb">%f</span> ];
+    }
+
+    <span class="kwa">return</span> <span class="kwb">&#64;se_nh2</span>;
+}
+
+<span class="kwa">sub</span> get_puzzle {
+
+    <span class="kwc">my</span> <span class="kwb">&#64;bd</span>;
+    <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$y</span> ( <span class="num">0</span> .. <span class="kwb">$h</span> - <span class="num">1</span> ) {
+        <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$x</span> ( <span class="num">0</span> .. <span class="kwb">$w</span> - <span class="num">1</span> ) {
+            <span class="kwc">push</span> <span class="kwb">&#64;bd</span>, <span class="kwb">$E</span> * <span class="kwb">$x</span> + <span class="kwb">$S</span> * <span class="kwb">$y</span> + <span class="kwb">$y</span> % <span class="num">2</span>;
+        }
+    }
+
+    <span class="kwc">my</span> <span class="kwb">%ct</span>;
+    <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$i</span> ( <span class="num">0</span> .. <span class="kwb">&#64;bd</span> - <span class="num">1</span> ) {
+        <span class="kwb">$ct</span>{ <span class="kwb">$bd</span>[<span class="kwb">$i</span>] } = <span class="kwb">$i</span>;
+    }
+
+    <span class="kwc">my</span> <span class="kwb">&#64;idos</span> = (
+        [ <span class="kwb">$E</span>,  <span class="kwb">$E</span>,  <span class="kwb">$E</span>,  <span class="kwb">$SE</span> ],
+        [ <span class="kwb">$SE</span>, <span class="kwb">$SW</span>, <span class="kwb">$W</span>,  <span class="kwb">$SW</span> ],
+        [ <span class="kwb">$W</span>,  <span class="kwb">$W</span>,  <span class="kwb">$SW</span>, <span class="kwb">$SE</span> ],
+        [ <span class="kwb">$E</span>,  <span class="kwb">$E</span>,  <span class="kwb">$SW</span>, <span class="kwb">$SE</span> ],
+        [ <span class="kwb">$NW</span>, <span class="kwb">$W</span>,  <span class="kwb">$NW</span>, <span class="kwb">$SE</span>, <span class="kwb">$SW</span> ],
+        [ <span class="kwb">$E</span>,  <span class="kwb">$E</span>,  <span class="kwb">$NE</span>, <span class="kwb">$W</span> ],
+        [ <span class="kwb">$NW</span>, <span class="kwb">$NE</span>, <span class="kwb">$NE</span>, <span class="kwb">$W</span> ],
+        [ <span class="kwb">$NE</span>, <span class="kwb">$SE</span>, <span class="kwb">$E</span>,  <span class="kwb">$NE</span> ],
+        [ <span class="kwb">$SE</span>, <span class="kwb">$SE</span>, <span class="kwb">$E</span>,  <span class="kwb">$SE</span> ],
+        [ <span class="kwb">$E</span>,  <span class="kwb">$NW</span>, <span class="kwb">$NW</span>, <span class="kwb">$NW</span> ]
+    );
+
+    <span class="kwc">my</span> <span class="kwb">&#64;ps</span>;
+    <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$p</span> ( <span class="kwc">map</span> { permute( <span class="kwb">$_</span>, <span class="kwb">$idos</span>[<span class="num">3</span>] ) } <span class="kwb">&#64;idos</span> ) {
+        <span class="kwc">push</span> <span class="kwb">&#64;ps</span>, [ <span class="kwc">map</span> { convert( <span class="kwb">$_</span> ) } &#64;{<span class="kwb">$p</span>} ];
+    }
+
+    <span class="kwa">return</span> ( \<span class="kwb">&#64;bd</span>, \<span class="kwb">%ct</span>, \<span class="kwb">&#64;ps</span> );
+}
+
+<span class="kwa">sub</span> print_board {
+    <span class="kwc">my</span> ( <span class="kwb">$bd</span> ) = <span class="kwb">&#64;_</span>;
+
+    <span class="kwc">print</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+    <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$y</span> ( <span class="num">0</span> .. <span class="kwb">$h</span> - <span class="num">1</span> ) {
+        <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$x</span> ( <span class="num">0</span> .. <span class="kwb">$w</span> - <span class="num">1</span> ) {
+            <span class="kwc">print substr</span>( <span class="kwb">$bd</span>, <span class="kwb">$x</span> + <span class="kwb">$y</span> * <span class="kwb">$w</span>, <span class="num">1</span> ) . <span class="str">' '</span>;
+        }
+
+        <span class="kwc">print</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+
+        <span class="kwa">if</span> ( <span class="kwb">$y</span> % <span class="num">2</span> == <span class="num">0</span> ) {
+            <span class="kwc">print</span> <span class="str">' '</span>;
+        }
+    }
+}
+
+<span class="kwa">sub</span> solve {
+    <span class="kwc">my</span> ( <span class="kwb">$i_min</span>, <span class="kwb">$free</span>, <span class="kwb">$pieces_left</span> ) = <span class="kwb">&#64;_</span>;
+
+    <span class="kwc">my</span> <span class="kwb">$fp_i_cands</span> = <span class="kwb">$fps</span>[<span class="kwb">$i_min</span>];
+
+    <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$p</span> ( &#64;{<span class="kwb">$pieces_left</span>} ) {
+      FOOTPRINT:
+        <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$fpa</span> ( &#64;{ <span class="kwb">$fp_i_cands</span>-&gt;[<span class="kwb">$p</span>] } ) {
+
+            <span class="kwa">for</span> ( &#64;{<span class="kwb">$fpa</span>} ) {
+                <span class="kwa">next</span> FOOTPRINT <span class="kwa">if</span> !<span class="kwb">$free</span>-&gt;[<span class="kwb">$_</span>];
+            }
+
+            <span class="kwb">&#64;curr_board</span>[ &#64;{<span class="kwb">$fpa</span>} ] = ( <span class="kwb">$p</span> ) x &#64;{<span class="kwb">$fpa</span>};
+
+            <span class="kwa">if</span> ( &#64;{<span class="kwb">$pieces_left</span>} &gt; <span class="num">1</span> ) {
+                <span class="kwc">my</span> <span class="kwb">&#64;n_free</span> = &#64;{<span class="kwb">$free</span>};
+                <span class="kwb">&#64;n_free</span>[ &#64;{<span class="kwb">$fpa</span>} ] = ();
+
+                <span class="kwc">my</span> <span class="kwb">$n_i_min</span>;
+                <span class="kwa">for</span> ( <span class="num">0</span> .. <span class="kwb">$#n_free</span> ) {
+                    <span class="kwa">if</span> ( <span class="kwb">$n_free</span>[<span class="kwb">$_</span>] ) {
+                        <span class="kwb">$n_i_min</span> = <span class="kwb">$_</span>;
+                        <span class="kwa">last</span>;
+                    }
+                }
+
+                <span class="kwc">my</span> <span class="kwb">$se_neighborhood_has_free</span> = <span class="num">0</span>;
+                <span class="kwa">for</span> ( &#64;{ <span class="kwb">$south_east_neighborhoods</span>[<span class="kwb">$n_i_min</span>] } ) {
+                    <span class="kwa">if</span> ( <span class="kwb">$n_free</span>[<span class="kwb">$_</span>] ) {
+                        <span class="kwb">$se_neighborhood_has_free</span> = <span class="num">1</span>;
+                        <span class="kwa">last</span>;
+                    }
+                }
+                <span class="kwa">next if</span> !<span class="kwb">$se_neighborhood_has_free</span>;
+
+                <span class="kwc">my</span> <span class="kwb">&#64;n_pieces_left</span> = <span class="kwc">grep</span> { <span class="kwb">$_</span> != <span class="kwb">$p</span> } &#64;{<span class="kwb">$pieces_left</span>};
+
+                solve( <span class="kwb">$n_i_min</span>, \<span class="kwb">&#64;n_free</span>, \<span class="kwb">&#64;n_pieces_left</span> );
+            }
+            <span class="kwa">else</span> {
+                <span class="kwc">my</span> <span class="kwb">$s</span> = <span class="kwc">join</span>( <span class="str">''</span>, <span class="kwb">&#64;curr_board</span> );
+                <span class="kwc">push</span> <span class="kwb">&#64;solutions</span>, <span class="kwb">$s</span>;
+                <span class="kwc">my</span> <span class="kwb">$rs</span> = <span class="kwc">reverse</span> <span class="kwb">$s</span>;
+                <span class="kwc">push</span> <span class="kwb">&#64;solutions</span>, <span class="kwb">$rs</span>;
+
+                <span class="kwa">return if</span> <span class="kwb">&#64;solutions</span> &gt;= <span class="kwb">$needed</span>;
+            }
+        }
+
+        <span class="kwa">return if</span> <span class="kwb">&#64;solutions</span> &gt;= <span class="kwb">$needed</span>;
+    }
+
+    <span class="kwa">return</span>;
+}

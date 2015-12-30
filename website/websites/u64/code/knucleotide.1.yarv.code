@@ -1,0 +1,82 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by jose fco. gonzalez</span>
+<span class="slc"># modified by Sokolov Yura</span>
+<span class="slc"># Parallelism by Rick Branson</span>
+
+<span class="kwb">$seq</span> = String.new
+
+<span class="kwa">def</span> <span class="kwd">frequency</span>(seq, length<span class="opt">)</span>
+  frequencies = Hash.<span class="kwd">new</span>(<span class="num">0</span><span class="opt">)</span>
+  ns          = seq.length + <span class="num">1</span> - length
+  
+  <span class="kwa">for</span> i <span class="kwa">in</span> (<span class="num">0</span> ... ns<span class="opt">)</span>
+    frequencies[seq[i, length]] += <span class="num">1</span>
+  <span class="kwa">end</span>
+  
+  [ns, frequencies]
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">sort_by_freq</span>(seq, length<span class="opt">)</span>
+  ret       = <span class="str">&quot;&quot;</span>
+  n, table  = <span class="kwd">frequency</span>(seq, length<span class="opt">)</span>
+
+  table.sort{|a,b| b[1] &lt;=&gt; a[1]}.each <span class="kwa">do</span> |v|
+      ret += <span class="str">&quot;%s %.3f</span><span class="esc">\n</span><span class="str">&quot;</span> % [v[<span class="num">0</span>].upcase,((v[<span class="num">1</span>]*<span class="num">100</span><span class="opt">)</span>.to_f/n<span class="opt">)</span>]
+  <span class="kwa">end</span>
+  
+  ret += <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">find_seq</span>(seq, s<span class="opt">)</span>
+  n, table = <span class="kwd">frequency</span>(seq, s.length<span class="opt">)</span>
+  <span class="str">&quot;</span><span class="ipl">#{table[s].to_s}</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">#{s.upcase}</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>
+<span class="kwa">end</span>
+
+line = <span class="kwc">STDIN</span>.gets <span class="kwa">while</span> line !~ <span class="kwc">/^&gt;THREE/</span>
+line = <span class="kwc">STDIN</span>.gets
+<span class="kwa">while</span> (line !~ <span class="kwc">/^&gt;/</span><span class="opt">)</span> &amp; line <span class="kwa">do</span>
+    <span class="kwb">$seq</span> &lt;&lt; line.chomp
+    line = <span class="kwc">STDIN</span>.gets
+<span class="kwa">end</span>
+
+<span class="kwa">class</span> Worker
+  <span class="kwa">def</span> <span class="kwd">initialize</span>(&amp;block<span class="opt">)</span>
+    <span class="kwa">if</span> <span class="kwc">RUBY_PLATFORM</span> == <span class="str">&quot;java&quot;</span>
+      <span class="kwb">&#64;t</span> = Thread.new <span class="kwa">do</span>
+        Thread.current[<span class="kwc">:result</span>] = <span class="kwa">yield</span>
+      <span class="kwa">end</span>
+    <span class="kwa">else</span>
+      <span class="kwb">&#64;r</span>, <span class="kwb">&#64;w</span> = IO.pipe
+      <span class="kwb">&#64;p</span> = Process.fork <span class="kwa">do</span>
+        <span class="kwb">&#64;r</span>.close
+        <span class="kwb">&#64;w</span>.write <span class="kwa">yield</span>
+        <span class="kwb">&#64;w</span>.close
+      <span class="kwa">end</span>
+      
+      <span class="kwb">&#64;w</span>.close
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+  
+  <span class="kwa">def</span> result
+    <span class="kwa">if</span> <span class="kwc">RUBY_PLATFORM</span> == <span class="str">&quot;java&quot;</span>
+      <span class="kwb">&#64;t</span>.join
+      <span class="kwb">&#64;t</span>[<span class="kwc">:result</span>]
+    <span class="kwa">else</span>
+      ret = <span class="kwb">&#64;r</span>.read
+      <span class="kwb">&#64;r</span>.close
+      Process.<span class="kwd">wait</span>(<span class="kwb">&#64;p</span><span class="opt">)</span>
+      ret
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+FREQS   = [<span class="num">1</span>, <span class="num">2</span>]
+NUCLEOS = %<span class="kwd">w</span>(ggt ggta ggtatt ggtattttaatt ggtattttaatttatagt<span class="opt">)</span>
+
+workers =   FREQS.map   { |i| Worker.new { sort_by_freq($seq, i) } }
+workers +=  NUCLEOS.map { |s| Worker.new { find_seq($seq, s) } }
+  
+results = workers.map { |w| w.result }
+print results.join

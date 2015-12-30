@@ -1,0 +1,83 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Alexey Zolotov</span>
+<span class="com">   without openmp, without assert</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;re2.h&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+
+<span class="kwa">using namespace</span> re2;
+<span class="kwa">using namespace</span> std;
+
+<span class="ppc">#define BUFSIZE 1024</span>
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">void</span>)
+{
+    string str, out;
+    <span class="kwb">int</span> len1, len2;
+    <span class="kwb">int</span> read_size;
+    <span class="kwb">char</span> *buf;
+
+    string pattern1[] = {
+        <span class="str">&quot;agggtaaa|tttaccct&quot;</span>,
+        <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+        <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+        <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+        <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+        <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+        <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+        <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+        <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>
+    };
+
+    string pattern2[] = {
+        <span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>, <span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>, <span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>, <span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>,
+        <span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>, <span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>, <span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>, <span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>,
+        <span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>, <span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>, <span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>
+    };
+
+
+    <span class="kwd">fseek</span>(stdin, <span class="num">0</span>, SEEK_END);
+    read_size = <span class="kwd">ftell</span>(stdin);
+
+    buf = <span class="kwa">new</span> <span class="kwb">char</span>[read_size];
+    <span class="kwd">rewind</span>(stdin);
+    read_size = <span class="kwd">fread</span>(buf, <span class="num">1</span>, read_size, stdin);
+
+    str.<span class="kwd">append</span>(buf, read_size);
+
+    <span class="kwa">delete</span> [] buf;
+
+    len1 = str.<span class="kwd">length</span>();
+    RE2::<span class="kwd">GlobalReplace</span>(&amp;str, <span class="str">&quot;&gt;.*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="str">&quot;&quot;</span>);
+    len2 = str.<span class="kwd">length</span>();
+
+    out = str;
+
+    {
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; (<span class="kwb">int</span>)(<span class="kwa">sizeof</span>(pattern1) / <span class="kwa">sizeof</span>(string)); i++) {
+            <span class="kwb">int</span> count = <span class="num">0</span>;
+            RE2 <span class="kwd">pat</span>(pattern1[i]);
+            StringPiece piece = str;
+
+            <span class="kwa">while</span> (RE2::<span class="kwd">FindAndConsume</span>(&amp;piece, pat)) {
+                count++;
+            }
+
+            cout &lt;&lt; pattern1[i] &lt;&lt; <span class="str">&quot; &quot;</span> &lt;&lt; count &lt;&lt; endl;
+        }
+
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; (<span class="kwb">int</span>)(<span class="kwa">sizeof</span>(pattern2) / <span class="kwa">sizeof</span>(string)); i += <span class="num">2</span>) {
+            RE2::<span class="kwd">GlobalReplace</span>(&amp;out, pattern2[i], pattern2[i + <span class="num">1</span>]);
+        }
+    }
+
+    cout &lt;&lt; endl;
+    cout &lt;&lt; len1 &lt;&lt; endl;
+    cout &lt;&lt; len2 &lt;&lt; endl;
+    cout &lt;&lt; out.<span class="kwd">length</span>() &lt;&lt; endl;
+
+}

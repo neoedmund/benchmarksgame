@@ -1,0 +1,14 @@
+
+Thu, 27 Aug 2015 23:57:57 GMT
+
+COMMAND LINE:
+/usr/local/src/ruby/bin/ruby pidigits.yarv-5.yarv 2000
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+pidigits.yarv-5.yarv:12:in `mul!': undefined method `mul' for GMP::Z:Class (NoMethodError)
+	from pidigits.yarv-5.yarv:47:in `produce_chunk'
+	from pidigits.yarv-5.yarv:74:in `<main>'

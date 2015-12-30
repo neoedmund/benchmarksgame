@@ -1,0 +1,117 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">// Contributed by Paul Kitchin</span>
+
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;iterator&gt;</span>
+<span class="ppc">#include &lt;vector&gt;</span>
+
+std::<span class="kwb">size_t</span> line_length = <span class="num">60</span>;
+
+<span class="kwb">char</span> <span class="kwd">complement</span>(<span class="kwb">char</span> character)
+{
+   <span class="kwb">static char const</span> complement_map[] =
+   {
+      <span class="str">'\0'</span>, <span class="str">'T'</span>, <span class="str">'V'</span>, <span class="str">'G'</span>, <span class="str">'H'</span>, <span class="str">'\0'</span>, <span class="str">'\0'</span>, <span class="str">'C'</span>, <span class="str">'D'</span>, <span class="str">'\0'</span>, <span class="str">'\0'</span>, <span class="str">'M'</span>, <span class="str">'\0'</span>, <span class="str">'K'</span>, <span class="str">'N'</span>, <span class="str">'\0'</span>, <span class="str">'\0'</span>, <span class="str">'\0'</span>, <span class="str">'Y'</span>, <span class="str">'S'</span>, <span class="str">'A'</span>, <span class="str">'A'</span>, <span class="str">'B'</span>, <span class="str">'W'</span>, <span class="str">'\0'</span>, <span class="str">'R'</span>
+   };
+   <span class="kwa">return</span> complement_map[character &amp; <span class="num">0x1f</span>];
+}
+
+<span class="kwb">struct</span> chunk
+{
+   <span class="kwd">chunk</span>()
+      :
+      <span class="kwd">previous</span>(<span class="num">0</span>),
+      <span class="kwd">next</span>(<span class="num">0</span>),
+      <span class="kwd">length</span>(<span class="num">0</span>)
+   {
+   }
+   <span class="kwd">chunk</span>(chunk * previous)
+      :
+      <span class="kwd">previous</span>(previous),
+      <span class="kwd">next</span>(<span class="num">0</span>),
+      <span class="kwd">length</span>(<span class="num">0</span>)
+   {
+      previous-&gt;next = <span class="kwa">this</span>;
+   }
+   chunk * previous;
+   chunk * next;
+   <span class="kwb">unsigned short</span> length;
+   <span class="kwb">char</span> data[<span class="num">65526</span>];
+};
+
+<span class="kwb">void</span> <span class="kwd">write_reverse_complement</span>(chunk * begin, chunk * end)
+{
+   chunk * start = begin;
+   <span class="kwb">char</span> * begin_char = begin-&gt;data;
+   <span class="kwb">char</span> * end_char = end-&gt;data + end-&gt;length - <span class="num">1</span>;
+   <span class="kwa">while</span> (begin != end || begin_char &lt; end_char)
+   {
+      <span class="kwb">char</span> temp = <span class="kwd">complement</span>(*begin_char);
+      *begin_char++ = <span class="kwd">complement</span>(*end_char);
+      *end_char-- = temp;
+      <span class="kwa">if</span> (*begin_char == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+      {
+         ++begin_char;
+      }
+      <span class="kwa">if</span> (*end_char == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+      {
+         --end_char;
+      }
+      <span class="kwa">if</span> (begin_char == begin-&gt;data + begin-&gt;length)
+      {
+         begin = begin-&gt;next;
+         begin_char = begin-&gt;data;
+         <span class="kwa">if</span> (*begin_char == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+         {
+            ++begin_char;
+         }
+      }
+      <span class="kwa">if</span> (end_char == end-&gt;data - <span class="num">1</span>)
+      {
+         end = end-&gt;previous;
+         end_char = end-&gt;data + end-&gt;length - <span class="num">1</span>;
+         <span class="kwa">if</span> (*end_char == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+         {
+            --end_char;
+         }
+      }
+   }
+   <span class="kwa">while</span> (start)
+   {
+      std::cout.<span class="kwd">write</span>(start-&gt;data, start-&gt;length);
+      chunk * last = start;
+      start = start-&gt;next;
+      <span class="kwa">delete</span> last;
+   }
+   std::cout.<span class="kwd">put</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>);
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>()
+{
+   std::cin.<span class="kwd">sync_with_stdio</span>(<span class="kwa">false</span>);
+   std::cout.<span class="kwd">sync_with_stdio</span>(<span class="kwa">false</span>);
+   <span class="kwa">while</span> (!std::cin.<span class="kwd">eof</span>())
+   {
+      std::string header;
+      std::<span class="kwd">getline</span>(std::cin, header);
+      std::cout &lt;&lt; header &lt;&lt; <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+      chunk * start = <span class="kwa">new</span> <span class="kwd">chunk</span>();
+      chunk * end = start;
+      <span class="kwa">while</span> (!std::cin.<span class="kwd">eof</span>() &amp;&amp; std::cin.<span class="kwd">peek</span>() != <span class="str">'&gt;'</span>)
+      {
+         <span class="kwa">for</span> (<span class="kwb">int</span> line = <span class="num">0</span>; line &lt; <span class="num">1074</span> &amp;&amp; !std::cin.<span class="kwd">eof</span>() &amp;&amp; std::cin.<span class="kwd">peek</span>() != <span class="str">'&gt;'</span>; ++line)
+         {
+            std::cin.<span class="kwd">getline</span>(end-&gt;data + end-&gt;length, line_length + <span class="num">1</span>);
+            end-&gt;length += std::cin.<span class="kwd">gcount</span>();
+            *(end-&gt;data + end-&gt;length - <span class="num">1</span>) = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+         }
+         <span class="kwa">if</span> (!std::cin.<span class="kwd">eof</span>() &amp;&amp; std::cin.<span class="kwd">peek</span>() != <span class="str">'&gt;'</span>)
+         {
+            end = <span class="kwa">new</span> <span class="kwd">chunk</span>(end);
+         }
+      }
+      --end-&gt;length;
+      <span class="kwd">write_reverse_complement</span>(start, end);
+   }
+}

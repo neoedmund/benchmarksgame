@@ -1,7 +1,0 @@
-*.pyc
-*/*/nimcache
-bencher/run_logs
-bencher/run_markup
-bencher/summary
-bencher/tmp
-website

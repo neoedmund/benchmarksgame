@@ -1,0 +1,183 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Contributed by TeXitoi</span>
+<span class="slc">// Inspired by Mr Ledrug's C version and thestinger's rust-gmp</span>
+
+#![allow(non_camel_case_types)]
+
+<span class="slc">//extern crate libc;</span>
+<span class="slc">// exporting needed things from libc for linux x64 (still unstable)</span>
+#[cfg(all(target_os = <span class="str">&quot;linux&quot;</span>, any(target_arch = <span class="str">&quot;x86_64&quot;</span>, target_arch = <span class="str">&quot;x86&quot;</span>)))]
+<span class="kwa">mod</span> libc {
+    #![allow(non_camel_case_types)]
+    #[repr(u8)]
+    <span class="kwa">pub enum</span> c_void { __variant1, __variant2 }
+    <span class="kwa">pub type</span> c_int = i32;
+    #[cfg(target_arch = <span class="str">&quot;x86_64&quot;</span>)] <span class="kwa">pub type</span> c_ulong = u64;
+    #[cfg(target_arch = <span class="str">&quot;x86&quot;</span>)] <span class="kwa">pub type</span> c_ulong = u32;
+}
+
+<span class="kwa">use</span> libc::{c_int, c_ulong, c_void};
+<span class="kwa">use</span> std::mem::uninitialized;
+<span class="kwa">use</span> std::cmp::Ordering;
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> n = std::env::args_os().nth(<span class="num">1</span>)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">27</span>);
+    <span class="kwa">for</span> (i, d) <span class="kwa">in</span> Context::new().enumerate().take(n) {
+        print!(<span class="str">&quot;{}&quot;</span>, d);
+        <span class="kwa">if</span> (i + <span class="num">1</span>) % <span class="num">10</span> == <span class="num">0</span> { println!(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:{}&quot;</span>, i + <span class="num">1</span>); }
+    }
+    <span class="kwa">if</span> n % <span class="num">10</span> != <span class="num">0</span> {
+        <span class="kwa">for</span> _ <span class="kwa">in</span> n % <span class="num">10</span> .. <span class="num">10</span> { print!(<span class="str">&quot; &quot;</span>); }
+        println!(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:{}&quot;</span>, n);
+    }
+}
+
+<span class="kwa">pub struct</span> Context {
+    k: c_ulong,
+    tmp1: Mpz,
+    tmp2: Mpz,
+    acc: Mpz,
+    den: Mpz,
+    num: Mpz
+}
+<span class="kwa">impl</span> Context {
+    <span class="kwa">pub fn</span> new() -&gt; Context {
+        Context {
+            k: <span class="num">0</span>,
+            tmp1: Mpz::from_ui(<span class="num">0</span>),
+            tmp2: Mpz::from_ui(<span class="num">0</span>),
+            acc: Mpz::from_ui(<span class="num">0</span>),
+            den: Mpz::from_ui(<span class="num">1</span>),
+            num: Mpz::from_ui(<span class="num">1</span>)
+        }
+    }
+    <span class="kwa">fn</span> extract_digit(&amp;<span class="kwa">mut self</span>, nth: c_ulong) -&gt; c_ulong {
+        <span class="kwa">self</span>.tmp1.mul_ui(&amp;<span class="kwa">self</span>.num, nth);
+        <span class="kwa">self</span>.tmp2.add(&amp;<span class="kwa">self</span>.tmp1, &amp;<span class="kwa">self</span>.acc);
+        <span class="kwa">self</span>.tmp1.tdiv_q(&amp;<span class="kwa">self</span>.tmp2, &amp;<span class="kwa">self</span>.den);
+        <span class="kwa">return self</span>.tmp1.as_ui();
+    }
+    <span class="kwa">fn</span> eliminate_digit(&amp;<span class="kwa">mut self</span>, d: c_ulong) {
+        <span class="kwa">self</span>.acc.submul_ui(&amp;<span class="kwa">self</span>.den, d);
+        <span class="kwa">self</span>.acc.mul_from_ui(<span class="num">10</span>);
+        <span class="kwa">self</span>.num.mul_from_ui(<span class="num">10</span>);
+    }
+    <span class="kwa">fn</span> next_term(&amp;<span class="kwa">mut self</span>) {
+        <span class="kwa">self</span>.k += <span class="num">1</span>;
+        <span class="kwa">let</span> k2 = <span class="kwa">self</span>.k * <span class="num">2</span> + <span class="num">1</span>;
+        <span class="kwa">self</span>.acc.addmul_ui(&amp;<span class="kwa">self</span>.num, <span class="num">2</span>);
+        <span class="kwa">self</span>.acc.mul_from_ui(k2);
+        <span class="kwa">self</span>.den.mul_from_ui(k2);
+        <span class="kwa">self</span>.num.mul_from_ui(<span class="kwa">self</span>.k);
+    }
+}
+<span class="kwa">impl</span> Iterator <span class="kwa">for</span> Context {
+    <span class="kwa">type</span> Item = c_ulong;
+    <span class="kwa">fn</span> next(&amp;<span class="kwa">mut self</span>) -&gt; Option&lt;c_ulong&gt; {
+        <span class="kwa">loop</span> {
+            <span class="kwa">self</span>.next_term();
+            <span class="kwa">if self</span>.num &gt; <span class="kwa">self</span>.acc { <span class="kwa">continue</span>; }
+            <span class="kwa">let</span> d = <span class="kwa">self</span>.extract_digit(<span class="num">3</span>);
+            <span class="kwa">if</span> d != <span class="kwa">self</span>.extract_digit(<span class="num">4</span>) { <span class="kwa">continue</span>; }
+
+            <span class="kwa">self</span>.eliminate_digit(d);
+            <span class="kwa">return</span> Some(d);
+        }
+    }
+}
+
+<span class="slc">// safe bindings to needed GMP functions</span>
+<span class="kwa">pub struct</span> Mpz {
+    mpz: mpz_struct,
+}
+<span class="kwa">impl</span> Drop <span class="kwa">for</span> Mpz {
+    <span class="kwa">fn</span> drop(&amp;<span class="kwa">mut self</span>) { <span class="kwa">unsafe</span> { __gmpz_clear(&amp;<span class="kwa">mut self</span>.mpz) } }
+}
+<span class="kwa">impl</span> Mpz {
+    <span class="kwa">pub fn</span> from_ui(i: c_ulong) -&gt; Mpz {
+        <span class="kwa">unsafe</span> {
+            <span class="kwa">let mut</span> mpz = uninitialized();
+            __gmpz_init_set_ui(&amp;<span class="kwa">mut</span> mpz, i);
+            Mpz { mpz: mpz }
+        }
+    }
+    <span class="slc">// self = a * b</span>
+    <span class="kwa">pub fn</span> mul_ui(&amp;<span class="kwa">mut self</span>, a: &amp;Mpz, b: c_ulong) {
+        <span class="kwa">unsafe</span> { __gmpz_mul_ui(&amp;<span class="kwa">mut self</span>.mpz, &amp;a.mpz, b); }
+    }
+    <span class="slc">// self *= a</span>
+    <span class="kwa">pub fn</span> mul_from_ui(&amp;<span class="kwa">mut self</span>, a: c_ulong) {
+        <span class="kwa">unsafe</span> { __gmpz_mul_ui(&amp;<span class="kwa">mut self</span>.mpz, &amp;<span class="kwa">self</span>.mpz, a); }
+    }
+    <span class="slc">// self -= a * b</span>
+    <span class="kwa">pub fn</span> submul_ui(&amp;<span class="kwa">mut self</span>, a: &amp;Mpz, b: c_ulong) {
+        <span class="kwa">unsafe</span> { __gmpz_submul_ui(&amp;<span class="kwa">mut self</span>.mpz, &amp;a.mpz, b); }
+    }
+    <span class="slc">// self = a + b</span>
+    <span class="kwa">pub fn</span> add(&amp;<span class="kwa">mut self</span>, a: &amp;Mpz, b: &amp;Mpz) {
+        <span class="kwa">unsafe</span> { __gmpz_add(&amp;<span class="kwa">mut self</span>.mpz, &amp;a.mpz, &amp;b.mpz); }
+    }
+    <span class="slc">// self += a * b</span>
+    <span class="kwa">pub fn</span> addmul_ui(&amp;<span class="kwa">mut self</span>, a: &amp;Mpz, b: c_ulong) {
+        <span class="kwa">unsafe</span> { __gmpz_addmul_ui(&amp;<span class="kwa">mut self</span>.mpz, &amp;a.mpz, b); }
+    }
+    <span class="slc">// self = a / b</span>
+    <span class="kwa">pub fn</span> tdiv_q(&amp;<span class="kwa">mut self</span>, a: &amp;Mpz, b: &amp;Mpz) {
+        <span class="kwa">unsafe</span> { __gmpz_tdiv_q(&amp;<span class="kwa">mut self</span>.mpz, &amp;a.mpz, &amp;b.mpz); }
+    }
+    <span class="kwa">pub fn</span> as_ui(&amp;<span class="kwa">self</span>) -&gt; c_ulong {
+        <span class="kwa">unsafe</span> { __gmpz_get_ui(&amp;<span class="kwa">self</span>.mpz) }
+    }
+}
+<span class="kwa">impl</span> Eq <span class="kwa">for</span> Mpz {}
+<span class="kwa">impl</span> PartialEq <span class="kwa">for</span> Mpz {
+    <span class="kwa">fn</span> eq(&amp;<span class="kwa">self</span>, other: &amp;Mpz) -&gt; bool {
+        <span class="kwa">unsafe</span> { __gmpz_cmp(&amp;<span class="kwa">self</span>.mpz, &amp;other.mpz) == <span class="num">0</span> }
+    }
+}
+<span class="kwa">impl</span> Ord <span class="kwa">for</span> Mpz {
+    <span class="kwa">fn</span> cmp(&amp;<span class="kwa">self</span>, other: &amp;Mpz) -&gt; Ordering {
+        <span class="kwa">let</span> cmp = <span class="kwa">unsafe</span> { __gmpz_cmp(&amp;<span class="kwa">self</span>.mpz, &amp;other.mpz) };
+        <span class="kwa">if</span> cmp == <span class="num">0</span> {
+            Ordering::Equal
+        } <span class="kwa">else if</span> cmp &lt; <span class="num">0</span> {
+            Ordering::Less
+        } <span class="kwa">else</span> {
+            Ordering::Greater
+        }
+    }
+}
+<span class="kwa">impl</span> PartialOrd <span class="kwa">for</span> Mpz {
+    <span class="kwa">fn</span> partial_cmp(&amp;<span class="kwa">self</span>, other: &amp;Mpz) -&gt; Option&lt;Ordering&gt; {
+        Some(<span class="kwa">self</span>.cmp(other))
+    }
+}
+
+<span class="slc">// Raw bindings to needed GMP functions</span>
+#[repr(C)]
+<span class="kwa">struct</span> mpz_struct {
+    _mp_alloc: c_int,
+    _mp_size: c_int,
+    _mp_d: *<span class="kwa">mut</span> c_void
+}
+
+<span class="kwa">type</span> mpz_ptr = *<span class="kwa">mut</span> mpz_struct;
+<span class="kwa">type</span> mpz_srcptr = *<span class="kwa">const</span> mpz_struct;
+
+#[link(name = <span class="str">&quot;gmp&quot;</span>)]
+<span class="kwa">extern</span> <span class="str">&quot;C&quot;</span> {
+    <span class="kwa">fn</span> __gmpz_init_set_ui(rop: mpz_ptr, op: c_ulong);
+    <span class="kwa">fn</span> __gmpz_clear(x: mpz_ptr);
+    <span class="kwa">fn</span> __gmpz_get_ui(op: mpz_srcptr) -&gt; c_ulong;
+    <span class="kwa">fn</span> __gmpz_cmp(op1: mpz_srcptr, op2: mpz_srcptr) -&gt; c_int;
+    <span class="kwa">fn</span> __gmpz_add(rop: mpz_ptr, op1: mpz_srcptr, op2: mpz_srcptr);
+    <span class="kwa">fn</span> __gmpz_mul_ui(rop: mpz_ptr, op1: mpz_srcptr, op2: c_ulong);
+    <span class="kwa">fn</span> __gmpz_submul_ui(rop: mpz_ptr, op1: mpz_srcptr, op2: c_ulong);
+    <span class="kwa">fn</span> __gmpz_addmul_ui(rop: mpz_ptr, op1: mpz_srcptr, op2: c_ulong);
+    <span class="kwa">fn</span> __gmpz_tdiv_q(q: mpz_ptr, n: mpz_srcptr, d: mpz_srcptr);
+}

@@ -1,0 +1,67 @@
+﻿<span class="com">(*  The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">    Contributed by Dmitry Lomov &amp; Jomo Fisher</span>
+<span class="com"></span>
+<span class="com">    Uses F# asyncs (lightweight threads) with customized auto reset cell </span>
+<span class="com">    as semaphore.</span>
+<span class="com">*)</span>
+
+<span class="kwa">let</span> ringLength = <span class="num">503</span>
+
+<span class="kwa">type</span> <span class="kwd">AutoResetCell</span>() =
+    <span class="kwa">let mutable</span> value = -<span class="num">1</span>
+    <span class="kwa">let mutable</span> run = <span class="kwd">None</span>
+    
+    <span class="kwa">member</span> this.<span class="kwd">RegisterResult</span> res =
+        <span class="kwa">let</span> grabbed = 
+            lock this (<span class="kwa">fun</span> () -&gt;
+                <span class="kwa">match</span> run <span class="kwa">with</span>
+                | <span class="kwd">None</span> -&gt; value &lt;- res; <span class="kwd">None</span>
+                | grabbed -&gt; run &lt;- <span class="kwd">None</span>; grabbed)
+        <span class="kwa">match</span> grabbed <span class="kwa">with</span>
+        | <span class="kwd">None</span> -&gt; ()
+        | <span class="kwd">Some</span> run -&gt; run res
+
+    <span class="kwa">member</span> this.<span class="kwd">AsyncResult</span> = 
+        <span class="kwd">Async</span>.<span class="kwd">FromContinuations</span>(<span class="kwa">fun</span> (success,_,_) -&gt; 
+            <span class="kwa">let</span> runNow = 
+                lock this (<span class="kwa">fun</span> () -&gt;
+                    <span class="kwa">if</span> value = -<span class="num">1</span> <span class="kwa">then</span>
+                        run &lt;- <span class="kwd">Some</span> success
+                        <span class="kwa">false</span>                        
+                    <span class="kwa">else true</span>)                        
+            <span class="kwa">if</span> runNow <span class="kwa">then</span> 
+                <span class="kwa">let</span> r = value
+                value &lt;- -<span class="num">1</span> <span class="slc">// Autoreset</span>
+                success r) 
+
+<span class="kwa">let</span> createCell _ = <span class="kwd">AutoResetCell</span>()
+
+<span class="kwa">let</span> createThread (cells:<span class="kwd">AutoResetCell</span> array) i =
+    <span class="kwa">let</span> next = <span class="kwa">if</span> i = ringLength-<span class="num">1</span> <span class="kwa">then</span> <span class="num">0</span> <span class="kwa">else</span> i + <span class="num">1</span>
+    async {
+            <span class="kwa">let</span> more = <span class="kwb">ref</span> <span class="kwa">true</span>
+            <span class="kwa">while</span> !more <span class="kwa">do</span>
+                <span class="kwa">let</span>! msg = cells.[i].<span class="kwd">AsyncResult</span> 
+                cells.[next].<span class="kwd">RegisterResult</span>(msg-<span class="num">1</span>)           
+                more := msg&gt;<span class="num">0</span>
+                <span class="kwa">if</span> msg = <span class="num">0</span> <span class="kwa">then</span>                    
+                    printfn <span class="str">&quot;</span><span class="ipl">%d</span><span class="str">&quot;</span> (i+<span class="num">1</span>) }
+
+[&lt;<span class="kwd">EntryPoint</span>&gt;]
+<span class="kwa">let</span> main args = 
+    <span class="kwa">let</span> count = <span class="kwa">if</span> args.<span class="kwd">Length</span>&gt;<span class="num">0</span> <span class="kwa">then</span> <span class="kwb">int</span> args.[<span class="num">0</span>] <span class="kwa">else</span> <span class="num">50000000</span>
+    
+    <span class="kwa">let</span> cells = <span class="kwd">Array</span>.init ringLength createCell
+
+    <span class="kwa">let</span> threads = <span class="kwd">Array</span>.init ringLength (createThread cells)
+
+    cells.[<span class="num">0</span>].<span class="kwd">RegisterResult</span>(count) 
+
+    threads
+        |&gt; <span class="kwd">Async</span>.<span class="kwd">Parallel</span> <span class="slc">// Run all the asyncs at once</span>
+        |&gt; <span class="kwd">Async</span>.<span class="kwd">Ignore</span> <span class="slc">// Ignore the results</span>
+        |&gt; <span class="kwd">Async</span>.<span class="kwd">RunSynchronously</span> <span class="slc">// Block the main thread until work is done</span>
+    
+    <span class="num">0</span>

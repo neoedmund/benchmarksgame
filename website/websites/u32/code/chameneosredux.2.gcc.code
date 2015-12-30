@@ -1,0 +1,302 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Michael Barker</span>
+<span class="com">   based on a Java contribution by Luzius Meisser</span>
+<span class="com"></span>
+<span class="com">   convert to C by dualamd</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+
+
+<span class="kwb">enum</span> Colour 
+{
+   blue      = <span class="num">0</span>,
+   red      = <span class="num">1</span>,
+   yellow   = <span class="num">2</span>,
+   Invalid   = <span class="num">3</span>
+};
+
+<span class="kwb">const char</span>* ColourName[] = {<span class="str">&quot;blue&quot;</span>, <span class="str">&quot;red&quot;</span>, <span class="str">&quot;yellow&quot;</span>};
+<span class="kwb">const int</span> STACK_SIZE   = <span class="num">32</span>*<span class="num">1024</span>;
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned int</span> BOOL;
+<span class="kwb">const</span> BOOL TRUE = <span class="num">1</span>;
+<span class="kwb">const</span> BOOL FALSE = <span class="num">0</span>;
+
+<span class="kwb">int</span> CreatureID = <span class="num">0</span>;
+
+
+<span class="kwb">enum</span> Colour <span class="kwd">doCompliment</span>(<span class="kwb">enum</span> Colour c1, <span class="kwb">enum</span> Colour c2) 
+{
+   <span class="kwa">switch</span> (c1) 
+   {
+   <span class="kwa">case</span> blue:
+      <span class="kwa">switch</span> (c2) 
+      {
+      <span class="kwa">case</span> blue:
+         <span class="kwa">return</span> blue;
+      <span class="kwa">case</span> red:
+         <span class="kwa">return</span> yellow;
+      <span class="kwa">case</span> yellow:
+         <span class="kwa">return</span> red;
+      <span class="kwa">default</span>:
+         <span class="kwa">goto</span> errlb;
+      }
+   <span class="kwa">case</span> red:
+      <span class="kwa">switch</span> (c2) 
+      {
+      <span class="kwa">case</span> blue:
+         <span class="kwa">return</span> yellow;
+      <span class="kwa">case</span> red:
+         <span class="kwa">return</span> red;
+      <span class="kwa">case</span> yellow:
+         <span class="kwa">return</span> blue;
+      <span class="kwa">default</span>:
+         <span class="kwa">goto</span> errlb;
+      }
+   <span class="kwa">case</span> yellow:
+      <span class="kwa">switch</span> (c2) 
+      {
+      <span class="kwa">case</span> blue:
+         <span class="kwa">return</span> red;
+      <span class="kwa">case</span> red:
+         <span class="kwa">return</span> blue;
+      <span class="kwa">case</span> yellow:
+         <span class="kwa">return</span> yellow;
+      <span class="kwa">default</span>:
+         <span class="kwa">goto</span> errlb;
+      }
+   <span class="kwa">default</span>:
+      <span class="kwa">break</span>;
+   }
+
+errlb:   
+   <span class="kwd">printf</span>(<span class="str">&quot;Invalid colour</span><span class="esc">\n</span><span class="str">&quot;</span>);
+   <span class="kwd">exit</span>( <span class="num">1</span> );
+}
+
+<span class="com">/* convert integer to number string: 1234 -&gt; &quot;one two three four&quot; */</span>
+<span class="kwb">char</span>* <span class="kwd">formatNumber</span>(<span class="kwb">int</span> n, <span class="kwb">char</span>* outbuf)
+{
+   <span class="kwb">int</span> ochar = <span class="num">0</span>, ichar = <span class="num">0</span>;
+   <span class="kwb">int</span> i;
+   <span class="kwb">char</span> tmp[<span class="num">64</span>];
+
+   <span class="kwb">const char</span>* NUMBERS[] =
+   {
+      <span class="str">&quot;zero&quot;</span>, <span class="str">&quot;one&quot;</span>, <span class="str">&quot;two&quot;</span>, <span class="str">&quot;three&quot;</span>, <span class="str">&quot;four&quot;</span>, <span class="str">&quot;five&quot;</span>,
+      <span class="str">&quot;six&quot;</span>, <span class="str">&quot;seven&quot;</span>, <span class="str">&quot;eight&quot;</span>, <span class="str">&quot;nine&quot;</span>
+   };
+
+   ichar = <span class="kwd">sprintf</span>(tmp, <span class="str">&quot;%d&quot;</span>, n);
+
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; ichar; i++)
+      ochar += <span class="kwd">sprintf</span>( outbuf + ochar, <span class="str">&quot; %s&quot;</span>, NUMBERS[ tmp[i] - <span class="str">'0'</span> ] );
+
+   <span class="kwa">return</span> outbuf;
+}
+
+
+<span class="kwb">struct</span> MeetingPlace 
+{
+   pthread_mutex_t   mutex;
+   <span class="kwb">int</span>             meetingsLeft;
+   <span class="kwb">struct</span> Creature*   firstCreature;
+};
+
+<span class="kwb">struct</span> Creature
+{
+   pthread_t         ht;
+   pthread_attr_t      stack_att;
+
+   <span class="kwb">struct</span> MeetingPlace* place;
+   <span class="kwb">int</span>         count;
+   <span class="kwb">int</span>         sameCount;
+
+   <span class="kwb">enum</span> Colour   colour;
+   <span class="kwb">int</span>          id;
+
+   BOOL      two_met;
+   BOOL      sameid;
+};
+
+
+<span class="kwb">void</span> <span class="kwd">MeetingPlace_Init</span>(<span class="kwb">struct</span> MeetingPlace* m, <span class="kwb">int</span> meetings ) 
+{
+   <span class="kwd">pthread_mutex_init</span>( &amp;m-&gt;mutex, <span class="num">0</span> );
+   m-&gt;meetingsLeft = meetings;
+   m-&gt;firstCreature = <span class="num">0</span>;
+}
+
+
+BOOL <span class="kwd">Meet</span>( <span class="kwb">struct</span> Creature* cr)
+{
+   BOOL retval = TRUE;
+
+   <span class="kwb">struct</span> MeetingPlace* mp = cr-&gt;place;
+   <span class="kwd">pthread_mutex_lock</span>( &amp;(mp-&gt;mutex) );
+
+   <span class="kwa">if</span> ( mp-&gt;meetingsLeft &gt; <span class="num">0</span> )
+   {
+      <span class="kwa">if</span> ( mp-&gt;firstCreature == <span class="num">0</span> ) 
+      {
+         cr-&gt;two_met = FALSE;
+         mp-&gt;firstCreature = cr;
+      } 
+      <span class="kwa">else</span> 
+      {
+         <span class="kwb">struct</span> Creature* first;
+         <span class="kwb">enum</span> Colour newColour;
+
+         first = mp-&gt;firstCreature;
+         newColour = <span class="kwd">doCompliment</span>( cr-&gt;colour, first-&gt;colour );
+
+         cr-&gt;sameid = cr-&gt;id == first-&gt;id;
+         cr-&gt;colour = newColour;
+         cr-&gt;two_met = TRUE;
+         
+         first-&gt;sameid = cr-&gt;sameid;
+         first-&gt;colour = newColour;
+         first-&gt;two_met = TRUE;
+
+         mp-&gt;firstCreature = <span class="num">0</span>;
+         mp-&gt;meetingsLeft--;
+      }
+   } 
+   <span class="kwa">else</span> 
+      retval = FALSE;
+
+   <span class="kwd">pthread_mutex_unlock</span>( &amp;(mp-&gt;mutex) );
+   <span class="kwa">return</span> retval;
+}
+
+   
+<span class="kwb">void</span>* <span class="kwd">CreatureThreadRun</span>(<span class="kwb">void</span>* param)
+{
+   <span class="kwb">struct</span> Creature* cr = (<span class="kwb">struct</span> Creature*)param;
+   
+   <span class="kwa">while</span> (TRUE) 
+   {
+      <span class="kwa">if</span> ( <span class="kwd">Meet</span>(cr) )
+      {
+         <span class="kwa">while</span> (cr-&gt;two_met == FALSE)
+            <span class="kwd">sched_yield</span>();
+            
+         <span class="kwa">if</span> (cr-&gt;sameid) 
+            cr-&gt;sameCount++;
+         cr-&gt;count++;
+      }
+      <span class="kwa">else</span>
+         <span class="kwa">break</span>;
+   }
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+
+<span class="kwb">void</span> <span class="kwd">Creature_Init</span>( <span class="kwb">struct</span> Creature *cr, <span class="kwb">struct</span> MeetingPlace* place, <span class="kwb">enum</span> Colour colour ) 
+{
+   cr-&gt;place = place;
+   cr-&gt;count = cr-&gt;sameCount = <span class="num">0</span>;
+
+   cr-&gt;id = ++CreatureID;
+   cr-&gt;colour = colour;
+   cr-&gt;two_met = FALSE;
+
+   <span class="kwd">pthread_attr_init</span>( &amp;cr-&gt;stack_att );
+   <span class="kwd">pthread_attr_setstacksize</span>( &amp;cr-&gt;stack_att, STACK_SIZE );
+   <span class="kwd">pthread_create</span>( &amp;cr-&gt;ht, &amp;cr-&gt;stack_att, &amp;CreatureThreadRun, (<span class="kwb">void</span>*)(cr) );
+}
+
+<span class="com">/* format meeting times of each creature to string */</span>
+<span class="kwb">char</span>* <span class="kwd">Creature_getResult</span>(<span class="kwb">struct</span> Creature* cr, <span class="kwb">char</span>* str) 
+{
+   <span class="kwb">char</span> numstr[<span class="num">256</span>];
+   <span class="kwd">formatNumber</span>(cr-&gt;sameCount, numstr);
+
+   <span class="kwd">sprintf</span>( str, <span class="str">&quot;%u%s&quot;</span>, cr-&gt;count, numstr );
+   <span class="kwa">return</span> str;
+}
+
+
+<span class="kwb">void</span> <span class="kwd">runGame</span>( <span class="kwb">int</span> n_meeting, <span class="kwb">int</span> ncolor, <span class="kwb">const enum</span> Colour* colours ) 
+{
+   <span class="kwb">int</span> i;
+   <span class="kwb">int</span> total = <span class="num">0</span>;
+   <span class="kwb">char</span> str[<span class="num">256</span>];
+
+   <span class="kwb">struct</span> MeetingPlace place;
+   <span class="kwb">struct</span> Creature *creatures = (<span class="kwb">struct</span> Creature*) <span class="kwd">calloc</span>( ncolor, <span class="kwa">sizeof</span>(<span class="kwb">struct</span> Creature) );
+
+   <span class="kwd">MeetingPlace_Init</span>( &amp;place, n_meeting );
+
+   <span class="com">/* print initial color of each creature */</span>
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; ncolor; i++)
+   {
+      <span class="kwd">printf</span>( <span class="str">&quot;%s &quot;</span>, ColourName[ colours[i] ] );
+      <span class="kwd">Creature_Init</span>( &amp;(creatures[i]), &amp;place, colours[i] );
+   }
+   <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+
+   <span class="com">/* wait for them to meet */</span>
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; ncolor; i++) 
+      <span class="kwd">pthread_join</span>( creatures[i].ht, <span class="num">0</span> );      
+
+   <span class="com">/* print meeting times of each creature */</span>
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; ncolor; i++) 
+   {
+      <span class="kwd">printf</span>( <span class="str">&quot;%s</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">Creature_getResult</span>(&amp;(creatures[i]), str) );
+      total += creatures[i].count;
+   }
+
+   <span class="com">/* print total meeting times, should equal n_meeting */</span>
+   <span class="kwd">printf</span>( <span class="str">&quot;%s</span><span class="esc">\n\n</span><span class="str">&quot;</span>, <span class="kwd">formatNumber</span>(total, str) );
+
+   <span class="com">/* cleaup &amp; quit */</span>
+   <span class="kwd">pthread_mutex_destroy</span>( &amp;place.mutex );
+   <span class="kwd">free</span>( creatures );
+}
+
+
+<span class="kwb">void</span> <span class="kwd">printColours</span>( <span class="kwb">enum</span> Colour c1, <span class="kwb">enum</span> Colour c2 ) 
+{
+   <span class="kwd">printf</span>( <span class="str">&quot;%s + %s -&gt; %s</span><span class="esc">\n</span><span class="str">&quot;</span>, 
+      ColourName[c1], 
+      ColourName[c2], 
+      ColourName[<span class="kwd">doCompliment</span>(c1, c2)]   );
+}
+
+<span class="kwb">void</span> <span class="kwd">printColoursTable</span>(<span class="kwb">void</span>) 
+{
+   <span class="kwd">printColours</span>(blue, blue);
+   <span class="kwd">printColours</span>(blue, red);
+   <span class="kwd">printColours</span>(blue, yellow);
+   <span class="kwd">printColours</span>(red, blue);
+   <span class="kwd">printColours</span>(red, red);
+   <span class="kwd">printColours</span>(red, yellow);
+   <span class="kwd">printColours</span>(yellow, blue);
+   <span class="kwd">printColours</span>(yellow, red);
+   <span class="kwd">printColours</span>(yellow, yellow);
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>** argv) 
+{
+   <span class="kwb">int</span> n = (argc == <span class="num">2</span>) ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">600</span>;
+
+   <span class="kwd">printColoursTable</span>();
+   <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+   
+   <span class="kwb">const enum</span> Colour r1[] = {   blue, red, yellow   };
+   <span class="kwb">const enum</span> Colour r2[] = {   blue, red, yellow, 
+               red, yellow, blue, 
+               red, yellow, red, blue   };
+
+   <span class="kwd">runGame</span>( n, <span class="kwa">sizeof</span>(r1) / <span class="kwa">sizeof</span>(r1[<span class="num">0</span>]), r1 );
+   <span class="kwd">runGame</span>( n, <span class="kwa">sizeof</span>(r2) / <span class="kwa">sizeof</span>(r2[<span class="num">0</span>]), r2 );
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+

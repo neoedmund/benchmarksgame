@@ -1,0 +1,24 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc">#   contributed by Robert Bradshaw</span>
+<span class="slc">#   modified by Ruud H.G.van Tol</span>
+<span class="slc">#   modified by Emanuele Zeppieri</span>
+<span class="slc">#   modified to use Math:GMP by Kuang-che Wu</span>
+<span class="slc">#   modified by Kjetil Skotheim, cleanup + speedup 10%</span>
+
+<span class="kwa">use</span> Math::GMP;
+<span class="kwc">my</span> <span class="kwb">$n</span> = <span class="kwb">$ARGV</span>[<span class="num">0</span>];
+<span class="kwc">my</span>(<span class="kwb">$z0</span>, <span class="kwb">$z1</span>, <span class="kwb">$z2</span>) = <span class="kwc">map</span> Math::GMP-&gt;<span class="kwd">new</span>(<span class="kwb">$_</span>), <span class="num">1</span>,<span class="num">0</span>,<span class="num">1</span>;
+<span class="kwc">my</span>(<span class="kwb">$k</span>, <span class="kwb">$s</span>, <span class="kwb">$d</span>, <span class="kwb">$f</span>);
+<span class="kwa">for</span> (<span class="num">1</span>..<span class="kwb">$n</span>) {
+    <span class="kwa">while</span> ( <span class="kwb">$z0</span>&gt;<span class="kwb">$z2</span> <span class="kwc">or</span> ( <span class="kwb">$d</span> = (<span class="kwb">$f</span>=<span class="kwb">$z0</span>*<span class="num">3</span>+<span class="kwb">$z1</span>)<span class="kwd">/$z2 ) != ($f+$z0)/</span><span class="kwb">$z2</span> ) {
+        <span class="kwb">$z2</span> *= <span class="kwb">$f</span> = <span class="num">2</span>*++<span class="kwb">$k</span>+<span class="num">1</span>;
+        <span class="kwb">$z1</span>  = <span class="kwb">$f</span> * (<span class="kwb">$z1</span>+<span class="num">2</span>*<span class="kwb">$z0</span>);
+        <span class="kwb">$z0</span> *= <span class="kwb">$k</span>;
+    }
+    <span class="kwb">$z1</span>  = <span class="num">10</span> * (<span class="kwb">$z1</span>-<span class="kwb">$d</span>*<span class="kwb">$z2</span>);
+    <span class="kwb">$z0</span> *= <span class="num">10</span>;
+    <span class="kwb">$s</span>  .= <span class="kwb">$d</span>;
+    <span class="kwc">printf</span> <span class="str">&quot;%-10s</span><span class="esc">\t</span><span class="str">:</span><span class="ipl">$_</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwb">$s</span> <span class="kwc">and</span> <span class="kwb">$s</span>=<span class="str">&quot;&quot;</span> <span class="kwa">if</span> <span class="kwb">$_%10</span>&lt;<span class="num">1</span> <span class="kwc">or</span> <span class="kwb">$_</span>==<span class="kwb">$n</span>;
+}

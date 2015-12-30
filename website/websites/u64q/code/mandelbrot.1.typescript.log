@@ -1,0 +1,12 @@
+
+Tue, 22 Dec 2015 23:05:24 GMT
+
+MAKE:
+mv mandelbrot.typescript mandelbrot.ts
+/usr/local/src/node-v5.1.0-linux-x64/bin/tsc  mandelbrot.ts
+2.02s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/node-v5.1.0-linux-x64/bin/node --use_strict mandelbrot.js 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN

@@ -1,0 +1,12 @@
+
+Wed, 18 Nov 2015 23:28:38 GMT
+
+MAKE:
+make: *** No rule to make target 'binarytrees.hack_run'.  Stop.
+0.01s to complete and log all make actions
+
+COMMAND LINE:
+/usr/bin/hhvm  binarytrees.hack 12
+
+MAKE ERROR 
+

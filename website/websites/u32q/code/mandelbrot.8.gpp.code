@@ -1,0 +1,108 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by Elam Kolenovic</span>
+<span class="slc">//</span>
+<span class="slc">// Changes (2013-04-19)</span>
+<span class="slc">//   - using omp</span>
+<span class="slc">//   - use buffer and fwrite at end instead of putchar</span>
+<span class="slc">//   - pre-calculate cr0[]</span>
+<span class="slc">//   - rename variables and use underscore before the index part of the name</span>
+<span class="slc">//   - inverted bit tests, better performance under MSVC</span>
+<span class="slc">//   - optional argument for file output, usefull in windows shell</span>
+<span class="slc">//</span>
+<span class="slc">// Changes (2013-04-07):</span>
+<span class="slc">//   - removed unnecessary arrays, faster especially on 32 bits</span>
+<span class="slc">//   - using putchar instead of iostreams, slightly faster</span>
+<span class="slc">//   - using namespace std for readability</span>
+<span class="slc">//   - replaced size_t with unsigned</span>
+<span class="slc">//   - removed some includes</span>
+
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;limits&gt;</span>
+<span class="ppc">#include &lt;vector&gt;</span>
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned char</span> Byte;
+
+<span class="kwa">using namespace</span> std;
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>* argv[])
+{
+    <span class="kwb">const unsigned</span> N              = <span class="kwd">max</span>(<span class="num">0</span>, (argc &gt; <span class="num">1</span>) ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">0</span>);
+    <span class="kwb">const unsigned</span> width          = N;
+    <span class="kwb">const unsigned</span> height         = N;
+    <span class="kwb">const unsigned</span> max_x          = (width + <span class="num">7</span>) / <span class="num">8</span>;
+    <span class="kwb">const unsigned</span> max_iterations = <span class="num">50</span>;
+    <span class="kwb">const double</span>   limit          = <span class="num">2.0</span>;
+    <span class="kwb">const double</span>   limit_sq       = limit * limit;
+
+    <span class="kwb">FILE</span>* out = (argc == <span class="num">3</span>) ? <span class="kwd">fopen</span>(argv[<span class="num">2</span>], <span class="str">&quot;wb&quot;</span>) : stdout;
+
+    vector&lt;Byte&gt; <span class="kwd">buffer</span>(height * max_x);
+
+    std::vector&lt;<span class="kwb">double</span>&gt; <span class="kwd">cr0</span>(<span class="num">8</span> * max_x);
+    <span class="kwa">for</span> (<span class="kwb">unsigned</span> x = <span class="num">0</span>; x &lt; max_x; ++x)
+    {
+        <span class="kwa">for</span> (<span class="kwb">unsigned</span> k = <span class="num">0</span>; k &lt; <span class="num">8</span>; ++k)
+        {
+            <span class="kwb">const int</span> xk = <span class="num">8</span> * x + k;
+            cr0[xk] = (<span class="num">2.0</span> * xk) / width - <span class="num">1.5</span>;
+        }
+    }
+
+<span class="ppc">#pragma omp parallel for</span>
+    <span class="kwa">for</span> (<span class="kwb">unsigned</span> y = <span class="num">0</span>; y &lt; height; ++y)
+    {
+        Byte* line = &amp;buffer[y * max_x];
+
+        <span class="kwb">const double</span> ci0 = <span class="num">2.0</span> * y / height - <span class="num">1.0</span>;
+
+        <span class="kwa">for</span> (<span class="kwb">unsigned</span> x = <span class="num">0</span>; x &lt; max_x; ++x)
+        {
+            <span class="kwb">const double</span>* cr0_x = &amp;cr0[<span class="num">8</span> * x];
+
+            <span class="kwb">double</span> cr[<span class="num">8</span>];
+            <span class="kwd">copy</span>(cr0_x, cr0_x + <span class="num">8</span>, &amp;cr[<span class="num">0</span>]);
+
+            <span class="kwb">double</span> ci[<span class="num">8</span>];
+            <span class="kwd">fill</span>(ci, ci + <span class="num">8</span>, ci0);
+
+            Byte bits = <span class="num">0xFF</span>;
+            <span class="kwa">for</span> (<span class="kwb">unsigned</span> i = <span class="num">0</span>; i &lt; max_iterations &amp;&amp; bits; ++i)
+            {
+                Byte bit_k = <span class="num">0x80</span>;
+                <span class="kwa">for</span> (<span class="kwb">unsigned</span> k = <span class="num">0</span>; k &lt; <span class="num">8</span>; ++k)
+                {
+                    <span class="kwa">if</span> (bits &amp; bit_k)
+                    {
+                        <span class="kwb">const double</span> cr_k    = cr[k];
+                        <span class="kwb">const double</span> ci_k    = ci[k];
+                        <span class="kwb">const double</span> cr_k_sq = cr_k * cr_k;
+                        <span class="kwb">const double</span> ci_k_sq = ci_k * ci_k;
+
+                        cr[k] = cr_k_sq - ci_k_sq + cr0_x[k];
+                        ci[k] = <span class="num">2.0</span> * cr_k * ci_k + ci0;
+
+                        <span class="kwa">if</span> (cr_k_sq + ci_k_sq &gt; limit_sq)
+                        {
+                            bits ^= bit_k;
+                        }
+                    }
+                    bit_k &gt;&gt;= <span class="num">1</span>;
+                }
+            }
+            line[x] = bits;
+        }
+    }
+
+    <span class="kwd">fprintf</span>(out, <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">%u %u</span><span class="esc">\n</span><span class="str">&quot;</span>, width, height);
+    <span class="kwd">fwrite</span>(&amp;buffer[<span class="num">0</span>], buffer.<span class="kwd">size</span>(), <span class="num">1</span>, out);
+
+    <span class="kwa">if</span> (out != stdout)
+    {
+        <span class="kwd">fclose</span>(out);
+    }
+
+    <span class="kwa">return</span> <span class="num">0</span>;
+}

@@ -1,0 +1,28 @@
+
+Mon, 18 May 2015 23:47:58 GMT
+
+MAKE:
+mv spectralnorm.scala-4.scala spectralnorm.scala
+/usr/local/src/scala-2.11.6/bin/scalac -optimise -target:jvm-1.8 spectralnorm.scala
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+spectralnorm.scala:55: error: identifier expected but ')' found.
+      var w = Array.fill(chunkSize)(0.)
+                                      ^
+spectralnorm.scala:97: error: identifier expected but ')' found.
+      var w = Array.fill(size)(0.)
+                                 ^
+two errors found
+/home/dunham/benchmarksgame/nanobench/makefiles/u32q.programs.Makefile:595: recipe for target 'spectralnorm.scala-4.scala_run' failed
+make: [spectralnorm.scala-4.scala_run] Error 1 (ignored)
+1.43s to complete and log all make actions
+
+COMMAND LINE:
+ /usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -Xbootclasspath/a:/usr/local/src/scala-2.11.6/lib/scala-library.jar:/usr/local/src/scala-2.11.6/lib/akka-actors.jar:/usr/local/src/scala-2.11.6/lib/typesafe-config.jar spectralnorm 500
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Error: Could not find or load main class spectralnorm

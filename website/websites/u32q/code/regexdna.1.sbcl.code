@@ -1,0 +1,66 @@
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; contributed by Shyamal Prasad</span>
+
+
+(<span class="kwa">eval-when</span> (:compile-toplevel :load-toplevel :execute)
+  (<span class="kwa">require</span> :asdf)
+  (<span class="kwa">require</span> :cl-ppcre))
+
+(<span class="kwa">defparameter</span> *regex-list*
+  (<span class="kwa">list</span>
+   <span class="str">&quot;agggtaaa|tttaccct&quot;</span>
+   <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>
+   <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>
+   <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>
+   <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>
+   <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>
+   <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>
+   <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>
+   <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>))
+
+(<span class="kwa">defparameter</span> *alternatives*
+  '((<span class="str">&quot;B&quot;</span> <span class="str">&quot;(c|g|t)&quot;</span>)  (<span class="str">&quot;D&quot;</span> <span class="str">&quot;(a|g|t)&quot;</span>)
+    (<span class="str">&quot;H&quot;</span> <span class="str">&quot;(a|c|t)&quot;</span>)  (<span class="str">&quot;K&quot;</span> <span class="str">&quot;(g|t)&quot;</span>)
+    (<span class="str">&quot;M&quot;</span> <span class="str">&quot;(a|c)&quot;</span>)    (<span class="str">&quot;N&quot;</span> <span class="str">&quot;(a|c|g|t)&quot;</span>)
+    (<span class="str">&quot;R&quot;</span> <span class="str">&quot;(a|g)&quot;</span>)    (<span class="str">&quot;S&quot;</span> <span class="str">&quot;(c|t)&quot;</span>)
+    (<span class="str">&quot;V&quot;</span> <span class="str">&quot;(a|c|g)&quot;</span>)  (<span class="str">&quot;W&quot;</span> <span class="str">&quot;(a|t)&quot;</span>)
+    (<span class="str">&quot;Y&quot;</span> <span class="str">&quot;(c|t)&quot;</span>)))
+
+
+<span class="slc">;; Read in the entire file as the benchmark specifieds</span>
+(<span class="kwa">defun</span> get-input-chars (<span class="kwa">stream</span>)
+  (<span class="kwa">with-output-to-string</span>
+    (<span class="kwa">output</span>)
+    (<span class="kwa">loop</span> while (<span class="kwa">multiple-value-bind</span>
+		    (<span class="kwa">line</span> missing) (<span class="kwa">read-line</span> stream nil)
+		  (<span class="kwa">when</span> line (<span class="kwa">write-string</span> line output))
+		  (<span class="kwa">unless</span> missing (<span class="kwa">write-char</span> #\Newline output))
+		  line))))
+			 
+
+
+(<span class="kwa">defun</span> main (&amp;optional (<span class="kwa">stream</span> *standard-input*))
+  (<span class="kwa">let</span>*
+      <span class="slc">;; Benchmark definition requires using a regex to</span>
+      <span class="slc">;; remove headers/newlines from the file</span>
+      ((<span class="kwa">text</span> (<span class="kwa">get-input-chars</span> stream))
+       (<span class="kwa">sequence</span>
+	(<span class="kwa">cl-ppcre</span>:regex-replace-all <span class="str">&quot;&gt;[^</span><span class="esc">\\</span><span class="str">n]*</span><span class="esc">\\</span><span class="str">n|</span><span class="esc">\\</span><span class="str">n&quot;</span> text <span class="str">&quot;&quot;</span>)))
+
+    <span class="slc">;; Count and print the number of subsequences</span>
+    (<span class="kwa">loop</span> for regex in *regex-list* do
+	  (<span class="kwa">format</span> t <span class="str">&quot;~a ~a~%&quot;</span> regex
+		  (/ (<span class="kwa">length</span> (<span class="kwa">cl-ppcre</span>:all-matches regex sequence)) <span class="num">2</span>)))
+    
+    <span class="slc">;; Print lengths</span>
+    (<span class="kwa">format</span> t <span class="str">&quot;~%~a~%&quot;</span> (<span class="kwa">length</span> text))
+    (<span class="kwa">format</span> t <span class="str">&quot;~a~%&quot;</span> (<span class="kwa">length</span> sequence))
+
+    <span class="slc">;; do the alternative substitution and create the new text string</span>
+    <span class="slc">;; that the benchmark definition requires</span>
+    (<span class="kwa">loop</span> for pair in *alternatives* do
+	  (<span class="kwa">setf</span> sequence
+		(<span class="kwa">cl-ppcre</span>:regex-replace-all (<span class="kwa">car</span> pair) sequence (<span class="kwa">cadr</span> pair))))
+    (<span class="kwa">format</span> t <span class="str">&quot;~a~%&quot;</span> (<span class="kwa">length</span> sequence))))

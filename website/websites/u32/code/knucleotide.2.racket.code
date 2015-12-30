@@ -1,0 +1,79 @@
+#lang racket/base
+
+<span class="slc">;;   The Computer Language Shootout</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+(<span class="kwa">require</span> racket/future racket/require (<span class="kwa">for-syntax</span> racket/base) racket/port
+         racket/place
+         (<span class="kwa">filtered-in</span> (λ (<span class="kwa">name</span>) (<span class="kwa">regexp-replace</span> #rx<span class="str">&quot;unsafe-&quot;</span> name <span class="str">&quot;&quot;</span>))
+                      racket/unsafe/ops))
+
+(<span class="kwa">define</span> (<span class="kwa">all-counts</span> len dna)
+  (<span class="kwa">define</span> table (<span class="kwa">make-hasheq</span>))
+  (<span class="kwa">define</span> seq (<span class="kwa">make-bytes</span> len))
+  (<span class="kwa">for</span> ([s (<span class="kwa">in-range</span> (<span class="kwa">-</span> (<span class="kwa">bytes-length</span> dna) len) -<span class="num">1</span> -<span class="num">1</span>)])
+    (<span class="kwa">bytes-copy</span>! seq <span class="num">0</span> dna s (+ s len))
+    (<span class="kwa">define</span> key (<span class="kwa">string-</span>&gt;symbol (<span class="kwa">bytes-</span>&gt;string/utf-8 seq)))
+    (<span class="kwa">define</span> cnt (<span class="kwa">hash-ref</span> table key <span class="num">0</span>))
+    (<span class="kwa">hash-set</span>! table key (<span class="kwa">add1</span> cnt)))
+  table)
+
+(<span class="kwa">define</span> (<span class="kwa">write-freqs</span> table port)
+  (<span class="kwa">define</span> content (<span class="kwa">hash-map</span> table cons))
+  (<span class="kwa">define</span> total (<span class="kwa">exact-</span>&gt;inexact (<span class="kwa">apply</span> + (<span class="kwa">map</span> cdr content))))
+  (<span class="kwa">for</span> ([a (<span class="kwa">sort</span> content &gt; #:key cdr)])
+    (<span class="kwa">fprintf</span> port <span class="str">&quot;~a ~a</span><span class="esc">\n</span><span class="str">&quot;</span>
+             (<span class="kwa">car</span> a)
+             (<span class="kwa">real-</span>&gt;decimal-string (<span class="kwa">fl</span>* <span class="num">100</span>. (<span class="kwa">fl</span>/ (<span class="kwa">fx-</span>&gt;fl (<span class="kwa">cdr</span> a)) total)) <span class="num">3</span>))))
+
+(<span class="kwa">define</span> (<span class="kwa">write-one-freq</span> table key port)
+  (<span class="kwa">define</span> cnt (<span class="kwa">hash-ref</span> table key <span class="num">0</span>))
+  (<span class="kwa">fprintf</span> port <span class="str">&quot;~a</span><span class="esc">\t</span><span class="str">~a</span><span class="esc">\n</span><span class="str">&quot;</span> cnt key))
+
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">at-place</span> (<span class="kwa">var</span> ...) body ...)
+  (<span class="kwa">let</span> ()
+    (<span class="kwa">define</span> p (<span class="kwa">place</span> ch
+                     (<span class="kwa">define</span> var (<span class="kwa">place-channel-get</span> ch)) ...
+                     (<span class="kwa">place-channel-put</span> ch (<span class="kwa">let</span> () body ...))))
+    (<span class="kwa">place-channel-put</span> p var) ...
+    p))
+
+(<span class="kwa">define</span> (<span class="kwa">main</span> . _)    
+  (<span class="kwa">define</span> dna-shared
+    (<span class="kwa">let</span> ()
+      (<span class="kwa">define</span> in (<span class="kwa">current-input-port</span>))
+      <span class="slc">;; Skip to &quot;&gt;THREE ...&quot;          </span>
+      (<span class="kwa">regexp-match</span> #rx#<span class="str">&quot;(?m:^&gt;THREE.*$)&quot;</span> in)
+      (<span class="kwa">define</span> s (<span class="kwa">open-output-bytes</span>))
+      <span class="slc">;; Copy everything but newlines to s:            </span>
+      (<span class="kwa">for</span> ([l (<span class="kwa">in-bytes-lines</span> in)])
+        (<span class="kwa">write-bytes</span> l s))
+      <span class="slc">;; Extract the bytes from s:            </span>
+      (<span class="kwa">define</span> dna (<span class="kwa">get-output-bytes</span> s))
+      (<span class="kwa">define</span> sb (<span class="kwa">make-shared-bytes</span> (<span class="kwa">bytes-length</span> dna)))
+      (<span class="kwa">for</span> ([i (<span class="kwa">in-range</span> (<span class="kwa">bytes-length</span> dna))])
+        (<span class="kwa">bytes-set</span>! sb i (<span class="kwa">fx-</span> (<span class="kwa">bytes-ref</span> dna i) <span class="num">32</span>)))
+      sb))
+  (<span class="kwa">define</span> l
+    (<span class="kwa">append</span>
+     <span class="slc">;; 1/2-nucleotide counts:   </span>
+     (<span class="kwa">for</span>/list ([i '(<span class="kwa">1</span> <span class="num">2</span>)])
+       (<span class="kwa">at-place</span> (<span class="kwa">i</span> dna-shared)
+         (<span class="kwa">define</span> pr (<span class="kwa">open-output-bytes</span>))
+         (<span class="kwa">write-freqs</span> (<span class="kwa">all-counts</span> i dna-shared) pr)
+         (<span class="kwa">newline</span> pr)
+         (<span class="kwa">get-output-bytes</span> pr)))
+     
+     <span class="slc">;; Specific sequences:</span>
+     (<span class="kwa">for</span>/list ([seq '(<span class="str">&quot;GGT&quot;</span> <span class="str">&quot;GGTA&quot;</span> <span class="str">&quot;GGTATT&quot;</span> <span class="str">&quot;GGTATTTTAATT&quot;</span> <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>)])
+       (<span class="kwa">at-place</span> (<span class="kwa">seq</span> dna-shared)
+         (<span class="kwa">define</span> pr (<span class="kwa">open-output-bytes</span>))
+         (<span class="kwa">write-one-freq</span> (<span class="kwa">all-counts</span> (<span class="kwa">string-length</span> seq) dna-shared)
+                         (<span class="kwa">string-</span>&gt;symbol seq) pr)
+         (<span class="kwa">get-output-bytes</span> pr)))))
+
+  (<span class="kwa">for</span> ([p l]) (<span class="kwa">write-bytes</span> (<span class="kwa">place-channel-get</span> p))))
+(<span class="kwa">provide</span> main)
+
+
+
+

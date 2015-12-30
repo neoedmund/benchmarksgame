@@ -1,0 +1,58 @@
+<span class="com">/**</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Klaus Friedel</span>
+<span class="com"> * modified by Daryl Griffith</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.util.concurrent.locks.LockSupport;
+
+<span class="kwa">public class</span> threadring <span class="kwa">extends</span> Thread {
+
+    <span class="kwa">static final</span> <span class="kwb">int</span> THREAD_COUNT = <span class="num">503</span>;
+
+    threadring nextThread;
+    <span class="kwa">volatile</span> <span class="kwb">boolean</span> waiting = true;
+    <span class="kwb">int</span> message;
+
+    <span class="kwa">public</span> <span class="kwd">threadring</span>(<span class="kwb">int</span> name) {
+        <span class="kwa">super</span>(Integer.<span class="kwd">toString</span>(name));
+    }
+
+    <span class="kwc">&#64;Override</span>
+    <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+        <span class="kwa">for</span> (;;) {
+            <span class="kwa">while</span> (waiting) {
+                LockSupport.<span class="kwd">park</span>();
+            }
+            <span class="kwa">if</span> (message == <span class="num">0</span>) {
+                System.out.<span class="kwd">println</span>(<span class="kwd">getName</span>());
+                System.<span class="kwd">exit</span>(<span class="num">0</span>);
+            }
+            waiting = true;
+            nextThread.message = message - <span class="num">1</span>;
+            nextThread.waiting = false;
+            LockSupport.<span class="kwd">unpark</span>(nextThread);
+        }
+    }
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String args[]) <span class="kwa">throws</span> Exception {
+        threadring first = <span class="kwa">new</span> <span class="kwd">threadring</span>(<span class="num">1</span>);
+        threadring current = <span class="kwa">new</span> <span class="kwd">threadring</span>(<span class="num">2</span>);
+
+        first.<span class="kwd">start</span>(); <span class="slc">// Thread 1</span>
+        first.nextThread = current;
+        first.message = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+        first.waiting = false;
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">3</span>; i &lt; THREAD_COUNT; i++) {
+            current.nextThread = <span class="kwa">new</span> <span class="kwd">threadring</span>(i);
+            current.<span class="kwd">start</span>();
+            current = current.nextThread;
+        }
+        current.nextThread = <span class="kwa">new</span> <span class="kwd">threadring</span>(THREAD_COUNT);
+        current.<span class="kwd">start</span>(); <span class="slc">// Thread 502</span>
+        current = current.nextThread;
+        current.nextThread = first;
+        current.<span class="kwd">start</span>(); <span class="slc">// Thread 503</span>
+    }
+}

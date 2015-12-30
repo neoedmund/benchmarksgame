@@ -1,0 +1,166 @@
+<span class="com">/*</span>
+<span class="com">The Computer Language Benchmarks Game</span>
+<span class="com">http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> </span>
+<span class="com">Based on C# entry by Isaac Gouy</span>
+<span class="com">contributed by Jarkko Miettinen</span>
+<span class="com">Parallel by The Anh Tran</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.text.DecimalFormat;
+<span class="kwa">import</span> java.text.NumberFormat;
+<span class="kwa">import</span> java.util.concurrent.CyclicBarrier;
+
+<span class="kwa">public class</span> spectralnorm
+{
+    <span class="kwa">private static final</span> NumberFormat formatter = <span class="kwa">new</span> <span class="kwd">DecimalFormat</span> (<span class="str">&quot;#.000000000&quot;</span>);
+    
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span> (String[] args)
+    {
+        <span class="kwb">int</span> n = <span class="num">1000</span>;
+        <span class="kwa">if</span> (args.length &gt; <span class="num">0</span>) n = Integer.<span class="kwd">parseInt</span> (args[<span class="num">0</span>]);
+        
+        System.out.<span class="kwd">println</span> (formatter.<span class="kwd">format</span> (<span class="kwd">spectralnormGame</span> (n)) );
+    }
+    
+    
+    <span class="kwa">private static final</span> <span class="kwb">double</span> <span class="kwd">spectralnormGame</span> (<span class="kwb">int</span> n)
+    {
+        <span class="slc">// create unit vector</span>
+        <span class="kwb">double</span>[] u = <span class="kwa">new</span> <span class="kwb">double</span>[n];
+        <span class="kwb">double</span>[] v = <span class="kwa">new</span> <span class="kwb">double</span>[n];
+        <span class="kwb">double</span>[] tmp = <span class="kwa">new</span> <span class="kwb">double</span>[n];
+        
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; n; i++)
+            u[i] = <span class="num">1.0</span>;
+        
+        <span class="slc">// get available processor, then set up syn object</span>
+        <span class="kwb">int</span> nthread = Runtime.<span class="kwd">getRuntime</span> ().<span class="kwd">availableProcessors</span> ();
+        Approximate.barrier = <span class="kwa">new</span> <span class="kwd">CyclicBarrier</span> (nthread);
+        
+        <span class="kwb">int</span> chunk = n / nthread;
+        Approximate[] ap = <span class="kwa">new</span> Approximate[nthread];
+        
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; nthread; i++)
+        {
+            <span class="kwb">int</span> r1 = i * chunk;
+            <span class="kwb">int</span> r2 = (i &lt; (nthread -<span class="num">1</span>)) ? r1 + chunk : n;
+            
+            ap[i] = <span class="kwa">new</span> <span class="kwd">Approximate</span> (u, v, tmp, r1, r2);
+        }
+        
+        
+        <span class="kwb">double</span> vBv = <span class="num">0</span>, vv = <span class="num">0</span>;
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; nthread; i++)
+        {
+            <span class="kwa">try</span>
+            {
+                ap[i].<span class="kwd">join</span> ();
+                
+                vBv += ap[i].m_vBv;
+                vv += ap[i].m_vv;
+            }
+            <span class="kwa">catch</span> (Exception e)
+            {
+                e.<span class="kwd">printStackTrace</span> ();
+            }
+        }
+        
+        <span class="kwa">return</span> Math.<span class="kwd">sqrt</span> (vBv/vv);
+    }
+    
+    
+    <span class="kwa">private static class</span> Approximate <span class="kwa">extends</span> Thread
+    {
+        <span class="kwa">private static</span> CyclicBarrier barrier;
+        
+        <span class="kwa">private</span> <span class="kwb">double</span>[] _u;
+        <span class="kwa">private</span> <span class="kwb">double</span>[] _v;
+        <span class="kwa">private</span> <span class="kwb">double</span>[] _tmp;
+        
+        <span class="kwa">private</span> <span class="kwb">int</span> range_begin, range_end;
+        <span class="kwa">private</span> <span class="kwb">double</span> m_vBv = <span class="num">0</span>, m_vv = <span class="num">0</span>;
+        
+        
+        <span class="kwa">public</span> <span class="kwd">Approximate</span> (<span class="kwb">double</span>[] u, <span class="kwb">double</span>[] v, <span class="kwb">double</span>[] tmp, <span class="kwb">int</span> rbegin, <span class="kwb">int</span> rend)
+        {
+            <span class="kwa">super</span> ();
+            
+            _u = u;
+            _v = v;
+            _tmp = tmp;
+            
+            range_begin = rbegin;
+            range_end = rend;
+            
+            <span class="kwd">start</span> ();
+        }
+        
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span> ()
+        {
+            <span class="slc">// 20 steps of the power method</span>
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">10</span>; i++)
+            {
+                <span class="kwd">MultiplyAtAv</span> (_u, _tmp, _v);
+                <span class="kwd">MultiplyAtAv</span> (_v, _tmp, _u);
+            }
+            
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = range_begin; i &lt; range_end; i++)
+            {
+                m_vBv += _u[i] * _v[i];
+                m_vv  += _v[i] * _v[i];
+            }
+        }
+        
+        <span class="com">/* return element i,j of infinite matrix A */</span>
+        <span class="kwa">private final static</span> <span class="kwb">double</span> <span class="kwd">eval_A</span> (<span class="kwb">int</span> i, <span class="kwb">int</span> j)
+        {
+            <span class="kwb">int</span> div = ( ((i+j) * (i+j+<span class="num">1</span>) &gt;&gt;&gt; <span class="num">1</span>) +i+<span class="num">1</span> );
+            <span class="kwa">return</span> <span class="num">1.0</span> / div;
+        }
+        
+        <span class="com">/* multiply vector v by matrix A, each thread evaluate its range only */</span>
+        <span class="kwa">private final</span> <span class="kwb">void</span> <span class="kwd">MultiplyAv</span> (<span class="kwa">final</span> <span class="kwb">double</span>[] v, <span class="kwb">double</span>[] Av)
+        {
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = range_begin; i &lt; range_end; i++)
+            {
+                <span class="kwb">double</span> sum = <span class="num">0</span>;
+                <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; v.length; j++)
+                    sum += <span class="kwd">eval_A</span> (i, j) * v[j];
+                
+                Av[i] = sum;
+            }
+        }
+        
+        <span class="com">/* multiply vector v by matrix A transposed */</span>
+        <span class="kwa">private final</span> <span class="kwb">void</span> <span class="kwd">MultiplyAtv</span> (<span class="kwa">final</span> <span class="kwb">double</span>[] v, <span class="kwb">double</span>[] Atv)
+        {
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = range_begin; i &lt; range_end; i++)
+            {
+                <span class="kwb">double</span> sum = <span class="num">0</span>;
+                <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; v.length; j++)
+                    sum += <span class="kwd">eval_A</span> (j, i) * v[j];
+                
+                Atv[i] = sum;
+            }
+        }
+        
+        <span class="com">/* multiply vector v by matrix A and then by matrix A transposed */</span>
+        <span class="kwa">private final</span> <span class="kwb">void</span> <span class="kwd">MultiplyAtAv</span> (<span class="kwa">final</span> <span class="kwb">double</span>[] v, <span class="kwb">double</span>[] tmp, <span class="kwb">double</span>[] AtAv)
+        {
+            <span class="kwa">try</span>
+            {
+                <span class="kwd">MultiplyAv</span> (v, tmp);
+                <span class="slc">// all thread must syn at completion</span>
+                barrier.<span class="kwd">await</span> ();
+                <span class="kwd">MultiplyAtv</span> (tmp, AtAv);
+                <span class="slc">// all thread must syn at completion</span>
+                barrier.<span class="kwd">await</span> ();
+            }
+            <span class="kwa">catch</span> (Exception e)
+            {
+                e.<span class="kwd">printStackTrace</span> ();
+            }
+        }
+    }
+}

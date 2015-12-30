@@ -1,0 +1,70 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; contributed by Dmitry Ignatiev</span>
+<span class="slc">;;;</span>
+
+(<span class="kwa">declaim</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">space</span> <span class="num">0</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)))
+
+(<span class="kwa">defstruct</span> (<span class="kwa">node</span>
+            <span class="slc">;; vector :type layout optimizes away type information</span>
+            <span class="slc">;;  and reduces consing</span>
+            (:type vector)
+            (:constructor node (<span class="kwa">item</span> left right)))
+  (<span class="kwa">item</span> <span class="num">0</span> :type fixnum)
+  (<span class="kwa">left</span> nil :type (<span class="kwa">or</span> null node))
+  (<span class="kwa">right</span> nil :type (<span class="kwa">or</span> null node)))
+
+(<span class="kwa">deftype</span> node () '(<span class="kwa">simple-array</span> t (<span class="kwa">3</span>)))
+
+(<span class="kwa">defun</span> create-tree (<span class="kwa">item</span> depth)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum item depth))
+  <span class="slc">;; Use of LABELS will force SBCL to use local call convention</span>
+  <span class="slc">;;  which will speed up function call</span>
+  (<span class="kwa">labels</span> ((<span class="kwa">create-node</span> (<span class="kwa">item</span> depth)
+             (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum item depth))
+             (<span class="kwa">let</span> ((<span class="kwa">node</span> (<span class="kwa">node</span> item nil nil))
+                   (<span class="kwa">item2</span> (* item <span class="num">2</span>)))
+               (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum item2))
+               (<span class="kwa">when</span> (&gt; depth <span class="num">0</span>)
+                 (<span class="kwa">setf</span> (<span class="kwa">node-left</span> node)
+                       (<span class="kwa">create-node</span> (<span class="kwa">1-</span> item2) (<span class="kwa">1-</span> depth))
+                       (<span class="kwa">node-right</span> node)
+                       (<span class="kwa">create-node</span> item2 (<span class="kwa">1-</span> depth))))
+               node)))
+    (<span class="kwa">create-node</span> item (<span class="kwa">1-</span> depth))))
+
+(<span class="kwa">defun</span> check-tree (<span class="kwa">node</span>)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> node node))
+  <span class="slc">;; Force local call</span>
+  (<span class="kwa">labels</span> ((<span class="kwa">check-node</span> (<span class="kwa">node</span>)
+             (<span class="kwa">if</span> (<span class="kwa">node-left</span> node)
+               (<span class="kwa">the</span> fixnum (<span class="kwa">-</span> (+ (<span class="kwa">node-item</span> node)
+                                 (<span class="kwa">check-node</span> (<span class="kwa">node-left</span> node)))
+                              (<span class="kwa">check-node</span> (<span class="kwa">node-right</span> node))))
+               (<span class="kwa">node-item</span> node))))
+    (<span class="kwa">check-node</span> node)))
+
+(<span class="kwa">defun</span> main (&amp;optional (<span class="kwa">n</span> (<span class="kwa">parse-integer</span> (<span class="kwa">or</span> (<span class="kwa">cdr</span> (<span class="kwa">last</span> sb-ext:*posix-argv*))
+                                             <span class="str">&quot;1&quot;</span>))))
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">integer</span> <span class="num">0 255</span>) n))
+  (<span class="kwa">let</span>* ((<span class="kwa">min-depth</span> <span class="num">4</span>)
+         (<span class="kwa">max-depth</span> (<span class="kwa">max</span> (+ min-depth <span class="num">2</span>) n))
+         (<span class="kwa">stretch-depth</span> (<span class="kwa">1</span>+ max-depth)))
+    (<span class="kwa">format</span> t <span class="str">&quot;stretch tree of depth ~d	 check: ~d~%&quot;</span>
+            stretch-depth (<span class="kwa">check-tree</span> (<span class="kwa">create-tree</span> <span class="num">0</span> stretch-depth)))
+    (<span class="kwa">let</span> ((<span class="kwa">long-lived-tree</span> (<span class="kwa">create-tree</span> <span class="num">0</span> max-depth)))
+      (<span class="kwa">do</span> ((<span class="kwa">depth</span> min-depth (+ depth <span class="num">2</span>)))
+          ((&gt; depth max-depth))
+        (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum depth))
+        (<span class="kwa">do</span>* ((<span class="kwa">iterations</span> (<span class="kwa">ash</span> <span class="num">1</span> (+ max-depth min-depth (<span class="kwa">-</span> depth))))
+              (<span class="kwa">check</span> <span class="num">0</span>)
+              (<span class="kwa">i</span> <span class="num">1</span> (<span class="kwa">1</span>+ i)))
+             ((&gt; i iterations)
+              (<span class="kwa">format</span> t <span class="str">&quot;~D	 trees of depth ~D	 check: ~D~%&quot;</span>
+                      (<span class="kwa">the</span> fixnum (* iterations <span class="num">2</span>)) depth check))
+          (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum iterations check i))
+          (<span class="kwa">incf</span> check (<span class="kwa">check-tree</span> (<span class="kwa">create-tree</span> i depth)))
+          (<span class="kwa">incf</span> check (<span class="kwa">check-tree</span> (<span class="kwa">create-tree</span> (<span class="kwa">-</span> i) depth)))))
+      (<span class="kwa">format</span> t <span class="str">&quot;long lived tree of depth ~D	 check: ~D~%&quot;</span>
+              max-depth (<span class="kwa">check-tree</span> long-lived-tree)))))

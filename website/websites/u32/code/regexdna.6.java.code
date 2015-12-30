@@ -1,0 +1,194 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Greg Haines</span>
+<span class="com"> * based on work by Michael Stover</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.io.BufferedReader;
+<span class="kwa">import</span> java.io.IOException;
+<span class="kwa">import</span> java.io.InputStreamReader;
+<span class="kwa">import</span> java.nio.charset.Charset;
+<span class="kwa">import</span> java.util.HashMap;
+<span class="kwa">import</span> java.util.Map;
+<span class="kwa">import</span> java.util.concurrent.atomic.AtomicInteger;
+<span class="kwa">import</span> java.util.regex.Matcher;
+<span class="kwa">import</span> java.util.regex.Pattern;
+
+<span class="kwa">public final class</span> regexdna
+{
+   <span class="kwa">private static final</span> Map&lt;String,String&gt; replacements = 
+      <span class="kwa">new</span> HashMap&lt;String,String&gt;(<span class="num">11</span>);
+   <span class="kwa">private static final</span> Pattern newSeqPattern = 
+      Pattern.<span class="kwd">compile</span>(<span class="str">&quot;[WYKMSRBDVHN]&quot;</span>);
+   <span class="kwa">private static final</span> String[] variants = { 
+      <span class="str">&quot;agggtaaa|tttaccct&quot;</span>, 
+      <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+      <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+      <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+      <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+      <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+      <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+      <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+      <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>
+   };
+
+   <span class="kwa">static</span>
+   {
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>);
+   }
+   
+   <span class="kwa">private static final class</span> NewSeqThread <span class="kwa">extends</span> Thread
+   {
+      <span class="kwa">private final</span> String sequence;
+      <span class="kwa">private final</span> AtomicInteger newSeqLength;
+      <span class="kwa">private final</span> AtomicInteger inputLength;
+
+      <span class="kwa">private</span> <span class="kwd">NewSeqThread</span>(<span class="kwa">final</span> ThreadGroup threadGroup, 
+            <span class="kwa">final</span> String sequence, <span class="kwa">final</span> AtomicInteger newSeqLength, 
+            <span class="kwa">final</span> AtomicInteger inputLength)
+      {
+         <span class="kwa">super</span>(threadGroup, <span class="str">&quot;newSeq&quot;</span>);
+         <span class="kwa">this</span>.sequence = sequence;
+         <span class="kwa">this</span>.newSeqLength = newSeqLength;
+         <span class="kwa">this</span>.inputLength = inputLength;
+      }
+
+      <span class="kwc">&#64;Override</span>
+      <span class="kwa">public final</span> <span class="kwb">void</span> <span class="kwd">run</span>()
+      {
+         <span class="kwa">final</span> StringBuffer buf = <span class="kwa">new</span> <span class="kwd">StringBuffer</span>(
+            (<span class="kwb">int</span>)(<span class="kwa">this</span>.inputLength.<span class="kwd">get</span>() * <span class="num">1.32</span>));
+         <span class="kwa">final</span> Matcher m = newSeqPattern.<span class="kwd">matcher</span>(<span class="kwa">this</span>.sequence);
+         <span class="kwa">while</span> (m.<span class="kwd">find</span>())
+         {
+            m.<span class="kwd">appendReplacement</span>(buf, <span class="str">&quot;&quot;</span>);
+            buf.<span class="kwd">append</span>(replacements.<span class="kwd">get</span>(m.<span class="kwd">group</span>()));
+         }
+         m.<span class="kwd">appendTail</span>(buf);
+         <span class="kwa">this</span>.newSeqLength.<span class="kwd">set</span>(buf.<span class="kwd">length</span>());
+      }
+   }
+
+   <span class="kwa">private static final class</span> VariantThread <span class="kwa">extends</span> Thread
+   {
+      <span class="kwa">private final</span> Map&lt;String,Integer&gt; results;
+      <span class="kwa">private final</span> String variant;
+      <span class="kwa">private final</span> String sequence;
+
+      <span class="kwa">private</span> <span class="kwd">VariantThread</span>(<span class="kwa">final</span> ThreadGroup threadGroup, 
+            <span class="kwa">final</span> String name, <span class="kwa">final</span> Map&lt;String,Integer&gt; results, 
+            <span class="kwa">final</span> String variant, <span class="kwa">final</span> String sequence)
+      {
+         <span class="kwa">super</span>(threadGroup, name);
+         <span class="kwa">this</span>.results = results;
+         <span class="kwa">this</span>.variant = variant;
+         <span class="kwa">this</span>.sequence = sequence;
+      }
+
+      <span class="kwc">&#64;Override</span>
+      <span class="kwa">public final</span> <span class="kwb">void</span> <span class="kwd">run</span>()
+      {
+         <span class="kwb">int</span> count = <span class="num">0</span>;
+         <span class="kwa">final</span> Matcher m = Pattern.<span class="kwd">compile</span>(<span class="kwa">this</span>.variant)
+                        .<span class="kwd">matcher</span>(<span class="kwa">this</span>.sequence);
+         <span class="kwa">while</span> (m.<span class="kwd">find</span>())
+         {
+            count++;
+         }
+         <span class="kwa">this</span>.results.<span class="kwd">put</span>(<span class="kwa">this</span>.variant, count);
+      }
+   }
+   
+   <span class="kwa">private static</span> String <span class="kwd">readInput</span>(<span class="kwa">final</span> AtomicInteger inputLength, 
+         <span class="kwa">final</span> AtomicInteger seqLength)
+   <span class="kwa">throws</span> IOException
+   {
+      <span class="kwa">final</span> StringBuilder sb = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>(<span class="num">10000000</span>);
+      <span class="kwa">final</span> BufferedReader r = <span class="kwa">new</span> <span class="kwd">BufferedReader</span>(
+         <span class="kwa">new</span> <span class="kwd">InputStreamReader</span>(System.<span class="kwa">in</span>, Charset.<span class="kwd">defaultCharset</span>()));
+      <span class="kwb">int</span> commentLength = <span class="num">0</span>;
+      <span class="kwa">try</span>
+      {
+         String line;
+         <span class="kwa">while</span> ((line = r.<span class="kwd">readLine</span>()) != null)
+         {
+            <span class="kwa">if</span> (line.<span class="kwd">charAt</span>(<span class="num">0</span>) == <span class="str">'&gt;'</span>)
+            {
+               commentLength += line.<span class="kwd">length</span>() + <span class="num">1</span>;
+            }
+            <span class="kwa">else</span>
+            {
+               sb.<span class="kwd">append</span>(line);
+               commentLength += <span class="num">1</span>;
+            }
+         }
+      }
+      <span class="kwa">finally</span>
+      {
+         r.<span class="kwd">close</span>();
+      }
+      seqLength.<span class="kwd">set</span>(sb.<span class="kwd">length</span>());
+      inputLength.<span class="kwd">set</span>(seqLength.<span class="kwd">get</span>() + commentLength);
+      <span class="kwa">return</span> sb.<span class="kwd">toString</span>();
+   }
+   
+   <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">awaitThreads</span>(<span class="kwa">final</span> ThreadGroup tg)
+   {
+      <span class="kwa">final</span> Thread[] threads = <span class="kwa">new</span> Thread[variants.length];
+      tg.<span class="kwd">enumerate</span>(threads);
+      <span class="kwa">for</span> (<span class="kwa">final</span> Thread thread : threads)
+      {
+         <span class="kwa">if</span> (thread != null)
+         {
+            <span class="kwa">while</span> (thread.<span class="kwd">isAlive</span>())
+            {
+               <span class="kwa">try</span> { thread.<span class="kwd">join</span>(); } <span class="kwa">catch</span> (InterruptedException ie){}
+            }
+         }
+      }
+      tg.<span class="kwd">destroy</span>();
+   }
+
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(<span class="kwa">final</span> String[] args)
+   <span class="kwa">throws</span> IOException
+   {
+      <span class="kwa">final</span> AtomicInteger inputLength = <span class="kwa">new</span> <span class="kwd">AtomicInteger</span>(<span class="num">0</span>);
+      <span class="kwa">final</span> AtomicInteger seqLength = <span class="kwa">new</span> <span class="kwd">AtomicInteger</span>(<span class="num">0</span>);
+      <span class="kwa">final</span> AtomicInteger newSeqLength = <span class="kwa">new</span> <span class="kwd">AtomicInteger</span>(<span class="num">0</span>);
+      <span class="kwa">final</span> Map&lt;String,Integer&gt; results = 
+         <span class="kwa">new</span> HashMap&lt;String,Integer&gt;(variants.length);
+      {
+         <span class="kwa">final</span> ThreadGroup threadGroup = <span class="kwa">new</span> <span class="kwd">ThreadGroup</span>(<span class="str">&quot;regexWork&quot;</span>);
+         {
+            <span class="kwa">final</span> String sequence = <span class="kwd">readInput</span>(inputLength, seqLength);
+            <span class="kwa">new</span> <span class="kwd">NewSeqThread</span>(threadGroup, sequence, 
+               newSeqLength, inputLength).<span class="kwd">start</span>();
+            <span class="kwa">for</span> (<span class="kwa">final</span> String variant : variants)
+            {
+               <span class="kwa">new</span> <span class="kwd">VariantThread</span>(threadGroup, variant, results, 
+                  variant, sequence).<span class="kwd">start</span>();
+            }
+         }
+         <span class="kwd">awaitThreads</span>(threadGroup);
+      }
+      <span class="kwa">for</span> (<span class="kwa">final</span> String variant : variants)
+      {
+         System.out.<span class="kwd">println</span>(variant + <span class="str">&quot; &quot;</span> + results.<span class="kwd">get</span>(variant));
+      }
+      System.out.<span class="kwd">println</span>();
+      System.out.<span class="kwd">println</span>(inputLength.<span class="kwd">get</span>());
+      System.out.<span class="kwd">println</span>(seqLength.<span class="kwd">get</span>());
+      System.out.<span class="kwd">println</span>(newSeqLength.<span class="kwd">get</span>());
+   }
+}

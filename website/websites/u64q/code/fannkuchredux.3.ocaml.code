@@ -1,0 +1,119 @@
+<span class="com">(*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Paolo Ribeca, August 2011</span>
+<span class="com"> *</span>
+<span class="com"> * (Based on the Java version by Oleg Mazurov)</span>
+<span class="com"> *)</span>
+
+<span class="kwa">let</span> workers = <span class="num">32</span>
+
+<span class="kwa">module</span> <span class="kwd">Perm</span> =
+  <span class="kwa">struct</span>
+    <span class="kwa">type</span> t = { p: <span class="kwb">int</span> array;
+               pp: <span class="kwb">int</span> array;
+               c: <span class="kwb">int</span> array }
+  <span class="kwa">let</span> facts =
+    <span class="kwa">let</span> n = <span class="num">20</span> <span class="kwa">in</span>
+    <span class="kwa">let</span> res = <span class="kwc">Array</span>.make (n + <span class="num">1</span>) <span class="num">1</span> <span class="kwa">in</span>
+    <span class="kwa">for</span> i = <span class="num">1</span> <span class="kwa">to</span> n <span class="kwa">do</span>
+      res.(i) &lt;- i * res.(i - <span class="num">1</span>)
+    <span class="kwa">done</span>;
+    res
+  <span class="com">(* Setting up the permutation based on the given index *)</span>
+  <span class="kwa">let</span> setup n idx =
+    <span class="kwa">let</span> res = { p = <span class="kwc">Array</span>.init n (<span class="kwa">fun</span> i -&gt; i);
+                pp = <span class="kwc">Array</span>.make n <span class="num">1</span>;
+                c = <span class="kwc">Array</span>.make n <span class="num">1</span> }
+    <span class="kwa">and</span> idx = <span class="kwb">ref</span> idx <span class="kwa">in</span>
+    <span class="kwa">for</span> i = n - <span class="num">1</span> <span class="kwa">downto</span> <span class="num">0</span> <span class="kwa">do</span>
+      <span class="kwa">let</span> d = !idx / facts.(i) <span class="kwa">in</span>
+      res.c.(i) &lt;- d;
+      idx := !idx <span class="kwa">mod</span> facts.(i);
+      <span class="kwc">Array</span>.blit res.p <span class="num">0</span> res.pp <span class="num">0</span> (i + <span class="num">1</span>);
+      <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> i <span class="kwa">do</span>
+        res.p.(j) &lt;- <span class="kwa">if</span> j + d &lt;= i <span class="kwa">then</span> res.pp.(j + d) <span class="kwa">else</span> res.pp.(j + d - i - <span class="num">1</span>)
+      <span class="kwa">done</span>
+    <span class="kwa">done</span>;
+    res
+  <span class="com">(* Getting the next permutation *)</span>
+  <span class="kwa">let</span> next { p = p; c = c } =
+    <span class="kwa">let</span> f = <span class="kwb">ref</span> p.(<span class="num">1</span>) <span class="kwa">in</span>
+    p.(<span class="num">1</span>) &lt;- p.(<span class="num">0</span>);
+    p.(<span class="num">0</span>) &lt;- !f;
+    <span class="kwa">let</span> i = <span class="kwb">ref</span> <span class="num">1</span> <span class="kwa">in</span>
+    <span class="kwa">while let</span> aug_c = c.(!i) + <span class="num">1</span> <span class="kwa">in</span> c.(!i) &lt;- aug_c; aug_c &gt; !i <span class="kwa">do</span>
+      c.(!i) &lt;- <span class="num">0</span>;
+      incr i;
+      <span class="kwa">let</span> n = p.(<span class="num">1</span>) <span class="kwa">in</span>
+      p.(<span class="num">0</span>) &lt;- n;
+      <span class="kwa">let</span> red_i = !i - <span class="num">1</span> <span class="kwa">in</span>
+      <span class="kwa">for</span> j = <span class="num">1</span> <span class="kwa">to</span> red_i <span class="kwa">do</span>
+        p.(j) &lt;- p.(j + <span class="num">1</span>)
+      <span class="kwa">done</span>;
+      p.(!i) &lt;- !f;
+      f := n
+    <span class="kwa">done</span>
+  <span class="com">(* Counting the number of flips *)</span>
+  <span class="kwa">let</span> count { p = p; pp = pp } =
+    <span class="kwa">let</span> f = <span class="kwb">ref</span> p.(<span class="num">0</span>) <span class="kwa">and</span> res = <span class="kwb">ref</span> <span class="num">1</span> <span class="kwa">in</span>
+    <span class="kwa">if</span> p.(!f) &lt;&gt; <span class="num">0</span> <span class="kwa">then begin</span>
+      <span class="kwa">let</span> len = <span class="kwc">Array</span>.length p <span class="kwa">in</span>
+      <span class="kwa">let</span> red_len = len - <span class="num">1</span> <span class="kwa">in</span>
+      <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> red_len <span class="kwa">do</span> pp.(i) &lt;- p.(i) <span class="kwa">done</span>;
+      <span class="kwa">while</span> pp.(!f) &lt;&gt; <span class="num">0</span> <span class="kwa">do</span>
+        incr res;
+        <span class="kwa">let</span> lo = <span class="kwb">ref</span> <span class="num">1</span> <span class="kwa">and</span> hi = <span class="kwb">ref</span> (!f - <span class="num">1</span>) <span class="kwa">in</span>
+        <span class="kwa">while</span> !lo &lt; !hi <span class="kwa">do</span>
+          <span class="kwa">let</span> t = pp.(!lo) <span class="kwa">in</span>
+          pp.(!lo) &lt;- pp.(!hi);
+          pp.(!hi) &lt;- t;
+          incr lo;
+          decr hi
+        <span class="kwa">done</span>;
+        <span class="kwa">let</span> ff = !f <span class="kwa">in</span>
+        <span class="kwa">let</span> t = pp.(ff) <span class="kwa">in</span>
+        pp.(ff) &lt;- ff;
+        f := t
+      <span class="kwa">done</span>
+    <span class="kwa">end</span>;
+    !res
+  <span class="kwa">end</span>
+
+<span class="kwa">let</span> _ =
+  <span class="kwa">match</span> <span class="kwc">Sys</span>.argv <span class="kwa">with</span>
+  | [| p; s_n |] -&gt;
+    <span class="kwa">let</span> n = int_of_string s_n <span class="kwa">in</span>
+    <span class="kwa">let</span> chunk_size = <span class="kwc">Perm</span>.facts.(n) / workers
+    <span class="kwa">and</span> rem = <span class="kwc">Perm</span>.facts.(n) <span class="kwa">mod</span> workers <span class="kwa">in</span>
+    <span class="kwa">let</span> w =
+      <span class="kwc">Array</span>.init workers
+        (<span class="kwa">fun</span> i -&gt;
+          <span class="kwa">let</span> lo = i * chunk_size + min i rem <span class="kwa">in</span>
+          <span class="kwa">let</span> hi = lo + chunk_size + <span class="kwa">if</span> i &lt; rem <span class="kwa">then</span> <span class="num">1</span> <span class="kwa">else</span> <span class="num">0</span> <span class="kwa">in</span>
+          <span class="kwc">Unix</span>.open_process_in (p ^ <span class="str">&quot; &quot;</span> ^ s_n ^ <span class="str">&quot; &quot;</span> ^ string_of_int lo ^ <span class="str">&quot; &quot;</span> ^ string_of_int hi)) <span class="kwa">in</span>
+    <span class="kwa">let</span> c = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">and</span> m = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+    <span class="kwc">Array</span>.iter
+      (<span class="kwa">fun</span> input -&gt;
+        c := !c + input_binary_int input;
+        m := max !m (input_binary_int input))
+      w;
+    <span class="kwc">Printf</span>.printf <span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">Pfannkuchen(</span><span class="ipl">%d</span><span class="str">) =</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> !c n !m
+  | [| _; n; lo; hi |] -&gt;
+    <span class="kwa">let</span> n = int_of_string n
+    <span class="kwa">and</span> lo = int_of_string lo <span class="kwa">and</span> hi = int_of_string hi <span class="kwa">in</span>
+    <span class="kwa">let</span> p = <span class="kwc">Perm</span>.setup n lo
+    <span class="kwa">and</span> c = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">and</span> m = <span class="kwb">ref</span> <span class="num">0</span>
+    <span class="kwa">and</span> red_hi = hi - <span class="num">1</span> <span class="kwa">in</span>
+    <span class="kwa">for</span> i = lo <span class="kwa">to</span> red_hi <span class="kwa">do</span>
+      <span class="kwa">let</span> r = <span class="kwc">Perm</span>.count p <span class="kwa">in</span>
+      c := !c + r * (<span class="num">1</span> - (i <span class="kwa">land</span> <span class="num">1</span>) <span class="kwa">lsl</span> <span class="num">1</span>);
+      <span class="kwa">if</span> r &gt; !m <span class="kwa">then</span>
+      m := r;
+      <span class="kwc">Perm</span>.next p
+    <span class="kwa">done</span>;
+    output_binary_int stdout !c;
+    output_binary_int stdout !m
+  | _ -&gt; <span class="kwc">Printf</span>.printf <span class="str">&quot;Wrong syntax</span><span class="esc">\n</span><span class="str">%!&quot;</span>
+

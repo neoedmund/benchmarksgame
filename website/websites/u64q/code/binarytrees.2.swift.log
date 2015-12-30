@@ -1,0 +1,17 @@
+
+Sat, 19 Dec 2015 19:58:00 GMT
+
+MAKE:
+/usr/local/src/swift-2.2-SNAPSHOT-2015-12-18-a-ubuntu15.10/bin/swiftc binarytrees.swift-2.swift -Ounchecked -whole-module-optimization -o binarytrees.swift-2.swift_run
+binarytrees.swift-2.swift:53:1: warning: C-style for statement is deprecated and will be removed in a future version of Swift
+for var depth=minDepth; depth<=maxDepth; depth+=2 {
+^
+2.40s to complete and log all make actions
+
+COMMAND LINE:
+./binarytrees.swift-2.swift_run 16
+
+TIMED OUT after 3600s
+
+
+PROGRAM OUTPUT:

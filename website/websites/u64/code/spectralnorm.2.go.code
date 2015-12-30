@@ -1,0 +1,140 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by chaishushan</span>
+<span class="com"> * Based on spectral-norm.go by The Go Authors.</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;flag&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;math&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+   <span class="str">&quot;strconv&quot;</span>
+   <span class="str">&quot;sync&quot;</span>
+)
+
+<span class="kwa">var</span> NumCPU = runtime.<span class="kwd">NumCPU</span>()*<span class="num">2</span>
+<span class="kwa">var</span> Num <span class="kwb">int</span>
+
+<span class="kwa">func</span> <span class="kwd">init</span>() {
+   flag.<span class="kwd">Parse</span>()
+   <span class="kwa">if</span> flag.<span class="kwd">NArg</span>() &gt; <span class="num">0</span> {
+      Num, _ = strconv.<span class="kwd">Atoi</span>(flag.<span class="kwd">Arg</span>(<span class="num">0</span>))
+   }
+   runtime.<span class="kwd">GOMAXPROCS</span>(NumCPU)
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%0</span><span class="str">.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">SpectralNorm</span>(Num))
+}
+
+<span class="kwa">func</span> <span class="kwd">SpectralNorm</span>(n <span class="kwb">int</span>) <span class="kwb">float64</span> {
+   u := <span class="kwb">make</span>([]<span class="kwb">float64</span>, n)
+   v := <span class="kwb">make</span>([]<span class="kwb">float64</span>, n)
+   t := <span class="kwb">make</span>([]<span class="kwb">float64</span>, n)
+
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; n; i++ {
+      u[i] = <span class="num">1</span>
+   }
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; <span class="num">10</span>; i++ {
+      <span class="kwd">mult_AtAv</span>(v, u, t)
+      <span class="kwd">mult_AtAv</span>(u, v, t)
+   }
+
+   dot_uv := <span class="kwd">Dot</span>(u, v, n)
+   dot_vv := <span class="kwd">Dot</span>(v, v, n)
+
+   <span class="kwa">return</span> math.<span class="kwd">Sqrt</span>(dot_uv / dot_vv)
+}
+
+<span class="kwa">func</span> <span class="kwd">mult_AtAv</span>(v, u, x []<span class="kwb">float64</span>) {
+   <span class="kwd">mult_Av</span>(x, u)
+   <span class="kwd">mult_Atv</span>(v, x)
+}
+
+<span class="kwa">func</span> <span class="kwd">mult_Av</span>(v, u []<span class="kwb">float64</span>) {
+   <span class="kwa">if</span> NumCPU &lt;= <span class="num">1</span> {
+      ul := <span class="kwb">len</span>(u)
+      <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; <span class="kwb">len</span>(v); i++ {
+         <span class="kwa">var</span> vi <span class="kwb">float64</span>
+         <span class="kwa">for</span> j := <span class="num">0</span>; j &lt; ul; j++ {
+            vi += u[j] / <span class="kwb">float64</span>(<span class="kwd">A</span>(i, j))
+         }
+         v[i] = vi
+      }
+   } <span class="kwa">else</span> {
+      <span class="kwa">var</span> wg sync.WaitGroup
+      <span class="kwa">for</span> k := <span class="num">0</span>; k &lt; NumCPU; k++ {
+         wg.<span class="kwd">Add</span>(<span class="num">1</span>)
+         <span class="kwa">go func</span>(kk <span class="kwb">int</span>) {
+            size := (<span class="kwb">len</span>(v) + NumCPU - <span class="num">1</span>) / NumCPU
+            start := size * kk
+            end := size * (kk + <span class="num">1</span>)
+            <span class="kwa">if</span> end &gt; <span class="kwb">len</span>(v) {
+               end = <span class="kwb">len</span>(v)
+            }
+            ul := <span class="kwb">len</span>(u)
+            <span class="kwa">for</span> i := start; i &lt; end; i++ {
+               <span class="kwa">var</span> vi <span class="kwb">float64</span>
+               <span class="kwa">for</span> j := <span class="num">0</span>; j &lt; ul; j++ {
+                  vi += u[j] / <span class="kwb">float64</span>(<span class="kwd">A</span>(i, j))
+               }
+               v[i] = vi
+            }
+            wg.<span class="kwd">Done</span>()
+         }(k)
+      }
+      wg.<span class="kwd">Wait</span>()
+   }
+}
+
+<span class="kwa">func</span> <span class="kwd">mult_Atv</span>(v, u []<span class="kwb">float64</span>) {
+   <span class="kwa">if</span> NumCPU &lt;= <span class="num">1</span> {
+      ul := <span class="kwb">len</span>(u)
+      <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; <span class="kwb">len</span>(v); i++ {
+         <span class="kwa">var</span> vi <span class="kwb">float64</span>
+         <span class="kwa">for</span> j := <span class="num">0</span>; j &lt; ul; j++ {
+            vi += u[j] / <span class="kwb">float64</span>(<span class="kwd">A</span>(j, i))
+         }
+         v[i] = vi
+      }
+   } <span class="kwa">else</span> {
+      <span class="kwa">var</span> wg sync.WaitGroup
+      <span class="kwa">for</span> k := <span class="num">0</span>; k &lt; NumCPU; k++ {
+         wg.<span class="kwd">Add</span>(<span class="num">1</span>)
+         <span class="kwa">go func</span>(kk <span class="kwb">int</span>) {
+            size := (<span class="kwb">len</span>(v) + NumCPU - <span class="num">1</span>) / NumCPU
+            start := size * kk
+            end := size * (kk + <span class="num">1</span>)
+            <span class="kwa">if</span> end &gt; <span class="kwb">len</span>(v) {
+               end = <span class="kwb">len</span>(v)
+            }
+            ul := <span class="kwb">len</span>(u)
+            <span class="kwa">for</span> i := start; i &lt; end; i++ {
+               <span class="kwa">var</span> vi <span class="kwb">float64</span>
+               <span class="kwa">for</span> j := <span class="num">0</span>; j &lt; ul; j++ {
+                  vi += u[j] / <span class="kwb">float64</span>(<span class="kwd">A</span>(j, i))
+               }
+               v[i] = vi
+            }
+            wg.<span class="kwd">Done</span>()
+         }(k)
+      }
+      wg.<span class="kwd">Wait</span>()
+   }
+}
+
+<span class="kwa">func</span> <span class="kwd">Dot</span>(v, u []<span class="kwb">float64</span>, n <span class="kwb">int</span>) <span class="kwb">float64</span> {
+   <span class="kwa">var</span> sum <span class="kwb">float64</span>
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; n; i++ {
+      sum += v[i] * u[i]
+   }
+   <span class="kwa">return</span> sum
+}
+
+<span class="kwa">func</span> <span class="kwd">A</span>(i, j <span class="kwb">int</span>) <span class="kwb">int</span> {
+   <span class="kwa">return</span> ((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span> + i + <span class="num">1</span>)
+}

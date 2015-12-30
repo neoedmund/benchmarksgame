@@ -1,0 +1,133 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org</span>
+<span class="slc">#</span>
+<span class="slc"># Contributed by Aaron Tavistock</span>
+
+<span class="kwa">require</span> <span class="str">'thread'</span>
+
+WORKER_COUNT = <span class="kwa">begin</span>
+  cpu_count = <span class="kwa">if</span> File.readable?(<span class="str">'/proc/cpuinfo'</span><span class="opt">)</span> <span class="slc"># Linux</span>
+    <span class="str">%x(cat /proc/cpuinfo | grep -c processor)</span>.chomp.to_i
+  <span class="kwa">elsif</span> File.executable?(<span class="str">'/usr/sbin/sysctl')  #OS/X</span>
+<span class="str">    %x(/usr/sbin/sysctl -n hw.ncpu)</span>.chomp.to_i
+  <span class="kwa">else</span>
+    <span class="num">1</span>
+  <span class="kwa">end</span>
+  [(cpu_count * <span class="num">2.0</span><span class="opt">)</span>.to_i, <span class="num">2</span>].max
+<span class="kwa">end</span>
+
+<span class="kwa">class</span> WorkerPool
+
+  <span class="kwa">def</span> initialize
+    <span class="kwb">&#64;work</span> = Queue.new
+    <span class="kwb">&#64;pool</span> = Array.<span class="kwd">new</span>(WORKER_COUNT<span class="opt">)</span> <span class="kwa">do</span> |i|
+      Thread.new <span class="kwa">do</span>
+        Thread.current[<span class="kwc">:id</span>] = i
+        <span class="kwd">catch</span>(<span class="kwc">:exit</span><span class="opt">)</span> <span class="kwa">do</span>
+          <span class="kwa">while</span>(<span class="kwa">true</span><span class="opt">)</span> <span class="kwa">do</span>
+            work, args = <span class="kwb">&#64;work</span>.pop
+            work.<span class="kwd">call</span>(*args<span class="opt">)</span>
+          <span class="kwa">end</span>
+        <span class="kwa">end</span>
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> <span class="kwd">schedule</span>(*args, &amp;block<span class="opt">)</span>
+    <span class="kwb">&#64;work</span> &lt;&lt; [block, args]
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> shutdown
+    <span class="kwb">&#64;pool</span>.size.times <span class="kwa">do</span>
+      schedule { throw :exit }
+    <span class="kwa">end</span>
+    <span class="kwb">&#64;pool</span>.each <span class="kwa">do</span> |t|
+      t.join
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+
+<span class="kwa">end</span>
+
+<span class="kwa">class</span> Mandel
+
+  attr_reader <span class="kwc">:output</span>
+
+  <span class="kwa">def self</span>.<span class="kwd">render</span>(size<span class="opt">)</span>
+    m = Mandel.<span class="kwd">new</span>(size<span class="opt">)</span>
+    m.process
+    print <span class="str">&quot;</span><span class="ipl">#{m.header}</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">#{m.output.join}</span><span class="str">&quot;</span>
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> <span class="kwd">initialize</span>(size<span class="opt">)</span>
+    <span class="kwb">&#64;size</span> = size.to_i
+    <span class="kwb">&#64;output</span> = Array.<span class="kwd">new</span>(<span class="kwb">&#64;size</span><span class="opt">)</span>
+    <span class="kwb">&#64;two_over_size</span> = <span class="num">2.0</span> / <span class="kwb">&#64;size</span>.to_f
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> process
+    workers = WorkerPool.new  <span class="slc"># Using a thread pool to manage processes</span>
+    <span class="kwb">&#64;size</span>.times <span class="kwa">do</span> |row|
+      workers.<span class="kwd">schedule</span>(row<span class="opt">)</span> <span class="kwa">do</span> |y|
+        read, write = IO.pipe
+        Process.fork <span class="kwa">do</span>
+          read.close
+          ci = (<span class="kwb">&#64;two_over_size</span> * y.to_f<span class="opt">)</span> - <span class="num">1.0</span>
+          write.<span class="kwd">print</span>( <span class="kwd">render_row</span>(ci<span class="opt">) )</span>
+        <span class="kwa">end</span>
+        Process.wait
+        write.close
+        <span class="kwb">&#64;output</span>[y] = read.read
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+    workers.shutdown
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> header
+    <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str"></span><span class="ipl">#{&#64;size}</span> <span class="str"></span><span class="ipl">#{&#64;size}</span><span class="str">&quot;</span>
+  <span class="kwa">end</span>
+
+  private
+
+  <span class="kwa">def</span> <span class="kwd">render_row</span>(ci<span class="opt">)</span>
+    row_bits = Array.<span class="kwd">new</span>(<span class="kwb">&#64;size</span><span class="opt">)</span> <span class="kwa">do</span> |col|
+      cr = (<span class="kwb">&#64;two_over_size</span> * col.to_f<span class="opt">)</span> - <span class="num">1.5</span>
+      <span class="kwd">get_bit</span>(cr, ci<span class="opt">)</span>
+    <span class="kwa">end</span>
+
+    row = <span class="str">''</span>
+    row_bits.<span class="kwd">each_slice</span>(<span class="num">8</span><span class="opt">)</span> <span class="kwa">do</span> |byte|
+      <span class="kwa">if</span> byte.size &lt; <span class="num">8</span>
+        byte = byte.<span class="kwd">fill</span>(<span class="num">0b0</span>, byte.size, <span class="num">8</span> - byte.size<span class="opt">)</span>
+      <span class="kwa">end</span>
+      row &lt;&lt; byte.join.<span class="kwd">to_i</span>(<span class="num">2</span><span class="opt">)</span>.chr
+    <span class="kwa">end</span>
+
+    row
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> <span class="kwd">get_bit</span>(cr, ci<span class="opt">)</span>
+    zrzr = <span class="num">0.0</span>
+    zizi = <span class="num">0.0</span>
+    zrzi = <span class="num">0.0</span>
+
+    count = <span class="num">50</span>
+    <span class="kwa">while</span> count &gt; <span class="num">0</span>
+
+      zr = zrzr - zizi + cr
+      zi = <span class="num">2.0</span> * zrzi + ci
+
+      zrzr = zr * zr
+      zizi = zi * zi
+      zrzi = zr * zi
+
+      <span class="kwa">return</span> <span class="num">0b0</span> <span class="kwa">if</span> zrzr + zizi &gt; <span class="num">4.0</span>
+
+      count -= <span class="num">1</span>
+    <span class="kwa">end</span>
+
+    <span class="num">0b1</span>
+  <span class="kwa">end</span>
+
+<span class="kwa">end</span>
+
+Mandel.<span class="kwd">render</span>(<span class="kwc">ARGV</span>.shift<span class="opt">)</span>

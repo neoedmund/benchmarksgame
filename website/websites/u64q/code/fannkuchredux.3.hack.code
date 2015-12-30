@@ -1,0 +1,157 @@
+&lt;?hh 
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   </span>
+<span class="com">   multicore version </span>
+<span class="com">   algorithm is based on Java 6 source code by Oleg Mazurov</span>
+<span class="com">   fork/shared mem is based on mandelbrot.php-3 </span>
+<span class="com">   contributed by Oleksii Prudkyi</span>
+<span class="com">   PHP as HHVM/Hack by Isaac Gouy</span>
+<span class="com">*/</span>
+
+$n = (<span class="kwb">int</span>) $argv[<span class="num">1</span>];
+$count_base = <span class="kwa">array</span>();
+$p_base = <span class="kwd">range</span>(<span class="num">0</span>, $n - <span class="num">1</span>);
+
+$procs = <span class="num">1</span>;
+<span class="kwa">if</span> (<span class="kwd">file_exists</span>(<span class="str">'/proc/cpuinfo'</span>)) {
+  $procs = <span class="kwd">preg_match_all</span>(<span class="str">'/^processor\s/m'</span>, <span class="kwd">file_get_contents</span>(<span class="str">'/proc/cpuinfo'</span>), $discard);
+}
+$procs &lt;&lt;= <span class="num">1</span>;
+
+$Fact = <span class="kwa">array</span>(<span class="num">1</span>);
+<span class="kwa">for</span> ($i = <span class="num">1</span>, $j = <span class="num">0</span>; $i &lt;= $n; $j = $i++) {
+   $Fact[$i] = $Fact[$j] * $i;
+}
+
+$index = <span class="num">0</span>;
+$index_max = $Fact[$n];
+$index_step = <span class="kwd">intval</span>(($index_max + $procs-<span class="num">1</span>) / $procs);
+
+$shsize = $procs * <span class="num">16</span>;
+$shmop = <span class="kwd">shmop_open</span>(<span class="kwd">ftok</span>(__FILE__, <span class="kwd">chr</span>(<span class="kwd">time</span>() &amp; <span class="num">255</span>)), <span class="str">'c'</span>, <span class="num">0644</span>, $shsize);
+
+<span class="kwa">if</span> (!$shmop) {
+   <span class="kwa">echo</span> <span class="str">&quot;faild to shmop_open()</span><span class="esc">\n</span><span class="str">&quot;</span>;
+   <span class="kwa">exit</span>(<span class="num">1</span>);
+}
+
+<span class="kwa">for</span> ($proc = <span class="num">0</span>; $proc &lt; $procs; ++$proc, $index += $index_step ) {
+   
+   <span class="kwa">if</span>($proc &lt; $procs - <span class="num">1</span>) {
+      $pid = <span class="kwd">pcntl_fork</span>();
+      <span class="kwa">if</span> ($pid === -<span class="num">1</span>) {
+         <span class="kwa">die</span>(<span class="str">'could not fork'</span>);
+      } <span class="kwa">else if</span> ($pid) {
+         <span class="kwa">continue</span>;
+      }
+   }
+
+   $idxMin = $index;
+   $idxMax = <span class="kwd">min</span>( $index_max, $index + $index_step );
+
+   <span class="slc">//firstPermutation( idxMin );</span>
+   $count = $count_base;
+   $p = $p_base;
+   $idx = $idxMin;
+   <span class="kwa">for</span> ($i = $n - <span class="num">1</span>; $i &gt; <span class="num">0</span>; --$i ) {
+      $factI = $Fact[$i];
+      $reminder = $idx % $factI;
+      $d = (($idx- $reminder) / $factI);
+      $count[$i] = $d;
+      $idx = $reminder;
+
+      $pp = $p;
+      <span class="kwa">for</span> ($j=<span class="num">0</span>, $jd = $d; $j&lt;=$i; ++$j, ++$jd ) {
+         $p[$j] = $pp[($jd &lt;= $i) ? $jd :$jd-$i-<span class="num">1</span>];
+      }
+   }
+
+   $maxflips = <span class="num">1</span>;
+   $chksum = <span class="num">0</span>;
+   $sign = <span class="num">1</span>;
+   <span class="kwa">for</span> ($idx =$idxMin;; ) {
+
+      $first = $p[<span class="num">0</span>];
+      <span class="kwa">if</span> ( $first != <span class="num">0</span> ) {
+         <span class="slc">//int flips = countFlips();</span>
+         $flips = <span class="num">1</span>;
+         <span class="kwa">if</span> ( $p[$first] != <span class="num">0</span> ) {
+            $pp = $p;
+            $p0 = $first;
+            <span class="kwa">do</span> {
+               ++$flips;
+               <span class="kwa">if</span> ($p0 &gt;= <span class="num">3</span>){
+                  $i = <span class="num">1</span>; $j = $p0 - <span class="num">1</span>;
+                  <span class="kwa">do</span> { 
+                     $t = $pp[$i]; 
+                     $pp[$i] = $pp[$j]; 
+                     $pp[$j] = $t; 
+                     ++$i;
+                     --$j;
+                  } <span class="kwa">while</span> ($i &lt; $j); 
+               }
+
+               $t = $pp[$p0];
+               $pp[$p0] = $p0;
+               $p0 = $t;
+            } <span class="kwa">while</span> ( $pp[$p0] != <span class="num">0</span> );
+         }
+         $maxflips = <span class="kwd">max</span>( $maxflips, $flips );
+         $chksum += $sign*$flips;
+      }
+
+      ++$idx ;
+      <span class="kwa">if</span> ( $idx  == ($idxMax) ) {
+         <span class="kwa">break</span>;
+      }
+
+      <span class="kwa">if</span> ($sign == <span class="num">1</span>){
+         $p[<span class="num">0</span>] = $p[<span class="num">1</span>];
+         $p[<span class="num">1</span>] = $first;
+         $sign = -<span class="num">1</span>;
+      } <span class="kwa">else</span> {
+         $t = $p[<span class="num">1</span>]; 
+         $p[<span class="num">1</span>] = $p[<span class="num">2</span>]; 
+         $p[<span class="num">2</span>] = $t; 
+         $sign = <span class="num">1</span>; 
+         
+         <span class="kwa">for</span>($i=<span class="num">2</span>;;){ 
+            $sx = &amp;$count[$i];
+            ++$sx;
+            <span class="kwa">if</span> ($sx &lt;= $i) {
+               <span class="kwa">break</span>; 
+            } <span class="kwa">else</span> {
+               $sx = <span class="num">0</span>;
+               <span class="kwa">for</span>($j=<span class="num">0</span>; $j&lt;=$i; ){ $p[$j++] = $p[$j]; } 
+               ++$i;
+               $p[$i] = $first;
+               $first = $p[<span class="num">0</span>]; 
+            }
+         }
+      }
+   }
+   $written_size = <span class="kwd">shmop_write</span>($shmop, <span class="kwd">pack</span>(<span class="str">&quot;ii&quot;</span>, $maxflips, $chksum), $proc * <span class="num">16</span>);
+
+   <span class="kwa">if</span>($pid === <span class="num">0</span>) {
+      <span class="kwa">exit</span>(<span class="num">0</span>);
+   }
+}
+
+$child = $procs - <span class="num">1</span>;
+$status = <span class="num">0</span>;
+<span class="kwa">while</span> ($child-- &gt; <span class="num">0</span>) {
+   <span class="kwd">pcntl_wait</span>($status);
+}
+
+$offset = <span class="num">0</span>;
+$res = <span class="num">0</span>;
+$chk = <span class="num">0</span>;
+<span class="kwa">for</span> ($proc = <span class="num">0</span>; $proc &lt; $procs; ++$proc, $offset += <span class="num">16</span> ) {
+   <span class="kwa">list</span>($v, $chk_v) = <span class="kwd">array_values</span>(<span class="kwd">unpack</span>(<span class="str">'ia/ib'</span>, <span class="kwd">shmop_read</span>($shmop, $offset, $written_size)));
+   $res = <span class="kwd">max</span>( $res, $v );
+   $chk += $chk_v;
+}
+
+<span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">Pfannkuchen(</span><span class="ipl">%d</span><span class="str">) =</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, $chk, $n, $res);
+

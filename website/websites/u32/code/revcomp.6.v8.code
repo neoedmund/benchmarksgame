@@ -1,0 +1,70 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">    contributed by Adriaan de Haan</span>
+<span class="com">*/</span>
+
+<span class="slc">// create a mapping between the translations.</span>
+<span class="kwa">var</span> map = [];
+map[<span class="str">'A'</span>] = <span class="str">'T'</span>;
+map[<span class="str">'a'</span>] = <span class="str">'T'</span>;
+map[<span class="str">'C'</span>] = <span class="str">'G'</span>;
+map[<span class="str">'c'</span>] = <span class="str">'G'</span>;
+map[<span class="str">'G'</span>] = <span class="str">'C'</span>;
+map[<span class="str">'g'</span>] = <span class="str">'C'</span>;
+map[<span class="str">'T'</span>] = <span class="str">'A'</span>;
+map[<span class="str">'t'</span>] = <span class="str">'A'</span>;
+map[<span class="str">'U'</span>] = <span class="str">'A'</span>;
+map[<span class="str">'u'</span>] = <span class="str">'A'</span>;
+map[<span class="str">'M'</span>] = <span class="str">'K'</span>;
+map[<span class="str">'m'</span>] = <span class="str">'K'</span>;
+map[<span class="str">'R'</span>] = <span class="str">'Y'</span>;
+map[<span class="str">'r'</span>] = <span class="str">'Y'</span>;
+map[<span class="str">'W'</span>] = <span class="str">'W'</span>;
+map[<span class="str">'w'</span>] = <span class="str">'W'</span>;
+map[<span class="str">'S'</span>] = <span class="str">'S'</span>;
+map[<span class="str">'s'</span>] = <span class="str">'S'</span>;
+map[<span class="str">'Y'</span>] = <span class="str">'R'</span>;
+map[<span class="str">'y'</span>] = <span class="str">'R'</span>;
+map[<span class="str">'K'</span>] = <span class="str">'M'</span>;
+map[<span class="str">'k'</span>] = <span class="str">'M'</span>;
+map[<span class="str">'V'</span>] = <span class="str">'B'</span>;
+map[<span class="str">'v'</span>] = <span class="str">'B'</span>;
+map[<span class="str">'H'</span>] = <span class="str">'D'</span>;
+map[<span class="str">'h'</span>] = <span class="str">'D'</span>;
+map[<span class="str">'D'</span>] = <span class="str">'H'</span>;
+map[<span class="str">'d'</span>] = <span class="str">'H'</span>;
+map[<span class="str">'B'</span>] = <span class="str">'V'</span>;
+map[<span class="str">'b'</span>] = <span class="str">'V'</span>;
+map[<span class="str">'N'</span>] = <span class="str">'N'</span>;
+map[<span class="str">'n'</span>] = <span class="str">'N'</span>;
+
+<span class="kwa">var</span> line = <span class="kwd">readline</span>();
+<span class="kwa">while</span> (<span class="kwa">true</span>) 
+{
+   <span class="kwa">var</span> seq = [];
+    <span class="kwa">while</span> (line != undefined &amp;&amp; line[<span class="num">0</span>] != <span class="str">'&gt;'</span>) 
+   {
+      seq += line;
+      line = <span class="kwd">readline</span>();         
+    }
+   <span class="kwa">var</span> cnt = <span class="num">0</span>;
+   <span class="kwa">for</span> (x = seq.length; x &gt; <span class="num">0</span>; --x)
+   {
+       ++cnt;
+      <span class="kwa">if</span> (cnt == <span class="num">60</span>)
+      {
+         cnt = <span class="num">0</span>;
+         <span class="kwd">print</span>(map[seq.<span class="kwd">charAt</span>(x-<span class="num">1</span>)]);
+      }
+      <span class="kwa">else</span>
+         <span class="kwd">write</span>(map[seq.<span class="kwd">charAt</span>(x-<span class="num">1</span>)]);
+   }
+   <span class="kwa">if</span> (cnt &gt; <span class="num">0</span>)
+      <span class="kwd">print</span>(<span class="str">&quot;&quot;</span>);
+   <span class="kwa">if</span> (line == undefined)
+      <span class="kwd">quit</span>();
+   
+   <span class="kwd">print</span>(line);
+   line = <span class="kwd">readline</span>();
+}

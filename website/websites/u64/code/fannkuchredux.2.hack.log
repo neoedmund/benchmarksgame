@@ -1,0 +1,14 @@
+
+Mon, 24 Aug 2015 04:09:49 GMT
+
+MAKE:
+/usr/bin/hh_client
+No errors!
+0.02s to complete and log all make actions
+
+COMMAND LINE:
+/usr/bin/hhvm  fannkuchredux.hack-2.hack 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

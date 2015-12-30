@@ -1,0 +1,52 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Stefan Ettrup</span>
+<span class="com"></span>
+<span class="com">*/</span>
+<span class="kwa">import</span> akka.actor.Actor
+<span class="kwa">import</span> akka.actor.ActorRef
+<span class="kwa">import</span> akka.actor.ActorSystem
+<span class="kwa">import</span> akka.actor.Props
+<span class="kwa">import</span> com.typesafe.config.Config
+<span class="kwa">import</span> com.typesafe.config.ConfigFactory
+<span class="kwa">import</span> com.typesafe.config.ConfigValueFactory
+<span class="kwa">import</span> com.typesafe.config.impl.ConfigLong
+<span class="kwa">import</span> java.io.File
+
+<span class="kwa">class</span> <span class="kwd">ThreadRingActor</span>(id : Int) <span class="kwa">extends</span> Actor {
+  <span class="kwa">var</span> next: ActorRef = null
+
+  <span class="kwa">def</span> receive: Actor.Receive = {
+    <span class="kwa">case</span> e: Integer =&gt; {
+      <span class="kwa">if</span> (e == <span class="num">0</span>) {
+        <span class="kwd">println</span>(id); System.<span class="kwd">exit</span>(<span class="num">0</span>)
+      } <span class="kwa">else</span>
+        next.<span class="kwd">tell</span>(e - <span class="num">1</span>, null);
+    }
+    <span class="kwa">case</span> n: ActorRef =&gt; { <span class="kwa">this</span>.next = n }
+  }
+}
+
+<span class="kwa">object</span> threadring {
+  <span class="kwa">val</span> ring = <span class="num">503</span>
+  
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) {
+    <span class="kwa">val</span> system = <span class="kwd">ActorSystem</span>(<span class="str">&quot;system&quot;</span>,config)
+
+    <span class="kwa">val</span> actors = (<span class="kwa">for</span> (i &lt;- <span class="num">1</span> to ring)
+      <span class="kwa">yield</span> system.<span class="kwd">actorOf</span>(<span class="kwd">Props</span>(classOf[ThreadRingActor],i), (i).<span class="kwd">toString</span>())).toArray
+
+    <span class="kwa">for</span> (i &lt;- <span class="num">0</span> until ring) {
+      <span class="kwa">if</span> (i == ring - <span class="num">1</span>) <span class="kwd">actors</span>(i) ! <span class="kwd">actors</span>(<span class="num">0</span>)
+      <span class="kwa">else</span> <span class="kwd">actors</span>(i) ! <span class="kwd">actors</span>(i + <span class="num">1</span>)
+    }
+
+    <span class="kwd">actors</span>(<span class="num">0</span>) ! <span class="kwd">args</span>(<span class="num">0</span>).toInt
+  }
+  
+  <span class="slc">//Akka configuration change</span>
+  <span class="kwa">val</span> config = ConfigFactory.<span class="kwd">parseString</span>(<span class="str">&quot;&quot;&quot;</span>
+<span class="str">  akka{actor{default-dispatcher{fork-join-executor{parallelism-max = 1}}}}&quot;&quot;&quot;</span>).
+  <span class="kwd">withFallback</span>(ConfigFactory.<span class="kwd">defaultReference</span>(<span class="kwa">this</span>.getClass.getClassLoader))
+}

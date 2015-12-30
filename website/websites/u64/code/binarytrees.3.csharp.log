@@ -1,0 +1,76 @@
+
+Wed, 12 Aug 2015 06:19:30 GMT
+
+MAKE:
+mv binarytrees.csharp-3.csharp binarytrees.csharp-3.cs
+/usr/local/bin/mcs  -optimize+ -platform:x64 -out:binarytrees.csharp-3.csharp_run binarytrees.csharp-3.cs
+rm binarytrees.csharp-3.cs
+0.26s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/mono --llvm binarytrees.csharp-3.csharp_run 20
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+stretch tree of depth 21	 check: -1
+2097152	 trees of depth 4	 check: -2097152
+We don't know how many blocks we have?
+
+Stacktrace:
+
+  at <unknown> <0xffffffff>
+  at (wrapper managed-to-native) object.__icall_wrapper_mono_gc_alloc_obj (intptr,intptr) <0xffffffff>
+  at (wrapper alloc) object.AllocSmall (intptr,intptr) <0xffffffff>
+  at BenchmarkGameBTrees.BinaryTrees/TreeNode.ChildTreeNodes (BenchmarkGameBTrees.BinaryTrees/TreeNode&,int,int) <0x0001a>
+  at BenchmarkGameBTrees.BinaryTrees/TreeNode.ChildTreeNodes (BenchmarkGameBTrees.BinaryTrees/TreeNode&,int,int) <0x00052>
+  at BenchmarkGameBTrees.BinaryTrees/TreeNode.ChildTreeNodes (BenchmarkGameBTrees.BinaryTrees/TreeNode&,int,int) <0x00052>
+  at BenchmarkGameBTrees.BinaryTrees/TreeNode.ChildTreeNodes (BenchmarkGameBTrees.BinaryTrees/TreeNode&,int,int) <0x00052>
+  at BenchmarkGameBTrees.BinaryTrees/TreeNode.ChildTreeNodes (BenchmarkGameBTrees.BinaryTrees/TreeNode&,int,int) <0x00052>
+  at BenchmarkGameBTrees.BinaryTrees/TreeNode.ChildTreeNodes (BenchmarkGameBTrees.BinaryTrees/TreeNode&,int,int) <0x00052>
+  at BenchmarkGameBTrees.BinaryTrees/TreeNode.bottomUpTree (int,int) <0x00018>
+  at BenchmarkGameBTrees.BinaryTrees/<Main>c__AnonStorey0.<>m__0 (int,System.Threading.Tasks.ParallelLoopState,int) <0x00019>
+  at System.Threading.Tasks.Parallel/<ForWorker>c__AnonStorey3`1<int>.<>m__1 () <0x005dc>
+  at System.Threading.Tasks.Task.InnerInvoke () <0x0004c>
+  at System.Threading.Tasks.Task.InnerInvokeWithArg (System.Threading.Tasks.Task) <0x00013>
+  at System.Threading.Tasks.Task/<ExecuteSelfReplicating>c__AnonStorey0.<>m__0 (object) <0x001d0>
+  at System.Threading.Tasks.Task.InnerInvoke () <0x00085>
+  at System.Threading.Tasks.Task.Execute () <0x00059>
+  at System.Threading.Tasks.Task.ExecutionContextCallback (object) <0x0004e>
+  at System.Threading.ExecutionContext.RunInternal (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool) <0x001ce>
+  at System.Threading.ExecutionContext.Run (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool) <0x00020>
+  at System.Threading.Tasks.Task.ExecuteWithThreadLocal (System.Threading.Tasks.Task&) <0x00116>
+  at System.Threading.Tasks.Task.ExecuteEntry (bool) <0x000ff>
+  at System.Threading.Tasks.Task.System.Threading.IThreadPoolWorkItem.ExecuteWorkItem () <0x0000e>
+  at System.Threading.ThreadPoolWorkQueue.Dispatch () <0x001d6>
+  at System.Threading._ThreadPoolWaitCallback.PerformWaitCallback () <0x00008>
+  at (wrapper runtime-invoke) <Module>.runtime_invoke_bool (object,intptr,intptr,intptr) <0xffffffff>
+
+Native stacktrace:
+
+	/usr/local/bin/mono() [0x60f450]
+	/lib/x86_64-linux-gnu/libpthread.so.0(+0x10d10) [0x7fe8778b3d10]
+	/lib/x86_64-linux-gnu/libc.so.6(gsignal+0x37) [0x7fe8772f8267]
+	/lib/x86_64-linux-gnu/libc.so.6(abort+0x16a) [0x7fe8772f9eca]
+	/usr/local/bin/mono() [0x7b5be1]
+	/usr/local/bin/mono() [0x7b597f]
+	/usr/local/bin/mono() [0x7b5a5b]
+	/usr/local/bin/mono() [0x7753bb]
+	/usr/local/bin/mono() [0x76e143]
+	/usr/local/bin/mono() [0x76e47c]
+	/usr/local/bin/mono() [0x77096c]
+	/usr/local/bin/mono() [0x763cf0]
+	/usr/local/bin/mono() [0x76409b]
+	/usr/local/bin/mono() [0x751509]
+	[0x407a7008]
+
+Debug info from gdb:
+
+
+=================================================================
+Got a SIGABRT while executing native code. This usually indicates
+a fatal error in the mono runtime or one of the native libraries 
+used by your application.
+=================================================================
+

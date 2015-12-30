@@ -1,0 +1,100 @@
+﻿<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com"></span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   from Scala version by Otto Bommer, 13 Dec 2011</span>
+<span class="com"></span>
+<span class="com">   Modified by Vassil Keremidchiev by simplifying and parallelizing in F#, January 24, 2012</span>
+<span class="com">*)</span>
+
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Threading</span>
+
+<span class="kwa">let rec</span> fac x = <span class="kwa">if</span> x&lt;<span class="num">2</span> <span class="kwa">then</span> <span class="num">1L</span> <span class="kwa">else</span> (int64 x) * fac (x-<span class="num">1</span>)
+<span class="kwa">let</span> <span class="kwd">F</span> = [<span class="num">0</span>.<span class="num">.20</span>] |&gt; <span class="kwd">Seq</span>.map fac |&gt; <span class="kwd">Seq</span>.toArray
+
+<span class="kwa">type</span> fannkuch( n ) =
+    <span class="kwa">let</span> p = <span class="kwd">Array</span>.create n <span class="num">0</span>
+    <span class="kwa">let</span> pp = <span class="kwd">Array</span>.create n <span class="num">0</span>
+    <span class="kwa">let</span> count = <span class="kwd">Array</span>.create n <span class="num">0</span>
+    <span class="kwa">let mutable</span> flips = <span class="num">0</span>
+    <span class="kwa">let mutable</span> cksum = <span class="num">0</span>
+
+    <span class="kwa">let rec</span> direct idx i =
+        <span class="kwa">if</span> i &gt; <span class="num">0</span> <span class="kwa">then</span>
+            <span class="kwa">let</span> d = <span class="kwb">int</span> (idx / <span class="kwd">F</span>.[i])
+            count.[i] &lt;- d
+            <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> d-<span class="num">1</span> <span class="kwa">do</span> pp.[j] &lt;- p.[j]
+            <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> i-d <span class="kwa">do</span> p.[j] &lt;- p.[j+d]
+            <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> d-<span class="num">1</span> <span class="kwa">do</span> p.[j+i+<span class="num">1</span>-d] &lt;- pp.[j]
+            direct (idx % <span class="kwd">F</span>.[i]) (i-<span class="num">1</span>)
+
+    <span class="kwa">let</span> permute() =
+        <span class="kwa">let mutable</span> first = p.[<span class="num">1</span>]
+        p.[<span class="num">1</span>] &lt;- p.[<span class="num">0</span>]
+        p.[<span class="num">0</span>] &lt;- first
+
+        <span class="kwa">let mutable</span> i = <span class="num">1</span>
+        count.[i] &lt;- count.[i] + <span class="num">1</span>
+        <span class="kwa">while</span> count.[i] &gt; i <span class="kwa">do</span>
+            count.[i] &lt;- <span class="num">0</span>
+            i &lt;- i + <span class="num">1</span>
+            p.[<span class="num">0</span>] &lt;- p.[<span class="num">1</span>]
+            <span class="kwa">let</span> next = p.[<span class="num">1</span>]
+            <span class="kwa">for</span> j = <span class="num">1</span> <span class="kwa">to</span> i-<span class="num">1</span> <span class="kwa">do</span> p.[j] &lt;- p.[j+<span class="num">1</span>]
+            p.[i] &lt;- first
+            first &lt;- next
+            count.[i] &lt;- count.[i] + <span class="num">1</span>
+
+    <span class="kwa">let</span> fcount() =
+        <span class="kwa">let mutable</span> flips = <span class="num">1</span>
+        <span class="kwa">let mutable</span> first = p.[<span class="num">0</span>]
+
+        <span class="kwa">if</span> p.[first] &lt;&gt; <span class="num">0</span> <span class="kwa">then</span>
+            <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> n-<span class="num">1</span> <span class="kwa">do</span> pp.[i] &lt;- p.[i]
+
+            <span class="kwa">while</span> pp.[first] &lt;&gt; <span class="num">0</span> <span class="kwa">do</span>
+                flips &lt;- flips + <span class="num">1</span>
+                <span class="kwa">let mutable</span> lo = <span class="num">1</span>
+                <span class="kwa">let mutable</span> hi = first - <span class="num">1</span>
+                <span class="kwa">while</span> lo &lt; hi <span class="kwa">do</span>
+                    <span class="kwa">let</span> t = pp.[lo]
+                    pp.[lo] &lt;- pp.[hi]
+                    pp.[hi] &lt;- t
+
+                    lo &lt;- lo + <span class="num">1</span>
+                    hi &lt;- hi - <span class="num">1</span>
+                <span class="kwa">let</span> t = pp.[first]
+                pp.[first] &lt;- first
+                first &lt;- t
+        flips
+
+    <span class="kwa">member</span> x.runTask( task, chunk ) = 
+        <span class="kwa">let</span> lo = int64(task) * chunk
+        <span class="kwa">let</span> hi = min <span class="kwd">F</span>.[n] (lo+chunk)
+        <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> p.<span class="kwd">Length</span> - <span class="num">1</span> <span class="kwa">do</span> p.[j] &lt;- j
+
+        direct lo (p.<span class="kwd">Length</span> - <span class="num">1</span>)
+
+        <span class="kwa">let</span> last = <span class="kwb">int</span>(hi - lo - <span class="num">1L</span>)
+        <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> last <span class="kwa">do</span>
+            <span class="kwa">if</span> p.[<span class="num">0</span>] &lt;&gt; <span class="num">0</span> <span class="kwa">then</span>
+                <span class="kwa">let</span> f = fcount()
+                flips &lt;- max flips f
+                cksum &lt;- cksum + <span class="kwa">if</span> (int64(j)+lo) % <span class="num">2L</span> = <span class="num">0L</span> <span class="kwa">then</span> f <span class="kwa">else</span> -f
+            <span class="kwa">if</span> j &lt; last <span class="kwa">then</span> permute()
+
+        (cksum, flips)
+
+<span class="kwa">let</span> _ = 
+    <span class="kwa">let</span> nthreads = <span class="kwd">System</span>.<span class="kwd">Environment</span>.<span class="kwd">ProcessorCount</span>
+    <span class="kwa">let</span> n = <span class="kwa">try</span> <span class="kwb">int</span>((<span class="kwd">System</span>.<span class="kwd">Environment</span>.<span class="kwd">GetCommandLineArgs</span>()).[<span class="num">1</span>]) <span class="kwa">with</span> _ -&gt; <span class="num">7</span>
+    <span class="kwa">let</span> split (i:int64) = (<span class="kwd">F</span>.[n] + i - <span class="num">1L</span>) / i
+    <span class="kwa">let</span> chunk  = split (int64(nthreads * <span class="num">4</span>))
+    <span class="kwa">let</span> ntasks = <span class="kwb">int</span>(split chunk)
+
+    <span class="kwa">let</span> (c, fl) =   [<span class="num">0</span>..ntasks] |&gt; <span class="kwd">Seq</span>.map (<span class="kwa">fun</span> i -&gt; async {  <span class="kwa">let</span> thread = fannkuch(n)
+                                                              return thread.runTask(i, chunk) } )
+                                |&gt; <span class="kwd">Async</span>.<span class="kwd">Parallel</span> |&gt; <span class="kwd">Async</span>.<span class="kwd">RunSynchronously</span>
+                                |&gt; <span class="kwd">Array</span>.fold (<span class="kwa">fun</span> (_cksum, _flips) (cksum, flips) -&gt; (_cksum + cksum, max _flips flips)) (<span class="num">0</span>,<span class="num">0</span>)
+
+    <span class="kwd">Printf</span>.printf <span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">Pfannkuchen(</span><span class="ipl">%d</span><span class="str">) =</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> c n fl

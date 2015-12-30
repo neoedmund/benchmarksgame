@@ -1,0 +1,178 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">! Contributed by Jason Blevins</span>
+<span class="slc">! Adapted from the C version by Petr Prokhorenkov</span>
+
+<span class="kwa">program</span> fastaredux
+  <span class="kwa">implicit none</span>
+
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: IM = <span class="num">139968</span>
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: IA = <span class="num">3877</span>
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: IC = <span class="num">29573</span>
+
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: LINE_LEN = <span class="num">60</span>
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: LOOKUP_SIZE = <span class="num">4096</span>
+  <span class="kwa">real</span>, <span class="kwa">parameter</span> :: LOOKUP_SCALE = <span class="kwa">real</span>(LOOKUP_SIZE - <span class="num">1</span>)
+
+  <span class="kwa">type</span> :: random_t
+     <span class="kwa">integer</span> :: state = <span class="num">42</span>
+  <span class="kwa">end type</span> random_t
+
+  <span class="kwa">type</span> :: amino_acid_t
+     <span class="kwa">character</span>(len=<span class="num">1</span>) :: sym
+     <span class="kwa">real</span> :: prob
+     <span class="kwa">real</span> :: cprob_lookup = <span class="num">0</span>.d0
+  <span class="kwa">end type</span> amino_acid_t
+
+  <span class="kwa">type</span>(amino_acid_t), <span class="kwa">dimension</span>(<span class="num">15</span>) :: amino_acid = (/ &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'a'</span>, <span class="num">0.27</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'c'</span>, <span class="num">0.12</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'g'</span>, <span class="num">0.12</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'t'</span>, <span class="num">0.27</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'B'</span>, <span class="num">0.02</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'D'</span>, <span class="num">0.02</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'H'</span>, <span class="num">0.02</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'K'</span>, <span class="num">0.02</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'M'</span>, <span class="num">0.02</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'N'</span>, <span class="num">0.02</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'R'</span>, <span class="num">0.02</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'S'</span>, <span class="num">0.02</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'V'</span>, <span class="num">0.02</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'W'</span>, <span class="num">0.02</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'Y'</span>, <span class="num">0.02</span>)  &amp;
+       /)
+
+  <span class="kwa">type</span>(amino_acid_t), <span class="kwa">dimension</span>(<span class="num">4</span>) :: homo_sapiens = (/ &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'a'</span>, <span class="num">0.3029549426680</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'c'</span>, <span class="num">0.1979883004921</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'g'</span>, <span class="num">0.1975473066391</span>), &amp;
+       <span class="kwd">amino_acid_t</span>(<span class="str">'t'</span>, <span class="num">0.3015094502008</span>)  &amp;
+       /)
+
+  <span class="kwa">character</span>(len=*), <span class="kwa">parameter</span> :: alu = &amp;
+       <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTG&quot;</span> // &amp;
+       <span class="str">&quot;GGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGA&quot;</span> // &amp;
+       <span class="str">&quot;GACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAA&quot;</span> // &amp;
+       <span class="str">&quot;AATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAAT&quot;</span> // &amp;
+       <span class="str">&quot;CCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAAC&quot;</span> // &amp;
+       <span class="str">&quot;CCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTG&quot;</span> // &amp;
+       <span class="str">&quot;CACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>
+
+  <span class="kwa">character</span>(len=<span class="num">60</span>) :: arg
+  <span class="kwa">integer</span> :: n
+  <span class="kwa">type</span>(random_t) :: rand
+
+  <span class="kwa">if</span> (<span class="kwd">command_argument_count</span>() &gt; <span class="num">0</span>) <span class="kwa">then</span>
+     <span class="kwa">call</span> <span class="kwd">get_command_argument</span>(<span class="num">1</span>, arg)
+     <span class="kwa">read</span>(arg, *) n
+  <span class="kwa">else</span>
+     n = <span class="num">512</span>
+  <span class="kwa">end if</span>
+
+  <span class="kwa">call</span> <span class="kwd">repeat</span>(<span class="str">&quot;&gt;ONE Homo sapiens alu&quot;</span>, n*<span class="num">2</span>)
+  <span class="kwa">call</span> <span class="kwd">randomize</span>(amino_acid, <span class="str">&quot;&gt;TWO IUB ambiguity codes&quot;</span>, n*<span class="num">3</span>, rand)
+  <span class="kwa">call</span> <span class="kwd">randomize</span>(homo_sapiens, <span class="str">&quot;&gt;THREE Homo sapiens frequency&quot;</span>, n*<span class="num">5</span>, rand)
+
+<span class="kwa">contains</span>
+
+  <span class="slc">! Special version with result rescaled to LOOKUP_SCALE.</span>
+  <span class="kwa">function</span> <span class="kwd">random_next_lookup</span>(random)
+    <span class="kwa">type</span>(random_t), <span class="kwd">intent</span>(inout) :: random
+    <span class="kwa">real</span> :: random_next_lookup
+    random%state = <span class="kwd">mod</span>(random%state*IA + IC, IM)
+    random_next_lookup = random%state * (LOOKUP_SCALE / IM)
+  <span class="kwa">end function</span> random_next_lookup
+
+  <span class="kwa">subroutine</span> <span class="kwd">repeat</span>(title, n)
+    <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: title
+    <span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: n
+    <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: length = <span class="kwd">len</span>(alu)
+    <span class="kwa">character</span>(len=length+LINE_LEN) :: buffer
+    <span class="kwa">integer</span> :: nn, pos, bytes
+
+    nn = n
+    pos = <span class="num">1</span>
+
+    <span class="kwd">buffer</span>(<span class="num">1</span>:length) = alu
+    <span class="kwd">buffer</span>(length+<span class="num">1</span>:) = alu
+
+    <span class="kwa">print</span> <span class="str">'(a)'</span>, title
+    <span class="kwa">do while</span> (nn &gt; <span class="num">1</span>)
+       <span class="kwa">if</span> (nn &gt; LINE_LEN) <span class="kwa">then</span>
+          bytes = LINE_LEN
+       <span class="kwa">else</span>
+          bytes = nn
+       <span class="kwa">end if</span>
+
+       <span class="kwa">print</span> <span class="str">'(a)'</span>, <span class="kwd">buffer</span>(pos:pos+bytes-<span class="num">1</span>)
+       pos = pos + bytes
+       <span class="kwa">if</span> (pos &gt; length) <span class="kwa">then</span>
+          pos = pos - length
+       <span class="kwa">end if</span>
+       nn = nn - bytes
+    <span class="kwa">end do</span>
+  <span class="kwa">end subroutine</span> repeat
+
+  <span class="kwa">subroutine</span> <span class="kwd">fill_lookup</span>(lookup, amino_acid)
+    <span class="kwa">integer</span>, <span class="kwa">dimension</span>(:), <span class="kwd">intent</span>(out) :: lookup
+    <span class="kwa">type</span>(amino_acid_t), <span class="kwa">dimension</span>(:), <span class="kwd">intent</span>(inout) :: amino_acid
+    <span class="kwa">real</span> :: p
+    <span class="kwa">integer</span> :: i, j
+
+    p = <span class="num">0</span>.d0
+
+    <span class="kwa">do</span> i = <span class="num">1</span>, <span class="kwd">size</span>(amino_acid)
+       p = p + <span class="kwd">amino_acid</span>(i)%prob
+       <span class="kwd">amino_acid</span>(i)%cprob_lookup = p*LOOKUP_SCALE
+    <span class="kwa">end do</span>
+
+    <span class="slc">! Prevent rounding error.</span>
+    <span class="kwd">amino_acid</span>(<span class="kwd">size</span>(amino_acid))%cprob_lookup = LOOKUP_SIZE - <span class="num">1</span>.d0
+
+    j = <span class="num">1</span>
+    <span class="kwa">do</span> i = <span class="num">1</span>, LOOKUP_SIZE
+       <span class="kwa">do while</span> (<span class="kwd">amino_acid</span>(j)%cprob_lookup &lt; i - <span class="num">1</span>)
+          j = j + <span class="num">1</span>
+       <span class="kwa">end do</span>
+       <span class="kwd">lookup</span>(i) = j
+    <span class="kwa">end do</span>
+  <span class="kwa">end subroutine</span> fill_lookup
+
+  <span class="kwa">subroutine</span> <span class="kwd">randomize</span>(amino_acid, title, n, rand)
+    <span class="kwa">type</span>(amino_acid_t), <span class="kwa">dimension</span>(:), <span class="kwd">intent</span>(inout) :: amino_acid
+    <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: title
+    <span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: n
+    <span class="kwa">type</span>(random_t), <span class="kwd">intent</span>(inout) :: rand
+    <span class="kwa">integer</span>, <span class="kwa">dimension</span>(LOOKUP_SIZE) :: lookup
+    <span class="kwa">character</span>(len=LINE_LEN) :: line_buffer
+    <span class="kwa">integer</span> :: i, j, u
+    <span class="kwa">real</span> :: r
+
+    <span class="kwa">call</span> <span class="kwd">fill_lookup</span>(lookup, amino_acid)
+
+    <span class="kwa">print</span> <span class="str">'(a)'</span>, title
+
+    j = <span class="num">1</span>
+    <span class="kwa">do</span> i = <span class="num">1</span>, n
+       r = <span class="kwd">random_next_lookup</span>(rand)
+       u = <span class="kwd">lookup</span>(<span class="kwd">int</span>(r)+<span class="num">1</span>)
+       <span class="kwa">do while</span> (<span class="kwd">amino_acid</span>(u)%cprob_lookup &lt; r)
+          u = u + <span class="num">1</span>
+       <span class="kwa">end do</span>
+
+       <span class="kwd">line_buffer</span>(j:j) = <span class="kwd">amino_acid</span>(u)%sym
+
+       <span class="kwa">if</span> (j == LINE_LEN) <span class="kwa">then</span>
+          <span class="kwa">print</span> <span class="str">'(a)'</span>, line_buffer
+          j = <span class="num">1</span>
+       <span class="kwa">else</span>
+          j = j + <span class="num">1</span>
+       <span class="kwa">end if</span>
+    <span class="kwa">end do</span>
+    <span class="kwa">if</span> (j &gt; <span class="num">1</span>) <span class="kwa">then</span>
+       <span class="kwa">print</span> <span class="str">'(a)'</span>, <span class="kwd">line_buffer</span>(<span class="num">1</span>:j-<span class="num">1</span>)
+    <span class="kwa">end if</span>
+  <span class="kwa">end subroutine</span> randomize
+
+<span class="kwa">end program</span> fastaredux

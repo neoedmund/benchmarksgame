@@ -1,0 +1,63 @@
+&lt;?php
+<span class="slc">#</span>
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by Danny Sauer</span>
+<span class="slc"># modified by Josh Goldfoot</span>
+
+<span class="slc"># regexp matches</span>
+
+<span class="slc">#ini_set(&quot;memory_limit&quot;,&quot;40M&quot;);</span>
+
+$variants = <span class="kwa">array</span>(
+    <span class="str">'agggtaaa|tttaccct'</span>,
+    <span class="str">'[cgt]gggtaaa|tttaccc[acg]'</span>,
+    <span class="str">'a[act]ggtaaa|tttacc[agt]t'</span>,
+    <span class="str">'ag[act]gtaaa|tttac[agt]ct'</span>,
+    <span class="str">'agg[act]taaa|ttta[agt]cct'</span>,
+    <span class="str">'aggg[acg]aaa|ttt[cgt]ccct'</span>,
+    <span class="str">'agggt[cgt]aa|tt[acg]accct'</span>,
+    <span class="str">'agggta[cgt]a|t[acg]taccct'</span>,
+    <span class="str">'agggtaa[cgt]|[acg]ttaccct'</span>,
+);
+
+<span class="slc"># IUB replacement parallel arrays</span>
+$IUB = <span class="kwa">array</span>(); $IUBnew = <span class="kwa">array</span>();
+$IUB[]=<span class="str">'/B/'</span>;     $IUBnew[]=<span class="str">'(c|g|t)'</span>;
+$IUB[]=<span class="str">'/D/'</span>;     $IUBnew[]=<span class="str">'(a|g|t)'</span>;
+$IUB[]=<span class="str">'/H/'</span>;     $IUBnew[]=<span class="str">'(a|c|t)'</span>;
+$IUB[]=<span class="str">'/K/'</span>;     $IUBnew[]=<span class="str">'(g|t)'</span>;
+$IUB[]=<span class="str">'/M/'</span>;     $IUBnew[]=<span class="str">'(a|c)'</span>;
+$IUB[]=<span class="str">'/N/'</span>;     $IUBnew[]=<span class="str">'(a|c|g|t)'</span>;
+$IUB[]=<span class="str">'/R/'</span>;     $IUBnew[]=<span class="str">'(a|g)'</span>;
+$IUB[]=<span class="str">'/S/'</span>;     $IUBnew[]=<span class="str">'(c|g)'</span>;
+$IUB[]=<span class="str">'/V/'</span>;     $IUBnew[]=<span class="str">'(a|c|g)'</span>;
+$IUB[]=<span class="str">'/W/'</span>;     $IUBnew[]=<span class="str">'(a|t)'</span>;
+$IUB[]=<span class="str">'/Y/'</span>;     $IUBnew[]=<span class="str">'(c|t)'</span>;
+
+<span class="slc"># sequence descriptions start with &gt; and comments start with ;</span>
+<span class="slc">#my $stuffToRemove = '^[&gt;;].*$|[\r\n]';</span>
+$stuffToRemove = <span class="str">'^&gt;.*$|</span><span class="esc">\n</span><span class="str">'</span>; <span class="slc"># no comments, *nix-format test file...</span>
+
+<span class="slc"># read in file</span>
+$contents = <span class="kwd">file_get_contents</span>(<span class="str">'php://stdin'</span>);
+$initialLength = <span class="kwd">strlen</span>($contents);
+
+<span class="slc"># remove things</span>
+$contents = <span class="kwd">preg_replace</span>(<span class="str">&quot;/</span><span class="ipl">$stuffToRemove</span><span class="str">/m&quot;</span>, <span class="str">''</span>, $contents);
+$codeLength = <span class="kwd">strlen</span>($contents);
+
+<span class="slc"># do regexp counts</span>
+<span class="kwa">foreach</span> ($variants <span class="kwa">as</span> $regex){
+    <span class="kwa">print</span> $regex . <span class="str">' '</span> . <span class="kwd">preg_match_all</span>(<span class="str">&quot;/</span><span class="ipl">$regex</span><span class="str">/i&quot;</span>, $contents, $discard). <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+}
+
+<span class="slc"># do replacements</span>
+$contents = <span class="kwd">preg_replace</span>($IUB, $IUBnew, $contents);
+
+<span class="kwa">print</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span> .
+      $initialLength . <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span> .
+      $codeLength . <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span> .
+      <span class="kwd">strlen</span>($contents) . <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span> ;
+?&gt;

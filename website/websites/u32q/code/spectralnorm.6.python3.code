@@ -1,0 +1,63 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># Contributed by Sebastien Loisel</span>
+<span class="slc"># Fixed by Isaac Gouy</span>
+<span class="slc"># Sped up by Josh Goldfoot</span>
+<span class="slc"># Dirtily sped up by Simon Descarpentries</span>
+<span class="slc"># Used list comprehension by Vadim Zelenin</span>
+<span class="slc"># 2to3</span>
+
+<span class="kwa">from</span> math      <span class="kwa">import</span> sqrt
+<span class="kwa">from</span> sys       <span class="kwa">import</span> argv
+
+
+<span class="kwa">def</span> <span class="kwd">eval_A</span>(i, j):
+    ij = i+j
+    <span class="kwa">return</span> <span class="num">1.0</span> / (ij * (ij + <span class="num">1</span>) / <span class="num">2</span> + i + <span class="num">1</span>)
+
+
+<span class="kwa">def</span> <span class="kwd">eval_A_times_u</span>(u):
+    local_eval_A = eval_A
+
+    <span class="kwa">return</span> [ <span class="kwb">sum</span>([ <span class="kwd">local_eval_A</span>(i, j) * u_j
+                   <span class="kwa">for</span> j, u_j <span class="kwa">in</span> <span class="kwb">enumerate</span>(u)
+                 ]
+                )
+             <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(<span class="kwb">len</span>(u))
+           ]
+
+
+<span class="kwa">def</span> <span class="kwd">eval_At_times_u</span>(u):
+    local_eval_A = eval_A
+
+    <span class="kwa">return</span> [ <span class="kwb">sum</span>([ <span class="kwd">local_eval_A</span>(j, i) * u_j
+                   <span class="kwa">for</span> j, u_j <span class="kwa">in</span> <span class="kwb">enumerate</span>(u)
+                 ]
+                )
+             <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(<span class="kwb">len</span>(u))
+           ]
+
+
+<span class="kwa">def</span> <span class="kwd">eval_AtA_times_u</span>(u):
+    <span class="kwa">return</span> <span class="kwd">eval_At_times_u</span>(<span class="kwd">eval_A_times_u</span>(u))
+
+
+<span class="kwa">def</span> <span class="kwd">main</span>():
+    n = <span class="kwb">int</span>(argv[<span class="num">1</span>])
+    u = [<span class="num">1</span>] * n
+    local_eval_AtA_times_u = eval_AtA_times_u
+
+    <span class="kwa">for</span> dummy <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">10</span>):
+        v = <span class="kwd">local_eval_AtA_times_u</span>(u)
+        u = <span class="kwd">local_eval_AtA_times_u</span>(v)
+
+    vBv = vv = <span class="num">0</span>
+
+    <span class="kwa">for</span> ue, ve <span class="kwa">in</span> <span class="kwb">zip</span>(u, v):
+        vBv += ue * ve
+        vv  += ve * ve
+
+    <span class="kwa">print</span>(<span class="str">&quot;</span><span class="ipl">%0</span><span class="str">.9f&quot;</span> % (<span class="kwd">sqrt</span>(vBv/vv)))
+
+<span class="kwd">main</span>()

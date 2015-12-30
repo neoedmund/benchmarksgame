@@ -1,0 +1,71 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> </span>
+<span class="com">   contributed by Jarkko Miettinen</span>
+<span class="com">*/</span>
+
+<span class="kwa">public class</span> binarytrees {
+
+   <span class="kwa">private final static</span> <span class="kwb">int</span> minDepth = <span class="num">4</span>;
+   
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args){
+      <span class="kwb">int</span> n = <span class="num">0</span>;
+      <span class="kwa">if</span> (args.length &gt; <span class="num">0</span>) n = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+      
+      <span class="kwb">int</span> maxDepth = (minDepth + <span class="num">2</span> &gt; n) ? minDepth + <span class="num">2</span> : n;
+      <span class="kwb">int</span> stretchDepth = maxDepth + <span class="num">1</span>;
+      
+      <span class="kwb">int</span> check = (TreeNode.<span class="kwd">bottomUpTree</span>(<span class="num">0</span>,stretchDepth)).<span class="kwd">itemCheck</span>();
+      System.out.<span class="kwd">println</span>(<span class="str">&quot;stretch tree of depth &quot;</span>+stretchDepth+<span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + check);
+      
+      TreeNode longLivedTree = TreeNode.<span class="kwd">bottomUpTree</span>(<span class="num">0</span>,maxDepth);
+      
+      <span class="kwa">for</span> (<span class="kwb">int</span> depth=minDepth; depth&lt;=maxDepth; depth+=<span class="num">2</span>){
+         <span class="kwb">int</span> iterations = <span class="num">1</span> &lt;&lt; (maxDepth - depth + minDepth);
+         check = <span class="num">0</span>;
+         
+         <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">1</span>; i&lt;=iterations; i++){
+            check += (TreeNode.<span class="kwd">bottomUpTree</span>(i,depth)).<span class="kwd">itemCheck</span>();
+            check += (TreeNode.<span class="kwd">bottomUpTree</span>(-i,depth)).<span class="kwd">itemCheck</span>();
+         }
+         System.out.<span class="kwd">println</span>((iterations*<span class="num">2</span>) + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">trees of depth &quot;</span> + depth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + check);
+      }   
+      System.out.<span class="kwd">println</span>(<span class="str">&quot;long lived tree of depth &quot;</span> + maxDepth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span>+ longLivedTree.<span class="kwd">itemCheck</span>());
+   }
+   
+   
+   <span class="kwa">private static class</span> TreeNode
+   {
+      <span class="kwa">private</span> TreeNode left, right;
+      <span class="kwa">private</span> <span class="kwb">int</span> item;
+      
+      <span class="kwd">TreeNode</span>(<span class="kwb">int</span> item){
+         <span class="kwa">this</span>.item = item;
+      }
+      
+      <span class="kwa">private static</span> TreeNode <span class="kwd">bottomUpTree</span>(<span class="kwb">int</span> item, <span class="kwb">int</span> depth){
+         <span class="kwa">if</span> (depth&gt;<span class="num">0</span>){
+            <span class="kwa">return new</span> <span class="kwd">TreeNode</span>(
+                  <span class="kwd">bottomUpTree</span>(<span class="num">2</span>*item-<span class="num">1</span>, depth-<span class="num">1</span>)
+                  , <span class="kwd">bottomUpTree</span>(<span class="num">2</span>*item, depth-<span class="num">1</span>)
+                  , item
+            );
+         }
+         <span class="kwa">else</span> {
+            <span class="kwa">return new</span> <span class="kwd">TreeNode</span>(item);
+         }
+      }
+      
+      <span class="kwd">TreeNode</span>(TreeNode left, TreeNode right, <span class="kwb">int</span> item){
+         <span class="kwa">this</span>.left = left;
+         <span class="kwa">this</span>.right = right;
+         <span class="kwa">this</span>.item = item;
+      }
+      
+      <span class="kwa">private</span> <span class="kwb">int</span> <span class="kwd">itemCheck</span>(){
+         <span class="slc">// if necessary deallocate here</span>
+         <span class="kwa">if</span> (left==null) <span class="kwa">return</span> item;
+         <span class="kwa">else return</span> item + left.<span class="kwd">itemCheck</span>() - right.<span class="kwd">itemCheck</span>();
+      }
+   }
+}

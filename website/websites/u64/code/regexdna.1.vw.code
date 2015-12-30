@@ -1,0 +1,69 @@
+<span class="com">&quot;* The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">    contributed by Eliot Miranda *&quot;</span>!
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">matchPatterns</span>
+   ^#(   <span class="str">'agggtaaa|tttaccct'</span>
+         <span class="str">'[cgt]gggtaaa|tttaccc[acg]'</span>
+         <span class="str">'a[act]ggtaaa|tttacc[agt]t'</span>
+         <span class="str">'ag[act]gtaaa|tttac[agt]ct'</span>
+         <span class="str">'agg[act]taaa|ttta[agt]cct'</span>
+         <span class="str">'aggg[acg]aaa|ttt[cgt]ccct'</span>
+         <span class="str">'agggt[cgt]aa|tt[acg]accct'</span>
+         <span class="str">'agggta[cgt]a|t[acg]taccct'</span>
+         <span class="str">'agggtaa[cgt]|[acg]ttaccct'</span>
+   )! !
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">substitutionPatterns</span>
+   ^#(   #(<span class="str">'B'</span> <span class="str">'(c|g|t)'</span>)
+         #(<span class="str">'D'</span> <span class="str">'(a|g|t)'</span>)
+         #(<span class="str">'H'</span> <span class="str">'(a|c|t)'</span>)
+         #(<span class="str">'K'</span> <span class="str">'(g|t)'</span>)
+         #(<span class="str">'M'</span> <span class="str">'(a|c)'</span>)
+         #(<span class="str">'N'</span> <span class="str">'(a|c|g|t)'</span>)
+         #(<span class="str">'R'</span> <span class="str">'(a|g)'</span>)
+         #(<span class="str">'S'</span> <span class="str">'(c|g)'</span>)
+         #(<span class="str">'V'</span> <span class="str">'(a|c|g)'</span>)
+         #(<span class="str">'W'</span> <span class="str">'(a|t)'</span>)
+         #(<span class="str">'Y'</span> <span class="str">'(c|t)'</span>))! !
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">regexDNA:</span> sequence <span class="kwb">to:</span> output
+   <span class="kwd">| s size1 size2 translation |</span>
+   size1 :<span class="kwb">=</span> sequence size.
+
+   <span class="com">&quot;* remove FASTA sequence descriptions and new-lines *&quot;</span>
+   s :<span class="kwb">=</span> sequence <span class="kwb">copyWithRegex:</span> <span class="str">'&gt;[^</span><span class="esc">\r</span><span class="str">]*</span><span class="esc">\r</span><span class="str">|</span><span class="esc">\r</span><span class="str">'</span> <span class="kwb">matchesReplacedWith:</span> <span class="str">''</span>.
+   size2 :<span class="kwb">=</span> s size.
+
+   <span class="com">&quot;* regex match *&quot;</span>
+   <span class="kwa">self</span> matchPatterns <span class="kwb">do:</span> [<span class="kwd">:each</span>| 
+      output 
+         <span class="kwb">nextPutAll:</span> each; space; 
+         <span class="kwb">print:</span> (s <span class="kwb">occurrencesOfRegex:</span> each); nl
+      ]. 
+
+   <span class="com">&quot;* regex substitution *&quot;</span>
+   translation :<span class="kwb">=</span> <span class="kwc">Dictionary</span> new.
+   <span class="kwa">self</span> substitutionPatterns <span class="kwb">do:</span> [<span class="kwd">:each</span>| 
+      translation <span class="kwb">at:</span> each first <span class="kwb">put:</span> each last].
+
+   s :<span class="kwb">=</span> s <span class="kwb">copyWithRegex:</span> <span class="str">'['</span>, 
+         (translation keys asArray <span class="kwb">fold:</span> [<span class="kwd">:a :b</span>| a, b]), <span class="str">']'</span>
+      <span class="kwb">matchesTranslatedUsing:</span> [<span class="kwd">:l</span>| translation <span class="kwb">at:</span> l].
+
+   output
+      nl;
+      <span class="kwb">print:</span> size1; nl; 
+      <span class="kwb">print:</span> size2; nl; 
+      <span class="kwb">print:</span> s size; nl! !
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmark scripts'</span>!
+<span class="kwb">regexdna</span>
+   <span class="kwa">self</span> <span class="kwb">regexDNA:</span> <span class="kwa">self</span> stdinSpecial contents <span class="kwb">to:</span> <span class="kwa">self</span> stdout.
+   ^<span class="str">''</span> ! !

@@ -1,0 +1,85 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Anthony Perez-Sanz.</span>
+<span class="com"> * based on Java program by Jarkko Miettinen</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;flag&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;strconv&quot;</span>
+)
+
+<span class="kwa">type</span> Node <span class="kwa">struct</span> {
+   item        <span class="kwb">int</span>
+   left, right *Node
+}
+
+<span class="kwa">const</span> minDepth = <span class="num">4</span>
+
+<span class="kwa">func</span> <span class="kwd">trees</span>(maxDepth <span class="kwb">int</span>) {
+   longLastingNode := <span class="kwd">createTree</span>(<span class="num">0</span>, maxDepth)
+   depth := <span class="num">4</span>
+
+   <span class="kwa">for</span> depth &lt;= maxDepth {
+      iterations := <span class="num">1</span> &lt;&lt; <span class="kwb">uint</span>(maxDepth-depth+minDepth) <span class="slc">// 16 &lt;&lt; (maxDepth - depth)</span>
+
+      <span class="kwd">loops</span>(iterations, depth)
+      depth += <span class="num">2</span>
+   }
+   fmt.<span class="kwd">Printf</span>(<span class="str">&quot;long lived tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, maxDepth,
+      <span class="kwd">checkTree</span>(longLastingNode))
+}
+
+<span class="kwa">func</span> <span class="kwd">loops</span>(iterations, depth <span class="kwb">int</span>) {
+   check := <span class="num">0</span>
+   item := <span class="num">0</span>
+   <span class="kwa">for</span> item &lt; iterations {
+      check += <span class="kwd">checkTree</span>(<span class="kwd">createTree</span>(item, depth)) +
+         <span class="kwd">checkTree</span>(<span class="kwd">createTree</span>(-item, depth))
+      item++
+   }
+   fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">trees of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>,
+      iterations&lt;&lt;<span class="num">1</span>, depth, check)
+}
+
+<span class="kwa">func</span> <span class="kwd">checkTree</span>(n *Node) <span class="kwb">int</span> {
+   <span class="kwa">if</span> n.left == <span class="kwb">nil</span> {
+      <span class="kwa">return</span> n.item
+   }
+   <span class="kwa">return</span> <span class="kwd">checkTree</span>(n.left) - <span class="kwd">checkTree</span>(n.right) + n.item
+}
+
+<span class="kwa">func</span> <span class="kwd">createTree</span>(item, depth <span class="kwb">int</span>) *Node {
+   node := &amp;Node{item: item}
+   <span class="kwa">if</span> depth &gt; <span class="num">0</span> {
+      item += item
+      depth--
+      node.left = <span class="kwd">createTree</span>(item-<span class="num">1</span>, depth)
+      node.right = <span class="kwd">createTree</span>(item, depth)
+   }
+   <span class="kwa">return</span> node
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   n := <span class="num">0</span>
+   flag.<span class="kwd">Parse</span>()
+   <span class="kwa">if</span> flag.<span class="kwd">NArg</span>() &gt; <span class="num">0</span> {
+      n, _ = strconv.<span class="kwd">Atoi</span>(flag.<span class="kwd">Arg</span>(<span class="num">0</span>))
+   }
+
+   maxDepth := n
+   <span class="kwa">if</span> minDepth+<span class="num">2</span> &gt; n {
+      maxDepth = minDepth + <span class="num">2</span>
+   }
+
+   {
+      stretchDepth := maxDepth + <span class="num">1</span>
+      check := <span class="kwd">checkTree</span>(<span class="kwd">createTree</span>(<span class="num">0</span>, stretchDepth))
+      fmt.<span class="kwd">Printf</span>(<span class="str">&quot;stretch tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, stretchDepth, check)
+   }
+   <span class="kwd">trees</span>(maxDepth)
+}

@@ -1,0 +1,171 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; contributed by Alex Miller, ported from Java version</span>
+
+(ns fannkuchredux
+  (:require clojure.string)
+  (:import [java.util.concurrent.atomic AtomicInteger])
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* true)
+
+(<span class="kwa">def</span> ^:const NCHUNKS <span class="num">150</span>)
+(<span class="kwa">def</span> ^AtomicInteger task-id (AtomicInteger.))
+
+(definterface Task
+  (taskLoop [^long n])
+  (runTask [^long task ^long n ^longs p ^longs pp ^longs counts])
+  (firstPermutation [^long idx ^longs p ^longs pp ^longs counts])
+  (^long countFlips [^longs p ^longs pp])
+  (nextPermutation [^longs p ^longs counts]))
+
+(deftype FannTask [^longs fact      <span class="slc">;; constant</span>
+                   ^long chunksz    <span class="slc">;; constant</span>
+                   ^long ntasks     <span class="slc">;; constant</span>
+                   ^longs max-flips <span class="slc">;; global scope</span>
+                   ^longs chk-sums  <span class="slc">;; global scope</span>
+                   ]
+  Task
+  (taskLoop [this n]
+    (<span class="kwc">let</span> [p (long-array n)
+          pp (long-array n)
+          counts (long-array n)]
+      (<span class="kwb">loop</span> []
+        (<span class="kwc">let</span> [task (.getAndIncrement task-id)]
+          (<span class="kwc">when</span> (&lt; task ntasks)
+            (.runTask this task n p pp counts)
+            (<span class="kwb">recur</span>))))))
+
+  (runTask [this task n p pp counts]
+    (<span class="kwc">let</span> [^longs max-flips max-flips
+          ^longs chk-sums chk-sums
+          idx-min (* task chunksz)
+          idx-max (min (aget fact n) (+ idx-min chunksz))]
+      (.firstPermutation this idx-min p pp counts)
+      (<span class="kwb">loop</span> [mflips <span class="num">1</span>
+             chksum <span class="num">0</span>
+             i idx-min]
+        (<span class="kwc">if</span> (zero? (aget p <span class="num">0</span>))
+          (<span class="kwc">let</span> [new-mflips mflips
+                new-chksum chksum
+                new-i (inc i)]
+            (<span class="kwc">if</span> (&lt; new-i idx-max)
+              (do
+                (.nextPermutation this p counts)
+                (<span class="kwb">recur</span> new-mflips new-chksum new-i))
+              (do
+                (aset max-flips task new-mflips)
+                (aset chk-sums task new-chksum)
+                nil)))
+          (<span class="kwc">let</span> [flips (.countFlips this p pp)
+                new-mflips (max mflips flips)                      
+                new-chksum (+ chksum (<span class="kwc">if</span> (zero? (rem i <span class="num">2</span>)) flips (- flips)))
+                new-i (inc i)]
+            (<span class="kwc">if</span> (&lt; new-i idx-max)
+              (do
+                (.nextPermutation this p counts)
+                (<span class="kwb">recur</span> (long new-mflips) (long new-chksum) new-i))
+              (do
+                (aset max-flips task new-mflips)
+                (aset chk-sums task new-chksum)
+                nil)))))))
+  
+  (firstPermutation [_ idx p pp counts]
+    (<span class="kwc">let</span> [^longs fact fact
+          pl (alength p)]
+      (<span class="kwb">loop</span> [i <span class="num">0</span>]
+        (<span class="kwc">when</span> (&lt; i pl)
+          (aset p i i)
+          (<span class="kwb">recur</span> (inc i))))
+      (<span class="kwb">loop</span> [i (dec (alength counts))
+             idx idx]
+        (<span class="kwc">when</span> (&gt; i <span class="num">0</span>)
+          (<span class="kwc">let</span> [fact-i (aget fact i)
+                d (quot idx fact-i)]
+            (aset counts i d)
+            (System/arraycopy p <span class="num">0</span> pp <span class="num">0</span> (inc i))
+            (<span class="kwb">loop</span> [j <span class="num">0</span>]
+              (<span class="kwc">if</span> (&lt;= j i)
+                (<span class="kwc">let</span> [jd (+ j d)
+                      val (<span class="kwc">if</span> (&lt;= jd i)
+                            (aget pp jd)
+                            (aget pp (- jd i <span class="num">1</span>)))]
+                  (aset p j val)
+                  (<span class="kwb">recur</span> (inc j)))))
+            (<span class="kwb">recur</span> (dec i) (long (rem idx fact-i))))))))
+  
+  (nextPermutation [_ p counts]    
+    (<span class="kwc">let</span> [f (aget p <span class="num">1</span>)]
+      (aset p <span class="num">1</span> (aget p <span class="num">0</span>))
+      (aset p <span class="num">0</span> f)
+      (<span class="kwb">loop</span> [i <span class="num">1</span>
+             f f]
+        (<span class="kwc">let</span> [ci (inc (aget counts i))]
+          (aset counts i ci)
+          (<span class="kwc">when</span> (&gt; ci i)
+            (aset counts i <span class="num">0</span>)
+            (<span class="kwc">let</span> [new-i (inc i)                
+                  next (aget p <span class="num">1</span>)]
+              (aset p <span class="num">0</span> next)
+              (<span class="kwb">loop</span> [j <span class="num">1</span>]
+                (<span class="kwc">when</span> (&lt; j new-i)
+                  (<span class="kwc">let</span> [j+<span class="num">1</span> (inc j)]
+                    (aset p j (aget p j+<span class="num">1</span>))
+                    (<span class="kwb">recur</span> j+<span class="num">1</span>))))
+              (aset p new-i f)
+              (<span class="kwb">recur</span> new-i next)))))))
+  
+  (countFlips [_ p pp]
+    (<span class="kwc">let</span> [flips <span class="num">1</span>
+          f (aget p <span class="num">0</span>)]
+      (<span class="kwc">if</span> (zero? (aget p f))
+        <span class="num">1</span>
+        (do
+          (System/arraycopy p <span class="num">0</span> pp <span class="num">0</span> (alength pp))
+          (<span class="kwb">loop</span> [f f
+                 flips flips]
+            (<span class="kwc">let</span> [new-flips (inc flips)]
+              (<span class="kwb">loop</span> [lo <span class="num">1</span>
+                     hi (dec f)]
+                (<span class="kwc">when</span> (&lt; lo hi)
+                  (<span class="kwc">let</span> [t (aget pp lo)]
+                    (aset pp lo (aget pp hi))
+                    (aset pp hi t)
+                    (<span class="kwb">recur</span> (inc lo) (dec hi)))))
+              (<span class="kwc">let</span> [t (aget pp f)]
+                (aset pp f f)
+                (<span class="kwc">if</span> (zero? (aget pp t))
+                  new-flips
+                  (<span class="kwb">recur</span> t new-flips))))))))))
+
+(<span class="kwa">defn</span> print-result [n res chk]
+  (printf <span class="str">&quot;%d</span><span class="esc">\n</span><span class="str">Pfannkuchen(%d) = %d</span><span class="esc">\n</span><span class="str">&quot;</span> chk n res))
+
+(<span class="kwa">defn</span> fannkuch [^long n]
+  (<span class="kwc">let</span> [fact (long-array (<span class="kwd">concat</span> [<span class="num">1</span>] (reductions * (<span class="kwd">range</span> <span class="num">1</span> (inc n)))))
+        chunksz (quot (+ (aget fact n) NCHUNKS -<span class="num">1</span>) NCHUNKS)
+        ntasks (quot (+ (aget fact n) chunksz -<span class="num">1</span>) chunksz)
+        max-flips (long-array ntasks)
+        chk-sums (long-array ntasks)
+        nthreads (.availableProcessors (Runtime/getRuntime))
+        tasks (repeatedly nthreads #(-&gt;FannTask fact chunksz ntasks max-flips chk-sums))
+        threads (into-array Thread (doall (<span class="kwd">map</span> #(Thread. (<span class="kwa">fn</span> [] (.taskLoop ^Task % n))) tasks)))]
+    
+    (<span class="kwb">doseq</span> [^Thread t threads]
+      (.start t))
+
+    (<span class="kwb">doseq</span> [^Thread t threads]
+      (.join t))
+
+    (print-result n (apply max max-flips) (reduce + chk-sums))))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [n (<span class="kwc">if</span> (seq args) (Long/parseLong (<span class="kwd">first</span> args)) <span class="num">12</span>)]
+    (cond (&lt; n <span class="num">0</span>) (print-result n -<span class="num">1</span> -<span class="num">1</span>)
+          (&gt; n <span class="num">12</span>) (print-result n -<span class="num">1</span> -<span class="num">1</span>)
+          (&lt;= n <span class="num">1</span>) (print-result n <span class="num">0 0</span>)
+          :else (fannkuch n)))
+  (flush)
+  (. System (exit <span class="num">0</span>)))

@@ -1,0 +1,58 @@
+
+Mon, 30 Nov 2015 00:10:46 GMT
+
+MAKE:
+mv fannkuchredux.fpascal fannkuchredux.pas
+/usr/local/src/fpc-3.0.0.i386-linux/bin/fpc -FuInclude/fpascal -XXs -Oppentiumm -Cppentiumm -O3 -Cfsse2  -oFPASCAL_RUN fannkuchredux.pas
+Free Pascal Compiler version 3.0.0 [2015/11/24] for i386
+Copyright (c) 1993-2015 by Florian Klaempfl and others
+Target OS: Linux for i386
+Compiling fannkuchredux.pas
+fannkuchredux.pas(99,14) Warning: Local variable "list" does not seem to be initialized
+fannkuchredux.pas(173,5) Warning: Local variable "list" does not seem to be initialized
+fannkuchredux.pas(171,21) Warning: Local variable "limits" does not seem to be initialized
+fannkuchredux.pas(170,23) Warning: Local variable "counters" does not seem to be initialized
+fannkuchredux.pas(169,19) Warning: Local variable "list" does not seem to be initialized
+Linking FPASCAL_RUN
+fannkuchredux.pas(199,1) Warning: "crti.o" not found, this will probably cause a linking failure
+fannkuchredux.pas(199,1) Warning: "crtn.o" not found, this will probably cause a linking failure
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/usr/bin/ld: warning: link.res contains output sections; did you forget -T?
+200 lines compiled, 0.3 sec
+7 warning(s) issued
+mv FPASCAL_RUN fannkuchredux.fpascal_run
+rm fannkuchredux.pas
+0.32s to complete and log all make actions
+
+COMMAND LINE:
+./fannkuchredux.fpascal_run 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

@@ -1,0 +1,131 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Contributed by Eric Willigers</span>
+<span class="com">   Port of Java implementation by Michael Barker and Luzius Meisser</span>
+<span class="com">*/</span>
+
+<span class="kwa">object</span> Colours <span class="kwa">extends</span> Enumeration {
+   <span class="kwa">val</span> Blue = <span class="kwd">Value</span>(<span class="str">&quot;blue&quot;</span>)
+   <span class="kwa">val</span> Red = <span class="kwd">Value</span>(<span class="str">&quot;red&quot;</span>)
+   <span class="kwa">val</span> Yellow = <span class="kwd">Value</span>(<span class="str">&quot;yellow&quot;</span>)
+}
+
+<span class="kwa">import</span> Colours.{Blue, Red, Yellow, Value =&gt; Colour}
+
+<span class="kwa">final class</span> <span class="kwd">Creature</span>(place: MeetingPlace, <span class="kwa">var</span> colour: Colour) <span class="kwa">extends</span> Runnable {
+   <span class="kwa">val</span> id = System.<span class="kwd">identityHashCode</span>(<span class="kwa">this</span>)
+   <span class="kwa">var</span> sameCount = <span class="num">0</span>
+   <span class="kwa">var</span> count = <span class="num">0</span>
+
+   <span class="kwa">def</span> <span class="kwd">run</span>() = <span class="kwa">try</span> {
+      <span class="kwa">while</span> (true) {
+         <span class="kwa">val</span> p = place.<span class="kwd">meet</span>(id, colour)
+         colour = p.colour
+         <span class="kwa">if</span> (p.sameId)
+            sameCount += <span class="num">1</span>
+         count +=<span class="num">1</span>
+      }
+   } <span class="kwa">catch</span> {
+      <span class="kwa">case</span> _: Exception =&gt; ()
+   }
+
+   <span class="kwa">override def</span> toString = String.<span class="kwd">valueOf</span>(count)+<span class="str">&quot; &quot;</span>+chameneosredux.<span class="kwd">getNumber</span>(sameCount)
+}
+
+<span class="kwa">final class</span> <span class="kwd">MeetingPlace</span>(<span class="kwa">var</span> meetingsLeft: Int) {
+   <span class="kwa">var</span> firstColour: Option[Colour] = None
+   <span class="kwa">var</span> firstId = <span class="num">0</span>
+   <span class="kwa">var</span> current: Future = _
+
+   <span class="kwa">def</span> <span class="kwd">meet</span>(id: Int, c: Colour) = <span class="kwa">synchronized</span> {
+      <span class="kwa">if</span> (meetingsLeft == <span class="num">0</span>) {
+         <span class="kwa">throw new</span> <span class="kwd">Exception</span>(<span class="str">&quot;Finished&quot;</span>)
+      } <span class="kwa">else</span> {
+         <span class="kwa">if</span> (firstColour.isEmpty) {
+            firstColour = <span class="kwd">Some</span>(c)
+            firstId = id
+            current = <span class="kwa">new</span> <span class="kwd">Future</span>()
+         } <span class="kwa">else</span> {
+            current.<span class="kwd">setItem</span>(<span class="kwa">new</span> <span class="kwd">Pair</span>(id == firstId, chameneosredux.<span class="kwd">doCompliment</span>(c, firstColour.get)))
+            firstColour = None
+            meetingsLeft -= <span class="num">1</span>
+         }
+
+         current
+      }
+   }.<span class="kwd">getItem</span>()
+}
+
+<span class="kwa">final class</span> Future {
+   <span class="kwc">&#64;volatile</span> <span class="kwa">var</span> p: Pair = _
+
+   <span class="kwa">def</span> <span class="kwd">getItem</span>() = {
+      <span class="kwa">while</span> (p == null)
+         Thread.`<span class="kwa">yield</span>`()   
+      p
+   }
+
+   <span class="kwa">def</span> <span class="kwd">setItem</span>(_p: Pair) {
+      <span class="kwa">this</span>.p = _p
+   }
+}
+
+<span class="kwa">final case class</span> <span class="kwd">Pair</span>(sameId: Boolean, colour: Colour)
+
+<span class="kwa">object</span> chameneosredux {
+   <span class="kwa">def</span> <span class="kwd">doCompliment</span>(c1: Colour, c2: Colour) = (c1, c2) match {
+      <span class="kwa">case</span> (Blue, Blue) =&gt; Blue   
+      <span class="kwa">case</span> (Blue, Red) =&gt; Yellow   
+      <span class="kwa">case</span> (Blue, Yellow) =&gt; Red   
+      <span class="kwa">case</span> (Red, Blue) =&gt; Yellow
+      <span class="kwa">case</span> (Red, Red) =&gt; Red
+      <span class="kwa">case</span> (Red, Yellow) =&gt; Blue   
+      <span class="kwa">case</span> (Yellow, Blue) =&gt; Red   
+      <span class="kwa">case</span> (Yellow, Red) =&gt; Blue
+      <span class="kwa">case</span> (Yellow, Yellow) =&gt; Yellow
+   }
+
+   <span class="kwa">def</span> <span class="kwd">run</span>(n: Int, colours: Colour*) {
+      <span class="kwa">val</span> place = <span class="kwa">new</span> <span class="kwd">MeetingPlace</span>(n)
+      colours.foreach { c =&gt; <span class="kwd">print</span>(<span class="str">&quot; &quot;</span>+c) }
+      <span class="kwa">val</span> creatures = colours.map { <span class="kwa">new</span> <span class="kwd">Creature</span>(place, _) }.toArray
+      <span class="kwd">println</span>()
+      <span class="kwa">val</span> ts = creatures.map { <span class="kwa">new</span> <span class="kwd">Thread</span>(_) }
+      ts.foreach { _.<span class="kwd">start</span>() }
+      ts.foreach { _.<span class="kwd">join</span>() }
+      creatures.foreach { <span class="kwd">println</span>(_) }
+      <span class="kwd">println</span>(<span class="kwd">getNumber</span>(creatures.<span class="kwd">foldLeft</span>(<span class="num">0</span>){_ + _.count}))
+      <span class="kwd">println</span>()
+   }
+
+   <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) {
+      <span class="kwa">val</span> n = <span class="kwa">if</span> (args.isEmpty) <span class="num">600</span> <span class="kwa">else</span> Integer.<span class="kwd">parseInt</span>(<span class="kwd">args</span>(<span class="num">0</span>))
+      <span class="kwd">printColours</span>()
+      <span class="kwd">println</span>()
+      <span class="kwd">run</span>(n, Blue, Red, Yellow)
+      <span class="kwd">run</span>(n, Blue, Red, Yellow, Red, Yellow,
+            Blue, Red, Yellow, Red, Blue)
+   }
+
+   <span class="kwa">val</span> Numbers = Array[String](<span class="str">&quot;zero&quot;</span>, <span class="str">&quot;one&quot;</span>, <span class="str">&quot;two&quot;</span>, <span class="str">&quot;three&quot;</span>, <span class="str">&quot;four&quot;</span>, <span class="str">&quot;five&quot;</span>, <span class="str">&quot;six&quot;</span>, <span class="str">&quot;seven&quot;</span>, <span class="str">&quot;eight&quot;</span>, <span class="str">&quot;nine&quot;</span>)
+
+   <span class="kwa">def</span> <span class="kwd">getNumber</span>(n: Int) = String.<span class="kwd">valueOf</span>(n).toList.map { ch =&gt; <span class="kwd">Numbers</span>(Character.<span class="kwd">getNumericValue</span>(ch)) } .<span class="kwd">mkString</span>(<span class="str">&quot; &quot;</span>)
+
+   <span class="kwa">def</span> <span class="kwd">printColours</span>() {
+      <span class="kwd">printColours</span>(Blue, Blue)
+      <span class="kwd">printColours</span>(Blue, Red)
+      <span class="kwd">printColours</span>(Blue, Yellow)
+      <span class="kwd">printColours</span>(Red, Blue)   
+      <span class="kwd">printColours</span>(Red, Red)
+      <span class="kwd">printColours</span>(Red, Yellow)
+      <span class="kwd">printColours</span>(Yellow, Blue)
+      <span class="kwd">printColours</span>(Yellow, Red)
+      <span class="kwd">printColours</span>(Yellow, Yellow)
+   }
+
+   <span class="kwa">def</span> <span class="kwd">printColours</span>(c1: Colour, c2: Colour) {
+      <span class="kwd">println</span>(c1+<span class="str">&quot; + &quot;</span>+c2+<span class="str">&quot; -&gt; &quot;</span>+<span class="kwd">doCompliment</span>(c1, c2))   
+   }
+}
+

@@ -1,0 +1,157 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * byte processing version using C# *3.0 idioms by Robert F. Tobler</span>
+<span class="com"> */</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.IO;
+<span class="kwa">using</span> System.Collections.Generic;
+<span class="kwa">using</span> System.Text;
+
+<span class="kwa">public</span> <span class="kwb">struct</span> ByteString : IEquatable&lt;ByteString&gt;
+{
+    <span class="kwa">public</span> <span class="kwb">byte</span>[] Array;
+    <span class="kwa">public</span> <span class="kwb">int</span> Start;
+    <span class="kwa">public</span> <span class="kwb">int</span> Length;
+
+    <span class="kwa">public</span> <span class="kwd">ByteString</span>(<span class="kwb">byte</span>[] array, <span class="kwb">int</span> start, <span class="kwb">int</span> length)
+    {
+        Array = array; Start = start; Length = length;
+    }
+    
+    <span class="kwa">public</span> <span class="kwd">ByteString</span>(<span class="kwb">string</span> text)
+    {
+        Start = <span class="num">0</span>; Length = text.Length;
+        Array = Encoding.ASCII.<span class="kwd">GetBytes</span>(text);
+    }
+    
+    <span class="kwa">public override</span> <span class="kwb">int</span> <span class="kwd">GetHashCode</span>()
+    {
+        <span class="kwa">if</span> (Length &lt; <span class="num">1</span>) <span class="kwa">return</span> <span class="num">0</span>;
+        <span class="kwb">int</span> hc = Length ^ (Array[Start] &lt;&lt; <span class="num">24</span>); <span class="kwa">if</span> (Length &lt; <span class="num">2</span>) <span class="kwa">return</span> hc;
+        hc ^= Array[Start+Length-<span class="num">1</span>] &lt;&lt; <span class="num">20</span>;      <span class="kwa">if</span> (Length &lt; <span class="num">3</span>) <span class="kwa">return</span> hc;
+        <span class="kwa">for</span> (<span class="kwb">int</span> c = Length-<span class="num">2</span>; c &gt; <span class="num">0</span>; c--)
+            hc ^= Array[Start + c] &lt;&lt; (c &amp; <span class="num">0xf</span>);
+        <span class="kwa">return</span> hc;
+    }
+
+    <span class="kwa">public</span> <span class="kwb">bool</span> <span class="kwd">Equals</span>(ByteString other)
+    {
+        <span class="kwa">if</span> (Length != other.Length) <span class="kwa">return false</span>;
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; Length; i++)
+            <span class="kwa">if</span> (Array[Start+i] != other.Array[other.Start+i]) <span class="kwa">return false</span>;
+        <span class="kwa">return true</span>;
+    }
+    
+    <span class="kwa">public override</span> <span class="kwb">string</span> <span class="kwd">ToString</span>()
+    {
+        <span class="kwa">return</span> Encoding.ASCII.<span class="kwd">GetString</span>(Array, Start, Length);
+    }
+}
+
+<span class="kwa">public static class</span> Extensions
+{
+    <span class="kwa">public static</span> <span class="kwb">byte</span>[] <span class="kwd">GetBytes</span>(<span class="kwa">this</span> List&lt;<span class="kwb">string</span>&gt; input)
+    {
+        <span class="kwb">int</span> count = <span class="num">0</span>;
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; input.Count; i++) count += input[i].Length;        
+        var byteArray = <span class="kwa">new</span> <span class="kwb">byte</span>[count];
+        count = <span class="num">0</span>;
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; input.Count; i++)
+        {
+            <span class="kwb">string</span> line = input[i];
+            Encoding.ASCII.<span class="kwd">GetBytes</span>(line, <span class="num">0</span>, line.Length, byteArray, count);
+            count += line.Length;
+        }
+        <span class="kwa">return</span> byteArray;
+    }
+}
+
+<span class="kwa">public class</span> program {
+
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(<span class="kwb">string</span>[] args) {
+        <span class="kwb">string</span> line;
+        StreamReader source = <span class="kwa">new</span> <span class="kwd">StreamReader</span>(Console.<span class="kwd">OpenStandardInput</span>());
+        var input = <span class="kwa">new</span> List&lt;<span class="kwb">string</span>&gt;();
+    
+        <span class="kwa">while</span> ( (line = source.<span class="kwd">ReadLine</span>() ) != <span class="kwa">null</span> )
+            <span class="kwa">if</span> (line[<span class="num">0</span>] == <span class="str">'&gt;'</span> &amp;&amp; line.<span class="kwd">Substring</span>(<span class="num">1</span>, <span class="num">5</span>) == <span class="str">&quot;THREE&quot;</span>)
+                <span class="kwa">break</span>;
+    
+        <span class="kwa">while</span> ( (line = source.<span class="kwd">ReadLine</span>()) != <span class="kwa">null</span> ) {
+            <span class="kwb">char</span> c = line[<span class="num">0</span>];
+            <span class="kwa">if</span> (c == <span class="str">'&gt;'</span>) <span class="kwa">break</span>;
+            <span class="kwa">if</span> (c != <span class="str">';'</span>) input.<span class="kwd">Add</span>(line.<span class="kwd">ToUpper</span>());
+        }
+    
+        KNucleotide kn = <span class="kwa">new</span> <span class="kwd">KNucleotide</span>(input.<span class="kwd">GetBytes</span>());
+        input = <span class="kwa">null</span>;
+        <span class="kwa">for</span> (<span class="kwb">int</span> f = <span class="num">1</span>; f &lt; <span class="num">3</span>; f++) kn.<span class="kwd">WriteFrequencies</span>(f);
+        <span class="kwa">foreach</span> (var seq <span class="kwa">in</span>
+                 <span class="kwa">new</span>[] { <span class="str">&quot;GGT&quot;</span>, <span class="str">&quot;GGTA&quot;</span>, <span class="str">&quot;GGTATT&quot;</span>, <span class="str">&quot;GGTATTTTAATT&quot;</span>,
+                         <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>})
+            kn.<span class="kwd">WriteCount</span>(seq);
+
+    }
+}
+
+<span class="kwa">public class</span> KNucleotide {
+
+    <span class="kwa">private class</span> Count {
+	   <span class="kwa">public</span> <span class="kwb">int</span> V;
+	   <span class="kwa">public</span> <span class="kwd">Count</span>(<span class="kwb">int</span> v) { V = v; }
+    }
+
+    <span class="kwa">private</span> Dictionary&lt;ByteString, Count&gt; frequencies
+        = <span class="kwa">new</span> Dictionary&lt;ByteString, Count&gt;();
+    <span class="kwa">private</span> <span class="kwb">byte</span>[] sequence;
+
+    <span class="kwa">public</span> <span class="kwd">KNucleotide</span>(<span class="kwb">byte</span>[] s) { sequence = s; }
+
+    <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">WriteFrequencies</span>(<span class="kwb">int</span> length) {
+        <span class="kwd">GenerateFrequencies</span>(length);
+        var items = <span class="kwa">new</span> List&lt;KeyValuePair&lt;ByteString, Count&gt;&gt;(frequencies);
+        items.<span class="kwd">Sort</span>(SortByFrequencyAndCode);    
+        <span class="kwb">double</span> percent = <span class="num">100.0</span> / (sequence.Length - length + <span class="num">1</span>);
+        <span class="kwa">foreach</span> (var item <span class="kwa">in</span> items)
+            Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="ipl">{0}</span> <span class="str">{1:f3}&quot;</span>,
+                        item.Key.<span class="kwd">ToString</span>(), item.Value.V * percent);
+        Console.<span class="kwd">WriteLine</span>();
+    }
+
+    <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">WriteCount</span>(<span class="kwb">string</span> fragment) {
+        <span class="kwd">GenerateFrequencies</span>(fragment.Length);
+        Count count;
+        <span class="kwa">if</span> (!frequencies.<span class="kwd">TryGetValue</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(fragment), out count))
+            count = <span class="kwa">new</span> <span class="kwd">Count</span>(<span class="num">0</span>);
+        Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="ipl">{0}</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">{1}</span><span class="str">&quot;</span>, count.V, fragment);
+    }
+
+    <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">GenerateFrequencies</span>(<span class="kwb">int</span> length) {
+        frequencies.<span class="kwd">Clear</span>();
+        <span class="kwa">for</span> (<span class="kwb">int</span> frame = <span class="num">0</span>; frame &lt; length; frame++)
+            <span class="kwd">KFrequency</span>(frame, length);
+    }
+
+    <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">KFrequency</span>(<span class="kwb">int</span> frame, <span class="kwb">int</span> k) {
+        <span class="kwb">int</span> n = sequence.Length - k + <span class="num">1</span>;
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = frame; i &lt; n; i += k) {
+            var key = <span class="kwa">new</span> <span class="kwd">ByteString</span>(sequence, i, k);
+            Count count;
+            <span class="kwa">if</span> (frequencies.<span class="kwd">TryGetValue</span>(key, out count))
+                count.V++;
+            <span class="kwa">else</span>
+                frequencies[key] = <span class="kwa">new</span> <span class="kwd">Count</span>(<span class="num">1</span>);
+        }
+    }
+
+    <span class="kwb">int</span> <span class="kwd">SortByFrequencyAndCode</span>(
+            KeyValuePair&lt;ByteString, Count&gt; i0,
+            KeyValuePair&lt;ByteString, Count&gt; i1) {
+        <span class="kwb">int</span> order = i1.Value.V.<span class="kwd">CompareTo</span>(i0.Value.V);
+        <span class="kwa">if</span> (order != <span class="num">0</span>) <span class="kwa">return</span> order;
+        <span class="kwa">return</span> i0.Key.<span class="kwd">ToString</span>().<span class="kwd">CompareTo</span>(i1.Key.<span class="kwd">ToString</span>());
+    }
+}

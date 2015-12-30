@@ -1,0 +1,67 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Isaac Gouy</span>
+<span class="com">   parallel by the Anh Team</span>
+<span class="com">   Scala Futures version by Robert Wilton</span>
+<span class="com">*/</span>
+<span class="kwa">import</span> scala.concurrent._
+<span class="kwa">import</span> scala.concurrent.duration._
+<span class="kwa">import</span> ExecutionContext.Implicits.global
+
+<span class="kwa">object</span> spectralnorm <span class="kwa">extends</span> App {
+  <span class="kwa">val</span> n = <span class="kwa">if</span> (args.length &gt; <span class="num">0</span>) <span class="kwd">args</span>(<span class="num">0</span>).toInt <span class="kwa">else</span> <span class="num">100</span>
+  <span class="kwa">val</span> u, v, tmp = Array.<span class="kwd">fill</span>(n)(<span class="num">1.0</span>)
+  
+  <span class="slc">// Ordinary and transposed versions of infinite matrix</span>
+  <span class="kwa">val</span> A = (i: Int, j: Int) =&gt; <span class="num">1.0</span>/((i + j) * (i + j + <span class="num">1</span>) / <span class="num">2</span> + i + <span class="num">1</span>)
+  <span class="kwa">val</span> multiplyAv = <span class="kwd">multiply</span>(A) _
+  <span class="kwa">val</span> At = (j: Int, i: Int) =&gt; <span class="num">1.0</span>/((i + j) * (i + j + <span class="num">1</span>) / <span class="num">2</span> + i + <span class="num">1</span>)
+  <span class="kwa">val</span> multiplyAtv = <span class="kwd">multiply</span>(At) _
+  
+  <span class="slc">// Calculate the chunks and perform calculation.</span>
+  <span class="kwa">val</span> threads = Runtime.getRuntime.availableProcessors
+  <span class="kwa">val</span> chunkSize = <span class="num">1</span> + n/threads
+  <span class="kwa">def</span> <span class="kwd">chunkStart</span>(t: Int) = t * chunkSize
+  <span class="kwa">def</span> <span class="kwd">chunkEnd</span>(t: Int) = ((t + <span class="num">1</span>) * chunkSize) min n
+  <span class="kwa">val</span> chunks = (<span class="num">0</span> until threads) map { t =&gt; (<span class="kwd">chunkStart</span>(t), <span class="kwd">chunkEnd</span>(t)) }
+  <span class="kwd">printf</span>(<span class="str">&quot;%.09f</span><span class="esc">\n</span><span class="str">&quot;</span>,  <span class="kwd">work</span>(chunks))
+  
+  <span class="slc">// Matrix multiplication for a given range: w &lt;- M*v</span>
+  <span class="kwa">def</span> <span class="kwd">multiply</span>(M: (Int,Int) =&gt; Double)
+              (v: Array[Double], w: Array[Double])(start: Int, end: Int) {
+    <span class="kwa">var</span> i = start
+    <span class="kwa">while</span> (i &lt; end) {
+     <span class="kwa">var</span> s = <span class="num">0.0</span>
+     <span class="kwa">var</span> j = <span class="num">0</span>
+     <span class="kwa">while</span> (j &lt; n) { s += <span class="kwd">M</span>(i,j)*<span class="kwd">v</span>(j); j += <span class="num">1</span> }
+     <span class="kwd">w</span>(i) =  s
+     i += <span class="num">1</span>
+    }
+  }
+  
+  <span class="kwa">def</span> <span class="kwd">work</span>(chunks: Seq[(Int, Int)]) = {
+    <span class="kwa">def</span> <span class="kwd">split</span>(f: (Int, Int) =&gt; Unit) = {
+      <span class="kwa">val</span> res = Future.<span class="kwd">sequence</span>(
+        chunks map { <span class="kwa">case</span> (start, end) =&gt; Future { <span class="kwd">f</span>(start, end) } } 
+      )
+      Await.<span class="kwd">result</span>(res, <span class="num">1</span>.minute)
+    }
+    
+    <span class="kwa">for</span> (_ &lt;- <span class="num">1</span> to <span class="num">10</span>) {
+      <span class="slc">// Multiply by matrix &amp; transpose</span>
+      <span class="kwd">split</span>(<span class="kwd">multiplyAv</span>(u, tmp))
+      <span class="kwd">split</span>(<span class="kwd">multiplyAtv</span>(tmp, v))
+      <span class="kwd">split</span>(<span class="kwd">multiplyAv</span>(v, tmp))
+      <span class="kwd">split</span>(<span class="kwd">multiplyAtv</span>(tmp, u))
+    }
+
+    <span class="kwa">var</span> vbv,vv = <span class="num">0.0</span>
+    <span class="kwa">var</span> i = <span class="num">0</span>
+    <span class="kwa">while</span> (i &lt; n) {
+      vbv += <span class="kwd">u</span>(i)*<span class="kwd">v</span>(i)
+      vv += <span class="kwd">v</span>(i)*<span class="kwd">v</span>(i)
+      i += <span class="num">1</span>
+    }
+    math.<span class="kwd">sqrt</span>(vbv/vv)
+  }
+}

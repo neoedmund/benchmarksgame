@@ -1,0 +1,177 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * </span>
+<span class="com"> *  contributed by Petr Prokhorenkov</span>
+<span class="com"> */</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+
+<span class="ppc">#define ARRAY_SIZE(a) (sizeof(a)/sizeof(a[0]))</span>
+<span class="ppc">#define unlikely(x) __builtin_expect((x), 0)</span>
+
+<span class="ppc">#define IM 139968</span>
+<span class="ppc">#define IA 3877</span>
+<span class="ppc">#define IC 29573</span>
+
+<span class="ppc">#define LINE_LEN 60</span>
+<span class="ppc">#define LOOKUP_SIZE 4096</span>
+<span class="ppc">#define LOOKUP_SCALE ((float)(LOOKUP_SIZE - 1))</span>
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned</span> random_t;
+
+<span class="kwb">void</span>
+<span class="kwd">random_init</span>(random_t *random) {
+    *random = <span class="num">42</span>;
+}
+
+<span class="slc">// Special version with result rescaled to LOOKUP_SCALE.</span>
+<span class="kwb">static</span> <span class="kwc">inline</span>
+<span class="kwb">float</span>
+<span class="kwd">random_next_lookup</span>(random_t *random) {
+    *random = (*random*IA + IC)%IM;
+
+    <span class="kwa">return</span> (*random)*(LOOKUP_SCALE/IM);
+}
+
+<span class="kwb">struct</span> amino_acid {
+   <span class="kwb">char</span> sym;
+   <span class="kwb">float</span> prob;
+   <span class="kwb">float</span> cprob_lookup;
+};
+
+<span class="kwb">void</span>
+<span class="kwd">repeat</span>(<span class="kwb">const char</span> *alu, <span class="kwb">const char</span> *title, <span class="kwb">int</span> n) {
+    <span class="kwb">int</span> len = <span class="kwd">strlen</span>(alu);
+    <span class="kwb">char</span> buffer[len + LINE_LEN];
+    <span class="kwb">int</span> pos = <span class="num">0</span>;
+
+    <span class="kwd">memcpy</span>(buffer, alu, len);
+    <span class="kwd">memcpy</span>(buffer + len, alu, LINE_LEN);
+
+    <span class="kwd">fputs_unlocked</span>(title, stdout);
+    <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+        <span class="kwb">int</span> bytes = n &gt; LINE_LEN ? LINE_LEN : n;
+
+        <span class="kwd">fwrite_unlocked</span>(buffer + pos, bytes, <span class="num">1</span>, stdout);
+        pos += bytes;
+        <span class="kwa">if</span> (pos &gt; len) {
+            pos -= len;
+        }
+        <span class="kwd">fputc_unlocked</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>, stdout);
+        n -= bytes;
+    }
+}
+
+<span class="com">/*</span>
+<span class="com"> * Lookup table contains mapping from real values to cumulative</span>
+<span class="com"> * probabilities. Careful selection of table size allows lookup</span>
+<span class="com"> * virtually in constant time.</span>
+<span class="com"> *</span>
+<span class="com"> * All cumulative probabilities are rescaled to LOOKUP_SCALE,</span>
+<span class="com"> * this allows to save one multiplication operation on each iteration</span>
+<span class="com"> * in randomize().</span>
+<span class="com"> */</span>
+
+<span class="kwb">void</span> *
+<span class="kwd">fill_lookup</span>(<span class="kwb">struct</span> amino_acid **lookup, <span class="kwb">struct</span> amino_acid *amino_acid, <span class="kwb">int</span> amino_acid_size) {
+    <span class="kwb">float</span> p = <span class="num">0</span>;
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; amino_acid_size; i++) {
+        p += amino_acid[i].prob;
+        amino_acid[i].cprob_lookup = p*LOOKUP_SCALE;
+    }
+
+    <span class="slc">// Prevent rounding error.</span>
+    amino_acid[amino_acid_size - <span class="num">1</span>].cprob_lookup = LOOKUP_SIZE - <span class="num">1</span>;
+
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>, j = <span class="num">0</span>; i &lt; LOOKUP_SIZE; i++) {
+        <span class="kwa">while</span> (amino_acid[j].cprob_lookup &lt; i) {
+            j++;
+        }
+        lookup[i] = &amp;amino_acid[j];
+    }
+
+    <span class="kwa">return</span> <span class="num">0</span>;
+}
+
+<span class="kwb">void</span>
+<span class="kwd">randomize</span>(<span class="kwb">struct</span> amino_acid *amino_acid, <span class="kwb">int</span> amino_acid_size,
+        <span class="kwb">const char</span> *title, <span class="kwb">int</span> n, random_t *rand) {
+    <span class="kwb">struct</span> amino_acid *lookup[LOOKUP_SIZE];
+    <span class="kwb">char</span> line_buffer[LINE_LEN + <span class="num">1</span>];
+    <span class="kwb">int</span> i, j;
+
+    line_buffer[LINE_LEN] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+
+    <span class="kwd">fill_lookup</span>(lookup, amino_acid, amino_acid_size);
+
+    <span class="kwd">fputs_unlocked</span>(title, stdout);
+
+    <span class="kwa">for</span> (i = <span class="num">0</span>, j = <span class="num">0</span>; i &lt; n; i++, j++) {
+        <span class="kwa">if</span> (j == LINE_LEN) {
+            <span class="kwd">fwrite_unlocked</span>(line_buffer, LINE_LEN + <span class="num">1</span>, <span class="num">1</span>, stdout);
+            j = <span class="num">0</span>;
+        }
+
+        <span class="kwb">float</span> r = <span class="kwd">random_next_lookup</span>(rand);
+        <span class="kwb">struct</span> amino_acid *u = lookup[(<span class="kwb">short</span>)r];
+        <span class="kwa">while</span> (<span class="kwd">unlikely</span>(u-&gt;cprob_lookup &lt; r)) {
+            ++u;
+        }
+        line_buffer[j] = u-&gt;sym;
+    }
+    line_buffer[j] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+    <span class="kwd">fwrite_unlocked</span>(line_buffer, j + <span class="num">1</span>, <span class="num">1</span>, stdout);
+}
+
+<span class="kwb">struct</span> amino_acid amino_acid[] = {
+   { <span class="str">'a'</span>, <span class="num">0.27</span> },
+   { <span class="str">'c'</span>, <span class="num">0.12</span> },
+   { <span class="str">'g'</span>, <span class="num">0.12</span> },
+   { <span class="str">'t'</span>, <span class="num">0.27</span> },
+
+   { <span class="str">'B'</span>, <span class="num">0.02</span> },
+   { <span class="str">'D'</span>, <span class="num">0.02</span> },
+   { <span class="str">'H'</span>, <span class="num">0.02</span> },
+   { <span class="str">'K'</span>, <span class="num">0.02</span> },
+   { <span class="str">'M'</span>, <span class="num">0.02</span> },
+   { <span class="str">'N'</span>, <span class="num">0.02</span> },
+   { <span class="str">'R'</span>, <span class="num">0.02</span> },
+   { <span class="str">'S'</span>, <span class="num">0.02</span> },
+   { <span class="str">'V'</span>, <span class="num">0.02</span> },
+   { <span class="str">'W'</span>, <span class="num">0.02</span> },
+   { <span class="str">'Y'</span>, <span class="num">0.02</span> },
+};
+
+<span class="kwb">struct</span> amino_acid homo_sapiens[] = {
+   { <span class="str">'a'</span>, <span class="num">0.3029549426680</span> },
+   { <span class="str">'c'</span>, <span class="num">0.1979883004921</span> },
+   { <span class="str">'g'</span>, <span class="num">0.1975473066391</span> },
+   { <span class="str">'t'</span>, <span class="num">0.3015094502008</span> },
+};
+
+<span class="kwb">static const char</span> alu[] =
+   <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTG&quot;</span>
+   <span class="str">&quot;GGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGA&quot;</span>
+   <span class="str">&quot;GACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAA&quot;</span>
+   <span class="str">&quot;AATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAAT&quot;</span>
+   <span class="str">&quot;CCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAAC&quot;</span>
+   <span class="str">&quot;CCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTG&quot;</span>
+   <span class="str">&quot;CACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+<span class="kwb">int</span>
+<span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">const char</span> **argv) {
+    <span class="kwb">int</span> n = argc &gt; <span class="num">1</span> ? <span class="kwd">atoi</span>( argv[<span class="num">1</span>] ) : <span class="num">512</span>;
+    random_t rand;
+
+    <span class="kwd">random_init</span>(&amp;rand);
+
+    <span class="kwd">repeat</span>(alu, <span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>, n*<span class="num">2</span>);
+    <span class="kwd">randomize</span>(amino_acid, <span class="kwd">ARRAY_SIZE</span>(amino_acid),
+            <span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>, n*<span class="num">3</span>, &amp;rand);
+    <span class="kwd">randomize</span>(homo_sapiens, <span class="kwd">ARRAY_SIZE</span>(homo_sapiens),
+            <span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>, n*<span class="num">5</span>, &amp;rand);
+
+    <span class="kwa">return</span> <span class="num">0</span>;
+}

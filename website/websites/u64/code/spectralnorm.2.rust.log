@@ -1,0 +1,12 @@
+
+Mon, 21 Sep 2015 01:32:25 GMT
+
+MAKE:
+/usr/local/src/rust-1.3.0-x86_64-unknown-linux-gnu/rustc/bin/rustc -C opt-level=3 -C target-cpu=core2  spectralnorm.rs -o spectralnorm.rust-2.rust_run
+2.27s to complete and log all make actions
+
+COMMAND LINE:
+./spectralnorm.rust-2.rust_run 5500
+
+PROGRAM OUTPUT:
+1.274224153

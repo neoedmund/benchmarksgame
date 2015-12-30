@@ -1,0 +1,137 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">#   contributed by Michael Barker</span>
+<span class="slc">#   based on a Java contribution by Luzius Meisser</span>
+<span class="slc">#   converted to C by dualamd</span>
+<span class="slc">#   converted to Ruby by Eugene Pimenov</span>
+
+<span class="kwa">require</span> <span class="str">'thread'</span>
+
+COLORS     = [<span class="kwc">:blue</span>, <span class="kwc">:red</span>, <span class="kwc">:yellow</span>, <span class="kwc">:invalid</span>].freeze
+COMPLIMENT = {
+  <span class="kwc">:blue</span> =&gt; {:blue =&gt; :blue, :red =&gt; :yellow, :yellow =&gt; :red}.freeze,
+  <span class="kwc">:red</span> =&gt; {:blue =&gt; :yellow, :red =&gt; :red, :yellow =&gt; :blue}.freeze,
+  <span class="kwc">:yellow</span> =&gt; {:blue =&gt; :red, :red =&gt; :blue, :yellow =&gt; :yellow}.freeze
+}.freeze
+
+<span class="kwb">$creature_id</span> = <span class="num">0</span>
+
+NUMBERS = %w{zero one two three four five six seven eight nine}.freeze
+
+<span class="slc"># convert integer to number string: 1234 -&gt; &quot;one two three four&quot;</span>
+<span class="kwa">def</span> <span class="kwd">format_number</span>(num<span class="opt">)</span>
+  out = []
+  <span class="kwa">begin</span>
+    out &lt;&lt; NUMBERS[num%<span class="num">10</span>]
+    num /= <span class="num">10</span>
+  <span class="kwa">end while</span> num &gt; <span class="num">0</span>
+  out.reverse.<span class="kwd">join</span>(<span class="str">&quot; &quot;</span><span class="opt">)</span>
+<span class="kwa">end</span>
+
+<span class="kwa">class</span> MeetingPlace
+  attr_reader <span class="kwc">:mutex</span>
+  attr_accessor <span class="kwc">:meetings_left</span>, <span class="kwc">:first_creature</span>
+
+  <span class="kwa">def</span> <span class="kwd">initialize</span>(meetings<span class="opt">)</span>
+    <span class="kwb">&#64;mutex</span> = Mutex.new
+    <span class="kwb">&#64;meetings_left</span> = meetings
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">class</span> Creature
+  attr_accessor <span class="kwc">:place</span>, <span class="kwc">:thread</span>, <span class="kwc">:count</span>, <span class="kwc">:same_count</span>, <span class="kwc">:color</span>, <span class="kwc">:id</span>, <span class="kwc">:two_met</span>, <span class="kwc">:sameid</span>
+
+  <span class="kwa">def</span> <span class="kwd">initialize</span>(place, color<span class="opt">)</span>
+    <span class="kwb">&#64;place</span> = place
+    <span class="kwb">&#64;count</span> = <span class="kwb">&#64;same_count</span> = <span class="num">0</span>
+
+    <span class="kwb">&#64;id</span> = (<span class="kwb">$creature_id</span> += <span class="num">1</span><span class="opt">)</span>
+    <span class="kwb">&#64;color</span> = color
+    <span class="kwb">&#64;two_met</span> = <span class="kwc">FALSE</span>
+
+    <span class="kwb">&#64;thread</span> = Thread.new <span class="kwa">do</span>
+      <span class="kwa">loop do</span>
+        <span class="kwa">if</span> meet
+          Thread.pass <span class="kwa">while</span> <span class="kwb">&#64;two_met</span> == <span class="kwa">false</span>
+
+          <span class="kwb">&#64;same_count</span> += <span class="num">1</span> <span class="kwa">if</span> <span class="kwb">&#64;sameid</span>
+          <span class="kwb">&#64;count</span> += <span class="num">1</span>
+        <span class="kwa">else</span>
+          <span class="kwa">break</span>
+        <span class="kwa">end</span>
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> meet
+    <span class="kwb">&#64;place</span>.mutex.lock
+
+    <span class="kwa">if</span> <span class="kwb">&#64;place</span>.meetings_left &gt; <span class="num">0</span>
+      <span class="kwa">if</span> <span class="kwb">&#64;place</span>.first_creature
+        first = <span class="kwb">&#64;place</span>.first_creature
+        new_color = COMPLIMENT[<span class="kwb">&#64;color</span>][first.color]
+
+        <span class="kwb">&#64;sameid</span>  = first.sameid  = <span class="kwb">&#64;id</span> == first.id
+        <span class="kwb">&#64;color</span>   = first.color   = new_color
+        <span class="kwb">&#64;two_met</span> = first.two_met = <span class="kwa">true</span>
+
+        <span class="kwb">&#64;place</span>.first_creature = <span class="kwa">nil</span>
+        <span class="kwb">&#64;place</span>.meetings_left -= <span class="num">1</span>
+      <span class="kwa">else</span>
+        <span class="kwb">&#64;two_met</span> = <span class="kwa">false</span>
+        <span class="kwb">&#64;place</span>.first_creature = <span class="kwa">self</span>
+      <span class="kwa">end</span>
+      <span class="kwa">true</span>
+    <span class="kwa">else</span>
+      <span class="kwa">false</span>
+    <span class="kwa">end</span>
+  <span class="kwa">ensure</span>
+    <span class="kwb">&#64;place</span>.mutex.unlock
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> result
+    <span class="str">''</span> &lt;&lt; <span class="kwb">&#64;count</span>.to_s &lt;&lt; <span class="str">' '</span> &lt;&lt; <span class="kwd">format_number</span>(<span class="kwb">&#64;same_count</span><span class="opt">)</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">run_game</span>(n_meeting, colors<span class="opt">)</span>
+  place = MeetingPlace.<span class="kwd">new</span>(n_meeting<span class="opt">)</span>
+
+  creatures = []
+  colors.each <span class="kwa">do</span> |color|
+    print color, <span class="str">&quot; &quot;</span>
+    creatures &lt;&lt; Creature.<span class="kwd">new</span>(place, color<span class="opt">)</span>
+  <span class="kwa">end</span>
+  puts
+
+  <span class="slc"># wait for them to meet</span>
+  creatures.each { |c| c.thread.join}
+
+  total = <span class="num">0</span>
+  <span class="slc"># print meeting times of each creature</span>
+  creatures.each <span class="kwa">do</span> |c|
+    puts c.result
+    total += c.count
+  <span class="kwa">end</span>
+
+  <span class="slc"># print total meeting times, should be equal n_meeting</span>
+  print <span class="str">' '</span>, <span class="kwd">format_number</span>(total<span class="opt">)</span>, <span class="str">&quot;</span><span class="esc">\n\n</span><span class="str">&quot;</span>
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> print_colors_table
+  [<span class="kwc">:blue</span>, <span class="kwc">:red</span>, <span class="kwc">:yellow</span>].each <span class="kwa">do</span> |c1|
+    [<span class="kwc">:blue</span>, <span class="kwc">:red</span>, <span class="kwc">:yellow</span>].each <span class="kwa">do</span> |c2|
+      puts <span class="str">&quot;</span><span class="ipl">#{c1}</span> <span class="str">+</span> <span class="ipl">#{c2}</span> <span class="str">-&gt;</span> <span class="ipl">#{COMPLIMENT[c1][c2]}</span><span class="str">&quot;</span>
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+n = (<span class="kwc">ARGV</span>[<span class="num">0</span>] || <span class="num">600</span><span class="opt">)</span>.to_i
+
+
+print_colors_table
+puts
+
+run_game n, [<span class="kwc">:blue</span>, <span class="kwc">:red</span>, <span class="kwc">:yellow</span>]
+run_game n, [<span class="kwc">:blue</span>, <span class="kwc">:red</span>, <span class="kwc">:yellow</span>, <span class="kwc">:red</span>, <span class="kwc">:yellow</span>, <span class="kwc">:blue</span>, <span class="kwc">:red</span>, <span class="kwc">:yellow</span>, <span class="kwc">:red</span>, <span class="kwc">:blue</span>]

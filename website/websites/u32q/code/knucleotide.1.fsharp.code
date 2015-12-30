@@ -1,0 +1,54 @@
+﻿<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Jimmy Tang</span>
+<span class="com"> *)</span>
+<span class="kwa">open</span> <span class="kwd">System</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">IO</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Collections</span>.<span class="kwd">Generic</span>
+
+<span class="slc">// make our hashtable using System.Collections.Generic.Dictionary</span>
+<span class="kwa">let</span> maketable (dna:<span class="kwb">string</span>) (length:<span class="kwb">int</span>) =
+   <span class="kwa">let</span> d = <span class="kwa">new</span> <span class="kwd">Dictionary</span>&lt;_,_&gt;()
+   <span class="kwa">for</span> start <span class="kwa">in</span> <span class="num">0</span>..(dna.<span class="kwd">Length</span> - length) <span class="kwa">do</span>
+      <span class="kwa">let</span> substr = dna.<span class="kwd">Substring</span>(start, length)
+      <span class="kwa">let</span> x = <span class="kwb">ref</span> (<span class="kwb">ref</span> <span class="num">0</span>)
+      <span class="kwa">if</span> d.<span class="kwd">TryGetValue</span>(substr, x) <span class="kwa">then</span> x.<span class="kwd">Value</span> := ! !x + <span class="num">1</span>
+      <span class="kwa">else</span> d.[substr] &lt;- <span class="kwb">ref</span> <span class="num">1</span>
+   d
+
+<span class="slc">// frequency for all substrings of a given length</span>
+<span class="kwa">let</span> frequencies (dna:<span class="kwb">string</span>) (length:<span class="kwb">int</span>) = [
+   <span class="kwa">let</span> d = maketable dna length
+   <span class="kwa">let</span> total = d.<span class="kwd">Values</span> |&gt; <span class="kwd">Seq</span>.map (!) |&gt; <span class="kwd">Seq</span>.sum
+   yield! [ <span class="kwa">for</span> pair <span class="kwa">in</span> d -&gt;
+             pair.<span class="kwd">Key</span>.<span class="kwd">ToUpper</span>(), (<span class="kwb">float</span>(pair.<span class="kwd">Value</span>.<span class="kwd">Value</span>) * <span class="num">100.0</span> /<span class="kwb">float</span>(total))]
+         |&gt; <span class="kwd">List</span>.sortBy (snd &gt;&gt; (~-))
+         |&gt; <span class="kwd">List</span>.map (<span class="kwa">fun</span> (s,c) -&gt; sprintf <span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">%.3f&quot;</span> s c)
+   yield <span class="str">&quot;&quot;</span>
+]
+
+<span class="slc">// frequency of occurrence for a particular substring</span>
+<span class="kwa">let</span> countSubstring dna (substring:<span class="kwb">string</span>) = [
+   <span class="kwa">let</span> d = maketable dna (substring.<span class="kwd">Length</span>)
+   yield (sprintf <span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">%s</span><span class="str">&quot;</span>
+      (<span class="kwa">if</span> d.<span class="kwd">ContainsKey</span>(substring) <span class="kwa">then</span> !d.[substring] <span class="kwa">else</span> <span class="num">0</span>)
+      (substring.<span class="kwd">ToUpper</span>()))
+]
+
+<span class="kwa">let</span> input = <span class="kwd">Console</span>.<span class="kwd">In</span>
+<span class="kwa">let</span> dna = seq { <span class="kwa">while true do</span> yield input.<span class="kwd">ReadLine</span>() }
+        |&gt; <span class="kwd">Seq</span>.takeWhile (<span class="kwa">fun</span> x -&gt; x &lt;&gt; <span class="kwa">null</span>)
+        |&gt; <span class="kwd">Seq</span>.skipWhile (<span class="kwa">fun</span> x -&gt; not(x.<span class="kwd">StartsWith</span>(<span class="str">&quot;&gt;THREE&quot;</span>)))
+        |&gt; <span class="kwd">Seq</span>.skip <span class="num">1</span>
+        |&gt; <span class="kwd">String</span>.concat <span class="str">&quot;&quot;</span>
+
+[<span class="kwa">for</span> len <span class="kwa">in</span> [<span class="num">1</span>;<span class="num">2</span>] -&gt; async { return frequencies dna len }] &#64;
+[<span class="kwa">for</span> str <span class="kwa">in</span> [<span class="str">&quot;ggt&quot;</span>;<span class="str">&quot;ggta&quot;</span>;<span class="str">&quot;ggtatt&quot;</span>;<span class="str">&quot;ggtattttaatt&quot;</span>;<span class="str">&quot;ggtattttaatttatagt&quot;</span>]
+ -&gt; async { return countSubstring dna str }]
+|&gt; <span class="kwd">List</span>.rev
+|&gt; <span class="kwd">Async</span>.<span class="kwd">Parallel</span>
+|&gt; <span class="kwd">Async</span>.<span class="kwd">RunSynchronously</span>
+|&gt; <span class="kwd">Array</span>.rev
+|&gt; <span class="kwd">Seq</span>.concat
+|&gt; <span class="kwd">Seq</span>.iter (printfn <span class="str">&quot;</span><span class="ipl">%s</span><span class="str">&quot;</span>)

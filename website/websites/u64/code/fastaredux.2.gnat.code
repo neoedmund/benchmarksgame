@@ -1,0 +1,227 @@
+
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">-- Based on code by Pascal Obry, Gautier de Montmollin, Andrew Moon</span>
+<span class="slc">-- Jason Blevins, and Petr Prokhorenkov</span>
+<span class="slc">-- Contributed by Jonathan Parker and Georg Bauhaus (Nov 2010)</span>
+
+
+<span class="kwa">with</span> Ada.Command_Line; <span class="kwa">use</span> Ada.Command_Line;
+<span class="kwa">with</span> Ada.Streams.Stream_IO;
+
+<span class="kwa">procedure</span> FastaRedux <span class="kwa">is</span>
+
+   <span class="kwa">type</span> Real <span class="kwa">is digits</span> <span class="num">15</span>;
+
+   <span class="kwa">type</span> Gene_id_Type <span class="kwa">is range</span> -<span class="num">2</span>**<span class="num">15</span> .. <span class="num">2</span>**<span class="num">15</span>-<span class="num">1</span>;
+
+   <span class="kwa">type</span> Aminoacid <span class="kwa">is record</span>
+      C : <span class="kwb">Character</span>;  <span class="slc">-- IUB code</span>
+      P : Real;       <span class="slc">-- probability</span>
+   <span class="kwa">end record</span>;
+
+   <span class="kwa">type</span> Aminoacid_Set <span class="kwa">is array</span> (Gene_id_Type <span class="kwa">range</span> &lt;&gt;) <span class="kwa">of</span> Aminoacid;
+
+   Homo_Sapiens : <span class="kwa">constant</span> Aminoacid_Set(<span class="num">0</span> .. <span class="num">3</span>) :=
+    ((<span class="str">'a'</span>, <span class="num">0.3029549426680</span>), (<span class="str">'c'</span>, <span class="num">0.1979883004921</span>),
+     (<span class="str">'g'</span>, <span class="num">0.1975473066391</span>), (<span class="str">'t'</span>, <span class="num">0.3015094502008</span>));
+
+   Genes : <span class="kwa">constant</span> Aminoacid_Set(<span class="num">0</span> .. <span class="num">14</span>) :=
+    ((<span class="str">'a'</span>, <span class="num">0.27</span>), (<span class="str">'c'</span>, <span class="num">0.12</span>), (<span class="str">'g'</span>, <span class="num">0.12</span>), (<span class="str">'t'</span>, <span class="num">0.27</span>),
+     (<span class="str">'B'</span>, <span class="num">0.02</span>), (<span class="str">'D'</span>, <span class="num">0.02</span>), (<span class="str">'H'</span>, <span class="num">0.02</span>), (<span class="str">'K'</span>, <span class="num">0.02</span>),
+     (<span class="str">'M'</span>, <span class="num">0.02</span>), (<span class="str">'N'</span>, <span class="num">0.02</span>), (<span class="str">'R'</span>, <span class="num">0.02</span>), (<span class="str">'S'</span>, <span class="num">0.02</span>),
+     (<span class="str">'V'</span>, <span class="num">0.02</span>), (<span class="str">'W'</span>, <span class="num">0.02</span>), (<span class="str">'Y'</span>, <span class="num">0.02</span>));
+
+   ALU : <span class="kwa">constant</span> <span class="kwb">String</span> :=
+     <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTG&quot;</span> &amp;
+     <span class="str">&quot;GGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGA&quot;</span> &amp;
+     <span class="str">&quot;GACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAA&quot;</span> &amp;
+     <span class="str">&quot;AATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAAT&quot;</span> &amp;
+     <span class="str">&quot;CCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAAC&quot;</span> &amp;
+     <span class="str">&quot;CCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTG&quot;</span> &amp;
+     <span class="str">&quot;CACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+   ALU_Length : <span class="kwa">constant</span> <span class="kwb">Positive</span> := ALU<span class="kwd">'Length</span>;
+
+   Lookup_Table_Size : <span class="kwa">constant</span> := <span class="num">4096</span>;
+   Lookup_Scale : <span class="kwa">constant</span> Real := Real (Lookup_Table_Size - <span class="num">1</span>);
+
+   <span class="kwa">type</span> Lookup_Table <span class="kwa">is</span>
+      <span class="kwa">array</span> (Gene_id_Type <span class="kwa">range</span> <span class="num">0</span>..Lookup_Table_Size-<span class="num">1</span>) <span class="kwa">of</span> Gene_id_Type;
+
+   <span class="kwa">type</span> Random_State <span class="kwa">is mod</span> <span class="num">2</span>**<span class="num">32</span>;
+   Max   : <span class="kwa">constant</span> Real := <span class="num">1.0</span>;
+   Seed  : <span class="kwa">constant</span> := <span class="num">42</span>;
+   State : Random_State := Seed;
+
+   Line_Length : <span class="kwa">constant</span> <span class="kwb">Positive</span> := <span class="num">60</span>;
+   End_of_Line : <span class="kwa">constant</span> <span class="kwb">String</span> := (<span class="num">1</span> =&gt; ASCII.LF);
+
+   <span class="kwa">package</span> Streamed_Line_IO <span class="kwa">is</span>
+
+      <span class="kwa">procedure</span> Put (Item : <span class="kwb">String</span>);
+
+      <span class="kwa">procedure</span> Close;  <span class="slc">--  close output</span>
+
+   <span class="kwa">end</span> Streamed_Line_IO;
+
+
+   <span class="kwa">package body</span> Streamed_Line_IO <span class="kwa">is</span>
+
+      <span class="kwa">use</span> Ada.Streams;
+
+      Stdout : Stream_IO.File_Type;
+
+      <span class="kwa">procedure</span> Put (Item : <span class="kwb">String</span>) <span class="kwa">is</span>
+         <span class="kwa">subtype</span> Index <span class="kwa">is</span> Stream_Element_Offset <span class="kwa">range</span> <span class="num">1</span> .. Item<span class="kwd">'Length</span>;
+         <span class="kwa">subtype</span> XBytes <span class="kwa">is</span> Stream_Element_Array (Index);
+         Item_Bytes: XBytes;
+         <span class="kwa">pragma</span> Import (Ada, Item_Bytes);
+         <span class="kwa">for</span> Item_Bytes<span class="kwd">'Address</span> <span class="kwa">use</span> Item<span class="kwd">'Address</span>;
+         <span class="kwa">pragma</span> Assert (Item<span class="kwd">'Size</span> = Item_Bytes<span class="kwd">'Size</span>);
+      <span class="kwa">begin</span>
+         Stream_IO.Write (Stdout, Item_Bytes);
+      <span class="kwa">end</span> Put;
+
+      <span class="kwa">procedure</span> Close <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Stream_IO.Close (Stdout);
+      <span class="kwa">end</span> Close;
+
+   <span class="kwa">begin</span>
+      Stream_IO.Open (Stdout,
+                      Mode =&gt; Stream_IO.Out_File,
+                      Name =&gt; <span class="str">&quot;/dev/stdout&quot;</span>);
+   <span class="kwa">end</span> Streamed_Line_IO;
+
+
+   <span class="kwa">procedure</span> Gen_Random
+     (Next_Result :    <span class="kwa">out</span> Real;
+      State       : <span class="kwa">in out</span> Random_State)
+   <span class="kwa">is</span>
+      IM : <span class="kwa">constant</span> := <span class="num">139</span>_968;
+      IA : <span class="kwa">constant</span> :=   <span class="num">3</span>_877;
+      IC : <span class="kwa">constant</span> :=  <span class="num">29</span>_573;
+   <span class="kwa">begin</span>
+      State := (State * IA + IC) <span class="kwa">mod</span> IM;
+      Next_Result := Max *(Real (State)) * (Lookup_Scale / Real (IM));
+   <span class="kwa">end</span> Gen_Random;
+
+
+   <span class="kwa">procedure</span> New_Line <span class="kwa">is begin</span>
+      Streamed_Line_IO.Put (End_of_Line);
+   <span class="kwa">end</span> New_Line;
+
+   <span class="kwa">procedure</span> Repeat
+     (Title : <span class="kwa">in</span> <span class="kwb">String</span>;
+      N     : <span class="kwa">in</span> <span class="kwb">Natural</span>)
+   <span class="kwa">is</span>
+      Buffer : <span class="kwb">String</span>(<span class="num">1</span> .. ALU_Length + Line_Length);
+      nn, pos, bytes : <span class="kwb">Integer</span>;
+   <span class="kwa">begin</span>
+      nn := N;
+      pos := <span class="num">1</span>;
+
+      Buffer(<span class="num">1</span> .. ALU_Length) := ALU(<span class="num">1</span> .. ALU_Length);
+      Buffer(ALU_Length+<span class="num">1</span> .. Buffer<span class="kwd">'Last</span>) := ALU(<span class="num">1</span> .. Buffer<span class="kwd">'Last</span>-ALU_Length);
+
+      Streamed_Line_IO.Put (Title); New_Line;
+
+      <span class="kwa">while</span> nn &gt; <span class="num">1</span> <span class="kwa">loop</span>
+         Bytes := <span class="kwb">Positive</span><span class="kwd">'Min</span> (Line_Length, Nn);
+
+         Streamed_Line_IO.Put (Buffer(pos .. pos+bytes-<span class="num">1</span>)); New_Line;
+
+         pos := pos + bytes;
+         <span class="kwa">if</span> pos &gt; ALU_Length <span class="kwa">then</span>
+            pos := pos - ALU_Length;
+         <span class="kwa">end if</span>;
+         nn := nn - bytes;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Repeat;
+
+
+   <span class="kwa">procedure</span> Randomize
+     (Genes : <span class="kwa">in</span> Aminoacid_Set;
+      Title : <span class="kwa">in</span> <span class="kwb">String</span>;
+      N     : <span class="kwa">in</span> <span class="kwb">Integer</span>)
+   <span class="kwa">is</span>
+      Line_Buffer : <span class="kwb">String</span> (<span class="num">1</span> .. Line_Length + End_of_Line<span class="kwd">'Length</span>);
+      Gene_Lookup : Lookup_Table;
+      Cumulative_Prob : <span class="kwa">array</span> (Gene_id_Type <span class="kwa">range</span> <span class="num">0</span>.<span class="num">.15</span>) <span class="kwa">of</span> Real;
+      j : <span class="kwb">Positive</span>;
+      u : Gene_id_Type;
+      r : Real;
+      Local_State : Random_State;
+
+      <span class="kwa">procedure</span> Init_Lookup_Table (Genes : <span class="kwa">in</span> Aminoacid_Set) <span class="kwa">is</span>
+         Sum_of_Ps : Real := <span class="num">0.0</span>;
+      <span class="kwa">begin</span>
+         <span class="kwa">for</span> i <span class="kwa">in</span> Genes<span class="kwd">'Range</span> <span class="kwa">loop</span>
+            Sum_of_Ps := Sum_of_Ps + Genes(i).p;
+            Cumulative_Prob (i) := Sum_of_Ps * Lookup_Scale;
+         <span class="kwa">end loop</span>;
+
+         Cumulative_Prob(Genes<span class="kwd">'Last</span>) := Lookup_Scale;
+
+         <span class="kwa">declare</span>
+            g : Gene_id_Type := Genes<span class="kwd">'First</span>;
+            Threshold : Real := Real(Gene_Lookup<span class="kwd">'First</span>) - <span class="num">1.0</span>;
+         <span class="kwa">begin</span>
+            <span class="kwa">for</span> i <span class="kwa">in</span> Gene_Lookup<span class="kwd">'Range</span> <span class="kwa">loop</span>
+               <span class="kwa">while</span> Cumulative_Prob(g) &lt; Threshold <span class="kwa">loop</span>
+                  g := g + <span class="num">1</span>;
+               <span class="kwa">end loop</span>;
+               Threshold := Threshold + <span class="num">1.0</span>;
+               Gene_Lookup(i) := g;
+            <span class="kwa">end loop</span>;
+         <span class="kwa">end</span>;
+      <span class="kwa">end</span> Init_Lookup_Table;
+
+      <span class="kwa">subtype</span> Line_End_Positions <span class="kwa">is</span> <span class="kwb">Positive</span>
+        <span class="kwa">range</span> Line_Buffer<span class="kwd">'Last</span> - End_of_Line<span class="kwd">'Length</span> + <span class="num">1</span> .. Line_Buffer<span class="kwd">'Last</span>;
+   <span class="kwa">begin</span>
+      Streamed_Line_IO.Put (Title); New_Line;
+
+      Init_Lookup_Table (Genes);
+
+      Line_Buffer(Line_End_Positions) := End_of_Line;
+
+      Local_State := State;
+      j := <span class="num">1</span>;
+      <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">1</span> .. N <span class="kwa">loop</span>
+         Gen_Random(r, Local_State);
+         u := Gene_Lookup(Gene_id_Type(Real<span class="kwd">'Truncation</span>(r)));
+         <span class="kwa">while</span> Cumulative_Prob(u) &lt; r <span class="kwa">loop</span>
+            u := u + <span class="num">1</span>;
+         <span class="kwa">end loop</span>;
+
+         Line_Buffer(j) := Genes(u).C;
+
+         <span class="kwa">if</span> j = Line_Length <span class="kwa">then</span>
+            Streamed_Line_IO.Put (Line_Buffer);
+            j := <span class="num">1</span>;
+         <span class="kwa">else</span>
+            j := j + <span class="num">1</span>;
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+      <span class="kwa">if</span> j &gt; <span class="num">1</span> <span class="kwa">then</span>
+         Streamed_Line_IO.Put (Line_Buffer(<span class="num">1</span> .. j-<span class="num">1</span>) &amp; End_of_Line);
+      <span class="kwa">end if</span>;
+
+      State := Local_State;
+   <span class="kwa">end</span> Randomize;
+
+   N : <span class="kwa">constant</span> <span class="kwb">Positive</span> := <span class="kwb">Positive</span><span class="kwd">'Value</span> (Argument (<span class="num">1</span>));
+
+<span class="kwa">begin</span>
+
+  Repeat (<span class="str">&quot;&gt;ONE Homo sapiens alu&quot;</span>, N*<span class="num">2</span>);
+  Randomize (Genes, <span class="str">&quot;&gt;TWO IUB ambiguity codes&quot;</span>, N*<span class="num">3</span>);
+  Randomize (Homo_Sapiens, <span class="str">&quot;&gt;THREE Homo sapiens frequency&quot;</span>, N*<span class="num">5</span>);
+
+  Streamed_Line_IO.Close;
+
+<span class="kwa">end</span> FastaRedux;
+

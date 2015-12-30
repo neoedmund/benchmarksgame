@@ -1,0 +1,22 @@
+
+Wed, 20 May 2015 00:06:49 GMT
+
+MAKE:
+mv meteor.scala-2.scala meteor.scala
+/usr/local/src/scala-2.11.6/bin/scalac -optimise -target:jvm-1.8 meteor.scala
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+warning: there was one feature warning; re-run with -feature for details
+warning: there were 6 inliner warnings; re-run with -Yinline-warnings for details
+two warnings found
+8.32s to complete and log all make actions
+
+COMMAND LINE:
+ /usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -Xbootclasspath/a:/usr/local/src/scala-2.11.6/lib/scala-library.jar:/usr/local/src/scala-2.11.6/lib/akka-actors.jar:/usr/local/src/scala-2.11.6/lib/typesafe-config.jar meteor 2098
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Error: Could not find or load main class meteor

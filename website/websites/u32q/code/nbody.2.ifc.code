@@ -1,0 +1,171 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">!   contributed by Simon Geard, translated from  Mark C. Williams nbody.java</span>
+<span class="slc">!   modified by Brian Taylor</span>
+<span class="slc">!</span>
+<span class="slc">! ifort -fast -o nbody nbody.f90</span>
+<span class="slc">!</span>
+
+<span class="kwa">program</span> nbody
+  <span class="kwa">implicit none</span>
+
+  <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwa">parameter</span> :: tstep = <span class="num">0.01d0</span>
+  <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwa">parameter</span> ::  PI = <span class="num">3.141592653589793d0</span>
+  <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwa">parameter</span> ::  SOLAR_MASS = <span class="num">4</span> * PI * PI
+  <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwa">parameter</span> ::  DAYS_PER_YEAR = <span class="num">365.24d0</span>
+
+  <span class="kwa">type</span> body
+     <span class="kwa">real</span>*<span class="num">8</span> :: x, y, z, vx, vy, vz, mass
+  <span class="kwa">end type</span> body
+
+  <span class="kwa">type</span>(body), <span class="kwa">parameter</span> :: jupiter = <span class="kwd">body</span>( &amp;
+       <span class="num">4.84143144246472090d0</span>,    -<span class="num">1.16032004402742839d0</span>, &amp;
+       -<span class="num">1.03622044471123109d</span>-<span class="num">01</span>, <span class="num">1.66007664274403694d</span>-<span class="num">03</span> * DAYS_PER_YEAR, &amp;
+       <span class="num">7.69901118419740425d</span>-<span class="num">03</span> * DAYS_PER_YEAR, &amp;
+       -<span class="num">6.90460016972063023d</span>-<span class="num">05</span> * DAYS_PER_YEAR, &amp;
+       <span class="num">9.54791938424326609d</span>-<span class="num">04</span> * SOLAR_MASS)
+
+  <span class="kwa">type</span>(body), <span class="kwa">parameter</span> :: saturn = <span class="kwd">body</span>( &amp;
+       <span class="num">8.34336671824457987d</span>+<span class="num">00</span>, &amp;
+       <span class="num">4.12479856412430479d</span>+<span class="num">00</span>, &amp;
+       -<span class="num">4.03523417114321381d</span>-<span class="num">01</span>, &amp;
+       -<span class="num">2.76742510726862411d</span>-<span class="num">03</span> * DAYS_PER_YEAR, &amp;
+       <span class="num">4.99852801234917238d</span>-<span class="num">03</span> * DAYS_PER_YEAR, &amp;
+       <span class="num">2.30417297573763929d</span>-<span class="num">05</span> * DAYS_PER_YEAR, &amp;
+       <span class="num">2.85885980666130812d</span>-<span class="num">04</span> * SOLAR_MASS)
+
+  <span class="kwa">type</span>(body), <span class="kwa">parameter</span> :: uranus = <span class="kwd">body</span>( &amp;
+       <span class="num">1.28943695621391310d</span>+<span class="num">01</span>, &amp;
+       -<span class="num">1.51111514016986312d</span>+<span class="num">01</span>, &amp;
+       -<span class="num">2.23307578892655734d</span>-<span class="num">01</span>, &amp;
+       <span class="num">2.96460137564761618d</span>-<span class="num">03</span> * DAYS_PER_YEAR, &amp;
+       <span class="num">2.37847173959480950d</span>-<span class="num">03</span> * DAYS_PER_YEAR, &amp;
+       -<span class="num">2.96589568540237556d</span>-<span class="num">05</span> * DAYS_PER_YEAR, &amp;
+       <span class="num">4.36624404335156298d</span>-<span class="num">05</span> * SOLAR_MASS )
+
+  <span class="kwa">type</span>(body), <span class="kwa">parameter</span> :: neptune = <span class="kwd">body</span>( &amp;
+       <span class="num">1.53796971148509165d</span>+<span class="num">01</span>, &amp;
+       -<span class="num">2.59193146099879641d</span>+<span class="num">01</span>, &amp;
+       <span class="num">1.79258772950371181d</span>-<span class="num">01</span>, &amp;
+       <span class="num">2.68067772490389322d</span>-<span class="num">03</span> * DAYS_PER_YEAR, &amp;
+       <span class="num">1.62824170038242295d</span>-<span class="num">03</span> * DAYS_PER_YEAR, &amp;
+       -<span class="num">9.51592254519715870d</span>-<span class="num">05</span> * DAYS_PER_YEAR, &amp;
+       <span class="num">5.15138902046611451d</span>-<span class="num">05</span> * SOLAR_MASS)
+
+  <span class="kwa">type</span>(body), <span class="kwa">parameter</span> :: sun = <span class="kwd">body</span>(<span class="num">0.0d0</span>, <span class="num">0.0d0</span>, <span class="num">0.0d0</span>, <span class="num">0.0d0</span>, <span class="num">0.0d0</span>, &amp;
+        <span class="num">0.0d0</span>, SOLAR_MASS)
+
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: nb = <span class="num">5</span>
+
+  <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwa">parameter</span> :: <span class="kwd">mass</span>(nb) = (/ sun%mass, jupiter%mass, saturn%mass, &amp;
+        uranus%mass, neptune%mass /)
+
+  <span class="kwa">integer</span> :: num, i
+  <span class="kwa">character</span>(len=<span class="num">8</span>) :: argv
+
+  <span class="kwa">real</span>*<span class="num">8</span> :: e, <span class="kwd">x</span>(<span class="num">3</span>,nb), <span class="kwd">v</span>(<span class="num">3</span>,nb)
+
+  <span class="kwd">x</span>(:,<span class="num">1</span>) = (/ sun%x, sun%y, sun%z /)
+  <span class="kwd">x</span>(:,<span class="num">2</span>) = (/ jupiter%x, jupiter%y, jupiter%z /)
+  <span class="kwd">x</span>(:,<span class="num">3</span>) = (/ saturn%x, saturn%y, saturn%z /)
+  <span class="kwd">x</span>(:,<span class="num">4</span>) = (/ uranus%x, uranus%y, uranus%z /)
+  <span class="kwd">x</span>(:,<span class="num">5</span>) = (/ neptune%x, neptune%y, neptune%z /)
+
+  <span class="kwd">v</span>(:,<span class="num">1</span>) = (/ sun%vx, sun%vy, sun%vz /)
+  <span class="kwd">v</span>(:,<span class="num">2</span>) = (/ jupiter%vx, jupiter%vy, jupiter%vz /)
+  <span class="kwd">v</span>(:,<span class="num">3</span>) = (/ saturn%vx, saturn%vy, saturn%vz /)
+  <span class="kwd">v</span>(:,<span class="num">4</span>) = (/ uranus%vx, uranus%vy, uranus%vz /)
+  <span class="kwd">v</span>(:,<span class="num">5</span>) = (/ neptune%vx, neptune%vy, neptune%vz /)
+
+  <span class="kwa">call</span> <span class="kwd">getarg</span>(<span class="num">1</span>, argv)
+  <span class="kwa">read</span> (argv,*) num
+
+  <span class="kwa">call</span> <span class="kwd">offsetMomentum</span>(<span class="num">1</span>, v, mass)
+  e = <span class="kwd">energy</span>(x, v, mass)
+  <span class="kwa">write</span> (*,<span class="str">'(f12.9)'</span>) e
+  <span class="kwa">do</span> i = <span class="num">1</span>, num
+     <span class="kwa">call</span> <span class="kwd">advance</span>(tstep, x, v, mass)
+  <span class="kwa">end do</span>
+  e = <span class="kwd">energy</span>(x, v, mass)
+  <span class="kwa">write</span> (*,<span class="str">'(f12.9)'</span>) e
+
+<span class="kwa">contains</span>
+
+  pure <span class="kwa">subroutine</span> <span class="kwd">offsetMomentum</span>(k, v, mass)
+    <span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: k
+    <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwa">dimension</span>(<span class="num">3</span>,nb), <span class="kwd">intent</span>(inout) :: v
+    <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwa">dimension</span>(nb), <span class="kwd">intent</span>(in) :: mass
+    <span class="kwa">real</span>*<span class="num">8</span> :: px, py, pz
+    <span class="kwa">integer</span> :: i
+    px = <span class="num">0.0d0</span>
+    py = <span class="num">0.0d0</span>
+    pz = <span class="num">0.0d0</span>
+    <span class="kwa">do</span> i = <span class="num">1</span>, nb
+       px = px + <span class="kwd">v</span>(<span class="num">1</span>,i) * <span class="kwd">mass</span>(i)
+       py = py + <span class="kwd">v</span>(<span class="num">2</span>,i) * <span class="kwd">mass</span>(i)
+       pz = pz + <span class="kwd">v</span>(<span class="num">3</span>,i) * <span class="kwd">mass</span>(i)
+    <span class="kwa">end do</span>
+    <span class="kwd">v</span>(<span class="num">1</span>,k) = -px / SOLAR_MASS
+    <span class="kwd">v</span>(<span class="num">2</span>,k) = -py / SOLAR_MASS
+    <span class="kwd">v</span>(<span class="num">3</span>,k) = -pz / SOLAR_MASS
+  <span class="kwa">end subroutine</span> offsetMomentum
+
+
+  pure <span class="kwa">subroutine</span> <span class="kwd">advance</span>(tstep, x, v, mass)
+  <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwd">intent</span>(in) :: tstep
+  <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwa">dimension</span>(<span class="num">3</span>,nb), <span class="kwd">intent</span>(inout) :: x, v
+  <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwa">dimension</span>(nb), <span class="kwd">intent</span>(in) :: mass
+
+  <span class="kwa">real</span>*<span class="num">8</span> :: dx, dy, dz, distance, mag
+  <span class="kwa">integer</span> :: i, j
+
+  <span class="kwa">do</span> i = <span class="num">1</span>, nb
+     <span class="kwa">do</span> j = i + <span class="num">1</span>, nb
+        dx = <span class="kwd">x</span>(<span class="num">1</span>,i) - <span class="kwd">x</span>(<span class="num">1</span>,j)
+        dy = <span class="kwd">x</span>(<span class="num">2</span>,i) - <span class="kwd">x</span>(<span class="num">2</span>,j)
+        dz = <span class="kwd">x</span>(<span class="num">3</span>,i) - <span class="kwd">x</span>(<span class="num">3</span>,j)
+
+        distance = <span class="kwd">sqrt</span>(dx**<span class="num">2</span> + dy**<span class="num">2</span> + dz**<span class="num">2</span>)
+        mag = tstep / distance**<span class="num">3</span>
+
+        <span class="kwd">v</span>(<span class="num">1</span>,i) = <span class="kwd">v</span>(<span class="num">1</span>,i) - dx * <span class="kwd">mass</span>(j) * mag
+        <span class="kwd">v</span>(<span class="num">2</span>,i) = <span class="kwd">v</span>(<span class="num">2</span>,i) - dy * <span class="kwd">mass</span>(j) * mag
+        <span class="kwd">v</span>(<span class="num">3</span>,i) = <span class="kwd">v</span>(<span class="num">3</span>,i) - dz * <span class="kwd">mass</span>(j) * mag
+
+        <span class="kwd">v</span>(<span class="num">1</span>,j) = <span class="kwd">v</span>(<span class="num">1</span>,j) + dx * <span class="kwd">mass</span>(i) * mag
+        <span class="kwd">v</span>(<span class="num">2</span>,j) = <span class="kwd">v</span>(<span class="num">2</span>,j) + dy * <span class="kwd">mass</span>(i) * mag
+        <span class="kwd">v</span>(<span class="num">3</span>,j) = <span class="kwd">v</span>(<span class="num">3</span>,j) + dz * <span class="kwd">mass</span>(i) * mag
+     <span class="kwa">end do</span>
+  <span class="kwa">end do</span>
+
+  <span class="kwa">do</span> i = <span class="num">1</span>, nb
+     <span class="kwd">x</span>(<span class="num">1</span>,i) = <span class="kwd">x</span>(<span class="num">1</span>,i) + tstep * <span class="kwd">v</span>(<span class="num">1</span>,i)
+     <span class="kwd">x</span>(<span class="num">2</span>,i) = <span class="kwd">x</span>(<span class="num">2</span>,i) + tstep * <span class="kwd">v</span>(<span class="num">2</span>,i)
+     <span class="kwd">x</span>(<span class="num">3</span>,i) = <span class="kwd">x</span>(<span class="num">3</span>,i) + tstep * <span class="kwd">v</span>(<span class="num">3</span>,i)
+  <span class="kwa">end do</span>
+  <span class="kwa">end subroutine</span> advance
+
+
+  pure <span class="kwa">function</span> <span class="kwd">energy</span>(x, v, mass)
+    <span class="kwa">real</span>*<span class="num">8</span> :: energy
+    <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwa">dimension</span>(<span class="num">3</span>,nb), <span class="kwd">intent</span>(in) :: x, v
+    <span class="kwa">real</span>*<span class="num">8</span>, <span class="kwa">dimension</span>(nb), <span class="kwd">intent</span>(in) :: mass
+
+    <span class="kwa">real</span>*<span class="num">8</span> :: dx, dy, dz, distance
+    <span class="kwa">integer</span> :: i, j
+
+    energy = <span class="num">0.0d0</span>
+    <span class="kwa">do</span> i = <span class="num">1</span>, nb
+       energy = energy + <span class="num">0.5d0</span> * <span class="kwd">mass</span>(i) * (<span class="kwd">v</span>(<span class="num">1</span>,i)**<span class="num">2</span> + <span class="kwd">v</span>(<span class="num">2</span>,i)**<span class="num">2</span> + <span class="kwd">v</span>(<span class="num">3</span>,i)**<span class="num">2</span>)
+       <span class="kwa">do</span> j = i + <span class="num">1</span>, nb
+          dx = <span class="kwd">x</span>(<span class="num">1</span>,i) - <span class="kwd">x</span>(<span class="num">1</span>,j)
+          dy = <span class="kwd">x</span>(<span class="num">2</span>,i) - <span class="kwd">x</span>(<span class="num">2</span>,j)
+          dz = <span class="kwd">x</span>(<span class="num">3</span>,i) - <span class="kwd">x</span>(<span class="num">3</span>,j)
+          distance = <span class="kwd">sqrt</span>(dx**<span class="num">2</span> + dy**<span class="num">2</span> + dz**<span class="num">2</span>)
+          energy = energy - (<span class="kwd">mass</span>(i) * <span class="kwd">mass</span>(j)) / distance;
+       <span class="kwa">end do</span>
+    <span class="kwa">end do</span>
+  <span class="kwa">end function</span> energy
+
+<span class="kwa">end program</span> nbody

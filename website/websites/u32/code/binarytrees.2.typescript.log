@@ -1,0 +1,23 @@
+
+Fri, 18 Dec 2015 03:42:29 GMT
+
+MAKE:
+mv binarytrees.typescript-2.typescript binarytrees.typescript-2.ts
+/usr/local/src/node-v5.1.0-linux-x86/bin/tsc -t ES6 binarytrees.typescript-2.ts
+2.68s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/node-v5.1.0-linux-x86/bin/node --use_strict binarytrees.typescript-2.js 20
+
+PROGRAM OUTPUT:
+stretch tree of depth 21	 check: -1
+2097152	 trees of depth 4	 check: -2097152
+524288	 trees of depth 6	 check: -524288
+131072	 trees of depth 8	 check: -131072
+32768	 trees of depth 10	 check: -32768
+8192	 trees of depth 12	 check: -8192
+2048	 trees of depth 14	 check: -2048
+512	 trees of depth 16	 check: -512
+128	 trees of depth 18	 check: -128
+32	 trees of depth 20	 check: -32
+long lived tree of depth 20	 check: -1

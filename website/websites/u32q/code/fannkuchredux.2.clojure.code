@@ -1,0 +1,173 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; contributed by Andy Fingerhut.  </span>
+<span class="slc">;; Speed improvements contributed by Stuart Halloway.</span>
+
+(ns fannkuchredux
+  (:require clojure.string)
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+
+
+<span class="slc">;; This macro assumes that 1 &lt;= n &lt;= (alength a), where a is a Java</span>
+<span class="slc">;; array of ints.  No guarantees are made of its correctness if this</span>
+<span class="slc">;; condition is violated.  It does this merely to avoid checking a few</span>
+<span class="slc">;; conditions, and thus perhaps be a bit faster.</span>
+
+(<span class="kwa">defmacro</span> reverse-first-n! [n #^ints a]
+  `(<span class="kwc">let</span> [n# (int ~n)
+         n-1# (int (dec n#))]
+     (<span class="kwb">loop</span> [i# (int <span class="num">0</span>)
+            j# (int n-1#)]
+       (<span class="kwc">when</span> (&lt; i# j#)
+         (<span class="kwc">let</span> [temp# (aget ~a i#)]
+           (aset ~a i# (aget ~a j#))
+           (aset ~a j# temp#))
+         (<span class="kwb">recur</span> (inc i#) (dec j#))))))
+
+
+(<span class="kwa">defmacro</span> rotate-left-first-n! [n #^ints a]
+  `(<span class="kwc">let</span> [n# (int ~n)
+	 n-1# (dec n#)
+	 a0# (aget ~a <span class="num">0</span>)]
+     (<span class="kwb">loop</span> [i# (int <span class="num">0</span>)]
+       (<span class="kwc">if</span> (== i# n-1#)
+	 (aset ~a n-1# a0#)
+	 (<span class="kwc">let</span> [i+<span class="num">1</span># (inc i#)]
+	   (aset ~a i# (aget ~a i+<span class="num">1</span>#))
+	   (<span class="kwb">recur</span> i+<span class="num">1</span>#))))))
+
+
+(<span class="kwa">defn</span> fannkuch-of-permutation [#^ints p]
+  (<span class="kwc">if</span> (== (int <span class="num">1</span>) (aget p <span class="num">0</span>))
+    <span class="slc">;; Handle this special case without bothering to create a Java</span>
+    <span class="slc">;; array.</span>
+    <span class="num">0</span>
+    <span class="slc">;; Using aclone instead of copy-java-int-array was a big</span>
+    <span class="slc">;; improvement.</span>
+    (<span class="kwc">let</span> [#^ints p2 (aclone p)]
+      (<span class="kwb">loop</span> [flips (int <span class="num">0</span>)]
+        (<span class="kwc">let</span> [first-num (int (aget p2 <span class="num">0</span>))]
+          (<span class="kwc">if</span> (== (int <span class="num">1</span>) first-num)
+            flips
+            (do
+              (reverse-first-n! first-num p2)
+              (<span class="kwb">recur</span> (inc flips)))))))))
+
+
+<span class="slc">;; initialize the permutation generation algorithm.  The permutations</span>
+<span class="slc">;; need to be generated in a particular order so that the checksum may</span>
+<span class="slc">;; be computed correctly (or if you can determine some way to</span>
+<span class="slc">;; calculate the sign from an arbitrary permutation, then you can</span>
+<span class="slc">;; generate the permutations in any order you wish).</span>
+
+<span class="slc">;; With the particular order of generating permutations used in this</span>
+<span class="slc">;; program, it turns out that each of the n consecutive &quot;groups&quot; of</span>
+<span class="slc">;; (n-1)!  permutations begin with these permutations (example given</span>
+<span class="slc">;; for n=6):</span>
+
+<span class="slc">;;   1st permutation: 1 2 3 4 5 6    sign: 1  count vals: 1 2 3 4 5 6</span>
+<span class="slc">;; 121st permutation: 2 3 4 5 6 1    sign: 1  count vals: 1 2 3 4 5 5</span>
+<span class="slc">;; 241st permutation: 3 4 5 6 1 2    sign: 1  count vals: 1 2 3 4 5 4</span>
+<span class="slc">;; 361st permutation: 4 5 6 1 2 3    sign: 1  count vals: 1 2 3 4 5 3</span>
+<span class="slc">;; 481st permutation: 5 6 1 2 3 4    sign: 1  count vals: 1 2 3 4 5 2</span>
+<span class="slc">;; 601st permutation: 6 1 2 3 4 5    sign: 1  count vals: 1 2 3 4 5 1</span>
+
+<span class="slc">;; This makes it very easy to divide the work into n parallel tasks</span>
+<span class="slc">;; that each start at one of the permutations above, and generate only</span>
+<span class="slc">;; (n-1)! permutations each.  Then combine the checksum and maxflips</span>
+<span class="slc">;; values of each thread and print.</span>
+
+(<span class="kwa">defn</span> init-permutations [n]
+  (<span class="kwc">let</span> [n-1 (dec n)]
+    (<span class="kwb">loop</span> [i <span class="num">1</span>
+           p (int-array (<span class="kwd">range</span> <span class="num">1</span> (inc n)))
+           sign <span class="num">1</span>
+           c (int-array (<span class="kwd">range</span> <span class="num">1</span> (inc n)))
+           tasks [{:perm p :sign sign :counts c}]]
+      (<span class="kwc">if</span> (== i n)
+        tasks
+        (<span class="kwc">let</span> [p2 (aclone p)
+              c2 (aclone c)]
+          (rotate-left-first-n! n p2)
+          (aset c2 n-1 (dec (aget c2 n-1)))
+          (<span class="kwb">recur</span> (inc i) p2 sign c2
+                 (conj tasks {:perm p2 :sign sign :counts c2})))))))
+
+
+(<span class="kwa">defmacro</span> swap-array-elems! [a i j]
+  `(<span class="kwc">let</span> [temp# (aget ~a ~i)]
+     (aset ~a ~i (aget ~a ~j))
+     (aset ~a ~j temp#)))
+
+
+<span class="slc">;; Modify the passed Java arrays p (a permutation) and c (count</span>
+<span class="slc">;; values) in place.  Let caller negate the sign themselves.</span>
+
+<span class="slc">;; Return true if the final value of p is a new permutation, false if</span>
+<span class="slc">;; there are no more permutations and the caller should not use the</span>
+<span class="slc">;; value of p for anything.</span>
+
+(<span class="kwa">defn</span> next-permutation! [N #^ints p sign #^ints c]
+  (<span class="kwc">if</span> (neg? sign)
+    (<span class="kwc">let</span> [N (int N)
+	  N-1 (dec N)]
+      (swap-array-elems! p <span class="num">1 2</span>)
+      (<span class="kwb">loop</span> [i (int <span class="num">2</span>)]
+	(<span class="kwc">if</span> (== i N)
+	  true)
+	(<span class="kwc">let</span> [cx (aget c i)
+	      i+<span class="num">1</span> (inc i)]
+	  (<span class="kwc">if</span> (not= cx <span class="num">1</span>)
+	    (do
+	      (aset c i (dec cx))
+	      true)
+	    (<span class="kwc">if</span> (== i N-1)
+	      false
+	      (do
+		(aset c i i+<span class="num">1</span>)
+		(rotate-left-first-n! (inc i+<span class="num">1</span>) p)
+		(<span class="kwb">recur</span> i+<span class="num">1</span>)))))))
+    <span class="slc">;; else sign is +1</span>
+    (swap-array-elems! p <span class="num">0 1</span>)))
+
+
+(<span class="kwa">defn</span> partial-fannkuch [num-perms #^ints p-arg first-sign #^ints c-arg]
+  (<span class="kwc">let</span> [#^ints p (aclone p-arg)
+        #^ints c (aclone c-arg)
+        N (int (count p))]
+    (<span class="kwb">loop</span> [i (int num-perms)
+           sign (int first-sign)
+	   maxflips (int <span class="num">0</span>)
+	   checksum (int <span class="num">0</span>)]
+      (<span class="kwc">if</span> (zero? i)
+        [checksum maxflips]
+        (<span class="kwc">let</span> [curflips (int (fannkuch-of-permutation p))]
+          (next-permutation! N p sign c)
+          (<span class="kwb">recur</span> (dec i) (- sign) (int (max maxflips curflips))
+                 (+ checksum (* sign curflips))))))))
+
+
+(<span class="kwa">defn</span> fannkuch [N]
+  (<span class="kwc">let</span> [init-perms (init-permutations N)
+        N-1-factorial (reduce * (<span class="kwd">range</span> <span class="num">1</span> N))
+        partial-results (pmap (<span class="kwa">fn</span> [{p :perm, s :sign, c :counts}]
+                                (partial-fannkuch N-1-factorial p s c))
+                              init-perms)]
+    (reduce (<span class="kwa">fn</span> [[checksum1 maxflips1] [checksum2 maxflips2]]
+              [(+ checksum1 checksum2) (max maxflips1 maxflips2)])
+            partial-results)))
+
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [N (<span class="kwc">if</span> (and (&gt;= (count args) <span class="num">1</span>)
+		   (re-matches #<span class="str">&quot;^\d+$&quot;</span> (nth args <span class="num">0</span>)))
+	    (. Integer valueOf (nth args <span class="num">0</span>) <span class="num">10</span>)
+	    <span class="num">10</span>)]
+    (<span class="kwc">let</span> [[checksum maxflips] (fannkuch N)]
+      (printf <span class="str">&quot;%d</span><span class="esc">\n</span><span class="str">&quot;</span> checksum)
+      (printf <span class="str">&quot;Pfannkuchen(%d) = %d</span><span class="esc">\n</span><span class="str">&quot;</span> N maxflips)))
+  (flush)
+  (. System (exit <span class="num">0</span>)))

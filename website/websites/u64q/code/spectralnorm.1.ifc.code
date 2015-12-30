@@ -1,0 +1,111 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">! contributed by Steve Decker based on the version by Simon Geard</span>
+<span class="slc">! September 2008, Simon Geard, Added OpenMP directives</span>
+<span class="slc">!</span>
+<span class="slc">! compilation:</span>
+<span class="slc">!   g95 -O1 -fomit-frame-pointer -funroll-loops spectral_norm.f90</span>
+<span class="slc">!   ifort -ipo -O3 -openmp spectral_norm.f90</span>
+<span class="slc">!   gfortran -O3 -openmp spectral_norm.f90 (not tested)</span>
+
+<span class="kwa">module</span> norm_subs
+  <span class="kwa">implicit none</span>
+
+  public :: MultiplyAtAv
+  public :: dp
+
+  private
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: dp = <span class="kwd">selected_real_kind</span>(<span class="num">12</span>)
+
+<span class="kwa">contains</span>
+
+  <span class="slc">! Multiply v by A</span>
+  pure <span class="kwa">function</span> <span class="kwd">MultiplyAv</span>(v) <span class="kwd">result</span> (Av)
+    <span class="kwa">real</span>(dp), <span class="kwa">dimension</span>(:), <span class="kwd">intent</span>(in) :: v
+    <span class="kwa">real</span>(dp), <span class="kwa">dimension</span>(<span class="kwd">size</span>(v))       :: Av
+    <span class="kwa">real</span>(dp) :: r
+    <span class="kwa">integer</span> :: n, i, j
+
+    n = <span class="kwd">size</span>(v)
+    <span class="slc">!$omp parallel do shared(Av, v, n) private(i, j, r)</span>
+    <span class="kwa">do</span> i = <span class="num">1</span>, n
+       r = <span class="num">0.0d0</span>
+       <span class="kwa">do</span> j = <span class="num">1</span>, n
+          r = r + <span class="kwd">A</span>() * <span class="kwd">v</span>(j)
+       <span class="kwa">end do</span>
+       <span class="kwd">Av</span>(i) = r
+    <span class="kwa">end do</span>
+    <span class="slc">!omp end parallel do</span>
+
+  <span class="kwa">contains</span>
+    pure <span class="kwa">real</span>(dp) <span class="kwa">function</span> A
+      <span class="slc">! Return element i,j of infinite matrix A</span>
+      a = <span class="num">1</span>.d0 / ((i+j-<span class="num">2</span>) * (i+j-<span class="num">1</span>)/<span class="num">2</span> + i)
+    <span class="kwa">end function</span> A
+  <span class="kwa">end function</span> MultiplyAv
+       
+  <span class="slc">! Multiply v by A transpose</span>
+  pure <span class="kwa">function</span> <span class="kwd">MultiplyAtv</span>(v) <span class="kwd">result</span> (Atv)
+    <span class="kwa">real</span>(dp), <span class="kwa">dimension</span>(:), <span class="kwd">intent</span>(in) :: v
+    <span class="kwa">real</span>(dp), <span class="kwa">dimension</span>(<span class="kwd">size</span>(v))       :: Atv
+
+    <span class="kwa">real</span>(dp) :: r
+    <span class="kwa">integer</span> :: n, i, j
+
+    n = <span class="kwd">size</span>(v)
+    Atv = <span class="num">0</span>.d0
+    <span class="slc">!$omp parallel do shared(Atv, v, n) private(i, j, r)</span>
+    <span class="kwa">do</span> i = <span class="num">1</span>, n
+       r = <span class="num">0.0d0</span>
+       <span class="kwa">do</span> j = <span class="num">1</span>, n
+          r = r + <span class="kwd">AT</span>() * <span class="kwd">v</span>(j)
+       <span class="kwa">end do</span>
+       <span class="kwd">Atv</span>(i) = r
+    <span class="kwa">end do</span>
+    <span class="slc">!omp end parallel do</span>
+
+  <span class="kwa">contains</span>
+    pure <span class="kwa">real</span>(dp) <span class="kwa">function</span> AT
+      <span class="slc">! Return element j,i of infinite matrix A</span>
+      AT = <span class="num">1</span>.d0 / ((i+j-<span class="num">2</span>) * (i+j-<span class="num">1</span>)/<span class="num">2</span> + j)
+    <span class="kwa">end function</span> AT
+  <span class="kwa">end function</span> MultiplyAtv
+
+  <span class="slc">! Multiply v by A and then by A transpose</span>
+  pure <span class="kwa">function</span> <span class="kwd">MultiplyAtAv</span>(v) <span class="kwd">result</span> (AtAv)
+    <span class="kwa">real</span>(dp), <span class="kwa">dimension</span>(:), <span class="kwd">intent</span>(in) :: v
+    <span class="kwa">real</span>(dp), <span class="kwa">dimension</span>(<span class="kwd">size</span>(v))       :: AtAv
+    
+    AtAv = <span class="kwd">MultiplyAtv</span>(<span class="kwd">MultiplyAv</span>(v))
+  <span class="kwa">end function</span> MultiplyAtAv
+<span class="kwa">end module</span> norm_subs
+
+<span class="kwa">program</span> spectral_norm
+  <span class="kwa">use</span> norm_subs
+  <span class="kwa">implicit none</span>
+
+  <span class="kwa">real</span>(dp), <span class="kwa">dimension</span>(:), allocatable :: u, v
+  <span class="kwa">integer</span>          :: i, n
+  <span class="kwa">character</span>(len=<span class="num">6</span>) :: argv
+
+  <span class="kwa">integer</span>, <span class="kwa">external</span> :: omp_get_num_procs
+
+  <span class="slc">! By default the number of threads should be set to the number of processors</span>
+  <span class="slc">! but the number can be controlled with one of the folowing</span>
+  <span class="slc">! export OMP_NUM_THREADS=4</span>
+  <span class="slc">! call omp_set_num_threads(omp_get_num_procs())</span>
+
+  <span class="kwa">call</span> <span class="kwd">get_command_argument</span>(<span class="num">1</span>, argv)
+  <span class="kwa">read</span>(argv, *) n
+
+  <span class="kwd">allocate</span>(<span class="kwd">u</span>(n), <span class="kwd">v</span>(n))
+  u = <span class="num">1</span>.d0
+  <span class="kwa">do</span> i = <span class="num">1</span>, <span class="num">10</span>
+     v = <span class="kwd">MultiplyAtAv</span>(u)
+     u = <span class="kwd">MultiplyAtAv</span>(v)
+  <span class="kwa">end do</span>
+
+  <span class="kwa">write</span>(*, <span class="str">&quot;(f0.9)&quot;</span>) <span class="kwd">sqrt</span>(<span class="kwd">dot_product</span>(u,v) / <span class="kwd">dot_product</span>(v,v))
+  <span class="kwd">deallocate</span>(u, v)
+<span class="kwa">end program</span> spectral_norm

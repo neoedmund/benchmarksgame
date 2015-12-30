@@ -1,0 +1,179 @@
+<span class="slc">; The Computer Language Benchmarks Game</span>
+<span class="slc">; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;</span>
+<span class="slc">; contributed by Kenneth Jonsson</span>
+<span class="slc">;</span>
+<span class="slc">; Each chameneos is its own agent and the agent state contains number</span>
+<span class="slc">; of meetings, number of meetings with self and current color.</span>
+<span class="slc">; The meeting point is implemented as a agent, where the state</span>
+<span class="slc">; contains, among other things, number of meetings left to do.</span>
+<span class="slc">;</span>
+<span class="slc">; Build with</span>
+<span class="slc">; $ java -Dclojure.compile.path=. -cp ${CLASSPATH} clojure.lang.Compile chameneosredux</span>
+<span class="slc">;</span>
+<span class="slc">; run with</span>
+<span class="slc">; $ java -server -XX:+TieredCompilation -XX:+AggressiveOpts -cp ${CLASSPATH} chameneosredux 6000000</span>
+<span class="slc">;</span>
+<span class="slc">; where ${CLASSPATH} includes the current directory and the jar files</span>
+<span class="slc">; for clojure core and clojure contrib</span>
+<span class="slc">;</span>
+
+(ns chameneosredux (:gen-class))
+
+(<span class="kwa">defn</span> num-&gt;spell-out-str [n]
+  <span class="str">&quot;Converts a number to a string, ex 123 -&gt;</span> <span class="esc">\&quot;</span> <span class="str">one two three</span><span class="esc">\&quot;</span><span class="str">&quot;</span>
+  (reduce (<span class="kwa">fn</span> [s i] (str s <span class="str">&quot; &quot;</span> (condp = i
+                                        \<span class="num">0</span> <span class="str">&quot;zero&quot;</span>
+                                        \<span class="num">1</span> <span class="str">&quot;one&quot;</span>
+                                        \<span class="num">2</span> <span class="str">&quot;two&quot;</span>
+                                        \<span class="num">3</span> <span class="str">&quot;three&quot;</span>
+                                        \<span class="num">4</span> <span class="str">&quot;four&quot;</span>
+                                        \<span class="num">5</span> <span class="str">&quot;five&quot;</span>
+                                        \<span class="num">6</span> <span class="str">&quot;six&quot;</span>
+                                        \<span class="num">7</span> <span class="str">&quot;seven&quot;</span>
+                                        \<span class="num">8</span> <span class="str">&quot;eight&quot;</span>
+                                        \<span class="num">9</span> <span class="str">&quot;nine&quot;</span>)))
+          <span class="str">&quot;&quot;</span>
+          (pr-str n)))
+
+<span class="slc">; Colors are defined as a map containing a string representation of</span>
+<span class="slc">; the color and a function that knows how to complement itself with</span>
+<span class="slc">; another color.</span>
+(declare *blue* *red* *yellow*)
+(<span class="kwa">def</span> *blue*   {:complement #(condp = %
+                             *red*    *yellow*
+                             *yellow* *red*
+                             *blue*   *blue*)
+               :str <span class="str">&quot;blue&quot;</span>})
+(<span class="kwa">def</span> *red*    {:complement #(condp = %
+                             *blue*   *yellow*
+                             *yellow* *blue*
+                             *red*    *red*)
+               :str <span class="str">&quot;red&quot;</span>})
+(<span class="kwa">def</span> *yellow* {:complement #(condp = %
+                             *red*    *blue*
+                             *blue*   *red*
+                             *yellow* *yellow*)
+               :str <span class="str">&quot;yellow&quot;</span>})
+
+(<span class="kwa">defn</span> print-color-table []
+  <span class="str">&quot;Prints all possible color conversions to stdout&quot;</span>
+  (<span class="kwc">let</span> [colors [*blue* *red* *yellow*] ]
+    (<span class="kwb">doseq</span> [colPair (<span class="kwb">for</span> [x colors y colors] [x y])]
+      (<span class="kwc">let</span> [[col1 col2] colPair
+	    new-col ((:complement col1) col2)]
+        (println (:str col1) <span class="str">&quot;+&quot;</span> (:str col2) <span class="str">&quot;-&gt;&quot;</span> (:str new-col)))))
+  (println))
+
+
+<span class="slc">; Agent that prints the result, used to restore order between games</span>
+<span class="slc">; running simultanious. Results will be printed in the order they</span>
+<span class="slc">; where started with \&quot;run-game\&quot;.</span>
+(<span class="kwa">def</span> *in-order* (agent {:id <span class="num">1</span>}))
+
+(<span class="kwa">defn</span> print-result [s result]
+  (<span class="kwc">if</span> (nil? result)
+    s
+    (<span class="kwc">let</span> [[id colors creatures] result]
+      (<span class="kwc">if</span> (&lt; (:id s) id)
+        (assoc s :results (<span class="kwd">sort</span> (conj (:results s) result)))
+        (<span class="kwc">if</span> (nil? creatures)
+          <span class="slc">; No more games are running, shutdown</span>
+          (shutdown-agents)
+          (do
+            <span class="slc">; Print starting colors</span>
+            (<span class="kwb">doseq</span> [col colors]
+              (print <span class="str">&quot;&quot;</span> (:str col)))
+            (println)
+            <span class="slc">; Print number of meetings done by each creature</span>
+            (<span class="kwb">doseq</span> [c creatures]
+              (println (str (:meetings &#64;c)
+                            (num-&gt;spell-out-str (:met-self &#64;c)))))
+            <span class="slc">; Spell out the total number of meetings.</span>
+            (println (num-&gt;spell-out-str (reduce (<span class="kwa">fn</span> [sum c]
+                                                   (+ sum (:meetings &#64;c)))
+                                                 <span class="num">0</span>
+                                                 creatures)))
+            (println)
+            <span class="slc">; Check if there are more results to print</span>
+            (<span class="kwb">recur</span> (assoc s
+                     :id (inc (:id s))
+                     :results (<span class="kwd">rest</span> (:results s)))
+                   (<span class="kwd">first</span> (:results s)))))))))
+
+
+<span class="slc">; Functions run in the context of the agent assigned to the meeting</span>
+<span class="slc">; place, ; i.e. *agent* is the agent for the meeting place.</span>
+(declare met-with)
+
+(<span class="kwa">defn</span> meet [m creature]
+  <span class="str">&quot;Meeting place is either empty and the creature must wait or a</span>
+<span class="str">   meeting takes place and the creatures leave&quot;</span>
+  (<span class="kwc">if</span> (zero? (:meetings-left m))
+    <span class="slc">; No more meetings left</span>
+    m
+    (<span class="kwc">if</span> (nil? (:waiting m))
+      <span class="slc">; No other creature here, need to wait</span>
+      (assoc m :waiting creature)
+       <span class="slc">; Creature is here, lets meet. Each creature will update its</span>
+       <span class="slc">; own state in the context of its agent</span>
+      (<span class="kwc">let</span> [new-ml (dec (:meetings-left m))
+            waiting-creature (:waiting m)]
+        (send creature
+              met-with
+              (:color &#64;waiting-creature)
+              (= creature waiting-creature)
+              *agent*)
+        (send waiting-creature
+              met-with
+              (:color &#64;creature)
+              (= creature waiting-creature)
+              *agent*)
+        (<span class="kwc">if</span> (zero? new-ml)
+          <span class="slc">; We are done, schedule a print of the results</span>
+          (send *in-order* print-result [(:id m) (:start-colors m) (:creatures m)]))
+        (assoc m :meetings-left new-ml :waiting nil)))))
+
+
+<span class="slc">; Functions run in the context of the agent assigned to each creature</span>
+<span class="slc">; i.e. *agent* is the agent for a chameneos.</span>
+(<span class="kwa">defn</span> met-with [creature other-col met-self meeting-place]
+  <span class="str">&quot;Switch color based on the color of the creature met&quot;</span>
+  (send meeting-place meet *agent*)
+  {:meetings (inc (:meetings creature))
+   :color ((:complement (:color creature)) other-col)
+   :met-self (+ (:met-self creature) (<span class="kwc">if</span> met-self <span class="num">1 0</span>))})
+
+
+<span class="slc">; Functions run in the main thread</span>
+(<span class="kwa">def</span> *game-id* (atom <span class="num">0</span>))
+
+(<span class="kwa">defn</span> run-game [n &amp; colors]
+  <span class="str">&quot;Runs a single meeting game, each game has its own set of agents for</span>
+<span class="str">   chameneos and the meeting place&quot;</span>
+  (<span class="kwc">let</span> [creatures (<span class="kwb">for</span> [col colors] (agent {:color col
+                                            :meetings <span class="num">0</span>
+                                            :met-self <span class="num">0</span>}))
+        meeting-place (agent {:id (swap! *game-id* inc)
+                              :start-colors colors
+                              :creatures creatures
+                              :meetings-left n})]
+    (<span class="kwb">doseq</span> [creature creatures]
+      (send meeting-place meet creature))))
+
+(<span class="kwa">defn</span> no-more-games []
+  <span class="str">&quot;No more games will be run, this process will be terminated when all</span>
+<span class="str">  games started with</span> <span class="esc">\&quot;</span><span class="str">run-game</span><span class="esc">\&quot;</span> <span class="str">has finished&quot;</span>
+  (send *in-order* print-result [(swap! *game-id* inc) nil nil]))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [num-meetings (<span class="kwc">if</span> (empty? args)
+                       <span class="num">0</span>
+                       (Integer/parseInt (<span class="kwd">first</span> args)))]
+    (print-color-table)
+    (run-game num-meetings
+	      *blue* *red* *yellow*)
+    (run-game num-meetings
+	      *blue* *red* *yellow* *red* *yellow* *blue* *red*
+	      *yellow* *red* *blue*)
+    (no-more-games)))

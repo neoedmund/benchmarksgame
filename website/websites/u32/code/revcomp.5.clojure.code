@@ -1,0 +1,75 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; ported from Scala revcomp #8</span>
+<span class="slc">;; contributed by Alex Miller</span>
+
+(ns revcomp
+  (:gen-class)
+  (:import [java.util.concurrent ForkJoinPool ForkJoinTask]))
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* true)
+
+(<span class="kwa">def</span> bs (<span class="kwc">let</span> [bs (byte-array <span class="num">128</span>)
+              a <span class="str">&quot;ACBDGHK</span><span class="esc">\n</span><span class="str">MNSRUTWVYacbdghkmnsrutwvy&quot;</span>
+              b <span class="str">&quot;TGVHCDM</span><span class="esc">\n</span><span class="str">KNSYAAWBRTGVHCDMKNSYAAWBR&quot;</span>
+              c (.length a)]
+          (<span class="kwb">loop</span> [i <span class="num">0</span>]
+            (<span class="kwc">when</span> (&lt; i c)
+              (aset bs (.charAt a i) (byte (int (.charAt b i))))
+              (<span class="kwb">recur</span> (inc i))))
+          bs))
+
+(<span class="kwa">defn</span> inner ^long [^long i ^long len ^bytes buf]
+  (<span class="kwc">let</span> [bs ^bytes bs]
+    (<span class="kwc">if</span> (&lt; i len)
+      (<span class="kwc">let</span> [b (int (aget buf i))]
+        (<span class="kwc">if</span> (= b (int <span class="num">62</span>))  <span class="slc">;; &gt;</span>
+          (inc i)
+          (do
+            (aset buf i (aget bs b))
+            (<span class="kwb">recur</span> (inc i) len buf))))
+      i)))
+
+(<span class="kwa">defn</span> reverse-task [^bytes buf ^long begin ^long end]
+  (<span class="kwa">fn</span> []
+    (<span class="kwc">let</span> [buf ^bytes buf]
+      (<span class="kwb">loop</span> [begin begin
+             end end]
+        (<span class="kwc">when</span> (&lt; begin end)
+          (<span class="kwc">let</span> [bb (long (aget buf begin))]
+            (<span class="kwc">if</span> (= bb <span class="num">10</span>)
+              (<span class="kwb">recur</span> (inc begin) end)
+              (<span class="kwc">let</span> [be (long (aget buf end))]
+                (<span class="kwc">if</span> (= be <span class="num">10</span>)
+                  (<span class="kwb">recur</span> begin (dec end))
+                  (do
+                    (aset buf begin (byte be))
+                    (aset buf end (byte bb))
+                    (<span class="kwb">recur</span> (inc begin) (dec end))))))))))))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [pool (ForkJoinPool/commonPool)
+        len (long (.available System/in))
+        buf (byte-array len)]
+    (.read System/in buf)
+    (<span class="kwb">loop</span> [i <span class="num">0</span>
+           tasks []]
+      (<span class="kwc">if</span> (&lt; i len)
+        (<span class="kwc">let</span> [b (long (aget buf i))]
+          (<span class="kwc">if</span> (= b <span class="num">10</span>)
+            (<span class="kwc">let</span> [j (inner i len buf)
+                  end (- j <span class="num">2</span>)
+                  task (ForkJoinTask/adapt (reverse-task buf i end) end)]
+              (.execute pool task)
+              (<span class="kwb">recur</span> (inc j) (conj tasks task)))
+            (<span class="kwb">recur</span> (inc i) tasks)))
+        (<span class="kwb">loop</span> [i <span class="num">0</span>
+               last <span class="num">0</span>]
+          (<span class="kwc">if</span> (&lt; i (count tasks))
+            (<span class="kwc">let</span> [t ^ForkJoinTask (nth tasks i)
+                  r (long (.join t))]
+              (.write System/out buf last (- r last))
+              (<span class="kwb">recur</span> (inc i) r))
+            (.write System/out buf last (- len last))))))))

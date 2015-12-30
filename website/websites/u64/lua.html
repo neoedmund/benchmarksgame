@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="content-type" content="text/html;charset=utf-8" />
+<meta http-equiv="Content-Style-Type" content="text/css" />
+
+<meta name="robots" content="index,follow,archive" /><meta name="description" content="Lua programs vs Java programs (performance on x64 Ubuntu : Intel Q6600 one core)." />
+<title>Lua&nbsp;vs&nbsp;Java | Computer&nbsp;Language&nbsp;Benchmarks&nbsp;Game</title>
+<link rel="stylesheet" type="text/css" href="../benchmark.css" />
+<link rel="shortcut icon" href="../favicon.ico" />
+<link rel="canonical" href="http://benchmarksgame.alioth.debian.org/u64q/lua.html" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body id="u64">
+
+
+<table class="banner"><tr>
+<td><h1><a href="http://benchmarksgame.alioth.debian.org/" title="quad-core and one core, x86 and x64 measurements">x64&nbsp;Ubuntu&nbsp;:&nbsp;Intel&#174;&nbsp;Q6600&#174;&nbsp;one&nbsp;core<br/>Computer&nbsp;<strong>Language</strong>&nbsp;<strong>Benchmarks</strong>&nbsp;Game&nbsp;</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="http://benchmarksgame.alioth.debian.org/play.html" title="How programs were measured. FAQs. How to contribute programs.">[[ Play ]]</a></h1></td>
+</tr></table>
+
+<div id="headtohead">
+<form method="get" action="benchmark.php" id="menus">
+<p><select name="test" id="test">
+<option value="all">- all benchmarks -</option>
+<option  value="nbody">n-body</option>
+<option  value="fannkuchredux">fannkuch-redux</option>
+<option  value="meteor">meteor-contest</option>
+<option  value="fasta">fasta</option>
+<option  value="fastaredux">fasta-redux</option>
+<option  value="spectralnorm">spectral-norm</option>
+<option  value="revcomp">reverse-complement</option>
+<option  value="mandelbrot">mandelbrot</option>
+<option  value="knucleotide">k-nucleotide</option>
+<option  value="regexdna">regex-dna</option>
+<option  value="pidigits">pidigits</option>
+<option  value="chameneosredux">chameneos-redux</option>
+<option  value="threadring">thread-ring</option>
+<option  value="binarytreesredux">binary-trees-redux</option>
+<option  value="binarytrees">binary-trees</option>
+</select>
+<select name="lang" id="lang">
+<option value="all">- all languages -</option>
+<option  value="gnat">Ada 2005 GNAT</option>
+<option  value="gcc">C gcc</option>
+<option  value="clojure">Clojure</option>
+<option  value="csharp">C# Mono</option>
+<option  value="gpp">C++ g++</option>
+<option  value="dart">Dart</option>
+<option  value="hipe">Erlang HiPE</option>
+<option  value="fsharp">F# Mono</option>
+<option  value="ifc">Fortran Intel</option>
+<option  value="go">Go</option>
+<option  value="ghc">Haskell GHC</option>
+<option  value="hack">Hack</option>
+<option  value="java">Java</option>
+<option  value="v8">JavaScript V8</option>
+<option  value="sbcl">Lisp SBCL</option>
+<option selected="selected" value="lua">Lua</option>
+<option  value="ocaml">OCaml</option>
+<option  value="fpascal">Pascal Free Pascal</option>
+<option  value="perl">Perl</option>
+<option  value="php">PHP</option>
+<option  value="python3">Python 3</option>
+<option  value="racket">Racket</option>
+<option  value="yarv">Ruby</option>
+<option  value="jruby">Ruby JRuby</option>
+<option  value="rust">Rust</option>
+<option  value="scala">Scala</option>
+<option  value="vw">Smalltalk VisualWorks</option>
+</select></p>
+<p>vs <select name="lang2" id="lang2">
+<option  value="gnat">Ada 2005 GNAT</option>
+<option  value="gcc">C gcc</option>
+<option  value="clojure">Clojure</option>
+<option  value="csharp">C# Mono</option>
+<option  value="gpp">C++ g++</option>
+<option  value="dart">Dart</option>
+<option  value="hipe">Erlang HiPE</option>
+<option  value="fsharp">F# Mono</option>
+<option  value="ifc">Fortran Intel</option>
+<option  value="go">Go</option>
+<option  value="ghc">Haskell GHC</option>
+<option  value="hack">Hack</option>
+<option selected="selected" value="java">Java</option>
+<option  value="v8">JavaScript V8</option>
+<option  value="sbcl">Lisp SBCL</option>
+<option  value="lua">Lua</option>
+<option  value="ocaml">OCaml</option>
+<option  value="fpascal">Pascal Free Pascal</option>
+<option  value="perl">Perl</option>
+<option  value="php">PHP</option>
+<option  value="python3">Python 3</option>
+<option  value="racket">Racket</option>
+<option  value="yarv">Ruby</option>
+<option  value="jruby">Ruby JRuby</option>
+<option  value="rust">Rust</option>
+<option  value="scala">Scala</option>
+<option  value="vw">Smalltalk VisualWorks</option>
+</select>
+<select name="data" id="data">
+<option  value="u32">x86 one core</option>
+<option  value="u64q">x64 quad-core</option>
+<option  value="u32q">x86 quad-core</option>
+<option selected="selected" value="u64">x64 one core</option>
+</select>
+<input type="submit" value="Show" />
+</p></form>
+ 
+
+<h2><a href="#faster-programs-chart" name="faster-programs-chart">&nbsp;1&nbsp;:&nbsp;<i>At a glance&nbsp;-&nbsp;</i>Are the <strong>Lua programs faster</strong>?</a></h2>
+
+<p>Each chart bar shows, for one unidentified benchmark, how much the fastest <strong>Lua</strong> program <i>used</i> compared to the fastest Java program.</p>
+
+<p>(Memory use is only compared <a href="http://benchmarksgame.alioth.debian.org/play.html#whymemory" title="">for tasks that require memory to be allocated</a>.)</p>
+
+<p><br/><img src="http://benchmarksgame.alioth.debian.org/u64/lua.png"
+   alt=""
+   title=""
+   width="480" height="300"
+ /></p>
+<p>These are not the only compilers and interpreters. These are not the only programs that could be written. These are not the only tasks that could be solved. <a href="http://benchmarksgame.alioth.debian.org/dont-jump-to-conclusions.html"><strong>These are just 10 tiny examples.</strong></a></p>
+
+<h2><a href="#faster-programs-approximately" name="faster-programs-approximately">&nbsp;2&nbsp;:&nbsp;<i>Approximately&nbsp;-&nbsp;</i>Are the <strong>Lua programs faster</strong>?</a></h2>
+
+<p>Each table row shows, for one named benchmark, how much the fastest <strong>Lua</strong> program <i>used</i> compared to the fastest Java program.</p>
+
+<p>(Memory use is only compared <a href="http://benchmarksgame.alioth.debian.org/play.html#whymemory" title="">for tasks that require memory to be allocated</a>.)</p>
+
+<table>
+<colgroup span="1" class="txt"></colgroup>
+<colgroup span="4" class="num"></colgroup>
+
+<tr><th colspan="5">&nbsp;<strong>Lua</strong>&nbsp;<b>used</b> what fraction? <b>used</b> how many times more?&nbsp;</th></tr>
+
+<tr>
+<th>Benchmark</th>
+<th><a href="http://benchmarksgame.alioth.debian.org/play.html#time" title="How do you measure program Elapsed secs?">Time</a></th>
+<th><a href="http://benchmarksgame.alioth.debian.org/play.html#memory" title="How do you measure program Memory KB?">Memory</a></th>
+<th><a href="http://benchmarksgame.alioth.debian.org/play.html#gzbytes" title="How do you measure program Source Code Bytes?">Code</a></th>
+</tr>
+
+<tr><td>&nbsp;regex-dna</td><td class="num2">&#177;</td><td><sup>1</sup>/<sub>2</sub></td><td><sup>1</sup>/<sub>2</sub></td></tr><tr><td>&nbsp;k-nucleotide</td><td class="num2">5&#215;</td><td class="num2">&#177;</td><td><sup>1</sup>/<sub>3</sub></td></tr><tr><td>&nbsp;spectral-norm</td><td class="num2">12&#215;</td><td>&nbsp;</td><td><sup>1</sup>/<sub>3</sub></td></tr><tr><td>&nbsp;n-body</td><td class="num1">19&#215;</td><td>&nbsp;</td><td class="num2">&#177;</td></tr><tr><td>&nbsp;fannkuch-redux</td><td class="num1">26&#215;</td><td>&nbsp;</td><td><sup>1</sup>/<sub>3</sub></td></tr><tr><td>&nbsp;mandelbrot</td><td class="num1">30&#215;</td><td>&nbsp;</td><td><sup>1</sup>/<sub>2</sub></td></tr><tr><td>&nbsp;binary-trees</td><td class="num1">74&#215;</td><td class="num2">4&#215;</td><td><sup>1</sup>/<sub>2</sub></td></tr></table>
+
+<table>
+<tr><th colspan="8">&nbsp;<strong>Lua</strong>&nbsp;<b>used</b> what fraction? <b>used</b> how many times more?&nbsp;</th></tr>
+
+<tr>
+<th><a href="http://benchmarksgame.alioth.debian.org/play.html#time" title="? More">Time-used</a></th>
+<th>&nbsp;|-</th>
+<th>&nbsp;|---</th>
+<th>&nbsp;25%</th>
+<th class="sort">median</th>
+<th>&nbsp;75%</th>
+<th>&nbsp;---|</th>
+<th>&nbsp;-|</th>
+</tr>
+<tr>
+<th>(Elapsed secs)</th><td class="num2">&#177;</td><td class="num2">&#177;</td><td class="num2">8&#215;</td><td class="num1">19&#215;</td><td class="num1">28&#215;</td><td class="num1">58&#215;</td><td class="num1">74&#215;</td></tr>
+</table>
+
+
+<p><span class="num2">&#177;</span> read the measurements and then read the program source code.<br/></p>
+
+<h2><a href="#faster-programs-measurements" name="faster-programs-measurements">&nbsp;3&nbsp;:&nbsp;<em>Measurements&nbsp;-&nbsp;</em>Are the <strong>Lua programs faster</strong>?</a></h2>
+
+<p>These are not the only tasks that could be solved. These are just 10 tiny examples. These are not the only compilers and interpreters. <strong>These are not the only programs that could be written.</strong></p>
+
+
+<p>For each named benchmark, measurements of <strong><i>the</i> <em>fastest</em> Lua</strong> program are shown for comparison against measurements of <i>the</i> <em>fastest</em> Java program.</p>
+
+<table>
+<tr>
+<th>Program&nbsp;Source&nbsp;Code</th>
+<th><a href="http://benchmarksgame.alioth.debian.org/play.html#time" title="How do you measure program CPU secs?">CPU&nbsp;secs</a></th>
+<th><a href="http://benchmarksgame.alioth.debian.org/play.html#time" title="How do you measure program Elapsed secs?">Elapsed&nbsp;secs</a></th>
+<th><a href="http://benchmarksgame.alioth.debian.org/play.html#memory" title="How do you measure program Memory KB?">Memory&nbsp;KB</a></th>
+<th><a href="http://benchmarksgame.alioth.debian.org/play.html#gzbytes" title="How do you measure program Source Code Bytes?">Code&nbsp;B</a></th>
+<th><a href="http://benchmarksgame.alioth.debian.org/play.html#cpuloadpercent" title="How do you measure CPU Load?">&asymp;&nbsp;CPU&nbsp;Load</a></th>
+</tr>
+
+<tr><th class="txt" colspan="3">&nbsp;<a name="regexdna" href="performance.php?test=regexdna" title="Measurements for all the regex-dna benchmark programs">regex-dna</a>&nbsp;</th><th colspan="3"></th></tr><tr><td><a href="program.php?test=regexdna&amp;lang=lua&amp;id=2" title="Read the Program Source Code : Lua regex-dna"><strong>Lua</strong></a></td><td>31.04</td><td >31.05</td><td>379,828</td><td>596</td><td class="smaller">&nbsp;&nbsp;1%&nbsp;1%&nbsp;0%&nbsp;100%</td></tr><tr><td><a href="program.php?test=regexdna&amp;lang=java&amp;id=7" title="Read the Program Source Code : Java regex-dna">Java</a></td><td>21.39</td><td >21.40</td><td>575,372</td><td>1284</td><td class="smaller">&nbsp;&nbsp;1%&nbsp;0%&nbsp;1%&nbsp;100%</td></tr><tr><th class="txt" colspan="3">&nbsp;<a name="knucleotide" href="performance.php?test=knucleotide" title="Measurements for all the k-nucleotide benchmark programs">k-nucleotide</a>&nbsp;</th><th colspan="3"></th></tr><tr><td><a href="program.php?test=knucleotide&amp;lang=lua&amp;id=2" title="Read the Program Source Code : Lua k-nucleotide"><strong>Lua</strong></a></td><td>173.24</td><td >174.70</td><td>793,696</td><td>613</td><td class="smaller">&nbsp;&nbsp;1%&nbsp;1%&nbsp;0%&nbsp;100%</td></tr><tr><td><a href="program.php?test=knucleotide&amp;lang=java&amp;id=7" title="Read the Program Source Code : Java k-nucleotide">Java</a></td><td>34.79</td><td >34.83</td><td>1,124,104</td><td>1844</td><td class="smaller">&nbsp;&nbsp;1%&nbsp;1%&nbsp;0%&nbsp;100%</td></tr><tr><th class="txt" colspan="3">&nbsp;<a name="spectralnorm" href="performance.php?test=spectralnorm" title="Measurements for all the spectral-norm benchmark programs">spectral-norm</a>&nbsp;</th><th colspan="3"></th></tr><tr><td><a href="program.php?test=spectralnorm&amp;lang=lua&amp;id=1" title="Read the Program Source Code : Lua spectral-norm"><strong>Lua</strong></a></td><td>190.00</td><td >190.05</td><td>1,324</td><td>329</td><td class="smaller">&nbsp;&nbsp;1%&nbsp;0%&nbsp;0%&nbsp;100%</td></tr><tr><td><a href="program.php?test=spectralnorm&amp;lang=java&amp;id=2" title="Read the Program Source Code : Java spectral-norm">Java</a></td><td>16.22</td><td >16.22</td><td>32,332</td><td>950</td><td class="smaller">&nbsp;&nbsp;0%&nbsp;1%&nbsp;1%&nbsp;100%</td></tr><tr><th class="txt" colspan="3">&nbsp;<a name="nbody" href="performance.php?test=nbody" title="Measurements for all the n-body benchmark programs">n-body</a>&nbsp;</th><th colspan="3"></th></tr><tr><td><a href="program.php?test=nbody&amp;lang=lua&amp;id=4" title="Read the Program Source Code : Lua n-body"><strong>Lua</strong></a></td><td>435.74</td><td >435.86</td><td>1,080</td><td>1305</td><td class="smaller">&nbsp;&nbsp;1%&nbsp;0%&nbsp;0%&nbsp;100%</td></tr><tr><td><a href="program.php?test=nbody&amp;lang=java&amp;id=2" title="Read the Program Source Code : Java n-body">Java</a></td><td>22.67</td><td >22.68</td><td>30,056</td><td>1424</td><td class="smaller">&nbsp;&nbsp;0%&nbsp;0%&nbsp;1%&nbsp;100%</td></tr><tr><th class="txt" colspan="3">&nbsp;<a name="fannkuchredux" href="performance.php?test=fannkuchredux" title="Measurements for all the fannkuch-redux benchmark programs">fannkuch-redux</a>&nbsp;</th><th colspan="3"></th></tr><tr><td><a href="program.php?test=fannkuchredux&amp;lang=lua&amp;id=1" title="Read the Program Source Code : Lua fannkuch-redux"><strong>Lua</strong></a></td><td>1,786.44</td><td >1,786.85</td><td>1,008</td><td>462</td><td class="smaller">&nbsp;&nbsp;1%&nbsp;1%&nbsp;1%&nbsp;100%</td></tr><tr><td><a href="program.php?test=fannkuchredux&amp;lang=java&amp;id=1" title="Read the Program Source Code : Java fannkuch-redux">Java</a></td><td>69.25</td><td >69.27</td><td>47,784</td><td>1282</td><td class="smaller">&nbsp;&nbsp;1%&nbsp;0%&nbsp;0%&nbsp;100%</td></tr><tr><th class="txt" colspan="3">&nbsp;<a name="mandelbrot" href="performance.php?test=mandelbrot" title="Measurements for all the mandelbrot benchmark programs">mandelbrot</a>&nbsp;</th><th colspan="3"></th></tr><tr><td><a href="program.php?test=mandelbrot&amp;lang=lua&amp;id=2" title="Read the Program Source Code : Lua mandelbrot"><strong>Lua</strong></a></td><td>726.87</td><td >727.06</td><td>1,068</td><td>367</td><td class="smaller">&nbsp;&nbsp;1%&nbsp;1%&nbsp;1%&nbsp;100%</td></tr><tr><td><a href="program.php?test=mandelbrot&amp;lang=java&amp;id=2" title="Read the Program Source Code : Java mandelbrot">Java</a></td><td>23.92</td><td >23.93</td><td>91,684</td><td>796</td><td class="smaller">&nbsp;&nbsp;1%&nbsp;1%&nbsp;1%&nbsp;100%</td></tr><tr><th class="txt" colspan="3">&nbsp;<a name="binarytrees" href="performance.php?test=binarytrees" title="Measurements for all the binary-trees benchmark programs">binary-trees</a>&nbsp;</th><th colspan="3"></th></tr><tr><td><a href="program.php?test=binarytrees&amp;lang=lua&amp;id=2" title="Read the Program Source Code : Lua binary-trees"><strong>Lua</strong></a></td><td>417.22</td><td >417.90</td><td>1,672,244</td><td>446</td><td class="smaller">&nbsp;&nbsp;0%&nbsp;1%&nbsp;1%&nbsp;100%</td></tr><tr><td><a href="program.php?test=binarytrees&amp;lang=java&amp;id=4" title="Read the Program Source Code : Java binary-trees">Java</a></td><td>5.60</td><td >5.61</td><td>434,772</td><td>919</td><td class="smaller">&nbsp;&nbsp;1%&nbsp;1%&nbsp;0%&nbsp;100%</td></tr><tr><th class="txt" colspan="3">&nbsp;<a name="fastaredux" href="performance.php?test=fastaredux" title="Measurements for all the fasta-redux benchmark programs">fasta-redux</a>&nbsp;</th><th colspan="3"></th></tr><td></td><td colspan="2"><span class="message">No&nbsp;program</span></td><td colspan="2"></td><td></td></tr><tr><td><a href="program.php?test=fastaredux&amp;lang=java&amp;id=3" title="Read the Program Source Code : Java fasta-redux">Java</a></td><td>0.20</td><td >0.22</td><td>1,704</td><td>1443</td><td class="smaller">&nbsp;&nbsp;5%&nbsp;0%&nbsp;0%&nbsp;100%</td></tr><tr><th class="txt" colspan="3">&nbsp;<a name="fasta" href="performance.php?test=fasta" title="Measurements for all the fasta benchmark programs">fasta</a>&nbsp;</th><th colspan="3"></th></tr><tr><td><a href="program.php?test=fasta&amp;lang=lua&amp;id=1" title="Read the Program Source Code : Lua fasta"><strong>Lua</strong></a></td><td colspan="2"><span class="message">Failed</span></td><td colspan="2"></td><td></td></tr><tr><td><a href="program.php?test=fasta&amp;lang=java&amp;id=4" title="Read the Program Source Code : Java fasta">Java</a></td><td>0.24</td><td >0.24</td><td>2,012</td><td>1507</td><td class="smaller">&nbsp;&nbsp;0%&nbsp;0%&nbsp;0%&nbsp;100%</td></tr><tr><th class="txt" colspan="3">&nbsp;<a name="revcomp" href="performance.php?test=revcomp" title="Measurements for all the reverse-complement benchmark programs">reverse-complement</a>&nbsp;</th><th colspan="3"></th></tr><tr><td><a href="program.php?test=revcomp&amp;lang=lua&amp;id=1" title="Read the Program Source Code : Lua reverse-complement"><strong>Lua</strong></a></td><td colspan="2"><span class="message">Failed</span></td><td colspan="2"></td><td></td></tr><tr><td><a href="program.php?test=revcomp&amp;lang=java&amp;id=6" title="Read the Program Source Code : Java reverse-complement">Java</a></td><td>0.23</td><td >0.24</td><td>2,008</td><td>745</td><td class="smaller">&nbsp;&nbsp;0%&nbsp;0%&nbsp;8%&nbsp;100%</td></tr><tr><th class="txt" colspan="3">&nbsp;<a name="pidigits" href="performance.php?test=pidigits" title="Measurements for all the pidigits benchmark programs">pidigits</a>&nbsp;</th><th colspan="3"></th></tr><tr><td><a href="program.php?test=pidigits&amp;lang=lua&amp;id=5" title="Read the Program Source Code : Lua pidigits"><strong>Lua</strong></a></td><td colspan="2"><span class="message">Failed</span></td><td colspan="2"></td><td></td></tr><tr><td><a href="program.php?test=pidigits&amp;lang=java&amp;id=2" title="Read the Program Source Code : Java pidigits">Java</a></td><td>0.30</td><td >0.33</td><td>2,020</td><td>938</td><td class="smaller">&nbsp;&nbsp;0%&nbsp;0%&nbsp;3%&nbsp;100%</td></tr>
+</table>
+
+
+<h2><a href="#measurements" name="measurements">&nbsp;4&nbsp;:&nbsp;Are there other <strong>Lua programs</strong> for these benchmarks?</a></h2>
+<p>Remember - those are just the fastest <em>Lua</em> and <i>Java</i> programs measured on this OS/machine. <b>Check</b> if there are other implementations of these benchmark programs for Lua.</p>
+<form method="get" action="measurements.php">
+<p><select name="lang">
+<option  value="gnat">Ada 2005 GNAT</option>
+<option  value="gcc">C gcc</option>
+<option  value="clojure">Clojure</option>
+<option  value="csharp">C# Mono</option>
+<option  value="gpp">C++ g++</option>
+<option  value="dart">Dart</option>
+<option  value="hipe">Erlang HiPE</option>
+<option  value="fsharp">F# Mono</option>
+<option  value="ifc">Fortran Intel</option>
+<option  value="go">Go</option>
+<option  value="ghc">Haskell GHC</option>
+<option  value="hack">Hack</option>
+<option  value="java">Java</option>
+<option  value="v8">JavaScript V8</option>
+<option  value="sbcl">Lisp SBCL</option>
+<option selected="selected" value="lua">Lua</option>
+<option  value="ocaml">OCaml</option>
+<option  value="fpascal">Pascal Free Pascal</option>
+<option  value="perl">Perl</option>
+<option  value="php">PHP</option>
+<option  value="python3">Python 3</option>
+<option  value="racket">Racket</option>
+<option  value="yarv">Ruby</option>
+<option  value="jruby">Ruby JRuby</option>
+<option  value="rust">Rust</option>
+<option  value="scala">Scala</option>
+<option  value="vw">Smalltalk VisualWorks</option>
+</select>
+<input type="submit" value="Show" />
+</p></form>
+
+<p>Maybe one of those other Lua programs is fastest on <a href="http://benchmarksgame.alioth.debian.org/dont-jump-to-conclusions.html#multicore" title="x86, x64 and quad-core">a different OS/machine</a>.</p>
+
+
+<h2><a href="#measurements" name="measurements">&nbsp;5&nbsp;:&nbsp;Are there other faster programs for these benchmarks?</a></h2>
+<p>Remember - those are just the fastest <em>Lua</em> and <i>Java</i> programs measured on this OS/machine. <b>Check</b> if there are faster implementations of these benchmark programs for other programming languages.</p>
+<form method="get" action="performance.php">
+<p><select name="test">
+<option  value="nbody">n-body</option>
+<option  value="fannkuchredux">fannkuch-redux</option>
+<option  value="meteor">meteor-contest</option>
+<option  value="fasta">fasta</option>
+<option  value="fastaredux">fasta-redux</option>
+<option  value="spectralnorm">spectral-norm</option>
+<option  value="revcomp">reverse-complement</option>
+<option  value="mandelbrot">mandelbrot</option>
+<option  value="knucleotide">k-nucleotide</option>
+<option  value="regexdna">regex-dna</option>
+<option  value="pidigits">pidigits</option>
+<option  value="chameneosredux">chameneos-redux</option>
+<option  value="threadring">thread-ring</option>
+<option  value="binarytreesredux">binary-trees-redux</option>
+<option  value="binarytrees">binary-trees</option>
+</select>
+<input type="submit" value="Show" />
+</p></form>
+<p>Maybe one of those other programs is fastest on <a href="http://benchmarksgame.alioth.debian.org/dont-jump-to-conclusions.html#multicore" title="x86, x64 and quad-core">a different OS/machine</a>.</p>
+
+
+<h3><a href="#about" name="about">&nbsp;<strong>Lua</strong></a>&nbsp;:&nbsp;associative arrays for extensible embedded scripting&nbsp;</h3>
+<p></p>
+<p>online book <a href="http://www.inf.puc-rio.br/~roberto/book/">"Programming in Lua" by Roberto Ierusalimschy</a></p>
+<p><a href="http://kore.net/company/luagamedev.html">"Game Developers Conference 2010 Lua Tutorial" (slides)</a></p>
+<p>Lua 5.3.0 Copyright (C) 1994-2015 Lua.org, PUC-Rio</p>
+<p>Home Page: <a href="http://www.lua.org/">http://www.lua.org/</a></p>
+<p>Download: <a href="http://www.lua.org/download.html">http://www.lua.org/download.html</a></p>
+
+<p class="imgfooter">
+<a href="http://benchmarksgame.alioth.debian.org/license.html" title="The Computer Language Benchmarks Game is published under this revised BSD license" >
+   <img src="../open_source_button.png" alt="Revised BSD license" height="31" width="88" />
+</a>
+</p>
+<p class="imgfooter">&nbsp; <a href="http://benchmarksgame.alioth.debian.org/">Home</a> &nbsp; <a href="http://benchmarksgame.alioth.debian.org/dont-jump-to-conclusions.html">Conclusions</a> &nbsp; <a href="http://benchmarksgame.alioth.debian.org/license.html">License</a> &nbsp; <a href="http://benchmarksgame.alioth.debian.org/play.html">Play</a> &nbsp;</p>
+</div>
+
+<script src="../benchmark.js" type="text/javascript" language="JavaScript"></script>
+
+
+<script type="text/javascript">var _gaq=_gaq||[];_gaq.push(['_setAccount','UA-37137205-1']);_gaq.push(['_trackPageview']);(function(){var ga=document.createElement('script');ga.type='text/javascript';ga.async=true;ga.src=('https:'==document.location.protocol?'https://ssl':'http://www')+'.google-analytics.com/ga.js';var s=document.getElementsByTagName('script')[0];s.parentNode.insertBefore(ga,s);})();</script>
+</body>
+</html>
+

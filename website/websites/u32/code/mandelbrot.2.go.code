@@ -1,0 +1,135 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Martin Koistinen</span>
+<span class="com"> * Based on mandelbrot.c contributed by Greg Buchholz and The Go Authors</span>
+<span class="com"> * flag.Arg hack by Isaac Gouy</span>
+<span class="com"> *</span>
+<span class="com"> * Large changes by Bill Broadley, including:</span>
+<span class="com"> * 1) Switching the one goroutine per line to one per CPU</span>
+<span class="com"> * 2) Replacing gorouting calls with channels</span>
+<span class="com"> * 3) Handling out of order results in the file writer.</span>
+<span class="com"></span>
+<span class="com"> * modified by Sean Lake</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;bufio&quot;</span>
+   <span class="str">&quot;flag&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+   <span class="str">&quot;strconv&quot;</span>
+   <span class="str">&quot;sync&quot;</span>
+)
+
+<span class="com">/* targeting a q6600 system, two cpu workers per core */</span>
+<span class="kwa">const</span> pool = <span class="num">8</span>
+<span class="kwa">const</span> log2pool = <span class="num">3</span>
+
+<span class="kwa">const</span> LIMIT = <span class="num">2.0</span>
+<span class="kwa">const</span> ITER = <span class="num">50</span> <span class="slc">// Benchmark parameter</span>
+<span class="kwa">const</span> SIZE = <span class="num">16000</span>
+
+<span class="kwa">var</span> bytesPerRow <span class="kwb">int</span>
+
+<span class="slc">// This func is responsible for rendering a row of pixels,</span>
+<span class="slc">// and when complete writing it out to the file.</span>
+
+<span class="kwa">func</span> <span class="kwd">renderRow</span>(w, h, y0, maxiter <span class="kwb">int</span>, wg *sync.WaitGroup, fieldChan <span class="kwa">chan</span>&lt;- []<span class="kwb">byte</span>) {
+
+   <span class="kwa">var</span> Zr, Zi, Tr, Ti, Cr <span class="kwb">float64</span>
+   <span class="kwa">var</span> x, i <span class="kwb">int</span>
+
+   <span class="slc">//All fields have at least floor( h / pool ) rows</span>
+   <span class="slc">//numRows := h / pool //Uncomment if pool is not a power of 2</span>
+   numRows := h &gt;&gt; log2pool <span class="slc">//Comment out if pool is not a power of 2</span>
+
+   <span class="slc">//Add one more row if this renderer needs to cover the extra row</span>
+   <span class="com">/*if y0 &lt; h % pool { //Uncomment if pool is not a power of 2</span>
+<span class="com">      numRows++</span>
+<span class="com">   }*/</span>
+   <span class="kwa">if</span> y0 &lt; h&amp;<span class="kwb">int</span>(pool-<span class="num">1</span>) { <span class="slc">//Comment out if pool is not a power of 2</span>
+      numRows++
+   }
+
+   field := <span class="kwb">make</span>([]<span class="kwb">byte</span>, numRows*bytesPerRow)
+
+   <span class="kwa">for</span> y := <span class="num">0</span>; y &lt; numRows; y++ {
+
+      offset := bytesPerRow * y
+      <span class="slc">//uncomment if pool is not a power of 2</span>
+      <span class="slc">//Ci := (float64((y * pool + y0) &lt;&lt; 1)/float64(h) - 1.0)</span>
+      <span class="slc">//comment out if pool is not a power of 2</span>
+      Ci := (<span class="kwb">float64</span>((y&lt;&lt;log2pool+y0)&lt;&lt;<span class="num">1</span>)/<span class="kwb">float64</span>(h) - <span class="num">1.0</span>)
+
+      <span class="kwa">for</span> x = <span class="num">0</span>; x &lt; w; x++ {
+         Zr, Zi, Tr, Ti = <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>
+         Cr = (<span class="kwb">float64</span>(x&lt;&lt;<span class="num">1</span>)/<span class="kwb">float64</span>(w) - <span class="num">1.5</span>)
+
+         <span class="kwa">for</span> i = <span class="num">0</span>; i &lt; maxiter &amp;&amp; Tr+Ti &lt;= LIMIT*LIMIT; i++ {
+            Zr, Zi = Tr-Ti+Cr, <span class="num">2</span>*Zr*Zi+Ci
+            Tr, Ti = Zr*Zr, Zi*Zi
+         }
+
+         <span class="slc">// Store the value in the array of ints</span>
+         <span class="kwa">if</span> Tr+Ti &lt;= LIMIT*LIMIT {
+            field[offset+(x&gt;&gt;<span class="num">3</span>)] |= (<span class="kwb">byte</span>(<span class="num">1</span>) &lt;&lt; <span class="kwb">uint</span>(<span class="num">7</span>-(x&amp;<span class="kwb">int</span>(<span class="num">7</span>))))
+         }
+      }
+   }
+   <span class="slc">//Signal finish</span>
+   wg.<span class="kwd">Done</span>()
+   fieldChan &lt;- field
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   runtime.<span class="kwd">GOMAXPROCS</span>(pool)
+
+   size := SIZE <span class="slc">// Contest settings</span>
+   maxiter := ITER
+
+   <span class="slc">// Get input, if any...</span>
+   flag.<span class="kwd">Parse</span>()
+   <span class="kwa">if</span> flag.<span class="kwd">NArg</span>() &gt; <span class="num">0</span> {
+      size, _ = strconv.<span class="kwd">Atoi</span>(flag.<span class="kwd">Arg</span>(<span class="num">0</span>))
+   }
+   w, h := size, size
+   bytesPerRow = w / <span class="num">8</span>
+
+   out := bufio.<span class="kwd">NewWriter</span>(os.Stdout)
+   <span class="kwa">defer</span> out.<span class="kwd">Flush</span>()
+   fmt.<span class="kwd">Fprintf</span>(out, <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d %d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, w, h)
+
+   fieldChans := <span class="kwb">make</span>([]<span class="kwa">chan</span> []<span class="kwb">byte</span>, pool)
+
+   <span class="com">/* Wait group for finish */</span>
+   wg := <span class="kwb">new</span>(sync.WaitGroup)
+   <span class="slc">// start pool workers, and assign all work</span>
+   <span class="kwa">for</span> y := <span class="num">0</span>; y &lt; pool; y++ {
+      wg.<span class="kwd">Add</span>(<span class="num">1</span>)
+      fc := <span class="kwb">make</span>(<span class="kwa">chan</span> []<span class="kwb">byte</span>)
+      fieldChans[y] = fc
+      <span class="kwa">go</span> <span class="kwd">renderRow</span>(w, h, y, maxiter, wg, fc)
+   }
+
+   fields := <span class="kwb">make</span>([][]<span class="kwb">byte</span>, pool)
+
+   <span class="com">/* wait for the file workers to finish, then write */</span>
+   wg.<span class="kwd">Wait</span>()
+   <span class="kwa">for</span> y := <span class="num">0</span>; y &lt; pool; y++ {
+      fields[y] = &lt;-fieldChans[y]
+   }
+
+   <span class="slc">//Interlace the fields for write out</span>
+   <span class="kwa">var</span> rowEnd <span class="kwb">int</span>
+   <span class="kwa">for</span> rowStart := <span class="num">0</span>; rowStart &lt; <span class="kwb">len</span>(fields[<span class="num">0</span>]); rowStart = rowEnd {
+      rowEnd = rowStart + bytesPerRow
+      <span class="kwa">for</span> fieldNum := <span class="num">0</span>; fieldNum &lt; pool &amp;&amp;
+         rowStart &lt; <span class="kwb">len</span>(fields[fieldNum]); fieldNum++ {
+         out.<span class="kwd">Write</span>(fields[fieldNum][rowStart:rowEnd])
+      }
+   }
+}

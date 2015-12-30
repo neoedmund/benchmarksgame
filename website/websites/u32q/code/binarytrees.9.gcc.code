@@ -1,0 +1,214 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Kenneth Jonsson</span>
+<span class="com"> */</span>
+<span class="ppc">#include &lt;alloca.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+
+<span class="com">/* The work area are for local variables and return addresses. */</span>
+<span class="ppc">#define STACK_WORK_SZ 32*1024</span>
+
+<span class="com">/*</span>
+<span class="com"> * Assume 4kB pages, which is true for both i386 and x86_64, some</span>
+<span class="com"> * OS:es requires stack sizes aligned to a page boundary.</span>
+<span class="com"> * Linux does not, OS X does.</span>
+<span class="com"> */</span>
+<span class="ppc">#define PAGE_SIZE (1 &lt;&lt; 12)</span>
+
+<span class="ppc">#define bottom_up_tree(item, depth)                                     \</span>
+<span class="ppc">    init_node(alloca(sizeof(struct node) * num_elem(depth)),            \</span>
+<span class="ppc">              item,                                                     \</span>
+<span class="ppc">              num_elem(depth))</span>
+
+<span class="kwb">struct</span> node {
+    <span class="kwb">int</span> item;
+    <span class="kwb">struct</span> node *left;
+    <span class="kwb">struct</span> node *right;
+};
+
+<span class="kwb">struct</span> item_worker_data {
+    <span class="kwb">int</span> iterations;
+    <span class="kwb">int</span> depth;
+    <span class="kwb">int</span> check;
+};
+
+<span class="kwb">struct</span> args {
+    <span class="kwb">int</span> min_depth;
+    <span class="kwb">int</span> max_depth;
+};
+
+
+<span class="kwb">static int</span>
+<span class="kwd">num_elem</span>(<span class="kwb">int</span> height)
+{
+    <span class="kwa">if</span> (height &lt; <span class="num">0</span>)
+        <span class="kwa">return</span> <span class="num">0</span>;
+    <span class="kwa">return</span> (<span class="num">1</span> &lt;&lt; height) + <span class="kwd">num_elem</span>(height - <span class="num">1</span>);
+}
+
+<span class="com">/*</span>
+<span class="com"> * Some pthread implementations requires that the stack size is a</span>
+<span class="com"> * multiple of the size of a page</span>
+<span class="com"> */</span>
+<span class="kwb">static int</span>
+<span class="kwd">stack_sz</span>(<span class="kwb">int</span> depth)
+{
+    <span class="kwb">int</span> sz = (<span class="kwd">num_elem</span>(depth) * <span class="kwa">sizeof</span>(<span class="kwb">struct</span> node) + STACK_WORK_SZ);
+    <span class="kwa">return</span> (sz + PAGE_SIZE - <span class="num">1</span>) &amp; ~(PAGE_SIZE - <span class="num">1</span>);
+}
+
+<span class="kwb">static int</span>
+<span class="kwd">node_check</span>(<span class="kwb">const struct</span> node *n)
+{
+    <span class="kwa">if</span> (n-&gt;left)
+        <span class="kwa">return</span> <span class="kwd">node_check</span>(n-&gt;left) + n-&gt;item - <span class="kwd">node_check</span>(n-&gt;right);
+    <span class="kwa">return</span> n-&gt;item;
+}
+
+<span class="kwb">static struct</span> node *
+<span class="kwd">init_node</span>(<span class="kwb">struct</span> node *node, <span class="kwb">int</span> item, <span class="kwb">int</span> n)
+{
+    <span class="kwb">int</span> subtree_n; <span class="com">/* Number of nodes in left/right subtree to this</span>
+<span class="com">                    * node */</span>
+
+    <span class="kwa">if</span> (n == <span class="num">0</span>)
+        <span class="kwa">return</span> NULL;
+
+    node-&gt;item = item;
+    subtree_n = n / <span class="num">2</span>;
+    <span class="com">/*</span>
+<span class="com">     * left subtree is stored in the front half of the stack space and</span>
+<span class="com">     * the right subtree is stored in the back half of the stack</span>
+<span class="com">     * space</span>
+<span class="com">     */</span>
+    node-&gt;left = <span class="kwd">init_node</span>(node + <span class="num">1</span>, <span class="num">2</span> * item - <span class="num">1</span>, subtree_n);
+    node-&gt;right = <span class="kwd">init_node</span>(node + <span class="num">1</span> + subtree_n, <span class="num">2</span> * item, subtree_n);
+    <span class="kwa">return</span> node;
+}
+
+<span class="com">/*</span>
+<span class="com"> * Do one iteration, must be in a non-static function to ensure that</span>
+<span class="com"> * the stack frame is released between each invocation, i.e. this</span>
+<span class="com"> * function must not be inlined.</span>
+<span class="com"> */</span>
+<span class="kwb">int</span>
+<span class="kwd">do_one_iteration</span>(<span class="kwb">int</span> i, <span class="kwb">int</span> depth)
+{
+    <span class="kwb">struct</span> node *a, *b;
+
+    a = <span class="kwd">bottom_up_tree</span>(i, depth);
+    b = <span class="kwd">bottom_up_tree</span>(-i, depth);
+    <span class="kwa">return</span> <span class="kwd">node_check</span>(a) + <span class="kwd">node_check</span>(b);
+}
+
+<span class="com">/*</span>
+<span class="com"> * Calculate the checksum at a specific depth. This is the equivalent</span>
+<span class="com"> * of the body to the the outer for-loop of most other</span>
+<span class="com"> * solutions. Enough space to store two trees with a depth of</span>
+<span class="com"> * 'wd-&gt;depth'</span>
+<span class="com"> */</span>
+<span class="kwb">void</span> *
+<span class="kwd">item_worker</span>(<span class="kwb">void</span> *arg)
+{
+    <span class="kwb">struct</span> item_worker_data *wd = arg;
+    <span class="kwb">int</span> i;
+
+    <span class="kwa">for</span> (i = <span class="num">1</span>; i &lt;= wd-&gt;iterations; ++i)
+        wd-&gt;check += <span class="kwd">do_one_iteration</span>(i, wd-&gt;depth);
+    <span class="kwa">return</span> wd;
+}
+
+<span class="com">/*</span>
+<span class="com"> * The calculations is started in reverse order compared to most other</span>
+<span class="com"> * solutions. The reason is that all data must be on the stack and the</span>
+<span class="com"> * result from shallowest tree must be printed first.</span>
+<span class="com"> */</span>
+<span class="kwb">void</span>
+<span class="kwd">do_trees</span>(<span class="kwb">int</span> depth, <span class="kwb">int</span> min_depth, <span class="kwb">int</span> max_depth)
+{
+    pthread_t thread;
+    pthread_attr_t attr;
+    <span class="kwb">struct</span> item_worker_data wd;
+
+    <span class="kwa">if</span> (depth &lt; min_depth)
+        <span class="kwa">return</span>;
+
+    <span class="kwd">pthread_attr_init</span>(&amp;attr);
+    <span class="kwd">pthread_attr_setstacksize</span>(&amp;attr, <span class="kwd">stack_sz</span>(depth + <span class="num">1</span>));
+
+    wd.iterations = <span class="num">1</span> &lt;&lt; (max_depth - depth + min_depth);
+    wd.check = <span class="num">0</span>;
+    wd.depth = depth;
+    <span class="kwd">pthread_create</span>(&amp;thread, &amp;attr, item_worker, &amp;wd);
+
+    <span class="kwd">do_trees</span>(depth-<span class="num">2</span>, min_depth, max_depth);
+
+    <span class="kwd">pthread_join</span>(thread, NULL);
+    <span class="kwd">pthread_attr_destroy</span>(&amp;attr);
+
+    <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\t</span> <span class="str">trees of depth %d</span><span class="esc">\t</span> <span class="str">check: %d</span><span class="esc">\n</span><span class="str">&quot;</span>,
+           <span class="num">2</span> * wd.iterations,
+           depth,
+           wd.check);
+}
+
+<span class="kwb">void</span>
+<span class="kwd">stretchdepth_tree</span>(<span class="kwb">int</span> depth)
+{
+    <span class="kwb">struct</span> node *stretch_tree = <span class="kwd">bottom_up_tree</span>(<span class="num">0</span>, depth);
+
+    <span class="kwd">printf</span>(<span class="str">&quot;stretch tree of depth %i</span><span class="esc">\t</span> <span class="str">check: %i</span><span class="esc">\n</span><span class="str">&quot;</span>,
+           depth,
+           <span class="kwd">node_check</span>(stretch_tree));
+}
+
+<span class="com">/*</span>
+<span class="com"> * Main function with enough stack space to fit the tree used to</span>
+<span class="com"> * 'stretch' memory. Same space is reused to the long lived tree.</span>
+<span class="com"> */</span>
+<span class="kwb">void</span> *
+<span class="kwd">main_thread</span>(<span class="kwb">void</span> *args_)
+{
+    <span class="kwb">struct</span> node *long_lived_tree;
+    <span class="kwb">struct</span> args *args = args_;
+
+    <span class="kwd">stretchdepth_tree</span>(args-&gt;max_depth + <span class="num">1</span>);
+    long_lived_tree = <span class="kwd">bottom_up_tree</span>(<span class="num">0</span>, args-&gt;max_depth);
+    <span class="com">/*</span>
+<span class="com">     * Calculates all subtrees for every second depth ranging from</span>
+<span class="com">     * min_depth up to, but not including max_depth</span>
+<span class="com">     */</span>
+    <span class="kwd">do_trees</span>(args-&gt;max_depth &amp; ~<span class="num">1</span>,
+             args-&gt;min_depth,
+             args-&gt;max_depth);
+    <span class="kwd">printf</span>(<span class="str">&quot;long lived tree of depth %i</span><span class="esc">\t</span> <span class="str">check: %i</span><span class="esc">\n</span><span class="str">&quot;</span>,
+           args-&gt;max_depth,
+           <span class="kwd">node_check</span>(long_lived_tree));
+
+    <span class="kwa">return</span> NULL;
+}
+
+<span class="kwb">int</span>
+<span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[])
+{
+    <span class="kwb">int</span> req_depth = (argc == <span class="num">2</span> ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">10</span>);
+    pthread_t thread;
+    pthread_attr_t attr;
+    <span class="kwb">struct</span> args args;
+
+    args.min_depth = <span class="num">4</span>;
+    args.max_depth = (req_depth &gt; args.min_depth + <span class="num">2</span>
+                      ? req_depth
+                      : args.min_depth + <span class="num">2</span>);
+
+    <span class="kwd">pthread_attr_init</span>(&amp;attr);
+    <span class="kwd">pthread_attr_setstacksize</span>(&amp;attr, <span class="kwd">stack_sz</span>(args.max_depth + <span class="num">1</span>));
+    <span class="kwd">pthread_create</span>(&amp;thread, &amp;attr, main_thread, &amp;args);
+    <span class="kwd">pthread_attr_destroy</span>(&amp;attr);
+    <span class="kwd">pthread_join</span>(thread, NULL);
+
+    <span class="kwa">return</span> <span class="num">0</span>;
+}

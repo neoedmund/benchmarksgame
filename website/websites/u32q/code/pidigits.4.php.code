@@ -1,0 +1,58 @@
+&lt;?php 
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Oleksii Prudkyi</span>
+<span class="com">   port from pidigits.lua-5.lua (Mike Pall, Wim Couwenberg)</span>
+<span class="com">*/</span>
+
+$N = (<span class="kwb">int</span>) $argv[<span class="num">1</span>];
+<span class="kwd">ob_start</span>(null, <span class="num">1</span>);
+
+$w = <span class="kwd">gmp_init</span>(<span class="num">0</span>);
+
+$k = <span class="num">1</span>;
+$n1 = <span class="kwd">gmp_init</span>(<span class="num">4</span>);
+$n2 = <span class="kwd">gmp_init</span>(<span class="num">3</span>);
+$d = <span class="kwd">gmp_init</span>(<span class="num">1</span>);
+
+$i = <span class="num">0</span>;
+<span class="kwa">while</span>(true) {
+   <span class="slc">//digit</span>
+   $u = <span class="kwd">gmp_div_q</span>($n1, $d);
+   $v = <span class="kwd">gmp_div_q</span>($n2, $d);
+   <span class="kwa">if</span>(<span class="kwd">gmp_cmp</span>($u, $v) == <span class="num">0</span>) {
+      <span class="kwa">echo</span> <span class="kwd">gmp_strval</span>($u);
+      $i++;
+      <span class="kwa">if</span>($i % <span class="num">10</span> == <span class="num">0</span>) {
+         <span class="kwa">echo</span> <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span> , $i , <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+      }
+      <span class="kwa">if</span>($i == $N) {
+         <span class="kwa">break</span>;
+      }
+      <span class="slc">//extract</span>
+      $u = <span class="kwd">gmp_mul</span>($d, <span class="kwd">gmp_mul</span>(-<span class="num">10</span>, $u));
+      $n1 = <span class="kwd">gmp_mul</span>($n1, <span class="num">10</span>);
+      $n1 = <span class="kwd">gmp_add</span>($n1, $u);
+      $n2 = <span class="kwd">gmp_mul</span>($n2, <span class="num">10</span>);
+      $n2 = <span class="kwd">gmp_add</span>($n2, $u);
+   } <span class="kwa">else</span> {
+      <span class="slc">//produce</span>
+      $k2 = $k &lt;&lt; <span class="num">1</span>;
+      $u = <span class="kwd">gmp_mul</span>($n1, $k2 - <span class="num">1</span>);
+      $v = <span class="kwd">gmp_add</span>($n2, $n2);
+      $w = <span class="kwd">gmp_mul</span>($n1, $k - <span class="num">1</span>);
+      $n1 = <span class="kwd">gmp_add</span>($u, $v);
+      $u = <span class="kwd">gmp_mul</span>($n2, $k + <span class="num">2</span>);
+      $n2 = <span class="kwd">gmp_add</span>($w, $u);
+      $d = <span class="kwd">gmp_mul</span>($d, $k2 + <span class="num">1</span>);
+      $k++;
+   }
+}
+<span class="kwa">if</span>($i % <span class="num">10</span> != <span class="num">0</span>) {
+   <span class="kwa">echo</span> <span class="kwd">str_repeat</span>(<span class="str">' '</span>, <span class="num">10</span> - $N % <span class="num">10</span>), <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>, $N, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+}
+
+<span class="kwd">ob_end_flush</span>();
+
+

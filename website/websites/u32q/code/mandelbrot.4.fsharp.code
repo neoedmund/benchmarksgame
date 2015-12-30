@@ -1,0 +1,67 @@
+﻿<span class="com">(*</span>
+<span class="com">      The Computer Language Benchmarks Game</span>
+<span class="com">      http://benchmarksgame.alioth.debian.org/ </span>
+<span class="com"></span>
+<span class="com">      Contributed by Don Syme</span>
+<span class="com">      Port of C# version by Antti Lankila, Isaac Gouy's, </span>
+<span class="com">      The Anh Tran, Robert F. Tobler, Nigel Delaney, Marek Safar, kasthack</span>
+<span class="com">*)</span>
+
+<span class="kwa">open</span> <span class="kwd">System</span>
+<span class="kwa">open</span> <span class="kwd">Mono</span>.<span class="kwd">Simd</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">IO</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Threading</span>
+
+
+[&lt;<span class="kwd">EntryPoint</span>&gt;]
+<span class="kwa">let</span> main argv = 
+    <span class="kwa">let</span> n  = <span class="kwa">if</span> (argv.<span class="kwd">Length</span> &gt; <span class="num">0</span>) <span class="kwa">then</span> <span class="kwd">Int32</span>.<span class="kwd">Parse</span>(argv.[<span class="num">0</span>]) <span class="kwa">else</span> <span class="num">200</span>
+    <span class="kwd">Console</span>.<span class="kwd">Out</span>.<span class="kwd">WriteLine</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str"></span><span class="ipl">{0} {0}</span><span class="str">&quot;</span>, n)
+    <span class="kwa">let</span> lineLen = (n - <span class="num">1</span>) / <span class="num">8</span> + <span class="num">1</span>
+    <span class="kwa">let</span> data = <span class="kwd">Array</span>.init n (<span class="kwa">fun</span> i -&gt; <span class="kwd">Array</span>.zeroCreate lineLen)
+    <span class="kwa">let</span> xa = <span class="kwd">Array</span>.init n (<span class="kwa">fun</span> x -&gt; <span class="kwb">float</span> x * <span class="num">2.0</span> / <span class="kwb">float</span> n - <span class="num">1.5</span>)
+    <span class="kwa">let</span> lineCount = <span class="kwb">ref</span> -<span class="num">1</span>
+    <span class="kwa">let</span> calculate()  =
+        <span class="kwa">let mutable</span> y = <span class="num">0</span>
+        <span class="kwa">let</span> twoOverN = <span class="num">2.0</span> / <span class="kwb">float</span> n
+        <span class="kwa">while</span> (y &lt;- <span class="kwd">Interlocked</span>.<span class="kwd">Increment</span>(&amp;lineCount.contents); y &lt; n) <span class="kwa">do</span>
+         <span class="kwa">let</span> line = data.[y]
+         <span class="kwa">let mutable</span> xbyte = <span class="num">0</span>
+         <span class="kwa">let mutable</span> bits = <span class="num">1</span>
+         <span class="kwa">let</span> ci = <span class="kwb">float</span> y * twoOverN - <span class="num">1.0</span>
+         <span class="kwa">let</span> <span class="kwd">Ci</span> = <span class="kwa">new</span> <span class="kwd">Vector2d</span> (ci)
+         <span class="kwa">for</span> x <span class="kwa">in</span> <span class="num">0</span> .. <span class="num">2</span> .. xa.<span class="kwd">Length</span> - <span class="num">1</span> <span class="kwa">do</span>
+            <span class="kwa">let</span> <span class="kwd">Cr</span> = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(xa.[x],xa.[x+<span class="num">1</span>])<span class="slc">//vector of constant real terms</span>
+            <span class="kwa">let</span> <span class="kwd">Tempr</span> = <span class="kwd">Cr</span> * <span class="kwd">Cr</span>
+            <span class="kwa">let</span> <span class="kwd">Tempi</span> = <span class="kwd">Ci</span> * <span class="kwd">Ci</span>
+            <span class="kwa">let mutable</span> <span class="kwd">Zr</span> = <span class="kwd">Cr</span>
+            <span class="kwa">let mutable</span> <span class="kwd">Zi</span> = <span class="kwd">Ci</span>
+            <span class="kwa">let mutable</span> <span class="kwd">Temp</span> = <span class="kwd">Tempr</span> - <span class="kwd">Tempi</span> + <span class="kwd">Cr</span>
+            <span class="kwa">if</span> (bits &gt; <span class="num">0xff</span>) <span class="kwa">then</span> line.[xbyte] &lt;- byte(bits ^^^ -<span class="num">1</span>); xbyte &lt;- xbyte + <span class="num">1</span>; bits &lt;- <span class="num">1</span> 
+            <span class="kwa">let mutable</span> i = <span class="num">49</span>
+            <span class="kwa">let mutable</span> b = <span class="num">0</span>
+            <span class="kwa">let mutable</span> brk = <span class="kwa">false</span>
+            <span class="kwa">while</span> not brk <span class="kwa">do</span>
+               <span class="kwa">let</span> <span class="kwd">Zri</span> = <span class="kwd">Zr</span>*<span class="kwd">Zi</span>  <span class="slc">//calculate r*i for both</span>
+               <span class="kwd">Zi</span> &lt;- <span class="kwd">Zri</span>+<span class="kwd">Zri</span>+<span class="kwd">Ci</span> <span class="slc">//double that and add a constant </span>
+               <span class="kwd">Zr</span> &lt;- <span class="kwd">Temp</span><span class="slc">//pre-calculated on previous loop</span>
+               <span class="kwa">let mutable</span> <span class="kwd">V0</span> = <span class="kwd">Zr</span>.<span class="kwd">InterleaveLow</span>(<span class="kwd">Zi</span>)<span class="slc">//r0,i0</span>
+               <span class="kwa">let mutable</span> <span class="kwd">V1</span> = <span class="kwd">Zr</span>.<span class="kwd">InterleaveHigh</span>(<span class="kwd">Zi</span>)<span class="slc">//r1,i1</span>
+               <span class="kwd">V0</span> &lt;- <span class="kwd">V0</span>*<span class="kwd">V0</span> <span class="slc">//r0^2,i0^2</span>
+               <span class="kwd">V1</span> &lt;- <span class="kwd">V1</span>*<span class="kwd">V1</span>
+               <span class="kwa">let</span> <span class="kwd">Length</span> = <span class="kwd">V0</span>.<span class="kwd">HorizontalAdd</span>(<span class="kwd">V1</span>)<span class="slc">//(r0^2+i0^2),(r1^2+i1^2)</span>
+               <span class="kwd">Temp</span> &lt;- <span class="kwd">V0</span>.<span class="kwd">HorizontalSub</span>(<span class="kwd">V1</span>)+<span class="kwd">Cr</span><span class="slc">//(r0^2-i0^2),(r1^2-i1^2)</span>
+                <span class="slc">//now to determine end condition, </span>
+               <span class="kwa">if</span>(<span class="kwd">Length</span>.<span class="kwd">X</span>&gt;<span class="num">4.0</span>) <span class="kwa">then</span> (b &lt;- b ||| <span class="num">2</span>; <span class="kwa">if</span>(b=<span class="num">3</span>) <span class="kwa">then</span> brk &lt;- <span class="kwa">true</span>)
+               <span class="kwa">if</span>(not brk &amp;&amp; <span class="kwd">Length</span>.<span class="kwd">Y</span>&gt;<span class="num">4.0</span>) <span class="kwa">then</span> (b &lt;- b ||| <span class="num">1</span>; <span class="kwa">if</span>(b=<span class="num">3</span>) <span class="kwa">then</span> brk &lt;- <span class="kwa">true</span>)
+               i &lt;- i - <span class="num">1</span>
+               <span class="kwa">if</span> (i = <span class="num">0</span>) <span class="kwa">then</span> brk &lt;- <span class="kwa">true</span>
+            bits &lt;- (bits &lt;&lt;&lt; <span class="num">2</span>) + b
+         <span class="kwa">while</span> (bits &lt; <span class="num">0x100</span>) <span class="kwa">do</span> bits &lt;- (bits &lt;&lt;&lt; <span class="num">1</span>) 
+         line.[xbyte] &lt;- byte(bits ^^^ -<span class="num">1</span>)
+
+    <span class="kwa">let</span> threads = <span class="kwd">Array</span>.init <span class="kwd">Environment</span>.<span class="kwd">ProcessorCount</span> (<span class="kwa">fun</span> _ -&gt; <span class="kwa">let</span> t = <span class="kwa">new</span> <span class="kwd">Thread</span>(calculate) <span class="kwa">in</span> t.<span class="kwd">Start</span>(); t)
+    <span class="kwa">for</span> t <span class="kwa">in</span> threads <span class="kwa">do</span> t.<span class="kwd">Join</span>()
+    <span class="kwa">let</span> s = <span class="kwd">Console</span>.<span class="kwd">OpenStandardOutput</span>()
+    <span class="kwa">for</span> y <span class="kwa">in</span> <span class="num">0</span> .. n - <span class="num">1</span> <span class="kwa">do</span> s.<span class="kwd">Write</span>(data.[y], <span class="num">0</span>, lineLen)
+    <span class="num">0</span>

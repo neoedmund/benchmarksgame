@@ -1,0 +1,774 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">// contributed by Ben St. John</span>
+<span class="slc">// some ideas taken from Kevin Barnes' implementation</span>
+
+<span class="com">/* A few key optimizations:</span>
+<span class="com">- pre-calcing of all possible orientations of each piece</span>
+<span class="com">- pre-calcing of which orientations are possible in each board position</span>
+<span class="com">- fast calculation of boards with bad islands (which are unsolveable)</span>
+<span class="com">- pre-calc of some boards (by top three lines) which *always* have bad islands</span>
+<span class="com">- using only 32-bit boards representations (plus row offset)</span>
+<span class="com">- improvement since #4 -- no caching of top three lines for other reasons</span>
+<span class="com">- not using STL vector -- it noticeably slow things down</span>
+<span class="com">- rotating each found solution, so only half need to be calculated -- done by removing</span>
+<span class="com">half the rotations of one piece (SKIP_PIECE) chosen as the one with the most valid positions</span>
+<span class="com">on the board, so only half the solution space is searched</span>
+<span class="com"></span>
+<span class="com">For size, most seems to come from the standard libs.</span>
+<span class="com">I'm tempted to get rid of string, and maybe use cstdio.</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;string&gt;</span>
+<span class="ppc">#include &lt;memory.h&gt;</span>
+
+<span class="kwa">using namespace</span> std;
+
+<span class="ppc">#define getMask(iPos) (1 &lt;&lt; (iPos))</span>
+
+<span class="kwb">enum</span> {X, Y, N_DIM};
+<span class="kwb">enum</span> {EVEN, ODD, N_PARITY};
+<span class="kwb">enum</span> {GOOD, BAD, ALWAYS_BAD};
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned int</span> TUInt32;
+<span class="kwc">typedef</span> <span class="kwb">unsigned long long</span> TUInt64;
+<span class="kwc">typedef</span> <span class="kwb">signed char</span> TInt8;
+<span class="kwc">typedef</span> TUInt32 BitVec;
+
+<span class="kwb">static const int</span> N_COL = <span class="num">5</span>;
+<span class="kwb">static const int</span> N_ROW = <span class="num">10</span>;
+<span class="kwb">static const int</span> N_CELL = N_COL * N_ROW;
+<span class="kwb">static const int</span> N_PIECE_TYPE = <span class="num">10</span>;
+
+<span class="kwb">struct</span> Piece;
+
+<span class="kwb">struct</span> Soln {
+   <span class="kwb">static const int</span> NO_PIECE = -<span class="num">1</span>;
+
+   <span class="kwb">void</span> <span class="kwd">setCells</span>(<span class="kwb">void</span>);
+   <span class="kwb">bool</span> <span class="kwd">lessThan</span>(Soln &amp; r);
+   string <span class="kwd">toString</span>(<span class="kwb">void</span>) <span class="kwb">const</span>;
+   <span class="kwb">void</span> <span class="kwd">fill</span>(<span class="kwb">int</span> val);
+   <span class="kwb">void</span> <span class="kwd">spin</span>(Soln &amp; spun);
+
+   <span class="kwb">bool</span> <span class="kwd">isEmpty</span>(<span class="kwb">void</span>) {<span class="kwa">return</span> (m_nPiece == <span class="num">0</span>);}
+   <span class="kwb">void</span> <span class="kwd">popPiece</span>(<span class="kwb">void</span>) {m_nPiece--; m_synched = <span class="kwa">false</span>;}
+   <span class="kwb">void</span> <span class="kwd">pushPiece</span>(BitVec vec, <span class="kwb">int</span> iPiece, <span class="kwb">int</span> row) {
+      SPiece &amp; p = m_pieces[m_nPiece++];
+      p.vec = vec;
+      p.iPiece = (<span class="kwb">short</span>)iPiece;
+      p.row = (<span class="kwb">short</span>)row;
+   }
+
+   <span class="kwd">Soln</span>(<span class="kwb">int</span> fillVal);
+   <span class="kwd">Soln</span>() : <span class="kwd">m_synched</span>(<span class="kwa">false</span>), <span class="kwd">m_nPiece</span>(<span class="num">0</span>) {}
+
+   <span class="kwb">struct</span> SPiece {
+      BitVec vec;
+      <span class="kwb">short</span> iPiece;
+      <span class="kwb">short</span> row;
+      <span class="kwd">SPiece</span>() {}
+      <span class="kwd">SPiece</span>(BitVec avec, TUInt32 apiece, TUInt32 arow) :
+      <span class="kwd">vec</span>(avec), <span class="kwd">iPiece</span>(<span class="kwb">short</span>(apiece)), <span class="kwd">row</span>(<span class="kwb">short</span>(arow))
+      {}
+   };
+   SPiece m_pieces[N_PIECE_TYPE];
+   TUInt32 m_nPiece;
+   TInt8 m_cells[N_ROW][N_COL];
+   <span class="kwb">bool</span> m_synched;
+};
+
+<span class="slc">//------------------------------------</span>
+<span class="kwb">struct</span> Board {
+   <span class="kwb">static const</span> BitVec L_EDGE_MASK =
+      (<span class="num">1</span> &lt;&lt;  <span class="num">0</span>) | (<span class="num">1</span> &lt;&lt;  <span class="num">5</span>) | (<span class="num">1</span> &lt;&lt; <span class="num">10</span>) | (<span class="num">1</span> &lt;&lt; <span class="num">15</span>) |
+      (<span class="num">1</span> &lt;&lt; <span class="num">20</span>) | (<span class="num">1</span> &lt;&lt; <span class="num">25</span>) | (<span class="num">1</span> &lt;&lt; <span class="num">30</span>);
+   <span class="kwb">static const</span> BitVec R_EDGE_MASK = L_EDGE_MASK &lt;&lt; <span class="num">4</span>;
+   <span class="kwb">static const</span> BitVec TOP_ROW = (<span class="num">1</span> &lt;&lt; N_COL) - <span class="num">1</span>;
+   <span class="kwb">static const</span> TUInt32 TWO_ROWS = <span class="num">2</span> * N_COL;
+   <span class="kwb">static const</span> BitVec TOP_2_ROWS = (<span class="num">1</span> &lt;&lt; TWO_ROWS) - <span class="num">1</span>;
+
+   <span class="kwb">static const</span> BitVec ROW_0_MASK =
+      TOP_ROW | (TOP_ROW &lt;&lt; <span class="num">10</span>) | (TOP_ROW &lt;&lt; <span class="num">20</span>) | (TOP_ROW &lt;&lt; <span class="num">30</span>);
+   <span class="kwb">static const</span> BitVec ROW_1_MASK = ROW_0_MASK &lt;&lt; <span class="num">5</span>;
+   <span class="kwb">static const</span> BitVec BOARD_MASK = (<span class="num">1</span> &lt;&lt; <span class="num">30</span>) - <span class="num">1</span>;
+
+   <span class="kwd">Board</span>();
+
+   <span class="kwb">static</span> TUInt32 <span class="kwd">getIndex</span>(TUInt32 x, TUInt32 y) { <span class="kwa">return</span> y * N_COL + x; }
+   <span class="kwb">static bool</span> <span class="kwd">badRegion</span>(BitVec &amp; toFill, BitVec rNew);
+   <span class="kwb">static int</span> <span class="kwd">hasBadIslands</span>(BitVec boardVec, <span class="kwb">int</span> row);
+   <span class="kwb">static int</span> <span class="kwd">calcBadIslands</span>(BitVec boardVec, <span class="kwb">int</span> row);
+   <span class="kwb">static bool</span> <span class="kwd">hasBadIslandsSingle</span>(BitVec boardVec, <span class="kwb">int</span> row);
+   <span class="kwb">static void</span> <span class="kwd">calcAlwaysBad</span>(<span class="kwb">void</span>);
+
+   <span class="kwb">void</span> <span class="kwd">genAllSolutions</span>(BitVec boardVec, TUInt32 placedPieces, TUInt32 iNextFill);
+   <span class="kwb">void</span> <span class="kwd">recordSolution</span>(Soln &amp; s);
+
+   Soln m_curSoln;
+   Soln m_minSoln;
+   Soln m_maxSoln;
+   TUInt32 m_nSoln;
+};
+
+<span class="slc">//------------------------------------</span>
+
+<span class="kwb">struct</span> Piece {
+   <span class="kwb">struct</span> Instance {
+      TUInt64 m_allowed;
+      BitVec m_vec;
+      <span class="kwb">int</span> m_offset;
+   };
+
+   <span class="kwb">static const int</span> N_ELEM = <span class="num">5</span>;
+   <span class="kwb">static const int</span> N_ORIENT = <span class="num">12</span>;
+   <span class="kwb">static const int</span> ALL_PIECE_MASK = (<span class="num">1</span> &lt;&lt; N_PIECE_TYPE) - <span class="num">1</span>;
+   <span class="kwb">static const</span> TUInt32 SKIP_PIECE = <span class="num">5</span>; <span class="slc">// it's magic!</span>
+
+   <span class="kwc">typedef</span> <span class="kwb">int</span> TPts[N_ELEM][N_DIM];
+
+   <span class="kwb">static const</span> BitVec BaseVecs[N_PIECE_TYPE];
+   <span class="kwb">static</span> Piece s_basePiece[N_PIECE_TYPE][N_ORIENT];
+
+   <span class="kwb">static const</span> Instance &amp; <span class="kwd">getPiece</span>(TUInt32 iPiece, TUInt32 iOrient, TUInt32 iParity);
+   <span class="kwb">static</span> BitVec <span class="kwd">toBitVector</span>(<span class="kwb">const</span> TPts &amp; pts);
+   <span class="kwb">static void</span> <span class="kwd">genOrientation</span>(BitVec vec, TUInt32 iOrient, Piece &amp; target);
+   <span class="kwb">static void</span> <span class="kwd">setCoordList</span>(BitVec vec, TPts &amp; pts);
+   <span class="kwb">static void</span> <span class="kwd">shiftUpLines</span>(TPts &amp; pts, <span class="kwb">int</span> shift);
+   <span class="kwb">static int</span> <span class="kwd">shiftToX0</span>(TPts &amp; pts, Instance &amp; instance, <span class="kwb">int</span> offsetRow);
+   <span class="kwb">void</span> <span class="kwd">setOkPos</span>(TUInt32 isOdd, <span class="kwb">int</span> w, <span class="kwb">int</span> h);
+   <span class="kwb">static void</span> <span class="kwd">genAllOrientations</span>(<span class="kwb">void</span>);
+
+   Instance m_instance[N_PARITY];
+};
+
+<span class="kwb">struct</span> OkPieces {
+   TInt8 nPieces[N_PIECE_TYPE];
+   TUInt32 pieceVec[N_PIECE_TYPE][Piece::N_ORIENT];
+};
+
+<span class="kwb">static</span> OkPieces g_okPieces[N_ROW][N_COL] = {{<span class="num">0</span>}};
+
+<span class="ppc">#define MAX_ISLAND_OFFSET 1024</span>
+<span class="kwb">struct</span> IslandInfo {
+   TUInt32 alwaysBad[N_PARITY];
+};
+
+<span class="kwb">static</span> IslandInfo g_islandInfo[MAX_ISLAND_OFFSET] = {<span class="num">0</span>};
+
+<span class="slc">//------------------------------------</span>
+Soln::<span class="kwd">Soln</span>(<span class="kwb">int</span> fillVal) :
+<span class="kwd">m_nPiece</span>(<span class="num">0</span>) {
+   <span class="kwd">fill</span>(fillVal);
+}
+
+<span class="kwb">void</span> Soln::<span class="kwd">fill</span>(<span class="kwb">int</span> val) {
+   m_synched = <span class="kwa">false</span>;
+   <span class="kwd">memset</span>(m_cells, val, N_CELL);
+}
+
+string Soln::<span class="kwd">toString</span>(<span class="kwb">void</span>) <span class="kwb">const</span> {
+   string result;
+   result.<span class="kwd">reserve</span>(N_CELL * <span class="num">2</span>);
+
+   <span class="kwa">for</span> (<span class="kwb">int</span> y = <span class="num">0</span>; y &lt; N_ROW; y++) {
+      <span class="kwa">for</span> (<span class="kwb">int</span> x = <span class="num">0</span>; x &lt; N_COL; x++) {
+         <span class="kwb">int</span> val = m_cells[y][x];
+         result += ((val == NO_PIECE) ? <span class="str">'.'</span> : <span class="kwb">char</span>(<span class="str">'0'</span> + val));
+         result += <span class="str">' '</span>;
+      }
+      result += <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+
+      <span class="slc">// indent every second line</span>
+      <span class="kwa">if</span> (y % <span class="num">2</span> == <span class="num">0</span>)
+         result += <span class="str">&quot; &quot;</span>;
+   }
+   <span class="kwa">return</span> result;
+}
+
+<span class="kwb">void</span> Soln::<span class="kwd">setCells</span>(<span class="kwb">void</span>) {
+   <span class="kwa">if</span> (m_synched)
+      <span class="kwa">return</span>;
+
+   <span class="kwa">for</span> (TUInt32 iPiece = <span class="num">0</span>; iPiece &lt; m_nPiece; iPiece++) {
+      <span class="kwb">const</span> SPiece &amp; p = m_pieces[iPiece];
+      BitVec vec = p.vec;
+      TInt8 pID = (TInt8)p.iPiece;
+      <span class="kwb">int</span> rowOffset = p.row;
+
+      <span class="kwb">int</span> nNewCells = <span class="num">0</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> y = rowOffset; y &lt; N_ROW; y++) {
+         <span class="kwa">for</span> (<span class="kwb">int</span> x = <span class="num">0</span>; x &lt; N_COL; x++) {
+            <span class="kwa">if</span> (vec &amp; <span class="num">1</span>) {
+               m_cells[y][x] = pID;
+               nNewCells++;
+            }
+            vec &gt;&gt;= <span class="num">1</span>;
+       }
+         <span class="kwa">if</span> (nNewCells == Piece::N_ELEM)
+            <span class="kwa">break</span>;
+      }
+   }
+   m_synched = <span class="kwa">true</span>;
+}
+
+<span class="kwb">bool</span> Soln::<span class="kwd">lessThan</span>(Soln &amp; r) {
+   <span class="kwa">if</span> (m_pieces[<span class="num">0</span>].iPiece != r.m_pieces[<span class="num">0</span>].iPiece) {
+      <span class="kwa">return</span> m_pieces[<span class="num">0</span>].iPiece &lt; r.m_pieces[<span class="num">0</span>].iPiece;
+   }
+
+   <span class="kwd">setCells</span>();
+   r.<span class="kwd">setCells</span>();
+
+   <span class="kwa">for</span> (<span class="kwb">int</span> y = <span class="num">0</span>; y &lt; N_ROW; y++) {
+      <span class="kwa">for</span> (<span class="kwb">int</span> x = <span class="num">0</span>; x &lt; N_COL; x++) {
+         <span class="kwb">int</span> lval = m_cells[y][x];
+         <span class="kwb">int</span> rval = r.m_cells[y][x];
+
+         <span class="kwa">if</span> (lval != rval)
+            <span class="kwa">return</span> (lval &lt; rval);
+      }
+   }
+
+   <span class="kwa">return false</span>; <span class="slc">// solutions are equal</span>
+}
+
+<span class="kwb">void</span> Soln::<span class="kwd">spin</span>(Soln &amp; spun) {
+   <span class="kwd">setCells</span>();
+
+   <span class="slc">// swap cells</span>
+   <span class="kwa">for</span> (<span class="kwb">int</span> y = <span class="num">0</span>; y &lt; N_ROW; y++) {
+      <span class="kwa">for</span> (<span class="kwb">int</span> x = <span class="num">0</span>; x &lt; N_COL; x++) {
+         TInt8 flipped = m_cells[N_ROW - y - <span class="num">1</span>][N_COL - x - <span class="num">1</span>];
+         spun.m_cells[y][x] = flipped;
+      }
+   }
+
+   <span class="slc">// swap first and last pieces (the rest aren't used)</span>
+   spun.m_pieces[<span class="num">0</span>].iPiece = m_pieces[N_PIECE_TYPE - <span class="num">1</span>].iPiece;
+   spun.m_synched = <span class="kwa">true</span>;
+}
+
+<span class="slc">//------------------------------------</span>
+
+Piece Piece::s_basePiece[N_PIECE_TYPE][N_ORIENT];
+
+<span class="kwb">const</span> BitVec Piece::BaseVecs[] = {
+   <span class="num">0x10f</span>, <span class="num">0x0cb</span>, <span class="num">0x1087</span>, <span class="num">0x427</span>, <span class="num">0x465</span>,
+   <span class="num">0x0c7</span>, <span class="num">0x8423</span>, <span class="num">0x0a7</span>, <span class="num">0x187</span>, <span class="num">0x08f</span>
+};
+
+<span class="kwb">int</span> <span class="kwd">floor</span>(<span class="kwb">int</span> top, <span class="kwb">int</span> bot) {
+   <span class="kwb">int</span> toZero = top / bot;
+   <span class="slc">// negative numbers should be rounded down, not towards zero</span>
+   <span class="kwa">if</span> ((toZero * bot != top) &amp;&amp; ((top &lt; <span class="num">0</span>) != (bot &lt;= <span class="num">0</span>)))
+      toZero--;
+
+   <span class="kwa">return</span> toZero;
+}
+
+<span class="kwb">const</span> TUInt32 s_firstOne[<span class="num">32</span>] = {
+   <span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,
+   <span class="num">3</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,
+
+   <span class="num">4</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,
+   <span class="num">3</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,
+};
+
+TUInt32 <span class="kwd">getFirstOne</span>(BitVec v, TUInt32 startPos = <span class="num">0</span>) {
+   <span class="kwa">if</span> (v == <span class="num">0</span>)
+      <span class="kwa">return</span> <span class="num">0</span>;
+
+   TUInt32 iPos = startPos;
+   BitVec mask = <span class="num">0xff</span> &lt;&lt; startPos;
+   <span class="kwa">if</span> ((mask &amp; v) == <span class="num">0</span>) {
+      mask &lt;&lt;= <span class="num">8</span>; iPos += <span class="num">8</span>;
+      <span class="kwa">if</span> ((mask &amp; v) == <span class="num">0</span>) {
+         mask &lt;&lt;= <span class="num">8</span>; iPos += <span class="num">8</span>;
+         <span class="kwa">if</span> ((mask &amp; v) == <span class="num">0</span>) {
+            mask &lt;&lt;= <span class="num">8</span>; iPos += <span class="num">8</span>;
+       }
+      }
+   }
+
+   TUInt32 result = <span class="kwd">TUInt32</span>((mask &amp; v) &gt;&gt; iPos);
+   TUInt32 resultLow = result &amp; <span class="num">0x0f</span>;
+   <span class="kwa">if</span> (resultLow != <span class="num">0</span>)
+      iPos += s_firstOne[resultLow];
+   <span class="kwa">else</span>
+      iPos += <span class="num">4</span> + s_firstOne[result &gt;&gt; <span class="num">4</span>];
+
+   <span class="kwa">return</span> iPos;
+}
+
+<span class="kwb">void</span> Piece::<span class="kwd">setCoordList</span>(BitVec vec, TPts &amp; pts) {
+   <span class="kwb">int</span> iPt = <span class="num">0</span>;
+   BitVec mask = <span class="num">1</span>;
+   <span class="kwa">for</span> (<span class="kwb">int</span> y = <span class="num">0</span>; y &lt; N_ROW; y++) {
+      <span class="kwa">for</span> (<span class="kwb">int</span> x = <span class="num">0</span>; x &lt; N_COL; x++) {
+         <span class="kwa">if</span> (mask &amp; vec) {
+            pts[iPt][X] = x;
+            pts[iPt][Y] = y;
+
+            iPt++;
+       }
+         mask &lt;&lt;= <span class="num">1</span>;
+      }
+   }
+}
+
+BitVec Piece::<span class="kwd">toBitVector</span>(<span class="kwb">const</span> TPts &amp; pts) {
+   <span class="kwb">int</span> y, x;
+   BitVec result = <span class="num">0</span>;
+   <span class="kwa">for</span> (<span class="kwb">int</span> iPt = <span class="num">0</span>; iPt &lt; N_ELEM; iPt++) {
+      x = pts[iPt][X];
+      y = pts[iPt][Y];
+
+      <span class="kwb">int</span> pos = Board::<span class="kwd">getIndex</span>(x, y);
+      result |= (<span class="num">1</span> &lt;&lt; pos);
+   }
+
+   <span class="kwa">return</span> result;
+}
+
+<span class="kwb">void</span> Piece::<span class="kwd">shiftUpLines</span>(TPts &amp; pts, <span class="kwb">int</span> shift) {
+   <span class="slc">// vertical shifts have a twist</span>
+   <span class="kwa">for</span> (<span class="kwb">int</span> iPt = <span class="num">0</span>; iPt &lt; N_ELEM; iPt++) {
+      <span class="kwb">int</span> &amp; rx = pts[iPt][X];
+      <span class="kwb">int</span> &amp; ry = pts[iPt][Y];
+
+      <span class="kwa">if</span> (ry &amp; shift &amp; <span class="num">0x1</span>)
+         rx++;
+      ry -= shift;
+   }
+}
+
+<span class="kwb">int</span> Piece::<span class="kwd">shiftToX0</span>(TPts &amp; pts, Instance &amp; instance, <span class="kwb">int</span> offsetRow)
+{
+   <span class="slc">// .. determine shift</span>
+   <span class="kwb">int</span> x, y, iPt;
+   <span class="kwb">int</span> xMin = pts[<span class="num">0</span>][X];
+   <span class="kwb">int</span> xMax = xMin;
+   <span class="kwa">for</span> (iPt = <span class="num">1</span>; iPt &lt; N_ELEM; iPt++) {
+      x = pts[iPt][X];
+      y = pts[iPt][Y];
+
+      <span class="kwa">if</span> (x &lt; xMin)
+         xMin = x;
+      <span class="kwa">else if</span> (x &gt; xMax)
+         xMax = x;
+   }
+
+   <span class="slc">// I'm dying for a 'foreach' here</span>
+   <span class="kwb">int</span> offset = N_ELEM;
+   <span class="kwa">for</span> (iPt = <span class="num">0</span>; iPt &lt; N_ELEM; iPt++) {
+      <span class="kwb">int</span> &amp; rx = pts[iPt][X];
+      <span class="kwb">int</span> &amp; ry = pts[iPt][Y];
+
+      rx -= xMin;
+
+      <span class="slc">// check offset -- leftmost cell on top line</span>
+      <span class="kwa">if</span> ((ry == offsetRow) &amp;&amp; (rx &lt; offset))
+         offset = rx;
+   }
+
+   instance.m_offset = offset;
+   instance.m_vec = <span class="kwd">toBitVector</span>(pts);
+   <span class="kwa">return</span> xMax - xMin;
+}
+
+<span class="kwb">void</span> Piece::<span class="kwd">setOkPos</span>(TUInt32 isOdd, <span class="kwb">int</span> w, <span class="kwb">int</span> h) {
+   Instance &amp; p = m_instance[isOdd];
+   TUInt64 &amp; allowed = p.m_allowed = <span class="num">0</span>;
+   TUInt64 posMask = <span class="num">1LL</span> &lt;&lt; (isOdd * N_COL);
+
+   <span class="kwa">for</span> (<span class="kwb">int</span> y = isOdd; y &lt; N_ROW - h; y+=<span class="num">2</span>, posMask &lt;&lt;= N_COL) {
+      <span class="kwa">if</span> (p.m_offset)
+         posMask &lt;&lt;= p.m_offset;
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> xPos = <span class="num">0</span>; xPos &lt; N_COL - p.m_offset; xPos++, posMask &lt;&lt;= <span class="num">1</span>) {
+         <span class="slc">// check if the new position is on the board</span>
+         <span class="kwa">if</span> (xPos &gt;= N_COL - w)
+            <span class="kwa">continue</span>;
+
+         <span class="slc">// move it to the desired location</span>
+         BitVec pieceVec = p.m_vec &lt;&lt; xPos;
+
+         <span class="kwa">if</span> (Board::<span class="kwd">hasBadIslandsSingle</span>(pieceVec, y))
+            <span class="kwa">continue</span>;
+
+         <span class="slc">// position is allowed</span>
+         allowed |= posMask;
+      }
+   }
+}
+
+<span class="kwb">void</span> Piece::<span class="kwd">genOrientation</span>(BitVec vec, TUInt32 iOrient, Piece &amp; target)
+{
+   <span class="slc">// get (x,y) coordinates</span>
+   TPts pts;
+   <span class="kwd">setCoordList</span>(vec, pts);
+
+   <span class="kwb">int</span> y, x, iPt;
+   <span class="kwb">int</span> rot = iOrient % <span class="num">6</span>;
+   <span class="kwb">int</span> flip = iOrient &gt;= <span class="num">6</span>;
+   <span class="kwa">if</span> (flip) {
+      <span class="kwa">for</span> (iPt = <span class="num">0</span>; iPt &lt; N_ELEM; iPt++)
+         pts[iPt][Y] = -pts[iPt][Y];
+   }
+
+   <span class="slc">// rotate as necessary</span>
+   <span class="kwa">while</span> (rot--) {
+      <span class="kwa">for</span> (iPt = <span class="num">0</span>; iPt &lt; N_ELEM; iPt++) {
+         x = pts[iPt][X];
+         y = pts[iPt][Y];
+
+         <span class="slc">// I just worked this out by hand. Took a while.</span>
+         <span class="kwb">int</span> xNew = <span class="kwd">floor</span>((<span class="num">2</span> * x - <span class="num">3</span> * y + <span class="num">1</span>), <span class="num">4</span>);
+         <span class="kwb">int</span> yNew = <span class="kwd">floor</span>((<span class="num">2</span> * x + y + <span class="num">1</span>), <span class="num">2</span>);
+         pts[iPt][X] = xNew;
+         pts[iPt][Y] = yNew;
+      }
+   }
+
+   <span class="slc">// determine vertical shift</span>
+   <span class="kwb">int</span> yMin = pts[<span class="num">0</span>][Y];
+   <span class="kwb">int</span> yMax = yMin;
+   <span class="kwa">for</span> (iPt = <span class="num">1</span>; iPt &lt; N_ELEM; iPt++) {
+      y = pts[iPt][Y];
+
+      <span class="kwa">if</span> (y &lt; yMin)
+         yMin = y;
+      <span class="kwa">else if</span> (y &gt; yMax)
+         yMax = y;
+   }
+   <span class="kwb">int</span> h = yMax - yMin;
+   Instance &amp; even = target.m_instance[EVEN];
+   Instance &amp; odd = target.m_instance[ODD];
+
+   <span class="kwd">shiftUpLines</span>(pts, yMin);
+   <span class="kwb">int</span> w = <span class="kwd">shiftToX0</span>(pts, even, <span class="num">0</span>);
+   target.<span class="kwd">setOkPos</span>(EVEN, w, h);
+   even.m_vec &gt;&gt;= even.m_offset;
+
+   <span class="slc">// shift down one line</span>
+   <span class="kwd">shiftUpLines</span>(pts, -<span class="num">1</span>);
+   w = <span class="kwd">shiftToX0</span>(pts, odd, <span class="num">1</span>);
+   <span class="slc">// shift the bitmask back one line</span>
+   odd.m_vec &gt;&gt;= N_COL;
+   target.<span class="kwd">setOkPos</span>(ODD, w, h);
+   odd.m_vec &gt;&gt;= odd.m_offset;
+}
+
+<span class="kwb">void</span> Piece::<span class="kwd">genAllOrientations</span>(<span class="kwb">void</span>) {
+   <span class="kwa">for</span> (<span class="kwb">int</span> iPiece = <span class="num">0</span>; iPiece &lt; N_PIECE_TYPE; iPiece++) {
+      BitVec refPiece = BaseVecs[iPiece];
+      <span class="kwa">for</span> (<span class="kwb">int</span> iOrient = <span class="num">0</span>; iOrient &lt; N_ORIENT; iOrient++) {
+         Piece &amp; p = s_basePiece[iPiece][iOrient];
+         <span class="kwd">genOrientation</span>(refPiece, iOrient, p);
+         <span class="kwa">if</span> ((iPiece == SKIP_PIECE) &amp;&amp; ((iOrient / <span class="num">3</span>) &amp; <span class="num">1</span>))
+            p.m_instance[<span class="num">0</span>].m_allowed = p.m_instance[<span class="num">1</span>].m_allowed = <span class="num">0</span>;
+      }
+   }
+
+   <span class="kwa">for</span> (<span class="kwb">int</span> iPiece = <span class="num">0</span>; iPiece &lt; N_PIECE_TYPE; iPiece++) {
+      <span class="kwa">for</span> (<span class="kwb">int</span> iOrient = <span class="num">0</span>; iOrient &lt; N_ORIENT; iOrient++) {
+         TUInt64 mask = <span class="num">1</span>;
+         <span class="kwa">for</span> (<span class="kwb">int</span> iRow = <span class="num">0</span>; iRow &lt; N_ROW; iRow++) {
+            <span class="kwb">const</span> Instance &amp; p = <span class="kwd">getPiece</span>(iPiece, iOrient, (iRow &amp; <span class="num">1</span>));
+            <span class="kwa">for</span> (<span class="kwb">int</span> iCol = <span class="num">0</span>; iCol &lt; N_COL; iCol++) {
+               OkPieces &amp; allowed = g_okPieces[iRow][iCol];
+               <span class="kwa">if</span> (p.m_allowed &amp; mask) {
+                  TInt8 &amp; nPiece = allowed.nPieces[iPiece];
+                  allowed.pieceVec[iPiece][nPiece] = p.m_vec &lt;&lt; iCol;
+                  nPiece++;
+               }
+
+               mask &lt;&lt;= <span class="num">1</span>;
+            }
+       }
+      }
+   }
+}
+
+
+<span class="kwc">inline</span> <span class="kwb">const</span> Piece::Instance &amp; Piece::<span class="kwd">getPiece</span>(TUInt32 iPiece, TUInt32 iOrient, TUInt32 iParity) {
+   <span class="kwa">return</span> s_basePiece[iPiece][iOrient].m_instance[iParity];
+}
+
+<span class="slc">// ------------------------------------</span>
+
+Board::<span class="kwd">Board</span>() :
+<span class="kwd">m_curSoln</span>(Soln::NO_PIECE), <span class="kwd">m_minSoln</span>(N_PIECE_TYPE),
+<span class="kwd">m_maxSoln</span>(Soln::NO_PIECE), <span class="kwd">m_nSoln</span>(<span class="num">0</span>)
+{}
+
+TUInt32 g_flip[] = {
+   <span class="num">0x00</span>, <span class="num">0x10</span>, <span class="num">0x08</span>, <span class="num">0x18</span>, <span class="num">0x04</span>, <span class="num">0x14</span>, <span class="num">0x0c</span>, <span class="num">0x1c</span>,
+   <span class="num">0x02</span>, <span class="num">0x12</span>, <span class="num">0x0a</span>, <span class="num">0x1a</span>, <span class="num">0x06</span>, <span class="num">0x16</span>, <span class="num">0x0e</span>, <span class="num">0x1e</span>,
+
+   <span class="num">0x01</span>, <span class="num">0x11</span>, <span class="num">0x09</span>, <span class="num">0x19</span>, <span class="num">0x05</span>, <span class="num">0x15</span>, <span class="num">0x0d</span>, <span class="num">0x1d</span>,
+   <span class="num">0x03</span>, <span class="num">0x13</span>, <span class="num">0x0b</span>, <span class="num">0x1b</span>, <span class="num">0x07</span>, <span class="num">0x17</span>, <span class="num">0x0f</span>, <span class="num">0x1f</span>,
+};
+
+<span class="kwc">inline</span> TUInt32 <span class="kwd">flipTwoRows</span>(TUInt32 bits) {
+   TUInt32 flipped = g_flip[bits &gt;&gt; N_COL] &lt;&lt; N_COL;
+   <span class="kwa">return</span> (flipped | g_flip[bits &amp; Board::TOP_ROW]);
+}
+
+<span class="kwb">void</span> Board::<span class="kwd">calcAlwaysBad</span>(<span class="kwb">void</span>) {
+   <span class="kwa">for</span> (TUInt32 iWord = <span class="num">1</span>; iWord &lt; MAX_ISLAND_OFFSET; iWord++) {
+      IslandInfo &amp; isleInfo = g_islandInfo[iWord];
+      IslandInfo &amp; flipped = g_islandInfo[<span class="kwd">flipTwoRows</span>(iWord)];
+
+      <span class="kwa">for</span> (TUInt32 i = <span class="num">0</span>, mask = <span class="num">1</span>; i &lt; <span class="num">32</span>; i++, mask &lt;&lt;= <span class="num">1</span>) {
+         TUInt32 boardVec = (i &lt;&lt; TWO_ROWS) | iWord;
+
+         <span class="kwb">int</span> hasBad = <span class="kwd">calcBadIslands</span>(boardVec, <span class="num">0</span>);
+         <span class="kwa">if</span> (hasBad == ALWAYS_BAD) {
+            isleInfo.alwaysBad[EVEN] |= mask;
+
+            TUInt32 flipMask = <span class="kwd">getMask</span>(g_flip[i]);
+            flipped.alwaysBad[ODD] |= flipMask;
+       }
+      }
+   }
+}
+
+<span class="kwb">bool</span> Board::<span class="kwd">hasBadIslandsSingle</span>(BitVec boardVec, <span class="kwb">int</span> row)
+{
+   BitVec toFill = ~boardVec;
+   <span class="kwb">bool</span> isOdd = (row &amp; <span class="num">1</span>);
+   <span class="kwa">if</span> (isOdd) {
+      row--;
+      toFill &lt;&lt;= N_COL; <span class="slc">// shift to even aligned</span>
+      toFill |= TOP_ROW;
+   }
+
+   BitVec startRegion = TOP_ROW;
+   BitVec lastRow = TOP_ROW &lt;&lt; (<span class="num">5</span> * N_COL);
+   BitVec boardMask = BOARD_MASK; <span class="slc">// all but the first two bits</span>
+   <span class="kwa">if</span> (row &gt;= <span class="num">4</span>)
+      boardMask &gt;&gt;= ((row - <span class="num">4</span>) * N_COL);
+   <span class="kwa">else if</span> (isOdd || (row == <span class="num">0</span>))
+      startRegion = lastRow;
+
+   toFill &amp;= boardMask;
+   startRegion &amp;= toFill;
+
+   <span class="kwa">while</span> (toFill)    {
+      <span class="kwa">if</span> (<span class="kwd">badRegion</span>(toFill, startRegion))
+         <span class="kwa">return true</span>;
+      <span class="kwb">int</span> iPos = <span class="kwd">getFirstOne</span>(toFill);
+      startRegion = <span class="kwd">getMask</span>(iPos);
+   }
+
+   <span class="kwa">return false</span>;
+}
+
+<span class="kwb">void</span> Board::<span class="kwd">recordSolution</span>(Soln &amp; s) {
+   m_nSoln += <span class="num">2</span>; <span class="slc">// add solution and its rotation</span>
+
+   <span class="kwa">if</span> (m_minSoln.<span class="kwd">isEmpty</span>()) {
+      m_minSoln = m_maxSoln = s;
+      <span class="kwa">return</span>;
+   }
+
+   <span class="kwa">if</span> (s.<span class="kwd">lessThan</span>(m_minSoln))
+      m_minSoln = s;
+   <span class="kwa">else if</span> (m_maxSoln.<span class="kwd">lessThan</span>(s))
+      m_maxSoln = s;
+
+   Soln spun;
+   s.<span class="kwd">spin</span>(spun);
+   <span class="kwa">if</span> (spun.<span class="kwd">lessThan</span>(m_minSoln))
+      m_minSoln = spun;
+   <span class="kwa">else if</span> (m_maxSoln.<span class="kwd">lessThan</span>(spun))
+      m_maxSoln = spun;
+}
+
+TUInt32 <span class="kwd">countOnes</span>(BitVec v) {
+   TUInt32 n = <span class="num">0</span>;
+   <span class="kwa">while</span> (v) {
+      n++;
+      v = v &amp; (v - <span class="num">1</span>);
+   }
+
+   <span class="kwa">return</span> n;
+}
+
+<span class="kwb">bool</span> Board::<span class="kwd">badRegion</span>(BitVec &amp; toFill, BitVec rNew)
+{
+   <span class="slc">// grow empty region, until it doesn't change any more</span>
+   BitVec region;
+   <span class="kwa">do</span> {
+      region = rNew;
+
+      <span class="slc">// simple grow up/down</span>
+      rNew |= (region &gt;&gt; N_COL);
+      rNew |= (region &lt;&lt; N_COL);
+
+      <span class="slc">// grow right/left</span>
+      rNew |= (region &amp; ~L_EDGE_MASK) &gt;&gt; <span class="num">1</span>;
+      rNew |= (region &amp; ~R_EDGE_MASK) &lt;&lt; <span class="num">1</span>;
+
+      <span class="slc">// tricky growth</span>
+      BitVec evenRegion = region &amp; (ROW_0_MASK &amp; ~L_EDGE_MASK);
+      rNew |= evenRegion &gt;&gt; (N_COL + <span class="num">1</span>);
+      rNew |= evenRegion &lt;&lt; (N_COL - <span class="num">1</span>);
+      BitVec oddRegion = region &amp; (ROW_1_MASK &amp; ~R_EDGE_MASK);
+      rNew |= oddRegion &gt;&gt; (N_COL - <span class="num">1</span>);
+      rNew |= oddRegion &lt;&lt; (N_COL + <span class="num">1</span>);
+
+      <span class="slc">// clamp against existing pieces</span>
+      rNew &amp;= toFill;
+   }
+   <span class="kwa">while</span> ((rNew != toFill) &amp;&amp; (rNew != region));
+
+   <span class="slc">// subtract empty region from board</span>
+   toFill ^= rNew;
+
+   TUInt32 nCells = <span class="kwd">countOnes</span>(toFill);
+   <span class="kwa">return</span> (nCells % Piece::N_ELEM != <span class="num">0</span>);
+}
+
+<span class="kwb">static</span> TUInt32 g_firstRegion[] = {
+   <span class="num">0x00</span>, <span class="num">0x01</span>, <span class="num">0x02</span>, <span class="num">0x03</span>,   <span class="num">0x04</span>, <span class="num">0x01</span>, <span class="num">0x06</span>, <span class="num">0x07</span>,
+   <span class="num">0x08</span>, <span class="num">0x01</span>, <span class="num">0x02</span>, <span class="num">0x03</span>,   <span class="num">0x0c</span>, <span class="num">0x01</span>, <span class="num">0x0e</span>, <span class="num">0x0f</span>,
+
+   <span class="num">0x10</span>, <span class="num">0x01</span>, <span class="num">0x02</span>, <span class="num">0x03</span>,   <span class="num">0x04</span>, <span class="num">0x01</span>, <span class="num">0x06</span>, <span class="num">0x07</span>,
+   <span class="num">0x18</span>, <span class="num">0x01</span>, <span class="num">0x02</span>, <span class="num">0x03</span>,   <span class="num">0x1c</span>, <span class="num">0x01</span>, <span class="num">0x1e</span>, <span class="num">0x1f</span>
+};
+
+<span class="kwb">int</span> Board::<span class="kwd">calcBadIslands</span>(BitVec boardVec, <span class="kwb">int</span> row)
+{
+   BitVec toFill = ~boardVec;
+   <span class="kwa">if</span> (row &amp; <span class="num">1</span>) {
+      row--;
+      toFill &lt;&lt;= N_COL;
+   }
+
+   BitVec boardMask = BOARD_MASK; <span class="slc">// all but the first two bits</span>
+   <span class="kwa">if</span> (row &gt; <span class="num">4</span>) {
+      <span class="kwb">int</span> boardMaskShift = (row - <span class="num">4</span>) * N_COL;
+      boardMask &gt;&gt;= boardMaskShift;
+   }
+   toFill &amp;= boardMask;
+
+   <span class="slc">// a little pre-work to speed things up</span>
+   BitVec bottom = (TOP_ROW &lt;&lt; (<span class="num">5</span> * N_COL));
+   <span class="kwb">bool</span> filled = ((bottom &amp; toFill) == bottom);
+   <span class="kwa">while</span> ((bottom &amp; toFill) == bottom) {
+      toFill ^= bottom;
+      bottom &gt;&gt;= N_COL;
+   }
+
+   BitVec startRegion;
+   <span class="kwa">if</span> (filled || (row &lt; <span class="num">4</span>))
+      startRegion = bottom &amp; toFill;
+   <span class="kwa">else</span> {
+      startRegion = g_firstRegion[toFill &amp; TOP_ROW];
+      <span class="kwa">if</span> (startRegion == <span class="num">0</span>)  {
+         startRegion = (toFill &gt;&gt; N_COL) &amp; TOP_ROW;
+         startRegion = g_firstRegion[startRegion];
+         startRegion &lt;&lt;= N_COL;
+      }
+      startRegion |= (startRegion &lt;&lt; N_COL) &amp; toFill;
+   }
+
+   <span class="kwa">do</span> {
+      <span class="kwa">if</span> (<span class="kwd">badRegion</span>(toFill, startRegion))
+         <span class="kwa">return</span> ALWAYS_BAD;
+      <span class="kwb">int</span> iPos = <span class="kwd">getFirstOne</span>(toFill);
+      startRegion = <span class="kwd">getMask</span>(iPos);
+   } <span class="kwa">while</span> (toFill);
+
+   <span class="kwa">return</span> GOOD;
+}
+
+<span class="kwb">int</span> Board::<span class="kwd">hasBadIslands</span>(BitVec boardVec, <span class="kwb">int</span> row)
+{
+   <span class="slc">// skip over any filled rows</span>
+   <span class="kwa">while</span> ((boardVec &amp; TOP_ROW) == TOP_ROW) {
+      boardVec &gt;&gt;= N_COL;
+      row++;
+   }
+
+   TUInt32 iInfo = boardVec &amp; TOP_2_ROWS;
+   IslandInfo &amp; info = g_islandInfo[iInfo];
+
+   TUInt32 thirdRow = (boardVec &gt;&gt; TWO_ROWS) &amp; TOP_ROW;
+   TUInt32 mask = <span class="kwd">getMask</span>(thirdRow);
+   TUInt32 isOdd = row &amp; <span class="num">1</span>;
+   TUInt32 &amp; alwaysBad = info.alwaysBad[isOdd];
+
+   <span class="kwa">if</span> (alwaysBad &amp; mask)
+      <span class="kwa">return</span> ALWAYS_BAD;
+
+   <span class="kwa">if</span> (boardVec == <span class="num">0</span>)
+      <span class="kwa">return</span> GOOD;
+
+   <span class="kwa">return</span> <span class="kwd">calcBadIslands</span>(boardVec, row);
+}
+
+<span class="kwb">void</span> Board::<span class="kwd">genAllSolutions</span>(BitVec boardVec, TUInt32 placedPieces, TUInt32 row)
+{
+   <span class="kwa">while</span> ((boardVec &amp; TOP_ROW) == TOP_ROW) {
+      boardVec &gt;&gt;= N_COL;
+      row++;
+   }
+   TUInt32 iNextFill = s_firstOne[~boardVec &amp; TOP_ROW];
+   <span class="kwb">const</span> OkPieces &amp; allowed = g_okPieces[row][iNextFill];
+
+   <span class="kwb">int</span> iPiece = <span class="kwd">getFirstOne</span>(~placedPieces);
+   <span class="kwb">int</span> pieceMask = <span class="kwd">getMask</span>(iPiece);
+
+   <span class="kwa">for</span> (; iPiece &lt; N_PIECE_TYPE; iPiece++, pieceMask &lt;&lt;= <span class="num">1</span>)
+   {
+      <span class="slc">// skip if we've already used this piece</span>
+      <span class="kwa">if</span> (pieceMask &amp; placedPieces)
+         <span class="kwa">continue</span>;
+
+      placedPieces |= pieceMask;
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> iOrient = <span class="num">0</span>; iOrient &lt; allowed.nPieces[iPiece]; iOrient++) {
+         BitVec pieceVec = allowed.pieceVec[iPiece][iOrient];
+
+         <span class="slc">// check if piece conflicts with other pieces</span>
+         <span class="kwa">if</span> ((pieceVec &amp; boardVec) || <span class="kwd">hasBadIslands</span>(boardVec | pieceVec, row))
+            <span class="kwa">continue</span>;
+
+         m_curSoln.<span class="kwd">pushPiece</span>(pieceVec, iPiece, row);
+
+         <span class="slc">// recur or record solution</span>
+         <span class="kwa">if</span> (placedPieces != Piece::ALL_PIECE_MASK)
+            <span class="kwd">genAllSolutions</span>(boardVec | pieceVec, placedPieces, row);
+         <span class="kwa">else</span>
+            <span class="kwd">recordSolution</span>(m_curSoln);
+
+         <span class="slc">// remove the piece before continuing with a new piece</span>
+         m_curSoln.<span class="kwd">popPiece</span>();
+      }
+
+      placedPieces ^= pieceMask;
+   }
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> * []) {
+   <span class="kwa">if</span> (argc &gt; <span class="num">2</span>)
+      <span class="kwa">return</span> <span class="num">1</span>; <span class="slc">// spec says this is an error</span>
+
+   Board b;
+   Piece::<span class="kwd">genAllOrientations</span>();
+   Board::<span class="kwd">calcAlwaysBad</span>();
+   b.<span class="kwd">genAllSolutions</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>);
+   cout &lt;&lt; b.m_nSoln &lt;&lt; <span class="str">&quot; solutions found</span><span class="esc">\n\n</span><span class="str">&quot;</span>;
+   cout &lt;&lt; b.m_minSoln.<span class="kwd">toString</span>() &lt;&lt; <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+   cout &lt;&lt; b.m_maxSoln.<span class="kwd">toString</span>() &lt;&lt; endl;
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+

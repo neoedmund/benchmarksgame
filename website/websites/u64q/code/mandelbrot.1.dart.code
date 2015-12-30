@@ -1,0 +1,103 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Jos Hirth,</span>
+<span class="com">   calculation block borrowed from the C# version which was</span>
+<span class="com">      created by Isaac Gouy, Antti Lankila, The Anh Tran, and Robert F. Tobler</span>
+<span class="com">*/</span>
+
+<span class="kwc">import</span> <span class="str">'dart:io'</span>;
+<span class="kwc">import</span> <span class="str">'dart:isolate'</span>;
+<span class="kwc">import</span> <span class="str">'dart:async'</span>;
+<span class="kwc">import</span> <span class="str">'dart:typed_data'</span>;
+
+<span class="kwa">void</span> main(args) {
+  <span class="kwb">int</span> n = args.length &gt; <span class="num">0</span> ? <span class="kwb">int</span>.parse(args[<span class="num">0</span>]) : <span class="num">2000</span>;
+
+  <span class="kwa">var</span> threads = Platform.numberOfProcessors;
+  <span class="kwa">var</span> segmentFutures = <span class="kwa">new</span> List(threads);
+  <span class="kwb">int</span> lineLen = (n - <span class="num">1</span>) ~/ <span class="num">8</span> + <span class="num">1</span>;
+  <span class="kwa">var</span> lines = <span class="kwa">new</span> List&lt;Uint8List&gt;(n);
+
+  <span class="kwa">var</span> segmentSize = <span class="kwa">new</span> List.filled(threads, n ~/ threads);
+  segmentSize[<span class="num">0</span>] += n % threads;
+
+  <span class="kwb">int</span> from = <span class="num">0</span>;
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; threads; i++) {
+    <span class="kwa">var</span> len = segmentSize[i];
+    <span class="kwa">var</span> response = <span class="kwa">new</span> ReceivePort();
+    <span class="kwb">int</span> localFrom = from;
+    Future&lt;Isolate&gt; remote = Isolate.spawn(calculateSegment, response.sendPort);
+    segmentFutures[i] = remote.then((_) =&gt; response.first).then((sendPort) {
+      ReceivePort response = <span class="kwa">new</span> ReceivePort();
+      sendPort.send({
+        <span class="str">'n'</span>: n,
+        <span class="str">'from'</span>: localFrom,
+        <span class="str">'len'</span>: len,
+        <span class="str">'port'</span>: response.sendPort
+      });
+      <span class="kwa">return</span> response.first;
+    });
+    from += len;
+  }
+
+  stdout.write(<span class="str">'P4</span><span class="esc">\n</span><span class="str">$n $n</span><span class="esc">\n</span><span class="str">'</span>);
+
+  Future.wait(segmentFutures).then((segments) {
+    <span class="kwa">for</span> (<span class="kwa">var</span> segment <span class="kwa">in</span> segments) {
+      <span class="kwa">for</span> (<span class="kwa">var</span> line <span class="kwa">in</span> segment) {
+        stdout.add(line);
+      }
+    }
+  });
+}
+
+Uint8List calculateLine (<span class="kwb">int</span> n, <span class="kwb">int</span> y) {
+  <span class="kwb">int</span> lineLen = (n - <span class="num">1</span>) ~/ <span class="num">8</span> + <span class="num">1</span>;
+
+  <span class="kwa">var</span> line = <span class="kwa">new</span> Uint8List(lineLen);
+
+  <span class="kwb">int</span> xbyte = <span class="num">0</span>, bits = <span class="num">1</span>;
+  <span class="kwb">double</span> ci = y * <span class="num">2.0</span> / n - <span class="num">1.0</span>;
+
+  <span class="kwa">for</span> (<span class="kwb">int</span> x = <span class="num">0</span>; x &lt; n; x++) {
+    <span class="kwb">double</span> cr = x * <span class="num">2.0</span> / n - <span class="num">1.5</span>;
+    <span class="kwa">if</span> (bits &gt; <span class="num">0xff</span>) {
+      line[xbyte++] = bits;
+      bits = <span class="num">1</span>;
+    }
+    <span class="kwb">double</span> zr = cr,
+        zi = ci,
+        tr = cr * cr,
+        ti = ci * ci;
+    <span class="kwb">int</span> i = <span class="num">49</span>;
+    <span class="kwa">do</span> {
+      zi = zr * zi + zr * zi + ci;
+      zr = tr - ti + cr;
+      tr = zr * zr;
+      ti = zi * zi;
+    } <span class="kwa">while</span> ((tr + ti &lt;= <span class="num">4.0</span>) &amp;&amp; (--i &gt; <span class="num">0</span>));
+    bits = (bits &lt;&lt; <span class="num">1</span>) | (i == <span class="num">0</span> ? <span class="num">1</span> : <span class="num">0</span>);
+  } <span class="kwa">while</span> (bits &lt; <span class="num">0x100</span>) bits = (bits &lt;&lt; <span class="num">1</span>);
+  line[xbyte] = bits;
+
+  <span class="kwa">return</span> line;
+}
+
+<span class="kwa">void</span> calculateSegment (SendPort initialReplyTo) {
+  <span class="kwa">var</span> port = <span class="kwa">new</span> ReceivePort();
+  initialReplyTo.send(port.sendPort);
+  port.listen((msg) {
+    <span class="kwb">int</span> n = msg[<span class="str">'n'</span>];
+    <span class="kwb">int</span> from = msg[<span class="str">'from'</span>];
+    <span class="kwb">int</span> len = msg[<span class="str">'len'</span>];
+    SendPort replyTo = msg[<span class="str">'port'</span>];
+
+    <span class="kwa">var</span> lines = <span class="kwa">new</span> List&lt;Uint8List&gt;(len);
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; len; i++) {
+      lines[i] = calculateLine(n, from + i);
+    }
+    replyTo.send(lines);
+    port.close();
+  });
+}

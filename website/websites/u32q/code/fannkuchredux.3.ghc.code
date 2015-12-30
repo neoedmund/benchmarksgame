@@ -1,0 +1,103 @@
+<span class="com">{-  The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">    contributed by Louis Wasserman</span>
+<span class="com">    </span>
+<span class="com">    This should be compiled with:</span>
+<span class="com">    	-threaded -O2 -fexcess-precision -fasm</span>
+<span class="com">    and run with:</span>
+<span class="com">    	+RTS -N&lt;number of cores&gt; -RTS &lt;input&gt;</span>
+<span class="com">-}</span>
+
+<span class="kwd">import</span> Control.Concurrent
+<span class="kwd">import</span> Control.Monad
+<span class="kwd">import</span> System.Environment
+<span class="kwd">import</span> Foreign <span class="kwd">hiding</span> (rotate)
+<span class="kwd">import</span> Data.Monoid
+
+<span class="kwd">type</span> Perm = Ptr Word8
+
+<span class="kwd">data</span> F = F <span class="com">{-# UNPACK #-}</span> !<span class="kwb">Int</span> <span class="com">{-# UNPACK #-}</span> !<span class="kwb">Int</span>
+
+<span class="kwd">instance</span> Monoid F <span class="kwd">where</span>
+	mempty = F <span class="num">0 0</span>
+	F s1 m1 `mappend` F s2 m2 = F (s1 + s2) (<span class="kwc">max</span> m1 m2)
+
+incPtr = (`advancePtr` <span class="num">1</span>)
+decPtr = (`advancePtr` (-<span class="num">1</span>))
+
+flop :: <span class="kwb">Int</span> -&gt; Perm -&gt; <span class="kwb">IO</span> ()
+flop k xs = flopp xs (xs `advancePtr` k)
+ <span class="kwd">where</span> flopp i j = <span class="kwc">when</span> (i &lt; j) $ swap i j &gt;&gt; flopp (incPtr i) (decPtr j)
+       swap i j = <span class="kwd">do</span>
+	a &lt;- peek i
+	b &lt;- peek j
+	poke j a
+	poke i b
+
+flopS :: Perm -&gt; (<span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> a) -&gt; <span class="kwb">IO</span> a
+flopS !xs f = <span class="kwd">do</span>
+	<span class="kwd">let</span> go !acc = <span class="kwd">do</span>
+		k &lt;- peekElemOff xs <span class="num">0</span>
+		<span class="kwd">if</span> k == <span class="num">0</span> <span class="kwd">then</span> f acc <span class="kwd">else</span> flop (<span class="kwc">fromIntegral</span> k) xs &gt;&gt; go (acc+<span class="num">1</span>)
+	go <span class="num">0</span>
+
+increment :: Ptr Word8 -&gt; Ptr Word8 -&gt; <span class="kwb">IO</span> ()
+increment !p !ct = <span class="kwd">do</span>
+	first &lt;- peekElemOff p <span class="num">1</span>
+	pokeElemOff p <span class="num">1</span> =&lt;&lt; peekElemOff p <span class="num">0</span>
+	pokeElemOff p <span class="num">0</span> first
+	
+	<span class="kwd">let</span> go !i !first = <span class="kwd">do</span>
+		ci &lt;- peekElemOff ct i
+		<span class="kwd">if</span> <span class="kwc">fromIntegral</span> ci &lt; i <span class="kwd">then</span> pokeElemOff ct i (ci+<span class="num">1</span>) <span class="kwd">else do</span>
+			pokeElemOff ct i <span class="num">0</span>
+			<span class="kwd">let</span> !i' = i + <span class="num">1</span>
+			moveArray p (incPtr p) i'
+			pokeElemOff p i' first
+			go i' =&lt;&lt; peekElemOff p <span class="num">0</span>
+	go <span class="num">1</span> first  
+
+genPermutations :: <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; Ptr Word8 -&gt; Ptr Word8 -&gt; <span class="kwb">IO</span> F
+genPermutations !n !l !r !perm !count = allocaArray n $ \ destF -&gt; <span class="kwd">do</span>
+	<span class="kwd">let</span> upd j !f run = <span class="kwd">do</span>
+		p0 &lt;- peekElemOff perm <span class="num">0</span>
+		<span class="kwd">if</span> p0 == <span class="num">0</span> <span class="kwd">then</span> increment perm count &gt;&gt; run f <span class="kwd">else do</span>
+			copyArray destF perm n
+			increment perm count
+			flopS destF $ \ flops -&gt; 
+				run (f `mappend` F (checksum j flops) flops)
+	<span class="kwd">let</span> go j !f = <span class="kwd">if</span> j &gt;= r <span class="kwd">then</span> <span class="kwc">return</span> f <span class="kwd">else</span> upd j f (go (j+<span class="num">1</span>))
+	go l mempty
+ <span class="kwd">where</span> checksum i f = <span class="kwd">if</span> i .&amp;. <span class="num">1</span> == <span class="num">0</span> <span class="kwd">then</span> f <span class="kwd">else</span> -f
+
+facts :: [<span class="kwb">Int</span>]
+facts = <span class="kwc">scanl</span> (*) <span class="num">1</span> [<span class="num">1</span>.<span class="num">.12</span>]
+
+unrank :: <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; (Ptr Word8 -&gt; Ptr Word8 -&gt; <span class="kwb">IO</span> a) -&gt; <span class="kwb">IO</span> a
+unrank !idx !n f = allocaArray n $ \ p -&gt; allocaArray n $ \ count -&gt;
+  allocaArray n $ \ pp -&gt; <span class="kwd">do</span>
+	<span class="kwc">mapM_</span> (\ i -&gt; pokeElemOff p i (<span class="kwc">fromIntegral</span> i)) [<span class="num">0</span>..n-<span class="num">1</span>]
+	<span class="kwd">let</span> go i !idx = <span class="kwc">when</span> (i &gt;= <span class="num">0</span>) $ <span class="kwd">do</span>
+		<span class="kwd">let</span> fi = facts !! i
+		<span class="kwd">let</span> (q, r) = idx `<span class="kwc">quotRem</span>` fi
+		pokeElemOff count i (<span class="kwc">fromIntegral</span> q)
+		copyArray pp p (i+<span class="num">1</span>)
+		<span class="kwd">let</span> go' j = <span class="kwc">when</span> (j &lt;= i) $ <span class="kwd">do</span>
+			<span class="kwd">let</span> jq = j + q
+			pokeElemOff p j =&lt;&lt; peekElemOff pp (<span class="kwd">if</span> jq &lt;= i <span class="kwd">then</span> jq <span class="kwd">else</span> jq - i - <span class="num">1</span>)
+			go' (j+<span class="num">1</span>)
+		go' <span class="num">0</span>
+		go (i-<span class="num">1</span>) r
+	go (n-<span class="num">1</span>) idx
+	f p count
+
+main = <span class="kwd">do</span>
+   n &lt;- <span class="kwc">fmap</span> (<span class="kwc">read</span>.<span class="kwc">head</span>) <span class="kwc">getArgs</span>
+   <span class="kwd">let</span> fact = <span class="kwc">product</span> [<span class="num">1</span>..n]
+   <span class="kwd">let</span> bk = fact `<span class="kwc">quot</span>` <span class="num">4</span>
+   vars &lt;- forM [<span class="num">0</span>,bk..fact-<span class="num">1</span>] $ \ ix -&gt; <span class="kwd">do</span>
+   	var &lt;- newEmptyMVar
+   	forkIO (unrank ix n $ \ p -&gt; genPermutations n ix (<span class="kwc">min</span> fact (ix + bk)) p &gt;=&gt; putMVar var)
+   	<span class="kwc">return</span> var
+   F chksm mflops &lt;- <span class="kwc">liftM</span> mconcat (<span class="kwc">mapM</span> takeMVar vars)
+   <span class="kwc">putStrLn</span> $ (<span class="kwc">show</span> chksm) ++ <span class="str">&quot;</span><span class="esc">\n</span><span class="str">Pfannkuchen(&quot;</span> ++ (<span class="kwc">show</span> n) ++ <span class="str">&quot;) = &quot;</span> ++ (<span class="kwc">show</span> $ mflops)

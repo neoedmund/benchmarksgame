@@ -1,0 +1,403 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> </span>
+<span class="com">   Based on bit encoding idea of C++ contribution of Andrew Moon</span>
+<span class="com">   Copy task division idea from Java entry, contributed by James McIlree</span>
+<span class="com">   Contributed by Petr Prokhorenkov</span>
+<span class="com">   Modified by Stefano Guidoni</span>
+<span class="com">*/</span>
+
+<span class="slc">//#include &quot;simple_hash3.h&quot;</span>
+
+<span class="ppc">#include &lt;ctype.h&gt;</span>
+<span class="ppc">#include &lt;malloc.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+<span class="ppc">#include &lt;sys/mman.h&gt;</span>
+<span class="ppc">#include &lt;sys/stat.h&gt;</span>
+<span class="ppc">#include &lt;unistd.h&gt;</span>
+
+<span class="ppc">#define HT_SIZE 2000000</span>
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned char uint8_t</span>;
+<span class="kwb">const uint8_t</span> selector[] = { -<span class="num">1</span>, <span class="num">0</span>,-<span class="num">1</span>, <span class="num">1</span>, <span class="num">3</span>,-<span class="num">1</span>,-<span class="num">1</span>, <span class="num">2</span> };
+<span class="kwb">const char</span> table[] = {<span class="str">'A'</span>, <span class="str">'C'</span>, <span class="str">'G'</span>, <span class="str">'T'</span>};
+
+<span class="com">/* this is sligthly faster</span>
+<span class="com">struct ht_node *</span>
+<span class="com">ht_find_new(struct ht_ht *ht, ui64 key) </span>
+<span class="com">{</span>
+<span class="com">    int hash_code = ht_hashcode(ht, key);</span>
+<span class="com">    struct ht_node *node = ht-&gt;tbl[hash_code];</span>
+<span class="com">    </span>
+<span class="com">    if (node) </span>
+<span class="com">    {</span>
+<span class="com">      if (key == node-&gt;key)</span>
+<span class="com">          return(node);</span>
+<span class="com">    } else {</span>
+<span class="com">      ht-&gt;items++;</span>
+<span class="com">      return(ht-&gt;tbl[hash_code] = ht_node_create(key));</span>
+<span class="com">    }</span>
+<span class="com">    </span>
+<span class="com">    while (node-&gt;next) </span>
+<span class="com">    {</span>
+<span class="com">        if (key == node-&gt;next-&gt;key)</span>
+<span class="com">            return(node-&gt;next);</span>
+<span class="com">        node = node-&gt;next;</span>
+<span class="com">    }</span>
+<span class="com"></span>
+<span class="com">    ht-&gt;items++;</span>
+<span class="com">    return (node-&gt;next = ht_node_create(key));</span>
+<span class="com">}*/</span>
+
+<span class="com">/* Thread pool implementation */</span>
+
+<span class="kwb">struct</span> tp_entry {
+    <span class="kwb">void</span> *job;
+    <span class="kwb">void</span> *param;
+};
+
+<span class="kwb">struct</span> tp {
+    <span class="kwb">struct</span> tp_entry *jobs;
+    <span class="kwb">int</span> capacity;
+    <span class="kwb">int</span> size;
+    pthread_mutex_t mutex;
+};
+
+<span class="kwb">struct</span> tp *
+<span class="kwd">tp_create</span>(<span class="kwb">int</span> max_jobs) {
+    <span class="kwb">struct</span> tp *pool = <span class="kwd">malloc</span>(<span class="kwa">sizeof</span>(*pool));
+
+    pool-&gt;jobs = <span class="kwd">malloc</span>(<span class="kwa">sizeof</span>(<span class="kwb">struct</span> tp_entry)*max_jobs);
+    pool-&gt;capacity = max_jobs;
+    pool-&gt;size = <span class="num">0</span>;
+    <span class="kwd">pthread_mutex_init</span>(&amp;pool-&gt;mutex, <span class="num">0</span>);
+
+    <span class="kwa">return</span> pool;
+}
+
+<span class="kwb">void</span>
+<span class="kwd">tp_destroy</span>(<span class="kwb">struct</span> tp *pool) {
+    <span class="kwd">free</span>(pool-&gt;jobs);
+    <span class="kwd">pthread_mutex_destroy</span>(&amp;pool-&gt;mutex);
+    <span class="kwd">free</span>(pool);
+}
+
+<span class="kwb">void</span>
+<span class="kwd">tp_add_job</span>(<span class="kwb">struct</span> tp *pool, <span class="kwb">void</span> *job, <span class="kwb">void</span> *param) {
+    <span class="kwa">if</span> (pool-&gt;size &lt; pool-&gt;capacity) {
+        pool-&gt;jobs[pool-&gt;size].job = job;
+        pool-&gt;jobs[pool-&gt;size].param = param;
+        ++pool-&gt;size;
+    }
+}
+
+<span class="kwb">void</span> *
+<span class="kwd">_tp_run</span>(<span class="kwb">void</span> *param) {
+    <span class="kwb">struct</span> tp *pool = param;
+
+    <span class="kwa">for</span> (;;) {
+        <span class="kwb">void</span> (*job)(<span class="kwb">void</span> *) = <span class="num">0</span>;
+        <span class="kwb">void</span> *param = <span class="num">0</span>;
+
+        <span class="kwd">pthread_mutex_lock</span>(&amp;pool-&gt;mutex);
+        <span class="kwa">if</span> (pool-&gt;size &gt; <span class="num">0</span>) {
+            job = pool-&gt;jobs[pool-&gt;size - <span class="num">1</span>].job;
+            param = pool-&gt;jobs[pool-&gt;size - <span class="num">1</span>].param;
+            --pool-&gt;size;
+        }
+        <span class="kwd">pthread_mutex_unlock</span>(&amp;pool-&gt;mutex);
+        <span class="kwa">if</span> (job == <span class="num">0</span>) {
+            <span class="kwa">return</span> <span class="num">0</span>;
+        } <span class="kwa">else</span> {
+            <span class="kwd">job</span>(param);
+        }
+    }
+}
+
+<span class="kwb">void</span>
+<span class="kwd">tp_run</span>(<span class="kwb">struct</span> tp *pool, <span class="kwb">int</span> max_threads) {
+    pthread_t threads[max_threads];
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; max_threads; i++) {
+        <span class="kwd">pthread_create</span>(&amp;threads[i], <span class="num">0</span>, &amp;_tp_run, pool);
+    }
+
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; max_threads; i++) {
+        <span class="kwd">pthread_join</span>(threads[i], <span class="num">0</span>);
+    }
+}
+
+<span class="kwb">char</span> *
+<span class="kwd">read_stdin</span>(<span class="kwb">int</span> *stdin_size) {
+    <span class="kwb">struct</span> stat stat;
+    <span class="kwd">fstat</span>(<span class="num">0</span>, &amp;stat);
+
+    <span class="kwb">char</span> *result = <span class="kwd">malloc</span>(stat.st_size);
+
+    <span class="kwa">do</span> {
+        <span class="kwd">fgets_unlocked</span>(result, stat.st_size, stdin);
+    } <span class="kwa">while</span> (<span class="kwd">strncmp</span>(result, <span class="str">&quot;&gt;THREE&quot;</span>, <span class="num">6</span>));
+
+    <span class="kwb">int</span> read = <span class="num">0</span>;
+    <span class="kwa">while</span> (<span class="kwd">fgets_unlocked</span>(result + read, stat.st_size - read, stdin)) {
+        <span class="kwb">int</span> len = <span class="kwd">strlen</span>(result + read);
+        <span class="kwa">if</span> (len == <span class="num">0</span> || result[read] == <span class="str">'&gt;'</span>) {
+            <span class="kwa">break</span>;
+        }
+        read += len;
+        <span class="kwa">if</span> (result[read - <span class="num">1</span>] == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) {
+            read--;
+        }
+    }
+
+    result[read++] = <span class="str">'&gt;'</span>;
+    result = <span class="kwd">realloc</span>(result, read);
+    *stdin_size = read;
+
+    <span class="kwa">return</span> result;
+}
+
+<span class="kwb">static</span>
+<span class="kwc">inline</span> <span class="kwb">char</span> *
+<span class="kwd">next_char</span>(<span class="kwb">char</span> *p) {
+    <span class="kwa">do</span> {
+        ++p;
+    } <span class="kwa">while</span> (<span class="kwd">isspace</span>(*p));
+
+    <span class="kwa">return</span> p;
+}
+
+<span class="kwc">inline</span> <span class="kwb">uint64_t</span>
+<span class="kwd">push_char</span>(<span class="kwb">uint64_t</span> cur, <span class="kwb">uint8_t</span> c) {
+    <span class="kwa">return</span> (cur &lt;&lt; <span class="num">2</span>) + selector[(c &amp; <span class="num">7</span>)];
+}
+
+<span class="kwb">uint64_t</span>
+<span class="kwd">pack_key</span>(<span class="kwb">char</span> *key, <span class="kwb">int</span> len) {
+    <span class="kwb">uint64_t</span> code = <span class="num">0</span>;
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; len; i++) {
+        code = <span class="kwd">push_char</span>(code, *key);
+        key = <span class="kwd">next_char</span>(key);
+    }
+
+    <span class="kwa">return</span> code;
+}
+
+<span class="kwb">void</span>
+<span class="kwd">unpack_key</span>(<span class="kwb">uint64_t</span> key, <span class="kwb">int</span> length, <span class="kwb">char</span> *buffer) {
+    <span class="kwb">int</span> i;
+
+    <span class="kwa">for</span> (i = length - <span class="num">1</span>; i &gt; -<span class="num">1</span>; i--) {
+        buffer[i] = table[key &amp; <span class="num">3</span>];
+        key &gt;&gt;= <span class="num">2</span>;
+    }
+    buffer[length] = <span class="num">0</span>;
+}
+
+<span class="kwb">void</span>
+<span class="kwd">generate_seqences</span>(<span class="kwb">char</span> *start, <span class="kwb">int</span> length, <span class="kwb">int</span> frame, <span class="kwb">struct</span> ht_ht *ht) {
+    <span class="kwb">uint64_t</span> code = <span class="num">0</span>;
+    <span class="kwb">uint64_t</span> mask = (<span class="num">1ull</span> &lt;&lt; <span class="num">2</span>*frame) - <span class="num">1</span>;
+    <span class="kwb">char</span> *p = start;
+    <span class="kwb">char</span> *end = start + length;
+
+    <span class="slc">// Pull first frame.</span>
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; frame; i++) {
+        code = <span class="kwd">push_char</span>(code, *p);
+        ++p;
+    }
+    <span class="kwd">ht_find_new</span>(ht, code)-&gt;val++;
+
+    <span class="kwa">while</span> (p &lt; end) {
+        code = <span class="kwd">push_char</span>(code, *p) &amp; mask;
+        <span class="kwd">ht_find_new</span>(ht, code)-&gt;val++;
+        ++p;
+        <span class="kwa">if</span> (*p &amp; <span class="num">8</span>) {
+            <span class="kwa">if</span> (*p &amp; <span class="num">1</span>) {
+                ++p;
+            } <span class="kwa">else</span>
+                <span class="kwa">break</span>;
+        }
+    }
+}
+
+<span class="kwb">int</span>
+<span class="kwd">key_count_cmp</span>(<span class="kwb">const void</span> *l, <span class="kwb">const void</span> *r) {
+    <span class="kwb">const struct</span> ht_node *lhs = l, *rhs = r;
+
+    <span class="kwa">if</span> (lhs-&gt;val != rhs-&gt;val) {
+        <span class="kwa">return</span> rhs-&gt;val - lhs-&gt;val;
+    } <span class="kwa">else</span> {
+        <span class="slc">// Overflow is possible here,</span>
+        <span class="slc">// so use comparisons instead of subtraction.</span>
+        <span class="kwa">if</span> (lhs-&gt;key &lt; rhs-&gt;key) {
+            <span class="kwa">return</span> -<span class="num">1</span>;
+        } <span class="kwa">else if</span> (lhs-&gt;key &gt; rhs-&gt;key) {
+            <span class="kwa">return</span> <span class="num">1</span>;
+        } <span class="kwa">else</span> {
+            <span class="kwa">return</span> <span class="num">0</span>;
+        }
+    }
+}
+
+<span class="kwb">struct</span> print_freqs_param {
+    <span class="kwb">char</span> *start;
+    <span class="kwb">int</span> length;
+    <span class="kwb">int</span> frame;
+    <span class="kwb">char</span> *output;
+    <span class="kwb">int</span> output_size;
+};
+
+<span class="kwb">struct</span> ht_node *
+<span class="kwd">ht_values_as_vector</span>(<span class="kwb">struct</span> ht_ht *ht) {
+    <span class="kwb">struct</span> ht_node *v = <span class="kwd">malloc</span>(ht-&gt;items*<span class="kwa">sizeof</span>(<span class="kwb">struct</span> ht_node));
+    <span class="kwb">struct</span> ht_node *n = <span class="kwd">ht_first</span>(ht);
+
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; ht-&gt;items; i++) {
+        v[i] = *n;
+        n = <span class="kwd">ht_next</span>(ht);
+    }
+
+    <span class="kwa">return</span> v;
+}
+
+<span class="kwb">void</span>
+<span class="kwd">print_freqs</span>(<span class="kwb">struct</span> print_freqs_param *param) {
+    <span class="kwb">char</span> *start = param-&gt;start;
+    <span class="kwb">int</span> length = param-&gt;length;
+    <span class="kwb">int</span> frame = param-&gt;frame;
+    <span class="kwb">char</span> *output = param-&gt;output;
+    <span class="kwb">int</span> output_size = param-&gt;output_size;
+
+    <span class="kwb">struct</span> ht_ht *ht = <span class="kwd">ht_create</span>(<span class="num">32</span>);
+    <span class="kwb">char</span> buffer[frame + <span class="num">1</span>];
+    <span class="kwb">int</span> output_pos = <span class="num">0</span>;
+
+    <span class="kwd">generate_seqences</span>(start, length, frame, ht);
+    
+    <span class="kwb">struct</span> ht_node *counts = <span class="kwd">ht_values_as_vector</span>(ht);
+    <span class="kwb">int</span> size = ht-&gt;items;
+
+    <span class="kwd">qsort</span>(counts, size, <span class="kwa">sizeof</span>(<span class="kwb">struct</span> ht_node), &amp;key_count_cmp);
+
+    <span class="kwb">int</span> total_count = <span class="num">0</span>;
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; size; i++) {
+        total_count += counts[i].val;
+    }
+
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; size; i++) {
+        <span class="kwd">unpack_key</span>(counts[i].key, frame, buffer);
+        output_pos += <span class="kwd">snprintf</span>(output + output_pos, output_size - output_pos,
+                <span class="str">&quot;%s %.3f</span><span class="esc">\n</span><span class="str">&quot;</span>, buffer, counts[i].val*<span class="num">100.0</span>f/total_count);
+    }
+
+    <span class="kwd">free</span>(counts);
+    <span class="kwd">ht_destroy</span>(ht);
+}
+
+<span class="kwb">struct</span> print_occurences_param {
+    <span class="kwb">char</span> *start;
+    <span class="kwb">int</span> length;
+    <span class="kwb">char</span> *nuc_seq;
+    <span class="kwb">char</span> *output;
+    <span class="kwb">int</span> output_size;
+};
+
+<span class="kwb">void</span>
+<span class="kwd">print_occurences</span>(<span class="kwb">struct</span> print_occurences_param *param) {
+    <span class="kwb">char</span> *start = param-&gt;start;
+    <span class="kwb">int</span> length = param-&gt;length;
+    <span class="kwb">char</span> *nuc_seq = param-&gt;nuc_seq;
+    <span class="kwb">char</span> *output = param-&gt;output;
+    <span class="kwb">int</span> output_size = param-&gt;output_size;
+    <span class="kwb">int</span> nuc_seq_len = <span class="kwd">strlen</span>(nuc_seq);
+    <span class="kwb">struct</span> ht_ht *ht = <span class="kwd">ht_create</span>(HT_SIZE);
+
+    <span class="kwd">generate_seqences</span>(start, length, nuc_seq_len, ht);
+
+    <span class="kwb">uint64_t</span> key = <span class="kwd">pack_key</span>(nuc_seq, nuc_seq_len);
+    <span class="kwb">int</span> count = <span class="kwd">ht_find_new</span>(ht, key)-&gt;val;
+    <span class="kwd">snprintf</span>(output, output_size, <span class="str">&quot;%d</span><span class="esc">\t</span><span class="str">%s</span><span class="esc">\n</span><span class="str">&quot;</span>, count, nuc_seq);
+    
+    <span class="kwd">ht_destroy</span>(ht);
+}
+
+<span class="kwb">int</span>
+<span class="kwd">get_cpu_count</span>(<span class="kwb">void</span>) {
+    cpu_set_t cpu_set;
+
+    <span class="kwd">CPU_ZERO</span>(&amp;cpu_set);
+    <span class="kwd">sched_getaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(cpu_set), &amp;cpu_set);
+
+    <span class="kwa">return</span> <span class="kwd">CPU_COUNT</span>(&amp;cpu_set);
+}
+
+<span class="ppc">#define MAX_OUTPUT 1024</span>
+
+<span class="kwb">int</span>
+<span class="kwd">main</span>(<span class="kwb">void</span>) {
+    <span class="kwb">int</span> stdin_size;
+    <span class="kwb">char</span> *stdin_mem = <span class="kwd">read_stdin</span>(&amp;stdin_size);
+    <span class="kwb">int</span> cpu_count = <span class="kwd">get_cpu_count</span>();
+
+    <span class="kwb">char</span> output_buffer[<span class="num">7</span>][MAX_OUTPUT];
+
+<span class="ppc">#   define DECLARE_PARAM(o, n) {\</span>
+<span class="ppc">    .start = stdin_mem, \</span>
+<span class="ppc">    .length = stdin_size, \</span>
+<span class="ppc">    .frame = n,\</span>
+<span class="ppc">    .output = output_buffer[o],\</span>
+<span class="ppc">    .output_size = MAX_OUTPUT }</span>
+
+    <span class="kwb">struct</span> print_freqs_param freq_params[<span class="num">2</span>] = {
+        <span class="kwd">DECLARE_PARAM</span>(<span class="num">0</span>, <span class="num">1</span>),
+        <span class="kwd">DECLARE_PARAM</span>(<span class="num">1</span>, <span class="num">2</span>)
+    }; 
+
+<span class="ppc">#   undef DECLARE_PARAM</span>
+
+<span class="ppc">#   define DECLARE_PARAM(o, s) {\</span>
+<span class="ppc">    .start = stdin_mem, \</span>
+<span class="ppc">    .length = stdin_size, \</span>
+<span class="ppc">    .nuc_seq = s,\</span>
+<span class="ppc">    .output = output_buffer[o],\</span>
+<span class="ppc">    .output_size = MAX_OUTPUT }</span>
+
+    <span class="kwb">struct</span> print_occurences_param occurences_params[<span class="num">5</span>] = {
+        <span class="kwd">DECLARE_PARAM</span>(<span class="num">2</span>, <span class="str">&quot;GGT&quot;</span>),
+        <span class="kwd">DECLARE_PARAM</span>(<span class="num">3</span>, <span class="str">&quot;GGTA&quot;</span>),
+        <span class="kwd">DECLARE_PARAM</span>(<span class="num">4</span>, <span class="str">&quot;GGTATT&quot;</span>),
+        <span class="kwd">DECLARE_PARAM</span>(<span class="num">5</span>, <span class="str">&quot;GGTATTTTAATT&quot;</span>),
+        <span class="kwd">DECLARE_PARAM</span>(<span class="num">6</span>, <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>)
+    };
+
+<span class="ppc">#   undef DECLARE_PARAM</span>
+
+    <span class="kwb">struct</span> tp *tp = <span class="kwd">tp_create</span>(<span class="num">7</span>);
+
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span> ; i &lt; <span class="num">2</span>; i++) {
+        <span class="kwd">tp_add_job</span>(tp, &amp;print_freqs, &amp;freq_params[i]);
+    }
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span> ;i &lt;  <span class="num">5</span>; i++) {
+        <span class="kwd">tp_add_job</span>(tp, &amp;print_occurences, &amp;occurences_params[i]);
+    }
+
+    <span class="kwd">tp_run</span>(tp, cpu_count + <span class="num">1</span>);
+
+    <span class="kwd">tp_destroy</span>(tp);
+
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">2</span>; i++) {
+        <span class="kwd">printf</span>(<span class="str">&quot;%s</span><span class="esc">\n</span><span class="str">&quot;</span>, output_buffer[i]);
+    }
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">2</span>; i &lt; <span class="num">7</span>; i++) {
+        <span class="kwd">printf</span>(<span class="str">&quot;%s&quot;</span>, output_buffer[i]);
+    }
+
+    <span class="kwd">free</span>(stdin_mem);
+
+    <span class="kwa">return</span> <span class="num">0</span>;
+}
+ 

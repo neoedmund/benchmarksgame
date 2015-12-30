@@ -1,0 +1,407 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">Based on original C contribution by Alex Burlyga.</span>
+<span class="com">Based on thread pool + request queue in Java contribution by Michael Barker.</span>
+<span class="com">Based on single atomic ops, and pthread affinity in C contribution by Dmitry Vyukov.</span>
+<span class="com">Based on C++ contribution by Andrew Moon.</span>
+<span class="com">Contributed by The Anh Tran.</span>
+<span class="com"></span>
+<span class="com">This entry creates N kernel threads. All threads will wait inside </span>
+<span class="com">boost::asio::io_service queue object. If there is a request posted to io_service </span>
+<span class="com">queue, a thread will be dispatched to handle it.</span>
+<span class="com"></span>
+<span class="com">Each creature will submit &quot;i want to go to meeting place&quot; request to io_service.</span>
+<span class="com">Atomic compare-and-set is used to change meeting place state.</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;fstream&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;string&gt;</span>
+<span class="ppc">#include &lt;map&gt;</span>
+<span class="ppc">#include &lt;sstream&gt;</span>
+
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;cassert&gt;</span>
+<span class="ppc">#include &lt;cmath&gt;</span>
+<span class="ppc">#include &lt;memory.h&gt;</span>
+
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+
+<span class="ppc">#include &lt;boost/xpressive/xpressive_static.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/lexical_cast.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/format.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/asio.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/thread.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/bind.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/smart_ptr.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/foreach.hpp&gt;</span>
+
+<span class="ppc">#define foreach BOOST_FOREACH</span>
+
+
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned int</span> uint;
+<span class="kwc">typedef</span> boost::asio::io_service QUEUE_T;
+
+
+<span class="ppc">#define CPU_INFO_STR</span>   <span class="pps">&quot;/proc/cpuinfo&quot;</span><span class="ppc"></span>
+<span class="ppc">#define L2_ALIGN      __attribute__((aligned(16)))</span>
+
+<span class="kwb">enum</span> COLOR {   BLUE = <span class="num">0</span>,   RED = <span class="num">1</span>,   YELLOW = <span class="num">2</span>   };
+COLOR 
+<span class="kwc">operator</span> ^ (COLOR c1, COLOR c2)
+{
+   <span class="kwa">switch</span> (c1)   <span class="slc">// game rule</span>
+   {
+   <span class="kwa">case</span> BLUE:   <span class="kwa">switch</span> (c2)
+            {
+            <span class="kwa">case</span> BLUE:      <span class="kwa">return</span> BLUE;
+            <span class="kwa">case</span> RED:      <span class="kwa">return</span> YELLOW;
+            <span class="kwa">case</span> YELLOW:   <span class="kwa">return</span> RED;
+            }
+
+   <span class="kwa">case</span> RED:   <span class="kwa">switch</span> (c2)
+            {
+            <span class="kwa">case</span> BLUE:      <span class="kwa">return</span> YELLOW;
+            <span class="kwa">case</span> RED:      <span class="kwa">return</span> RED;
+            <span class="kwa">case</span> YELLOW:   <span class="kwa">return</span> BLUE;
+            }
+
+   <span class="kwa">case</span> YELLOW:   <span class="kwa">switch</span> (c2)
+            {
+            <span class="kwa">case</span> BLUE:      <span class="kwa">return</span> RED;
+            <span class="kwa">case</span> RED:      <span class="kwa">return</span> BLUE;
+            <span class="kwa">case</span> YELLOW:   <span class="kwa">return</span> YELLOW;
+            }
+   }
+
+   <span class="kwa">assert</span>(<span class="kwa">false</span>);
+   <span class="kwa">return</span> BLUE;
+}
+
+
+std::ostream&amp; 
+<span class="kwc">operator</span> &lt;&lt; (std::ostream &amp;os, COLOR c) 
+{   
+   <span class="kwb">static char const</span> * ColorName[<span class="num">3</span>]   = {<span class="str">&quot;blue&quot;</span>, <span class="str">&quot;red&quot;</span>, <span class="str">&quot;yellow&quot;</span>};
+   os &lt;&lt; ColorName[c];
+   <span class="kwa">return</span> os;
+}
+
+
+std::string
+<span class="kwd">SpellNumber</span>(uint n)
+{
+   <span class="kwb">static char const</span>* NumberStr[] = 
+   {
+      <span class="str">&quot;zero &quot;</span>, <span class="str">&quot;one &quot;</span>, <span class="str">&quot;two &quot;</span>, <span class="str">&quot;three &quot;</span>, <span class="str">&quot;four &quot;</span>,
+      <span class="str">&quot;five &quot;</span>, <span class="str">&quot;six &quot;</span>, <span class="str">&quot;seven &quot;</span>, <span class="str">&quot;eight &quot;</span>, <span class="str">&quot;nine &quot;</span>
+   };
+   
+   std::string num;
+   
+   <span class="kwa">while</span> ( n &gt;= <span class="num">10</span> )
+   {
+      uint m = n % <span class="num">10</span>;
+      n /= <span class="num">10</span>;
+
+      num.<span class="kwd">insert</span>(<span class="num">0</span>, NumberStr[m]);
+   }
+
+   num.<span class="kwd">insert</span>(<span class="num">0</span>, NumberStr[n]);
+   <span class="kwa">return</span> num;
+}
+
+<span class="com">/*   Place where a creature meet another.</span>
+<span class="com">   stage_exchange stores 2 informations:</span>
+<span class="com">   _ how many meeting times to go. 28 bit from bit 0 -&gt; 27.</span>
+<span class="com">   _ is there any creature waiting. 4 highest bit, 28 -&gt; 31</span>
+<span class="com">*/</span>
+<span class="kwb">struct</span> MeetingPlace
+{
+<span class="kwc">private</span>:
+   L2_ALIGN
+   uint <span class="kwc">volatile</span>   state_exchange_;
+
+<span class="kwc">public</span>:
+   <span class="kwd">MeetingPlace</span>(uint N) :   <span class="kwd">state_exchange_</span>(N)   {   }
+
+<span class="com">/*</span>
+<span class="com">   State_exchange = 32 bit</span>
+<span class="com">   4 bit MSB: id of creature which is waiting. Can support up to 15 creatures.</span>
+<span class="com">   28 bit: counter of how many meeting times that needs to run</span>
+<span class="com">*/</span>
+   <span class="kwb">int</span> <span class="kwd">EnterMeetingRoom</span>( uint cr_id )   <span class="slc">// id starts from 1.</span>
+   {
+      <span class="kwa">while</span> (<span class="kwa">true</span>)
+      {
+         uint old_state = state_exchange_;
+         uint meeting_left = old_state &amp; <span class="num">0x0FFFFFFF</span>;
+
+         <span class="kwa">if</span> (meeting_left &gt; <span class="num">0</span>)
+         {
+            uint cr_waiting = old_state &gt;&gt; <span class="num">28</span>;
+            uint new_state;
+
+            <span class="kwa">if</span> (cr_waiting == <span class="num">0</span>)   <span class="slc">// no one inside, me is 1st</span>
+               new_state = meeting_left | (cr_id &lt;&lt; <span class="num">28</span>);
+            <span class="kwa">else</span>   <span class="slc">// there is a creature waiting</span>
+               new_state = meeting_left -<span class="num">1</span>;
+
+            <span class="kwa">if</span> (<span class="kwd">__sync_bool_compare_and_swap</span>(&amp;state_exchange_, old_state, new_state))
+               <span class="kwa">return</span> cr_waiting;
+         }
+         <span class="kwa">else</span>
+            <span class="kwa">return</span> -<span class="num">1</span>;
+      }
+   }
+};
+
+
+<span class="kwb">struct</span> Creature
+{
+   QUEUE_T*            p_queue_;
+   MeetingPlace*         p_meetingplace_;
+   Creature*            p_cr_list_;
+
+   COLOR               color_;
+   uint               count_;
+   uint               id_;      <span class="slc">// creature id start from 1</span>
+   uint               same_count_;
+
+   <span class="kwd">Creature</span>() : <span class="kwd">color_</span>(BLUE), <span class="kwd">count_</span>(<span class="num">0</span>), <span class="kwd">id_</span>(<span class="num">0</span>), <span class="kwd">same_count_</span>(<span class="num">0</span>)   {}
+
+   <span class="kwb">void</span> 
+   <span class="kwd">Start</span>(   MeetingPlace* mp, COLOR color , uint id, 
+         QUEUE_T* queue,  Creature* pcrl)
+   {
+      color_   = color;
+      id_      = id +<span class="num">1</span>;
+
+      p_queue_      = queue;
+      p_meetingplace_   = mp;
+      p_cr_list_      = pcrl;
+
+      <span class="slc">// post &quot;go to meeting place&quot; request</span>
+      p_queue_-&gt;<span class="kwd">post</span>(boost::<span class="kwd">bind</span>(&amp;Creature::PlayGame, <span class="kwa">this</span>));
+   }
+
+   <span class="slc">// request granted, meeting action executes here</span>
+   <span class="kwb">void</span> 
+   <span class="kwd">PlayGame</span>()   
+   {   
+      <span class="kwb">int</span> other_cr_id = p_meetingplace_-&gt;<span class="kwd">EnterMeetingRoom</span>(id_);
+
+      <span class="slc">// meeting_place returns other creature?</span>
+      <span class="kwa">if</span> (other_cr_id &gt; <span class="num">0</span>)
+         <span class="kwd">SayHello</span>( p_cr_list_[other_cr_id -<span class="num">1</span>] );
+
+      <span class="slc">// if me is the 1st one entering meeting_place, do nothing. </span>
+      <span class="slc">// 2nd arrival creature will submit next meeting request for me.</span>
+   }
+
+   <span class="kwb">void</span> 
+   <span class="kwd">SayHello</span>(Creature &amp;other)
+   {
+      <span class="kwa">if</span> (<span class="kwd">__builtin_expect</span>(id_ == other.id_, <span class="kwa">false</span>))
+      {
+         ++same_count_;
+         ++other.same_count_;
+      }
+      
+      ++count_;
+      ++other.count_;
+
+      COLOR new_color   = <span class="kwa">this</span>-&gt;color_ ^ other.color_;
+      other.color_   = color_   = new_color;
+
+      <span class="slc">// submit another meeting request, for current creature + other creature.</span>
+      p_queue_-&gt;<span class="kwd">post</span>(boost::<span class="kwd">bind</span>(&amp;Creature::PlayGame, <span class="kwa">this</span>));
+      p_queue_-&gt;<span class="kwd">post</span>(boost::<span class="kwd">bind</span>(&amp;Creature::PlayGame, &amp;other));
+   }
+} L2_ALIGN;
+
+
+
+<span class="kwc">template</span> &lt;<span class="kwb">int</span> ncolor&gt;
+<span class="kwb">struct</span> Game
+{
+   MeetingPlace   mplace;
+   QUEUE_T         queue;
+   Creature      cr_list[ncolor];   <span class="slc">// list of all creatures</span>
+
+   std::ostringstream   game_output;
+   boost::thread_group   cr_thread_group;         <span class="slc">// 1 standard OS thread for each creature</span>
+
+   <span class="kwd">Game</span>(uint n, COLOR <span class="kwb">const</span> (&amp;color)[ncolor], cpu_set_t * aff = <span class="num">0</span>)   
+      :   <span class="kwd">mplace</span>(n)   
+   {
+      boost::format <span class="kwd">fmt</span>(<span class="str">&quot;%1% &quot;</span>);
+      
+      <span class="slc">// print initial color of each creature</span>
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; ncolor; ++i)
+      {
+         game_output &lt;&lt; (fmt % (color[i]) );
+         cr_list[i].<span class="kwd">Start</span>( &amp;mplace, color[i], i, &amp;queue, cr_list );
+      }
+      game_output &lt;&lt; std::endl;
+
+      <span class="slc">// Create N kernel threads. All threads will wait inside boost::asio::io_service</span>
+      <span class="slc">// queue object. If there is a request posted to io_service queue, a thread</span>
+      <span class="slc">// will be dispatched to handle it.</span>
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; ncolor; ++i)
+      {
+         boost::thread* t = cr_thread_group.<span class="kwd">create_thread</span>(boost::<span class="kwd">bind</span>(&amp;QUEUE_T::run, &amp;queue));
+      
+         <span class="kwa">if</span>(aff != <span class="num">0</span>)
+            <span class="kwd">pthread_setaffinity_np</span>(t-&gt;<span class="kwd">native_handle</span>(), <span class="kwa">sizeof</span>(cpu_set_t), aff);
+      }
+   }
+
+   std::string
+   <span class="kwd">WaitAndGetResult</span>()
+   {
+      <span class="slc">// wait until meeting times = 0</span>
+      cr_thread_group.<span class="kwd">join_all</span>();
+
+      uint total = <span class="num">0</span>;
+      boost::format <span class="kwd">fmt</span>(<span class="str">&quot;%1% %2%</span><span class="esc">\n</span><span class="str">&quot;</span>);
+
+      <span class="slc">// print meeting times of each creature</span>
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; ncolor; i++)
+      {
+         total += cr_list[i].count_;
+         game_output &lt;&lt; (fmt 
+                     % cr_list[i].count_ 
+                     % <span class="kwd">SpellNumber</span>(cr_list[i].same_count_)   );
+      }
+
+      <span class="slc">// print total meeting times</span>
+      fmt = boost::<span class="kwd">format</span>(<span class="str">&quot; %1%</span><span class="esc">\n\n</span><span class="str">&quot;</span>);
+      game_output &lt;&lt; (fmt % <span class="kwd">SpellNumber</span>(total));
+
+      <span class="kwa">return</span> game_output.<span class="kwd">str</span>();
+   }
+};
+
+<span class="kwb">void</span> 
+<span class="kwd">PrintColors</span>()
+{
+   boost::format <span class="kwd">fmt</span>(<span class="str">&quot;%1% + %2% -&gt; %3%</span><span class="esc">\n</span><span class="str">&quot;</span>);
+   
+   <span class="kwa">for</span> (<span class="kwb">int</span> c1 = BLUE; c1 &lt;= YELLOW; ++c1)
+   {
+      <span class="kwa">for</span> (<span class="kwb">int</span> c2 = BLUE; c2 &lt;= YELLOW; ++c2)
+         std::cout &lt;&lt; (fmt % (COLOR)c1 % (COLOR)c2 % ((COLOR)c1 ^ (COLOR)c2));
+   }
+
+   std::cout &lt;&lt; std::endl;
+}
+
+<span class="slc">// Detect multi / single thread benchmark</span>
+<span class="kwb">int</span> 
+<span class="kwd">GetThreadCount</span>()
+{
+   cpu_set_t cs;
+   <span class="kwd">CPU_ZERO</span>(&amp;cs);
+   <span class="kwd">sched_getaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(cs), &amp;cs);
+
+   <span class="kwb">int</span> count = <span class="num">0</span>;
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">16</span>; ++i)
+   {
+      <span class="kwa">if</span> (<span class="kwd">CPU_ISSET</span>(i, &amp;cs))
+         ++count;
+   }
+   <span class="kwa">return</span> count;
+}
+
+<span class="slc">// Parse /proc/cpuinfo</span>
+<span class="slc">// Return a list of cpu cores sharing 1 L2 cache</span>
+std::auto_ptr&lt;std::vector&lt;cpu_set_t&gt; &gt;
+<span class="kwd">GetAffinityList</span>()
+{
+   std::ifstream <span class="kwd">file</span>(CPU_INFO_STR);
+   std::istreambuf_iterator&lt;<span class="kwb">char</span>&gt; <span class="kwd">is</span>(file), ise;
+
+   <span class="slc">// load file to vector&lt;char&gt;</span>
+   std::vector&lt;<span class="kwb">char</span>&gt; buf;
+   std::<span class="kwd">copy</span>(is, ise, std::<span class="kwd">back_inserter</span>(buf));
+   file.<span class="kwd">close</span>();
+   
+
+   <span class="slc">// map processors to L2 cache unit</span>
+   <span class="kwc">typedef</span> std::map&lt;<span class="kwb">int</span>, cpu_set_t&gt; MAP_T;
+   MAP_T l2_set;
+
+   {
+      <span class="kwa">using namespace</span> boost::xpressive;
+      <span class="kwa">namespace</span> bx = boost::xpressive;
+
+      <span class="kwc">typedef</span> std::vector&lt;<span class="kwb">char</span>&gt;::iterator      VI_T;
+      <span class="kwc">typedef</span> bx::basic_regex&lt;VI_T&gt;         RE_T;
+      <span class="kwc">typedef</span> bx::regex_iterator&lt;VI_T&gt;      IRE_T;
+
+      RE_T <span class="kwd">re</span>(
+         <span class="kwd">as_xpr</span>(<span class="str">&quot;processor&quot;</span>) &gt;&gt; +(_s|<span class="str">':'</span>) &gt;&gt; (s1 = +_d)
+         &gt;&gt; -+(~_n|_n)
+         &gt;&gt; <span class="str">&quot;apicid&quot;</span> &gt;&gt; +(_s|<span class="str">':'</span>) &gt;&gt; (s2 = +_d) );
+
+      IRE_T <span class="kwd">it</span>(buf.<span class="kwd">begin</span>(), buf.<span class="kwd">end</span>(), re), it_end;
+
+      <span class="kwa">for</span> (; it != it_end; ++it)
+      {
+         <span class="kwb">int</span> core = boost::lexical_cast&lt;<span class="kwb">int</span>&gt;( (*it)[<span class="num">1</span>].<span class="kwd">str</span>() );
+         <span class="kwb">int</span> apic = boost::lexical_cast&lt;<span class="kwb">int</span>&gt;( (*it)[<span class="num">2</span>].<span class="kwd">str</span>() );
+         
+         <span class="slc">// q6600 has 4 cores, 2 cores share 1 L2 cache</span>
+         <span class="slc">// 2 cores + 1 L2 = 1 package</span>
+         <span class="kwb">int</span> package = apic &gt;&gt; <span class="num">1</span>;
+
+         <span class="kwd">CPU_SET</span>(core, &amp;(l2_set[package]));
+      }
+   }
+
+   std::auto_ptr&lt;std::vector&lt;cpu_set_t&gt; &gt; <span class="kwd">aff</span>(<span class="kwa">new</span> std::vector&lt;cpu_set_t&gt;);
+   <span class="kwc">typedef</span> MAP_T::value_type VT;
+
+   <span class="kwd">foreach</span> ( VT &amp;i, l2_set )
+      aff-&gt;<span class="kwd">push_back</span>(i.second);
+
+   <span class="kwa">return</span> aff;
+}
+
+
+<span class="kwb">int</span> 
+<span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>** argv)
+{
+   <span class="kwd">PrintColors</span>();
+
+   COLOR <span class="kwb">const</span> r1[] = {   BLUE, RED, YELLOW   };
+   COLOR <span class="kwb">const</span> r2[] = {   BLUE, RED, YELLOW, RED, YELLOW, BLUE, RED, YELLOW, RED, BLUE   };
+   
+   <span class="kwb">int</span> n = (argc &gt;= <span class="num">2</span>) ? boost::lexical_cast&lt;<span class="kwb">int</span>&gt;(argv[<span class="num">1</span>]) : <span class="num">600</span>;
+   
+   <span class="kwa">if</span> (<span class="kwd">GetThreadCount</span>() &gt; <span class="num">1</span>)
+   {
+      std::auto_ptr&lt;std::vector&lt;cpu_set_t&gt; &gt; <span class="kwd">affset</span>( <span class="kwd">GetAffinityList</span>() );
+
+      Game&lt;<span class="num">3</span>&gt; <span class="kwd">cg1</span>( n, r1, &amp;((*affset)[<span class="num">0</span>]) );
+      Game&lt;<span class="num">10</span>&gt; <span class="kwd">cg2</span>( n, r2, &amp;((*affset)[<span class="num">1</span>]) );
+      
+      std::cout &lt;&lt; cg1.<span class="kwd">WaitAndGetResult</span>();
+      std::cout &lt;&lt; cg2.<span class="kwd">WaitAndGetResult</span>();
+   }
+   <span class="kwa">else</span>
+   {
+      Game&lt;<span class="num">3</span>&gt; <span class="kwd">cg1</span>( n, r1 );
+      std::cout &lt;&lt; cg1.<span class="kwd">WaitAndGetResult</span>();
+
+      Game&lt;<span class="num">10</span>&gt; <span class="kwd">cg2</span>( n, r2 );
+      std::cout &lt;&lt; cg2.<span class="kwd">WaitAndGetResult</span>();
+   }
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}

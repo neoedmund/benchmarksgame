@@ -1,0 +1,141 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Robert F. Tobler</span>
+<span class="com">   optimized based on java &amp; C# by Enotus, Isaac Gouy, and Alp Toker</span>
+<span class="com">*/</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.IO;
+<span class="kwa">using</span> System.Text;
+
+<span class="kwa">static class</span> FastaRedux
+{
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">Main</span> (<span class="kwb">string</span>[] args) {
+		<span class="kwd">AccumulateAndScale</span>(HomoSapiens);
+		<span class="kwd">AccumulateAndScale</span>(IUB);
+		<span class="kwb">int</span> n = args.Length &gt; <span class="num">0</span> ? Int32.<span class="kwd">Parse</span> (args[<span class="num">0</span>]) : <span class="num">2500000</span>;
+		<span class="kwa">using</span> (Stream s = Console.<span class="kwd">OpenStandardOutput</span> ()) {
+         s.<span class="kwd">WriteRepeatFasta</span>(<span class="str">&quot;ONE&quot;</span>, <span class="str">&quot;Homo sapiens alu&quot;</span>,
+                        Encoding.ASCII.<span class="kwd">GetBytes</span>(ALU), n*<span class="num">2</span>);
+			s.<span class="kwd">WriteRandomFasta</span>(<span class="str">&quot;TWO&quot;</span>, <span class="str">&quot;IUB ambiguity codes&quot;</span>,
+			               IUB, n*<span class="num">3</span>);
+			s.<span class="kwd">WriteRandomFasta</span>(<span class="str">&quot;THREE&quot;</span>, <span class="str">&quot;Homo sapiens frequency&quot;</span>,
+			               HomoSapiens, n*<span class="num">5</span>);
+		}
+	}
+
+   <span class="kwb">const int</span> LINE_LEN = <span class="num">60</span>;
+   <span class="kwb">const int</span> BUF_LEN = <span class="num">64</span> * <span class="num">1024</span>;
+   <span class="kwb">const byte</span> LF = (<span class="kwb">byte</span>)<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+
+   <span class="kwb">const int</span> LOOKUP_LEN = <span class="num">4</span>*<span class="num">1024</span>;
+   <span class="kwb">const double</span> LOOKUP_SCALE = LOOKUP_LEN - <span class="num">1</span>;
+
+	<span class="kwa">static readonly</span> <span class="kwb">string</span> ALU =
+		<span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span> +
+		<span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span> +
+		<span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span> +
+		<span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span> +
+		<span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span> +
+		<span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span> +
+		<span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+   <span class="kwb">struct</span> Freq {
+      <span class="kwa">public</span> <span class="kwb">double</span> P;
+      <span class="kwa">public</span> <span class="kwb">byte</span> C;
+
+      <span class="kwa">public</span> <span class="kwd">Freq</span> (<span class="kwb">char</span> c, <span class="kwb">double</span> p) { C = (<span class="kwb">byte</span>)c; P = p; }
+	}
+
+	<span class="kwa">static</span> Freq[] IUB = {
+      <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'a'</span>, <span class="num">0.27</span>), <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'c'</span>, <span class="num">0.12</span>), <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'g'</span>, <span class="num">0.12</span>),
+      <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'t'</span>, <span class="num">0.27</span>), <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'B'</span>, <span class="num">0.02</span>), <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'D'</span>, <span class="num">0.02</span>),
+      <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'H'</span>, <span class="num">0.02</span>), <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'K'</span>, <span class="num">0.02</span>), <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'M'</span>, <span class="num">0.02</span>),
+      <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'N'</span>, <span class="num">0.02</span>), <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'R'</span>, <span class="num">0.02</span>), <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'S'</span>, <span class="num">0.02</span>),
+      <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'V'</span>, <span class="num">0.02</span>), <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'W'</span>, <span class="num">0.02</span>), <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'Y'</span>, <span class="num">0.02</span>),
+	};
+
+	<span class="kwa">static</span> Freq[] HomoSapiens = {
+      <span class="kwa">new</span> <span class="kwd">Freq</span> (<span class="str">'a'</span>, <span class="num">0.3029549426680</span>), <span class="kwa">new</span> <span class="kwd">Freq</span> (<span class="str">'c'</span>, <span class="num">0.1979883004921</span>),
+      <span class="kwa">new</span> <span class="kwd">Freq</span> (<span class="str">'g'</span>, <span class="num">0.1975473066391</span>), <span class="kwa">new</span> <span class="kwd">Freq</span> (<span class="str">'t'</span>, <span class="num">0.3015094502008</span>),
+	};
+
+	<span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">AccumulateAndScale</span>(Freq[] a) {
+		<span class="kwb">double</span> cp = <span class="num">0.0</span>;
+		<span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; a.Length; i++)
+         a[i].P = (cp += a[i].P) * LOOKUP_SCALE;
+      a[a.Length - <span class="num">1</span>].P = LOOKUP_SCALE;
+	}
+
+   <span class="kwa">static</span> <span class="kwb">byte</span>[] buf = <span class="kwa">new</span> <span class="kwb">byte</span>[BUF_LEN];
+
+   <span class="kwa">static</span> <span class="kwb">int</span> <span class="kwd">WriteDesc</span>(<span class="kwa">this</span> <span class="kwb">byte</span>[] buf, <span class="kwb">string</span> id, <span class="kwb">string</span> desc)
+   {
+		var ds = Encoding.ASCII.<span class="kwd">GetBytes</span> (<span class="str">&quot;&gt;&quot;</span> + id + <span class="str">&quot; &quot;</span> + desc + <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; ds.Length; i++) buf[i] = ds[i];
+      <span class="kwa">return</span> BUF_LEN - ds.Length;
+   }
+
+   <span class="kwa">static</span> <span class="kwb">int</span> <span class="kwd">Min</span>(<span class="kwb">int</span> a, <span class="kwb">int</span> b) { <span class="kwa">return</span> a &lt; b ? a : b; }
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">WriteRepeatFasta</span>(
+         <span class="kwa">this</span> Stream s, <span class="kwb">string</span> id, <span class="kwb">string</span> desc, <span class="kwb">byte</span>[] alu, <span class="kwb">int</span> nr)
+   {
+      <span class="kwb">int</span> alen = alu.Length;
+      <span class="kwb">int</span> ar = alen, br = buf.<span class="kwd">WriteDesc</span>(id, desc), lr = LINE_LEN;
+      <span class="kwa">while</span> (nr &gt; <span class="num">0</span>)
+      {
+         <span class="kwb">int</span> r = <span class="kwd">Min</span>(<span class="kwd">Min</span>(nr, lr), <span class="kwd">Min</span>(ar, br));
+         <span class="kwa">for</span> (<span class="kwb">int</span> ai = alen - ar, bi = BUF_LEN - br, be = bi + r;
+             bi &lt; be; bi++, ai++) buf[bi] = alu[ai];
+         nr -= r; lr -= r; br -= r; ar -= r;
+         <span class="kwa">if</span> (ar == <span class="num">0</span>) ar = alen;
+         <span class="kwa">if</span> (br == <span class="num">0</span>) { s.<span class="kwd">Write</span>(buf, <span class="num">0</span>, BUF_LEN); br = BUF_LEN; }
+         <span class="kwa">if</span> (lr == <span class="num">0</span>) { buf[BUF_LEN - (br--)] = LF; lr = LINE_LEN; }
+         <span class="kwa">if</span> (br == <span class="num">0</span>) { s.<span class="kwd">Write</span>(buf, <span class="num">0</span>, BUF_LEN); br = BUF_LEN; }
+      }
+      <span class="kwa">if</span> (lr &lt; LINE_LEN) buf[BUF_LEN - (br--)] = LF;
+      <span class="kwa">if</span> (br &lt; BUF_LEN) s.<span class="kwd">Write</span>(buf, <span class="num">0</span>, BUF_LEN - br);
+   } 
+
+   <span class="kwa">static</span> Freq[] lookup = <span class="kwa">new</span> Freq[LOOKUP_LEN];
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">CreateLookup</span>(Freq[] fr) {
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>, j = <span class="num">0</span>; i &lt; LOOKUP_LEN; i++) {
+         <span class="kwa">while</span> (fr[j].P &lt; i) j++;
+         lookup[i] = fr[j];
+      }
+   }
+
+	<span class="kwb">const int</span> IM = <span class="num">139968</span>;
+	<span class="kwb">const int</span> IA = <span class="num">3877</span>;
+	<span class="kwb">const int</span> IC = <span class="num">29573</span>;
+   <span class="kwb">const double</span> SCALE = LOOKUP_SCALE / IM;
+
+	<span class="kwa">static</span> <span class="kwb">int</span> last = <span class="num">42</span>;
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">WriteRandomFasta</span>(
+         <span class="kwa">this</span> Stream s, <span class="kwb">string</span> id, <span class="kwb">string</span> desc, Freq[] fr, <span class="kwb">int</span> nr)
+   {
+      <span class="kwd">CreateLookup</span>(fr);
+      <span class="kwb">int</span> br = buf.<span class="kwd">WriteDesc</span>(id, desc), lr = LINE_LEN;      
+      <span class="kwa">while</span> (nr &gt; <span class="num">0</span>)
+      {
+         <span class="kwb">int</span> r = <span class="kwd">Min</span>(<span class="kwd">Min</span>(nr, lr), br);
+         <span class="kwa">for</span> (<span class="kwb">int</span> bi = BUF_LEN - br, be = bi + r; bi &lt; be; bi++)
+         {
+            <span class="kwb">double</span> p = SCALE * (last = (last * IA + IC) % IM);
+            <span class="kwb">int</span> ai = (<span class="kwb">int</span>)p; <span class="kwa">if</span> (lookup[ai].P &lt; p) ai++;
+            buf[bi] = lookup[ai].C;
+         }
+         nr -= r; lr -= r; br -= r;
+         <span class="kwa">if</span> (br == <span class="num">0</span>) { s.<span class="kwd">Write</span>(buf, <span class="num">0</span>, BUF_LEN); br = BUF_LEN; }
+         <span class="kwa">if</span> (lr == <span class="num">0</span>) { buf[BUF_LEN - (br--)] = LF; lr = LINE_LEN; }
+         <span class="kwa">if</span> (br == <span class="num">0</span>) { s.<span class="kwd">Write</span>(buf, <span class="num">0</span>, BUF_LEN); br = BUF_LEN; }
+      }
+      <span class="kwa">if</span> (lr &lt; LINE_LEN) buf[BUF_LEN - (br--)] = LF;
+      <span class="kwa">if</span> (br &lt; BUF_LEN) s.<span class="kwd">Write</span>(buf, <span class="num">0</span>, BUF_LEN - br);
+   } 
+
+}

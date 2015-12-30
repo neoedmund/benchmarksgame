@@ -1,0 +1,68 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"></span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Contributed by Philip Rogers</span>
+<span class="com">   Based on a javascript implementation by Jesse Millikan and Matt Baker</span>
+<span class="com">*/</span>
+
+<span class="kwc">import</span> <span class="str">'dart:io'</span>;
+<span class="kwc">import</span> <span class="str">'dart:collection'</span>;
+
+String readLine() =&gt; stdin.readLineSync();
+
+String readInput() {
+  <span class="kwa">while</span>(readLine().substring(<span class="num">0</span>, <span class="num">6</span>) != <span class="str">'&gt;THREE'</span>);
+
+  List&lt;String&gt; lines = <span class="kwa">new</span> List();
+  String line = readLine();
+  <span class="kwa">while</span> (line != <span class="kwa">null</span> &amp;&amp; line[<span class="num">0</span>] != <span class="str">'&gt;'</span>) {
+    lines.add(line);
+    line = readLine();
+  };
+  <span class="kwa">return</span> lines.join(<span class="str">''</span>).toUpperCase();
+}
+
+HashMap&lt;String, <span class="kwb">int</span>&gt; frequency(String sequence, <span class="kwb">int</span> length) {
+  HashMap&lt;String, <span class="kwb">int</span>&gt; freq = <span class="kwa">new</span> HashMap&lt;String, <span class="kwb">int</span>&gt;();
+  <span class="kwb">int</span> n = sequence.length - length + <span class="num">1</span>;
+  String sub;
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; n; i++) {
+    sub = sequence.substring(i, i + length);
+    <span class="kwa">if</span> (freq.containsKey(sub))
+      freq[sub] = freq[sub] + <span class="num">1</span>;
+    <span class="kwa">else</span>
+      freq[sub] = <span class="num">1</span>;
+  }
+  <span class="kwa">return</span> freq;
+}
+
+<span class="kwa">void</span> sort(String sequence, <span class="kwb">int</span> length) {
+  HashMap&lt;String, <span class="kwb">int</span>&gt; freq = frequency(sequence, length);
+  List&lt;String&gt; keys = freq.keys.toList();
+  <span class="kwb">int</span> n = sequence.length - length + <span class="num">1</span>;
+  keys.sort((a, b) =&gt; (freq[b] - freq[a]));
+  <span class="kwa">for</span> (String key <span class="kwa">in</span> keys) {
+    String count = (freq[key] * <span class="num">100</span> / n).toStringAsFixed(<span class="num">3</span>);
+    print(<span class="str">'$key $count'</span>);
+  }
+  print(<span class="str">''</span>);
+}
+
+<span class="kwa">void</span> find(String sequence, String string) {
+  HashMap&lt;String, <span class="kwb">int</span>&gt; freq = frequency(sequence, string.length);
+  print(<span class="str">'${(freq[string])}</span><span class="esc">\t</span><span class="str">$string'</span>);
+}
+
+<span class="kwa">void</span> main(args) {
+  String sequence = readInput();
+  <span class="kwa">if</span> (sequence == <span class="kwa">null</span>)
+    <span class="kwa">return</span>;
+  sort(sequence, <span class="num">1</span>);
+  sort(sequence, <span class="num">2</span>);
+  find(sequence, <span class="str">'GGT'</span>);
+  find(sequence, <span class="str">'GGTA'</span>);
+  find(sequence, <span class="str">'GGTATT'</span>);
+  find(sequence, <span class="str">'GGTATTTTAATT'</span>);
+  find(sequence, <span class="str">'GGTATTTTAATTTATAGT'</span>);
+}

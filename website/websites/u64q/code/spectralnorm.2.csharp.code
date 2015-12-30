@@ -1,0 +1,174 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Isaac Gouy</span>
+<span class="com">   parallel by The Anh Tran</span>
+<span class="com">   Updated by Alan McGovern</span>
+<span class="com">*/</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.Threading;
+
+<span class="kwa">class</span> SpectralNorm
+{
+    <span class="kwa">public class</span> BarrierHandle : System.Threading.WaitHandle
+    {
+        <span class="kwb">int</span> current;
+        <span class="kwb">int</span> threads;
+        ManualResetEvent handle = <span class="kwa">new</span> <span class="kwd">ManualResetEvent</span> (<span class="kwa">false</span>);
+
+        <span class="kwa">public</span> <span class="kwd">BarrierHandle</span> (<span class="kwb">int</span> threads)
+        {
+	    <span class="kwa">this</span>.current = threads;
+            <span class="kwa">this</span>.threads = threads;
+        }
+
+        <span class="kwa">public override</span> <span class="kwb">bool</span> <span class="kwd">WaitOne</span>()
+        {
+            ManualResetEvent h = handle;
+            <span class="kwa">if</span> (Interlocked.<span class="kwd">Decrement</span> (<span class="kwa">ref</span> current) &gt; <span class="num">0</span>) {
+                h.<span class="kwd">WaitOne</span> ();
+            }
+            <span class="kwa">else</span> {
+                handle = <span class="kwa">new</span> <span class="kwd">ManualResetEvent</span> (<span class="kwa">false</span>);
+                Interlocked.<span class="kwd">Exchange</span> (<span class="kwa">ref</span> current, threads);
+                h.<span class="kwd">Set</span> ();
+                h.<span class="kwd">Close</span> ();
+            }
+
+            <span class="kwa">return true</span>;
+        }
+    }
+	
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(String[] args)
+    {
+        <span class="kwb">int</span> n = <span class="num">2500</span>;
+        <span class="kwa">if</span> (args.Length &gt; <span class="num">0</span>)
+            n = Int32.<span class="kwd">Parse</span>(args[<span class="num">0</span>]);
+
+        Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;{0:f9}&quot;</span>, <span class="kwd">RunGame</span>(n));
+    }
+	
+    <span class="kwa">private static</span> <span class="kwb">double</span> <span class="kwd">RunGame</span>(<span class="kwb">int</span> n)
+    {
+        <span class="slc">// create unit vector</span>
+        <span class="kwb">double</span>[] u = <span class="kwa">new</span> <span class="kwb">double</span>[n];
+        <span class="kwb">double</span>[] tmp = <span class="kwa">new</span> <span class="kwb">double</span>[n];
+        <span class="kwb">double</span>[] v = <span class="kwa">new</span> <span class="kwb">double</span>[n];
+
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; n; i++)
+            u[i] = <span class="num">1.0</span>;
+
+        <span class="kwb">int</span> nthread = Environment.ProcessorCount;
+
+		BarrierHandle barrier = <span class="kwa">new</span> <span class="kwd">BarrierHandle</span> (nthread);
+        <span class="slc">// objects contain result of each thread</span>
+        Approximate[] apx = <span class="kwa">new</span> Approximate[nthread];
+
+        <span class="slc">// thread handle for waiting/joining</span>
+        Thread[] threads = <span class="kwa">new</span> Thread[nthread];
+
+        <span class="slc">// create thread and hand out tasks</span>
+        <span class="kwb">int</span> chunk = n / nthread;
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; nthread; i++)
+        {
+            <span class="kwb">int</span> r1 = i * chunk;
+            <span class="kwb">int</span> r2 = (i &lt; (nthread - <span class="num">1</span>)) ? r1 + chunk : n;
+
+            apx[i] = <span class="kwa">new</span> <span class="kwd">Approximate</span>(u, v, tmp, r1, r2);
+			apx[i].Barrier = barrier;
+            threads[i] = <span class="kwa">new</span> <span class="kwd">Thread</span>(<span class="kwa">new</span> <span class="kwd">ThreadStart</span>(apx[i].Evaluate));
+            threads[i].<span class="kwd">Start</span>();
+        }
+
+        <span class="slc">// collect results</span>
+        <span class="kwb">double</span> vBv = <span class="num">0</span>, vv = <span class="num">0</span>;
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; nthread; i++)
+        {
+            threads[i].<span class="kwd">Join</span>();
+
+            vBv += apx[i].m_vBv;
+            vv += apx[i].m_vv;
+        }
+
+        <span class="kwa">return</span> Math.<span class="kwd">Sqrt</span>(vBv / vv);
+    }
+
+    <span class="kwa">private class</span> Approximate
+    {
+        <span class="kwa">internal</span> BarrierHandle Barrier;
+        <span class="kwa">private</span> <span class="kwb">double</span>[] m_u;
+        <span class="kwa">private</span> <span class="kwb">double</span>[] m_v;
+        <span class="kwa">private</span> <span class="kwb">double</span>[] m_tmp;
+        <span class="kwa">private</span> <span class="kwb">int</span> m_range_begin, m_range_end;
+
+        <span class="kwa">public</span> <span class="kwb">double</span> m_vBv = <span class="num">0</span>, m_vv = <span class="num">0</span>;
+
+        <span class="kwa">public</span> <span class="kwd">Approximate</span>(<span class="kwb">double</span>[] u, <span class="kwb">double</span>[] v, <span class="kwb">double</span>[] tmp, <span class="kwb">int</span> rbegin, <span class="kwb">int</span> rend)
+        {
+            m_u = u;
+            m_v = v;
+            m_tmp = tmp;
+
+            m_range_begin = rbegin;
+            m_range_end = rend;
+        }
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">Evaluate</span>()
+        {
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">10</span>; i++)
+            {
+                <span class="kwd">MultiplyAtAv</span>(m_u, m_tmp, m_v);
+                <span class="kwd">MultiplyAtAv</span>(m_v, m_tmp, m_u);
+            }
+
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = m_range_begin; i &lt; m_range_end; i++)
+            {
+                m_vBv += m_u[i] * m_v[i];
+                m_vv += m_v[i] * m_v[i];
+            }
+        }
+
+        <span class="com">/* return element i,j of infinite matrix A */</span>
+        <span class="kwa">private static</span> <span class="kwb">double</span> <span class="kwd">eval_A</span>(<span class="kwb">int</span> i, <span class="kwb">int</span> j)
+        {
+            <span class="kwb">int</span> div = (((i + j) * (i + j + <span class="num">1</span>) &gt;&gt; <span class="num">1</span>) + i + <span class="num">1</span>);
+            <span class="kwa">return</span> <span class="num">1.0</span> / div;
+        }
+
+        <span class="com">/* multiply vector v by matrix A */</span>
+        <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">MultiplyAv</span>(<span class="kwb">double</span>[] v, <span class="kwb">double</span>[] Av)
+        {
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = m_range_begin; i &lt; m_range_end; i++)
+            {
+                <span class="kwb">double</span> sum = <span class="num">0.0</span>;
+                <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; v.Length; j++)
+                    sum += <span class="kwd">eval_A</span>(i, j) * v[j];
+                Av[i] = sum;
+            }
+        }
+
+        <span class="com">/* multiply vector v by matrix A transposed */</span>
+        <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">MultiplyAtv</span>(<span class="kwb">double</span>[] v, <span class="kwb">double</span>[] Atv)
+        {
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = m_range_begin; i &lt; m_range_end; i++)
+            {
+                <span class="kwb">double</span> sum = <span class="num">0.0</span>;
+                <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; v.Length; j++)
+                    sum += <span class="kwd">eval_A</span>(j, i) * v[j];
+                Atv[i] = sum;
+            }
+        }
+
+        <span class="com">/* multiply vector v by matrix A and then by matrix A transposed */</span>
+        <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">MultiplyAtAv</span>(<span class="kwb">double</span>[] v, <span class="kwb">double</span>[] tmp, <span class="kwb">double</span>[] AtAv)
+        {
+            <span class="kwd">MultiplyAv</span>(v, tmp);
+            Barrier.<span class="kwd">WaitOne</span> ();
+
+            <span class="kwd">MultiplyAtv</span>(tmp, AtAv);
+            Barrier.<span class="kwd">WaitOne</span> ();
+        }
+    }
+}
+

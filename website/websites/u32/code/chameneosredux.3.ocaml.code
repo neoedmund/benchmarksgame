@@ -1,0 +1,122 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Milan Stanojevic, Jul 12 2009</span>
+<span class="com">   modified to use event channels by Otto Bommer</span>
+<span class="com">*)</span>
+
+<span class="kwa">open</span> <span class="kwd">Printf</span>
+
+<span class="kwa">let</span> str2list s = <span class="kwa">let</span> l=<span class="kwb">ref</span> [] <span class="kwa">in</span> <span class="kwc">String</span>.iter (<span class="kwa">fun</span> c -&gt; l:=!l&#64;[c]) s; !l
+
+<span class="kwa">let</span> spell_char = <span class="kwa">function</span>
+  | '<span class="num">0</span>' -&gt; <span class="str">&quot;zero&quot;</span>
+  | '<span class="num">1</span>' -&gt; <span class="str">&quot;one&quot;</span>
+  | '<span class="num">2</span>' -&gt; <span class="str">&quot;two&quot;</span>
+  | '<span class="num">3</span>' -&gt; <span class="str">&quot;three&quot;</span>
+  | '<span class="num">4</span>' -&gt; <span class="str">&quot;four&quot;</span>
+  | '<span class="num">5</span>' -&gt; <span class="str">&quot;five&quot;</span>
+  | '<span class="num">6</span>' -&gt; <span class="str">&quot;six&quot;</span>
+  | '<span class="num">7</span>' -&gt; <span class="str">&quot;seven&quot;</span>
+  | '<span class="num">8</span>' -&gt; <span class="str">&quot;eight&quot;</span>
+  | '<span class="num">9</span>' -&gt; <span class="str">&quot;nine&quot;</span>
+  | x -&gt; failwith <span class="str">&quot;unexpected char&quot;</span>
+
+<span class="kwa">let</span> spell_int i = <span class="kwc">String</span>.concat <span class="str">&quot; &quot;</span> (<span class="kwc">List</span>.map spell_char (str2list (string_of_int i)))
+
+<span class="kwa">module</span> <span class="kwd">Color</span> = <span class="kwa">struct</span>
+<span class="kwa">type</span> t = <span class="kwd">B</span> | <span class="kwd">R</span> | <span class="kwd">Y</span>
+
+<span class="kwa">let</span> complement a b =
+<span class="kwa">match</span> a, b <span class="kwa">with</span>
+  | <span class="kwd">B</span>, <span class="kwd">B</span> -&gt; <span class="kwd">B</span>
+  | <span class="kwd">B</span>, <span class="kwd">R</span> -&gt; <span class="kwd">Y</span>
+  | <span class="kwd">B</span>, <span class="kwd">Y</span> -&gt; <span class="kwd">R</span>
+  | <span class="kwd">R</span>, <span class="kwd">B</span> -&gt; <span class="kwd">Y</span>
+  | <span class="kwd">R</span>, <span class="kwd">R</span> -&gt; <span class="kwd">R</span>
+  | <span class="kwd">R</span>, <span class="kwd">Y</span> -&gt; <span class="kwd">B</span>
+  | <span class="kwd">Y</span>, <span class="kwd">B</span> -&gt; <span class="kwd">R</span>
+  | <span class="kwd">Y</span>, <span class="kwd">R</span> -&gt; <span class="kwd">B</span>
+  | <span class="kwd">Y</span>, <span class="kwd">Y</span> -&gt; <span class="kwd">Y</span>
+
+<span class="kwa">let</span> to_string = <span class="kwa">function</span> <span class="kwd">B</span> -&gt; <span class="str">&quot;blue&quot;</span> | <span class="kwd">R</span> -&gt; <span class="str">&quot;red&quot;</span> | <span class="kwd">Y</span> -&gt; <span class="str">&quot;yellow&quot;</span>
+
+<span class="kwa">let</span> all = [ <span class="kwd">B</span>; <span class="kwd">R</span>; <span class="kwd">Y</span> ]
+<span class="kwa">end</span>
+
+<span class="kwa">module</span> <span class="kwd">Game</span> = <span class="kwa">struct</span>
+<span class="kwa">type</span> place = {
+  <span class="kwa">mutable</span> meetings_left : <span class="kwb">int</span>;
+  meet : (chameneos <span class="kwc">Event</span>.channel)
+}
+
+<span class="kwa">and</span> chameneos = {
+  <span class="kwa">mutable</span> color : <span class="kwc">Color</span>.t;
+  <span class="kwa">mutable</span> meetings : <span class="kwb">int</span>;
+  <span class="kwa">mutable</span> self_meetings : <span class="kwb">int</span>;
+  morph : ((chameneos * <span class="kwb">bool</span>) <span class="kwc">Event</span>.channel);
+}
+
+<span class="kwa">let</span> create_place n = { meetings_left=n; meet=<span class="kwc">Event</span>.new_channel () }
+
+<span class="kwa">let</span> create_chameneos color =
+  { color=color; meetings=<span class="num">0</span>; self_meetings=<span class="num">0</span>; morph=<span class="kwc">Event</span>.new_channel () }
+
+<span class="kwa">let</span> send chn v = <span class="kwc">Event</span>.sync (<span class="kwc">Event</span>.send chn v)
+<span class="kwa">let</span> receive chn = <span class="kwc">Event</span>.sync (<span class="kwc">Event</span>.receive chn)
+
+<span class="kwa">let rec</span> run_place place players () = 
+  <span class="kwa">if</span> place.meetings_left &gt; <span class="num">0</span> <span class="kwa">then</span> 
+    <span class="kwa">begin</span> 
+    <span class="kwa">let</span> ch1 = receive place.meet <span class="kwa">in</span>
+    <span class="kwa">let</span> ch2 = receive place.meet <span class="kwa">in</span>
+    send ch1.morph (ch2, <span class="kwa">true</span>);
+    send ch2.morph (ch1, <span class="kwa">true</span>);
+    place.meetings_left &lt;- place.meetings_left - <span class="num">1</span>; 
+    run_place place players ()
+    <span class="kwa">end</span>
+  <span class="kwa">else</span>
+    <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> players-<span class="num">1</span> <span class="kwa">do</span>
+      <span class="kwa">let</span> ch = receive place.meet <span class="kwa">in</span> 
+      send ch.morph (ch, <span class="kwa">false</span>)
+    <span class="kwa">done</span>
+
+<span class="kwa">let rec</span> run_chameneos ch place () =
+  send place.meet ch;
+  <span class="kwa">let</span> (other, continue) = receive ch.morph <span class="kwa">in</span>
+  <span class="kwa">if</span> continue <span class="kwa">then</span> 
+    <span class="kwa">begin</span>
+    ch.meetings &lt;- ch.meetings + <span class="num">1</span>;
+    <span class="kwa">if</span> ch == other <span class="kwa">then</span> ch.self_meetings &lt;- ch.self_meetings + <span class="num">1</span>;
+    ch.color &lt;- <span class="kwc">Color</span>.complement ch.color other.color;
+    run_chameneos ch place ()
+    <span class="kwa">end</span>
+
+<span class="kwa">let</span> play colors max_meetings =
+  <span class="kwc">List</span>.iter (<span class="kwa">fun</span> c -&gt; printf <span class="str">&quot;</span> <span class="ipl">%s</span><span class="str">&quot;</span> (<span class="kwc">Color</span>.to_string c)) colors; printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str">%!&quot;</span>;
+
+  <span class="kwa">let</span> place = create_place max_meetings <span class="kwa">in</span>
+  <span class="kwa">let</span> pthread = <span class="kwc">Thread</span>.create (run_place place (<span class="kwc">List</span>.length colors)) () <span class="kwa">in</span>
+
+  <span class="kwa">let</span> chs = <span class="kwc">List</span>.map create_chameneos colors <span class="kwa">in</span>
+  <span class="kwa">let</span> chthreads = <span class="kwc">List</span>.map (<span class="kwa">fun</span> ch -&gt; <span class="kwc">Thread</span>.create (run_chameneos ch place) ()) chs <span class="kwa">in</span>
+
+  <span class="kwc">List</span>.iter (<span class="kwa">fun</span> cht -&gt; <span class="kwc">Thread</span>.join cht) (pthread::chthreads);
+
+  <span class="kwc">List</span>.iter (<span class="kwa">fun</span> ch -&gt; printf <span class="str">&quot;</span><span class="ipl">%d %s</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> ch.meetings (spell_int ch.self_meetings)) chs;
+  <span class="kwa">let</span> meetings = <span class="kwc">List</span>.fold_left (+) <span class="num">0</span> (<span class="kwc">List</span>.map (<span class="kwa">fun</span> chs -&gt; chs.meetings) chs) <span class="kwa">in</span> 
+  printf <span class="str">&quot;</span> <span class="ipl">%s</span><span class="str"></span><span class="esc">\n\n</span><span class="str">%!&quot;</span> (spell_int meetings)
+<span class="kwa">end</span>
+
+<span class="kwa">open</span> <span class="kwd">Color</span>
+
+<span class="kwa">let</span> print_complements () = <span class="kwc">List</span>.iter (<span class="kwa">fun</span> c1 -&gt; <span class="kwc">List</span>.iter (<span class="kwa">fun</span> c2 -&gt;
+  printf <span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">+</span> <span class="ipl">%s</span> <span class="str">-&gt;</span> <span class="ipl">%s</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> (to_string c1) (to_string c2)
+    (to_string (complement c1 c2)) ) all) all;
+  printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>
+
+<span class="kwa">let</span> _ =
+  <span class="kwa">let</span> max_meetings = <span class="kwa">try</span> int_of_string <span class="kwc">Sys</span>.argv.(<span class="num">1</span>) <span class="kwa">with</span> _ -&gt; <span class="num">600</span> <span class="kwa">in</span>
+  print_complements ();
+  <span class="kwc">Game</span>.play [<span class="kwd">B</span>; <span class="kwd">R</span>; <span class="kwd">Y</span>] max_meetings;
+  <span class="kwc">Game</span>.play [<span class="kwd">B</span>; <span class="kwd">R</span>; <span class="kwd">Y</span>; <span class="kwd">R</span>; <span class="kwd">Y</span>; <span class="kwd">B</span>; <span class="kwd">R</span>; <span class="kwd">Y</span>; <span class="kwd">R</span>; <span class="kwd">B</span>] max_meetings;
+

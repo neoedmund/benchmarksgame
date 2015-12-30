@@ -1,0 +1,9 @@
+
+Mon, 07 Sep 2015 17:55:49 GMT
+
+COMMAND LINE:
+/usr/local/src/perl-5.20.2/bin/perl fannkuchredux.perl-3.perl 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

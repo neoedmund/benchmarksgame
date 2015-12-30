@@ -1,0 +1,169 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// Contributed by TeXitoi</span>
+<span class="hl slc">// Inspired by Mr Ledrug's C version and thestinger's rust-gmp</span>
+
+<span class="hl ppc">#![feature(slicing_syntax)]</span>
+<span class="hl ppc">#![allow(non_camel_case_types)]</span>
+
+<span class="hl kwc">extern</span> crate libc<span class="hl opt">;</span>
+
+use libc<span class="hl opt">::{</span>c_int<span class="hl opt">,</span> c_ulong<span class="hl opt">,</span> c_void<span class="hl opt">};</span>
+use std<span class="hl opt">::</span>mem<span class="hl opt">::</span>uninitialized<span class="hl opt">;</span>
+
+fn <span class="hl kwd">main</span><span class="hl opt">() {</span>
+    let n <span class="hl opt">=</span> std<span class="hl opt">::</span>os<span class="hl opt">::</span><span class="hl kwd">args</span><span class="hl opt">()[].</span><span class="hl kwd">get</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">).</span><span class="hl kwd">and_then</span><span class="hl opt">(|</span>n<span class="hl opt">|</span> <span class="hl kwd">from_str</span><span class="hl opt">(</span>n<span class="hl opt">[])).</span><span class="hl kwd">unwrap_or</span><span class="hl opt">(</span><span class="hl num">100</span><span class="hl opt">);</span>
+    <span class="hl kwa">for</span> <span class="hl opt">(</span>i<span class="hl opt">,</span> d<span class="hl opt">)</span> in Context<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">().</span><span class="hl kwd">enumerate</span><span class="hl opt">().</span><span class="hl kwd">take</span><span class="hl opt">(</span>n<span class="hl opt">) {</span>
+        print<span class="hl opt">!(</span><span class="hl str">&quot;{}&quot;</span><span class="hl opt">,</span> d<span class="hl opt">);</span>
+        <span class="hl kwa">if</span> <span class="hl opt">(</span>i <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">) %</span> <span class="hl num">10</span> <span class="hl opt">==</span> <span class="hl num">0</span> <span class="hl opt">{</span> println<span class="hl opt">!(</span><span class="hl str">&quot;</span><span class="hl esc">\t</span><span class="hl str">:{}&quot;</span><span class="hl opt">,</span> i <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">); }</span>
+    <span class="hl opt">}</span>
+    <span class="hl kwa">if</span> n <span class="hl opt">%</span> <span class="hl num">10</span> <span class="hl opt">!=</span> <span class="hl num">0</span> <span class="hl opt">{</span>
+        <span class="hl kwa">for</span> _ in <span class="hl kwd">range</span><span class="hl opt">(</span>n <span class="hl opt">%</span> <span class="hl num">10</span><span class="hl opt">,</span> <span class="hl num">10</span><span class="hl opt">) {</span> print<span class="hl opt">!(</span><span class="hl str">&quot; &quot;</span><span class="hl opt">); }</span>
+        println<span class="hl opt">!(</span><span class="hl str">&quot;</span><span class="hl esc">\t</span><span class="hl str">:{}&quot;</span><span class="hl opt">,</span> n<span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+pub <span class="hl kwb">struct</span> Context <span class="hl opt">{</span>
+    k<span class="hl opt">:</span> c_ulong<span class="hl opt">,</span>
+    tmp1<span class="hl opt">:</span> Mpz<span class="hl opt">,</span>
+    tmp2<span class="hl opt">:</span> Mpz<span class="hl opt">,</span>
+    acc<span class="hl opt">:</span> Mpz<span class="hl opt">,</span>
+    den<span class="hl opt">:</span> Mpz<span class="hl opt">,</span>
+    num<span class="hl opt">:</span> Mpz
+<span class="hl opt">}</span>
+impl Context <span class="hl opt">{</span>
+    pub fn <span class="hl kwa">new</span><span class="hl opt">() -&gt;</span> Context <span class="hl opt">{</span>
+        Context <span class="hl opt">{</span>
+            k<span class="hl opt">:</span> <span class="hl num">0</span><span class="hl opt">,</span>
+            tmp1<span class="hl opt">:</span> Mpz<span class="hl opt">::</span><span class="hl kwd">from_ui</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">),</span>
+            tmp2<span class="hl opt">:</span> Mpz<span class="hl opt">::</span><span class="hl kwd">from_ui</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">),</span>
+            acc<span class="hl opt">:</span> Mpz<span class="hl opt">::</span><span class="hl kwd">from_ui</span><span class="hl opt">(</span><span class="hl num">0</span><span class="hl opt">),</span>
+            den<span class="hl opt">:</span> Mpz<span class="hl opt">::</span><span class="hl kwd">from_ui</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">),</span>
+            num<span class="hl opt">:</span> Mpz<span class="hl opt">::</span><span class="hl kwd">from_ui</span><span class="hl opt">(</span><span class="hl num">1</span><span class="hl opt">)</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+    fn <span class="hl kwd">extract_digit</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> nth<span class="hl opt">:</span> c_ulong<span class="hl opt">) -&gt;</span> c_ulong <span class="hl opt">{</span>
+        self<span class="hl opt">.</span>tmp1<span class="hl opt">.</span><span class="hl kwd">mul_ui</span><span class="hl opt">(&amp;</span>self<span class="hl opt">.</span>num<span class="hl opt">,</span> nth<span class="hl opt">);</span>
+        self<span class="hl opt">.</span>tmp2<span class="hl opt">.</span><span class="hl kwd">add</span><span class="hl opt">(&amp;</span>self<span class="hl opt">.</span>tmp1<span class="hl opt">, &amp;</span>self<span class="hl opt">.</span>acc<span class="hl opt">);</span>
+        self<span class="hl opt">.</span>tmp1<span class="hl opt">.</span><span class="hl kwd">tdiv_q</span><span class="hl opt">(&amp;</span>self<span class="hl opt">.</span>tmp2<span class="hl opt">, &amp;</span>self<span class="hl opt">.</span>den<span class="hl opt">);</span>
+        <span class="hl kwa">return</span> self<span class="hl opt">.</span>tmp1<span class="hl opt">.</span><span class="hl kwd">as_ui</span><span class="hl opt">();</span>
+    <span class="hl opt">}</span>
+    fn <span class="hl kwd">eliminate_digit</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> d<span class="hl opt">:</span> c_ulong<span class="hl opt">) {</span>
+        self<span class="hl opt">.</span>acc<span class="hl opt">.</span><span class="hl kwd">submul_ui</span><span class="hl opt">(&amp;</span>self<span class="hl opt">.</span>den<span class="hl opt">,</span> d<span class="hl opt">);</span>
+        self<span class="hl opt">.</span>acc<span class="hl opt">.</span><span class="hl kwd">mul_from_ui</span><span class="hl opt">(</span><span class="hl num">10</span><span class="hl opt">);</span>
+        self<span class="hl opt">.</span>num<span class="hl opt">.</span><span class="hl kwd">mul_from_ui</span><span class="hl opt">(</span><span class="hl num">10</span><span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+    fn <span class="hl kwd">next_term</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">) {</span>
+        self<span class="hl opt">.</span>k <span class="hl opt">+=</span> <span class="hl num">1</span><span class="hl opt">;</span>
+        let k2 <span class="hl opt">=</span> self<span class="hl opt">.</span>k <span class="hl opt">*</span> <span class="hl num">2</span> <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">;</span>
+        self<span class="hl opt">.</span>acc<span class="hl opt">.</span><span class="hl kwd">addmul_ui</span><span class="hl opt">(&amp;</span>self<span class="hl opt">.</span>num<span class="hl opt">,</span> <span class="hl num">2</span><span class="hl opt">);</span>
+        self<span class="hl opt">.</span>acc<span class="hl opt">.</span><span class="hl kwd">mul_from_ui</span><span class="hl opt">(</span>k2<span class="hl opt">);</span>
+        self<span class="hl opt">.</span>den<span class="hl opt">.</span><span class="hl kwd">mul_from_ui</span><span class="hl opt">(</span>k2<span class="hl opt">);</span>
+        self<span class="hl opt">.</span>num<span class="hl opt">.</span><span class="hl kwd">mul_from_ui</span><span class="hl opt">(</span>self<span class="hl opt">.</span>k<span class="hl opt">);</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+impl Iterator<span class="hl opt">&lt;</span>c_ulong<span class="hl opt">&gt;</span> <span class="hl kwa">for</span> Context <span class="hl opt">{</span>
+    fn <span class="hl kwd">next</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">) -&gt;</span> Option<span class="hl opt">&lt;</span>c_ulong<span class="hl opt">&gt; {</span>
+        loop <span class="hl opt">{</span>
+            self<span class="hl opt">.</span><span class="hl kwd">next_term</span><span class="hl opt">();</span>
+            <span class="hl kwa">if</span> self<span class="hl opt">.</span>num <span class="hl opt">&gt;</span> self<span class="hl opt">.</span>acc <span class="hl opt">{</span> <span class="hl kwa">continue</span><span class="hl opt">; }</span>
+            let d <span class="hl opt">=</span> self<span class="hl opt">.</span><span class="hl kwd">extract_digit</span><span class="hl opt">(</span><span class="hl num">3</span><span class="hl opt">);</span>
+            <span class="hl kwa">if</span> d <span class="hl opt">!=</span> self<span class="hl opt">.</span><span class="hl kwd">extract_digit</span><span class="hl opt">(</span><span class="hl num">4</span><span class="hl opt">) {</span> <span class="hl kwa">continue</span><span class="hl opt">; }</span>
+
+            self<span class="hl opt">.</span><span class="hl kwd">eliminate_digit</span><span class="hl opt">(</span>d<span class="hl opt">);</span>
+            <span class="hl kwa">return</span> <span class="hl kwd">Some</span><span class="hl opt">(</span>d<span class="hl opt">);</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+<span class="hl slc">// safe bindings to needed GMP functions</span>
+pub <span class="hl kwb">struct</span> Mpz <span class="hl opt">{</span>
+    mpz<span class="hl opt">:</span> mpz_struct<span class="hl opt">,</span>
+<span class="hl opt">}</span>
+impl Drop <span class="hl kwa">for</span> Mpz <span class="hl opt">{</span>
+    fn <span class="hl kwd">drop</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">) {</span> unsafe <span class="hl opt">{</span> <span class="hl kwd">__gmpz_clear</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">.</span>mpz<span class="hl opt">) } }</span>
+<span class="hl opt">}</span>
+impl Mpz <span class="hl opt">{</span>
+    pub fn <span class="hl kwd">from_ui</span><span class="hl opt">(</span>i<span class="hl opt">:</span> c_ulong<span class="hl opt">) -&gt;</span> Mpz <span class="hl opt">{</span>
+        unsafe <span class="hl opt">{</span>
+            let mut mpz <span class="hl opt">=</span> <span class="hl kwd">uninitialized</span><span class="hl opt">();</span>
+            <span class="hl kwd">__gmpz_init_set_ui</span><span class="hl opt">(&amp;</span>mut mpz<span class="hl opt">,</span> i<span class="hl opt">);</span>
+            Mpz <span class="hl opt">{</span> mpz<span class="hl opt">:</span> mpz <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+    <span class="hl slc">// self = a * b</span>
+    pub fn <span class="hl kwd">mul_ui</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> a<span class="hl opt">: &amp;</span>Mpz<span class="hl opt">,</span> b<span class="hl opt">:</span> c_ulong<span class="hl opt">) {</span>
+        unsafe <span class="hl opt">{</span> <span class="hl kwd">__gmpz_mul_ui</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">.</span>mpz<span class="hl opt">, &amp;</span>a<span class="hl opt">.</span>mpz<span class="hl opt">,</span> b<span class="hl opt">); }</span>
+    <span class="hl opt">}</span>
+    <span class="hl slc">// self *= a</span>
+    pub fn <span class="hl kwd">mul_from_ui</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> a<span class="hl opt">:</span> c_ulong<span class="hl opt">) {</span>
+        unsafe <span class="hl opt">{</span> <span class="hl kwd">__gmpz_mul_ui</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">.</span>mpz<span class="hl opt">, &amp;</span>self<span class="hl opt">.</span>mpz<span class="hl opt">,</span> a<span class="hl opt">); }</span>
+    <span class="hl opt">}</span>
+    <span class="hl slc">// self -= a * b</span>
+    pub fn <span class="hl kwd">submul_ui</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> a<span class="hl opt">: &amp;</span>Mpz<span class="hl opt">,</span> b<span class="hl opt">:</span> c_ulong<span class="hl opt">) {</span>
+        unsafe <span class="hl opt">{</span> <span class="hl kwd">__gmpz_submul_ui</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">.</span>mpz<span class="hl opt">, &amp;</span>a<span class="hl opt">.</span>mpz<span class="hl opt">,</span> b<span class="hl opt">); }</span>
+    <span class="hl opt">}</span>
+    <span class="hl slc">// self = a + b</span>
+    pub fn <span class="hl kwd">add</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> a<span class="hl opt">: &amp;</span>Mpz<span class="hl opt">,</span> b<span class="hl opt">: &amp;</span>Mpz<span class="hl opt">) {</span>
+        unsafe <span class="hl opt">{</span> <span class="hl kwd">__gmpz_add</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">.</span>mpz<span class="hl opt">, &amp;</span>a<span class="hl opt">.</span>mpz<span class="hl opt">, &amp;</span>b<span class="hl opt">.</span>mpz<span class="hl opt">); }</span>
+    <span class="hl opt">}</span>
+    <span class="hl slc">// self += a * b</span>
+    pub fn <span class="hl kwd">addmul_ui</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> a<span class="hl opt">: &amp;</span>Mpz<span class="hl opt">,</span> b<span class="hl opt">:</span> c_ulong<span class="hl opt">) {</span>
+        unsafe <span class="hl opt">{</span> <span class="hl kwd">__gmpz_addmul_ui</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">.</span>mpz<span class="hl opt">, &amp;</span>a<span class="hl opt">.</span>mpz<span class="hl opt">,</span> b<span class="hl opt">); }</span>
+    <span class="hl opt">}</span>
+    <span class="hl slc">// self = a / b</span>
+    pub fn <span class="hl kwd">tdiv_q</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">,</span> a<span class="hl opt">: &amp;</span>Mpz<span class="hl opt">,</span> b<span class="hl opt">: &amp;</span>Mpz<span class="hl opt">) {</span>
+        unsafe <span class="hl opt">{</span> <span class="hl kwd">__gmpz_tdiv_q</span><span class="hl opt">(&amp;</span>mut self<span class="hl opt">.</span>mpz<span class="hl opt">, &amp;</span>a<span class="hl opt">.</span>mpz<span class="hl opt">, &amp;</span>b<span class="hl opt">.</span>mpz<span class="hl opt">); }</span>
+    <span class="hl opt">}</span>
+    pub fn <span class="hl kwd">as_ui</span><span class="hl opt">(&amp;</span>self<span class="hl opt">) -&gt;</span> c_ulong <span class="hl opt">{</span>
+        unsafe <span class="hl opt">{</span> <span class="hl kwd">__gmpz_get_ui</span><span class="hl opt">(&amp;</span>self<span class="hl opt">.</span>mpz<span class="hl opt">) }</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+impl Eq <span class="hl kwa">for</span> Mpz <span class="hl opt">{}</span>
+impl PartialEq <span class="hl kwa">for</span> Mpz <span class="hl opt">{</span>
+    fn <span class="hl kwd">eq</span><span class="hl opt">(&amp;</span>self<span class="hl opt">,</span> other<span class="hl opt">: &amp;</span>Mpz<span class="hl opt">) -&gt;</span> <span class="hl kwb">bool</span> <span class="hl opt">{</span>
+        unsafe <span class="hl opt">{</span> <span class="hl kwd">__gmpz_cmp</span><span class="hl opt">(&amp;</span>self<span class="hl opt">.</span>mpz<span class="hl opt">, &amp;</span>other<span class="hl opt">.</span>mpz<span class="hl opt">) ==</span> <span class="hl num">0</span> <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+impl Ord <span class="hl kwa">for</span> Mpz <span class="hl opt">{</span>
+    fn <span class="hl kwd">cmp</span><span class="hl opt">(&amp;</span>self<span class="hl opt">,</span> other<span class="hl opt">: &amp;</span>Mpz<span class="hl opt">) -&gt;</span> Ordering <span class="hl opt">{</span>
+        let cmp <span class="hl opt">=</span> unsafe <span class="hl opt">{</span> <span class="hl kwd">__gmpz_cmp</span><span class="hl opt">(&amp;</span>self<span class="hl opt">.</span>mpz<span class="hl opt">, &amp;</span>other<span class="hl opt">.</span>mpz<span class="hl opt">) };</span>
+        <span class="hl kwa">if</span> cmp <span class="hl opt">==</span> <span class="hl num">0</span> <span class="hl opt">{</span>
+            Equal
+        <span class="hl opt">}</span> <span class="hl kwa">else if</span> cmp <span class="hl opt">&lt;</span> <span class="hl num">0</span> <span class="hl opt">{</span>
+            Less
+        <span class="hl opt">}</span> <span class="hl kwa">else</span> <span class="hl opt">{</span>
+            Greater
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+impl PartialOrd <span class="hl kwa">for</span> Mpz <span class="hl opt">{</span>
+    fn <span class="hl kwd">partial_cmp</span><span class="hl opt">(&amp;</span>self<span class="hl opt">,</span> other<span class="hl opt">: &amp;</span>Mpz<span class="hl opt">) -&gt;</span> Option<span class="hl opt">&lt;</span>Ordering<span class="hl opt">&gt; {</span>
+        <span class="hl kwd">Some</span><span class="hl opt">(</span>self<span class="hl opt">.</span><span class="hl kwd">cmp</span><span class="hl opt">(</span>other<span class="hl opt">))</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+<span class="hl slc">// Raw bindings to needed GMP functions</span>
+<span class="hl ppc">#[repr(C)]</span>
+<span class="hl kwb">struct</span> mpz_struct <span class="hl opt">{</span>
+    _mp_alloc<span class="hl opt">:</span> c_int<span class="hl opt">,</span>
+    _mp_size<span class="hl opt">:</span> c_int<span class="hl opt">,</span>
+    _mp_d<span class="hl opt">: *</span>mut c_void
+<span class="hl opt">}</span>
+
+type mpz_ptr <span class="hl opt">= *</span>mut mpz_struct<span class="hl opt">;</span>
+type mpz_srcptr <span class="hl opt">= *</span><span class="hl kwb">const</span> mpz_struct<span class="hl opt">;</span>
+
+<span class="hl ppc">#[link(name =</span> <span class="hl pps">&quot;gmp&quot;</span><span class="hl ppc">)]</span>
+<span class="hl kwc">extern</span> <span class="hl str">&quot;C&quot;</span> <span class="hl opt">{</span>
+    fn <span class="hl kwd">__gmpz_init_set_ui</span><span class="hl opt">(</span>rop<span class="hl opt">:</span> mpz_ptr<span class="hl opt">,</span> op<span class="hl opt">:</span> c_ulong<span class="hl opt">);</span>
+    fn <span class="hl kwd">__gmpz_clear</span><span class="hl opt">(</span>x<span class="hl opt">:</span> mpz_ptr<span class="hl opt">);</span>
+    fn <span class="hl kwd">__gmpz_get_ui</span><span class="hl opt">(</span>op<span class="hl opt">:</span> mpz_srcptr<span class="hl opt">) -&gt;</span> c_ulong<span class="hl opt">;</span>
+    fn <span class="hl kwd">__gmpz_cmp</span><span class="hl opt">(</span>op1<span class="hl opt">:</span> mpz_srcptr<span class="hl opt">,</span> op2<span class="hl opt">:</span> mpz_srcptr<span class="hl opt">) -&gt;</span> c_int<span class="hl opt">;</span>
+    fn <span class="hl kwd">__gmpz_add</span><span class="hl opt">(</span>rop<span class="hl opt">:</span> mpz_ptr<span class="hl opt">,</span> op1<span class="hl opt">:</span> mpz_srcptr<span class="hl opt">,</span> op2<span class="hl opt">:</span> mpz_srcptr<span class="hl opt">);</span>
+    fn <span class="hl kwd">__gmpz_mul_ui</span><span class="hl opt">(</span>rop<span class="hl opt">:</span> mpz_ptr<span class="hl opt">,</span> op1<span class="hl opt">:</span> mpz_srcptr<span class="hl opt">,</span> op2<span class="hl opt">:</span> c_ulong<span class="hl opt">);</span>
+    fn <span class="hl kwd">__gmpz_submul_ui</span><span class="hl opt">(</span>rop<span class="hl opt">:</span> mpz_ptr<span class="hl opt">,</span> op1<span class="hl opt">:</span> mpz_srcptr<span class="hl opt">,</span> op2<span class="hl opt">:</span> c_ulong<span class="hl opt">);</span>
+    fn <span class="hl kwd">__gmpz_addmul_ui</span><span class="hl opt">(</span>rop<span class="hl opt">:</span> mpz_ptr<span class="hl opt">,</span> op1<span class="hl opt">:</span> mpz_srcptr<span class="hl opt">,</span> op2<span class="hl opt">:</span> c_ulong<span class="hl opt">);</span>
+    fn <span class="hl kwd">__gmpz_tdiv_q</span><span class="hl opt">(</span>q<span class="hl opt">:</span> mpz_ptr<span class="hl opt">,</span> n<span class="hl opt">:</span> mpz_srcptr<span class="hl opt">,</span> d<span class="hl opt">:</span> mpz_srcptr<span class="hl opt">);</span>
+<span class="hl opt">}</span>

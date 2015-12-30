@@ -1,0 +1,23 @@
+
+Sun, 27 Apr 2014 18:03:54 GMT
+
+MAKE:
+mv fannkuchredux.fpascal fannkuchredux.pas
+/usr/local/src/fpc-2.6.4.x86_64-linux/bin/fpc -FuInclude/fpascal -XXs -O3   -oFPASCAL_RUN fannkuchredux.pas
+Free Pascal Compiler version 2.6.4 [2014/03/03] for x86_64
+Copyright (c) 1993-2014 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling fannkuchredux.pas
+Linking FPASCAL_RUN
+/usr/bin/ld: warning: link.res contains output sections; did you forget -T?
+200 lines compiled, 0.2 sec 
+mv FPASCAL_RUN fannkuchredux.fpascal_run
+rm fannkuchredux.pas
+0.24s to complete and log all make actions
+
+COMMAND LINE:
+./fannkuchredux.fpascal_run 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

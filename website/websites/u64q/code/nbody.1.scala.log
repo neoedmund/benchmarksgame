@@ -1,0 +1,20 @@
+
+Tue, 19 May 2015 19:50:04 GMT
+
+MAKE:
+mv nbody.scala nbody.scala
+mv: ‘nbody.scala’ and ‘nbody.scala’ are the same file
+/home/dunham/benchmarksgame/nanobench/makefiles/u64q.programs.Makefile:606: recipe for target 'nbody.scala_run' failed
+make: [nbody.scala_run] Error 1 (ignored)
+/usr/local/src/scala-2.11.6/bin/scalac -optimise -target:jvm-1.8 nbody.scala
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+5.90s to complete and log all make actions
+
+COMMAND LINE:
+ /usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -Xbootclasspath/a:/usr/local/src/scala-2.11.6/lib/scala-library.jar:/usr/local/src/scala-2.11.6/lib/akka-actors.jar:/usr/local/src/scala-2.11.6/lib/typesafe-config.jar nbody 50000000
+
+PROGRAM OUTPUT:
+-0.169075164
+-0.169059907
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

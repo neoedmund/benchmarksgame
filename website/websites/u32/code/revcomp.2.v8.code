@@ -1,0 +1,57 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Contributed by Matthew Wilson</span>
+<span class="com">*/</span>
+
+(<span class="kwa">function</span>(complement,print,readline) {
+  <span class="kwa">var</span> l, seq=<span class="str">&quot;&quot;</span>;
+  <span class="kwd">print</span>(l = <span class="kwd">readline</span>());
+  <span class="kwa">for</span> (;;) { <span class="kwa">try</span> {
+    <span class="kwa">if</span> ((l = <span class="kwd">readline</span>()).length == <span class="num">60</span>) {
+      seq += l;
+    } <span class="kwa">else if</span> (<span class="kwc">/^&gt;/</span>.<span class="kwd">test</span>(l)) {
+      <span class="kwd">complement</span>(seq);
+      seq = <span class="str">&quot;&quot;</span>;
+      <span class="kwd">print</span>(l);
+    } <span class="kwa">else</span> {
+      seq += l;
+    }
+  } <span class="kwa">catch</span>(e){
+    <span class="kwa">if</span> (<span class="kwa">typeof</span>(seq)!=<span class="str">'undefined'</span> &amp;&amp; seq.length &gt; <span class="num">0</span>) {
+      <span class="kwd">complement</span>(seq);
+    }
+    <span class="kwa">break</span>;
+  }}
+})((<span class="kwa">function</span>(complement,print) {
+  <span class="kwa">return function</span>(seq) {
+    <span class="kwa">var</span> l = seq.length;
+    <span class="kwa">for</span> (;;) {
+      <span class="kwa">var</span> line=<span class="str">&quot;&quot;</span>;
+      <span class="kwa">if</span> (l &gt;= <span class="num">60</span>) {
+        <span class="kwa">for</span> (<span class="kwa">var</span> i=l-<span class="num">1</span>, j=l-<span class="num">61</span>; i&gt;j; --i) {
+          line += complement[seq.<span class="kwd">charCodeAt</span>(i)]
+        }
+        l-=<span class="num">60</span>;
+        <span class="kwd">print</span>(line);
+      } <span class="kwa">else if</span> (l &gt; <span class="num">0</span>) {
+        <span class="kwa">for</span> (<span class="kwa">var</span> i=l-<span class="num">1</span>; i&gt;-<span class="num">1</span>; --i) {
+          line += complement[seq.<span class="kwd">charCodeAt</span>(i)]
+        }
+        <span class="kwd">print</span>(line);
+        <span class="kwa">break</span>;
+      } <span class="kwa">else</span> {
+        <span class="kwa">break</span>;
+      }
+    }
+  }
+})((<span class="kwa">function</span>() {
+  <span class="kwa">var</span> complement=[],
+    keys =<span class="str">'WSATUGCYRKMBDHVNwsatugcyrkmbdhvn'</span>,
+    comps=<span class="str">'WSTAACGRYMKVHDBNWSTAACGRYMKVHDBN'</span>;
+  <span class="kwa">for</span>(<span class="kwa">var</span> i=<span class="num">0</span>; i&lt;<span class="num">32</span>; ++i)
+    complement[keys.<span class="kwd">charCodeAt</span>(i)]
+      = comps[i];
+  
+  <span class="kwa">return</span> complement;
+})(), print), print, readline)

@@ -1,0 +1,459 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">Contributed by Dmitry Vyukov</span>
+<span class="com"></span>
+<span class="com">Kernel thread is created for each chameneous.</span>
+<span class="com">Atomic compare-and-swap primitive is used </span>
+<span class="com">for meeting place state manipulation.</span>
+<span class="com">*/</span>
+
+<span class="ppc">#define _GNU_SOURCE</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;malloc.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+<span class="ppc">#include &lt;assert.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdint.h&gt;</span>
+<span class="ppc">#include &lt;sys/time.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+
+<span class="ppc">#define CPUINFO_FILENAME</span> <span class="pps">&quot;/proc/cpuinfo&quot;</span><span class="ppc"></span>
+
+<span class="ppc">#define CL_SIZE 64</span>
+
+<span class="kwb">void</span>* <span class="kwd">cache_aligned_malloc</span>(<span class="kwb">size_t</span> sz)
+{
+    <span class="kwb">char</span>*                       mem;
+    <span class="kwb">char</span>*                       res;
+    <span class="kwb">void</span>**                      pos;
+
+    mem = (<span class="kwb">char</span>*)<span class="kwd">malloc</span>(sz + <span class="num">2</span> * CL_SIZE);
+    <span class="kwa">if</span> (mem == <span class="num">0</span>)
+        <span class="kwd">exit</span>(<span class="num">1</span>);
+    res = (<span class="kwb">char</span>*)((<span class="kwb">uintptr_t</span>)(mem + CL_SIZE) &amp; ~(CL_SIZE - <span class="num">1</span>));
+    pos = (<span class="kwb">void</span>**)(res - <span class="kwa">sizeof</span>(<span class="kwb">void</span>*));
+    pos[<span class="num">0</span>] = mem;
+    <span class="kwa">return</span> res;
+}
+
+<span class="kwb">void</span> <span class="kwd">cache_aligned_free</span>(<span class="kwb">void</span>* res)
+{
+    <span class="kwb">void</span>*                       mem;
+    <span class="kwb">void</span>**                      pos;
+
+    <span class="kwa">assert</span>(((<span class="kwb">uintptr_t</span>)res &amp; (CL_SIZE - <span class="num">1</span>)) == <span class="num">0</span>);
+    pos = (<span class="kwb">void</span>**)((<span class="kwb">char</span>*)res - <span class="kwa">sizeof</span>(<span class="kwb">void</span>*));
+    mem = pos[<span class="num">0</span>];
+    <span class="kwd">free</span>(mem);
+}
+
+<span class="kwb">enum</span> color_t
+{
+    color_blue,
+    color_red,
+    color_yellow,
+};
+
+<span class="kwb">char const</span>* color_names[] = {<span class="str">&quot;blue&quot;</span>, <span class="str">&quot;red&quot;</span>, <span class="str">&quot;yellow&quot;</span>};
+
+<span class="kwb">enum</span> color_t <span class="kwd">color_complement</span>(<span class="kwb">enum</span> color_t c1, <span class="kwb">enum</span> color_t c2)
+{
+   <span class="kwa">switch</span> (c1)
+   {
+   <span class="kwa">case</span> color_blue:
+      <span class="kwa">switch</span> (c2)
+      {
+      <span class="kwa">case</span> color_blue:      <span class="kwa">return</span> color_blue;
+      <span class="kwa">case</span> color_red:       <span class="kwa">return</span> color_yellow;
+      <span class="kwa">case</span> color_yellow:    <span class="kwa">return</span> color_red;
+      }
+   <span class="kwa">case</span> color_red:
+      <span class="kwa">switch</span> (c2)
+      {
+      <span class="kwa">case</span> color_blue:      <span class="kwa">return</span> color_yellow;
+      <span class="kwa">case</span> color_red:       <span class="kwa">return</span> color_red;
+      <span class="kwa">case</span> color_yellow:    <span class="kwa">return</span> color_blue;
+      }
+   <span class="kwa">case</span> color_yellow:
+      <span class="kwa">switch</span> (c2)
+      {
+      <span class="kwa">case</span> color_blue:      <span class="kwa">return</span> color_red;
+      <span class="kwa">case</span> color_red:       <span class="kwa">return</span> color_blue;
+      <span class="kwa">case</span> color_yellow:    <span class="kwa">return</span> color_yellow;
+      }
+   }
+   <span class="kwa">assert</span>(<span class="num">0</span>);
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+
+<span class="kwb">void</span> <span class="kwd">print_colors</span>()
+{
+    <span class="kwb">enum</span> color_t                c1;
+    <span class="kwb">enum</span> color_t                c2;
+    <span class="kwb">enum</span> color_t                c3;
+
+    <span class="kwa">for</span> (c1 = color_blue; c1 &lt;= color_yellow; c1 += <span class="num">1</span>)
+    {
+        <span class="kwa">for</span> (c2 = color_blue; c2 &lt;= color_yellow; c2 += <span class="num">1</span>)
+        {
+            c3 = <span class="kwd">color_complement</span>(c1, c2);
+            <span class="kwd">printf</span>(<span class="str">&quot;%s + %s -&gt; %s</span><span class="esc">\n</span><span class="str">&quot;</span>,
+                color_names[c1], color_names[c2], color_names[c3]);
+        }
+    }
+    <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+}
+
+<span class="kwb">char const</span>* <span class="kwd">spell_number</span>(<span class="kwb">size_t</span> n)
+{
+    <span class="kwb">static char</span>                 buf [<span class="num">128</span>];
+    <span class="kwb">static char const</span>*          numbers [] = {
+        <span class="str">&quot; zero&quot;</span>, <span class="str">&quot; one&quot;</span>, <span class="str">&quot; two&quot;</span>,   <span class="str">&quot; three&quot;</span>, <span class="str">&quot; four&quot;</span>,
+        <span class="str">&quot; five&quot;</span>, <span class="str">&quot; six&quot;</span>, <span class="str">&quot; seven&quot;</span>, <span class="str">&quot; eight&quot;</span>, <span class="str">&quot; nine&quot;</span>};
+
+    <span class="kwb">size_t</span>                      tokens [<span class="num">32</span>];
+    <span class="kwb">size_t</span>                      token_count;
+    <span class="kwb">char const</span>*                 tok;
+    <span class="kwb">char</span>*                       pos;
+
+    token_count = <span class="num">0</span>;
+    <span class="kwa">do</span>
+    {
+        tokens[token_count] = n % <span class="num">10</span>;
+        token_count += <span class="num">1</span>;
+        n /= <span class="num">10</span>;
+    }
+    <span class="kwa">while</span> (n);
+
+    pos = buf;
+    <span class="kwa">while</span> (token_count)
+    {
+        token_count -= <span class="num">1</span>;
+        tok = numbers[tokens[token_count]];
+        <span class="kwa">while</span> (tok[<span class="num">0</span>])
+            pos++[<span class="num">0</span>] = tok++[<span class="num">0</span>];
+    }
+    pos[<span class="num">0</span>] = <span class="num">0</span>;
+    <span class="kwa">return</span> buf;
+}
+
+<span class="kwb">struct</span> meeting_place_t
+{
+    <span class="kwb">uintptr_t</span> <span class="kwc">volatile</span>          state;
+};
+
+<span class="ppc">#define CHAMENEOS_IDX_MASK      0xFF</span>
+<span class="ppc">#define MEET_COUNT_SHIFT        8</span>
+
+<span class="kwb">struct</span> chameneos_t
+{
+    <span class="kwb">enum</span> color_t                color;
+    <span class="kwb">size_t</span>                      meet_count;
+    <span class="kwb">size_t</span>                      meet_same_count;
+    <span class="kwb">int</span> <span class="kwc">volatile</span>                meeting_completed;
+    <span class="kwb">struct</span> meeting_place_t*     place;
+    <span class="kwb">struct</span> chameneos_t**        chameneos;
+    <span class="kwb">size_t</span>                      id;
+    <span class="kwb">int</span>                         is_smp;
+    pthread_t                   thread;
+    pthread_attr_t              thread_attr;
+};
+
+<span class="kwb">void</span>* <span class="kwd">chameneos_func</span>(<span class="kwb">void</span>* ctx)
+{
+    <span class="kwb">struct</span> chameneos_t*         chameneos;
+    <span class="kwb">struct</span> chameneos_t**        chameneoses;
+    <span class="kwb">struct</span> chameneos_t*         peer;
+    <span class="kwb">size_t</span>                      my_id;
+    <span class="kwb">size_t</span>                      is_same;
+    <span class="kwb">size_t</span>                      spin_count;
+    <span class="kwb">uintptr_t</span> <span class="kwc">volatile</span>*         state_p;
+    <span class="kwb">uintptr_t</span>                   state;
+    <span class="kwb">uintptr_t</span>                   peer_idx;
+    <span class="kwb">uintptr_t</span>                   xchg;
+    <span class="kwb">uintptr_t</span>                   prev;
+    <span class="kwb">enum</span> color_t                new_color;
+    <span class="kwb">int</span>                         is_smp;
+
+    chameneos = (<span class="kwb">struct</span> chameneos_t*)ctx;
+    chameneoses = chameneos-&gt;chameneos;
+    state_p = &amp;chameneos-&gt;place-&gt;state;
+    my_id = chameneos-&gt;id;
+    is_smp = chameneos-&gt;is_smp;
+
+    state = state_p[<span class="num">0</span>];
+    <span class="kwa">for</span> (;;)
+    {
+        peer_idx = state &amp; CHAMENEOS_IDX_MASK;
+        <span class="kwa">if</span> (peer_idx)
+            xchg = state - peer_idx - (<span class="num">1</span> &lt;&lt; MEET_COUNT_SHIFT);
+        <span class="kwa">else if</span> (state)
+            xchg = state | my_id;
+        <span class="kwa">else</span>
+            <span class="kwa">break</span>;
+        prev = <span class="kwd">__sync_val_compare_and_swap</span>(state_p, state, xchg);
+        <span class="kwa">if</span> (prev == state)
+        {
+            <span class="kwa">if</span> (peer_idx)
+            {
+                is_same = (peer_idx == my_id);
+                peer = chameneoses[peer_idx - <span class="num">1</span>];
+                new_color = <span class="kwd">color_complement</span>(chameneos-&gt;color, peer-&gt;color);
+                peer-&gt;color = new_color;
+                peer-&gt;meet_count += <span class="num">1</span>;
+                peer-&gt;meet_same_count += is_same;
+                peer-&gt;meeting_completed = <span class="num">1</span>;
+                chameneos-&gt;color = new_color;
+                chameneos-&gt;meet_count += <span class="num">1</span>;
+                chameneos-&gt;meet_same_count += is_same;
+            }
+            <span class="kwa">else</span>
+            {
+                <span class="kwa">if</span> (is_smp)
+                {
+                    spin_count = <span class="num">20000</span>;
+                    <span class="kwa">while</span> (chameneos-&gt;meeting_completed == <span class="num">0</span>)
+                    {
+                        <span class="kwa">if</span> (spin_count)
+                            spin_count -= <span class="num">1</span>;
+                        <span class="kwa">else</span>
+                            <span class="kwd">sched_yield</span>();
+                    }
+                }
+                <span class="kwa">else</span>
+                {
+                    <span class="kwa">while</span> (chameneos-&gt;meeting_completed == <span class="num">0</span>)
+                    {
+                        <span class="kwd">sched_yield</span>();
+                    }
+                }
+                chameneos-&gt;meeting_completed = <span class="num">0</span>;
+                state = state_p[<span class="num">0</span>];
+            }
+        }
+        <span class="kwa">else</span>
+        {
+            state = prev;
+
+        }
+    }
+    <span class="kwa">return</span> <span class="num">0</span>;
+}
+
+<span class="kwb">void</span> <span class="kwd">get_affinity</span>(<span class="kwb">int</span>* is_smp, cpu_set_t* affinity1, cpu_set_t* affinity2)
+{
+    cpu_set_t                   active_cpus;
+    <span class="kwb">FILE</span>*                       f;
+    <span class="kwb">char</span>                        buf [<span class="num">2048</span>];
+    <span class="kwb">char const</span>*                 pos;
+    <span class="kwb">int</span>                         cpu_idx;
+    <span class="kwb">int</span>                         physical_id;
+    <span class="kwb">int</span>                         core_id;
+    <span class="kwb">int</span>                         cpu_cores;
+    <span class="kwb">int</span>                         apic_id;
+    <span class="kwb">size_t</span>                      cpu_count;
+    <span class="kwb">size_t</span>                      i;
+
+    <span class="kwb">char const</span>*                 processor_str       = <span class="str">&quot;processor&quot;</span>;
+    <span class="kwb">size_t</span>                      processor_str_len   = <span class="kwd">strlen</span>(processor_str);
+    <span class="kwb">char const</span>*                 physical_id_str     = <span class="str">&quot;physical id&quot;</span>;
+    <span class="kwb">size_t</span>                      physical_id_str_len = <span class="kwd">strlen</span>(physical_id_str);
+    <span class="kwb">char const</span>*                 core_id_str         = <span class="str">&quot;core id&quot;</span>;
+    <span class="kwb">size_t</span>                      core_id_str_len     = <span class="kwd">strlen</span>(core_id_str);
+    <span class="kwb">char const</span>*                 cpu_cores_str       = <span class="str">&quot;cpu cores&quot;</span>;
+    <span class="kwb">size_t</span>                      cpu_cores_str_len   = <span class="kwd">strlen</span>(cpu_cores_str);
+    
+    <span class="kwd">CPU_ZERO</span>(&amp;active_cpus);
+    <span class="kwd">sched_getaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(active_cpus), &amp;active_cpus);
+    cpu_count = <span class="num">0</span>;
+    <span class="kwa">for</span> (i = <span class="num">0</span>; i != CPU_SETSIZE; i += <span class="num">1</span>)
+    {
+        <span class="kwa">if</span> (<span class="kwd">CPU_ISSET</span>(i, &amp;active_cpus))
+        {
+            cpu_count += <span class="num">1</span>;
+        }
+    }
+
+    <span class="kwa">if</span> (cpu_count == <span class="num">1</span>)
+    {
+        is_smp[<span class="num">0</span>] = <span class="num">0</span>;
+        <span class="kwa">return</span>;
+    }
+
+    is_smp[<span class="num">0</span>] = <span class="num">1</span>;
+    <span class="kwd">CPU_ZERO</span>(affinity1);
+    <span class="kwd">CPU_ZERO</span>(affinity2);
+
+    f = <span class="kwd">fopen</span>(CPUINFO_FILENAME, <span class="str">&quot;r&quot;</span>);
+
+    <span class="kwa">if</span> (cpu_count &lt; <span class="num">4</span> || f == <span class="num">0</span>)
+    {
+        <span class="kwa">for</span> (i = <span class="num">0</span>; i != CPU_SETSIZE; i += <span class="num">1</span>)
+        {
+            <span class="kwa">if</span> (<span class="kwd">CPU_ISSET</span>(i, &amp;active_cpus))
+            {
+                <span class="kwd">CPU_SET</span>(i, affinity1);
+                <span class="kwd">CPU_SET</span>(i, affinity2);
+            }
+        }
+        <span class="kwa">return</span>;
+    }
+
+    cpu_idx = physical_id = core_id = cpu_cores = -<span class="num">1</span>;
+    <span class="kwa">while</span> (<span class="kwd">fgets</span>(buf, <span class="num">2048</span>, f))
+    {
+        <span class="kwa">if</span> (<span class="num">0</span> == <span class="kwd">strncmp</span>(buf, processor_str, processor_str_len))
+        {
+            pos = <span class="kwd">strchr</span>(buf + processor_str_len, <span class="str">':'</span>);
+            <span class="kwa">if</span> (pos)
+                cpu_idx = <span class="kwd">atoi</span>(pos + <span class="num">1</span>);
+        }
+        <span class="kwa">else if</span> (<span class="num">0</span> == <span class="kwd">strncmp</span>(buf, physical_id_str, physical_id_str_len))
+        {
+            pos = <span class="kwd">strchr</span>(buf + physical_id_str_len, <span class="str">':'</span>);
+            <span class="kwa">if</span> (pos)
+                physical_id = <span class="kwd">atoi</span>(pos + <span class="num">1</span>);
+        }
+        <span class="kwa">else if</span> (<span class="num">0</span> == <span class="kwd">strncmp</span>(buf, core_id_str, core_id_str_len))
+        {
+            pos = <span class="kwd">strchr</span>(buf + core_id_str_len, <span class="str">':'</span>);
+            <span class="kwa">if</span> (pos)
+                core_id = <span class="kwd">atoi</span>(pos + <span class="num">1</span>);
+        }
+        <span class="kwa">else if</span> (<span class="num">0</span> == <span class="kwd">strncmp</span>(buf, cpu_cores_str, cpu_cores_str_len))
+        {
+            pos = <span class="kwd">strchr</span>(buf + cpu_cores_str_len, <span class="str">':'</span>);
+            <span class="kwa">if</span> (pos)
+                cpu_cores = <span class="kwd">atoi</span>(pos + <span class="num">1</span>);
+        }
+        <span class="kwa">if</span> (cpu_idx &gt;= <span class="num">0</span> &amp;&amp; physical_id &gt;= <span class="num">0</span> &amp;&amp; core_id &gt;= <span class="num">0</span> &amp;&amp; cpu_cores &gt;= <span class="num">0</span>)
+        {
+            apic_id = physical_id * cpu_cores + core_id;
+            <span class="kwa">if</span> (apic_id == <span class="num">0</span> || apic_id == <span class="num">1</span>)
+                <span class="kwd">CPU_SET</span>(cpu_idx, affinity1);
+            <span class="kwa">else if</span> (apic_id == <span class="num">2</span> || apic_id == <span class="num">3</span>)
+                <span class="kwd">CPU_SET</span>(cpu_idx, affinity2);
+            cpu_idx = physical_id = core_id = cpu_cores = -<span class="num">1</span>;
+        }
+    }
+
+    <span class="kwd">fclose</span>(f);
+}
+
+<span class="kwb">void</span> <span class="kwd">init_and_start</span>(<span class="kwb">enum</span> color_t* initial_colors, <span class="kwb">size_t</span> chameneos_count,
+    <span class="kwb">struct</span> meeting_place_t** place, <span class="kwb">struct</span> chameneos_t*** chameneos,
+    <span class="kwb">size_t</span> meet_count, <span class="kwb">int</span> is_smp, cpu_set_t* affinity)
+{
+    <span class="kwb">size_t</span>                      i;
+
+    place[<span class="num">0</span>] = (<span class="kwb">struct</span> meeting_place_t*)
+        <span class="kwd">cache_aligned_malloc</span>(<span class="kwa">sizeof</span>(<span class="kwb">struct</span> meeting_place_t));
+    place[<span class="num">0</span>]-&gt;state = meet_count &lt;&lt; MEET_COUNT_SHIFT;
+    chameneos[<span class="num">0</span>] = (<span class="kwb">struct</span> chameneos_t**)
+        <span class="kwd">cache_aligned_malloc</span>(chameneos_count * <span class="kwa">sizeof</span>(<span class="kwb">struct</span> chameneos_t*));
+    <span class="kwa">for</span> (i = <span class="num">0</span>; i != chameneos_count; i += <span class="num">1</span>)
+    {
+        chameneos[<span class="num">0</span>][i] = (<span class="kwb">struct</span> chameneos_t*)
+            <span class="kwd">cache_aligned_malloc</span>(<span class="kwa">sizeof</span>(<span class="kwb">struct</span> chameneos_t));
+        chameneos[<span class="num">0</span>][i]-&gt;place = place[<span class="num">0</span>];
+        chameneos[<span class="num">0</span>][i]-&gt;chameneos = chameneos[<span class="num">0</span>];
+        chameneos[<span class="num">0</span>][i]-&gt;id = i + <span class="num">1</span>;
+        chameneos[<span class="num">0</span>][i]-&gt;is_smp = is_smp;
+        chameneos[<span class="num">0</span>][i]-&gt;meet_count = <span class="num">0</span>;
+        chameneos[<span class="num">0</span>][i]-&gt;meet_same_count = <span class="num">0</span>;
+        chameneos[<span class="num">0</span>][i]-&gt;color = initial_colors[i];
+        chameneos[<span class="num">0</span>][i]-&gt;meeting_completed = <span class="num">0</span>;
+        <span class="kwa">if</span> (<span class="kwd">pthread_attr_init</span>(&amp;chameneos[<span class="num">0</span>][i]-&gt;thread_attr))
+            <span class="kwd">exit</span>(<span class="num">1</span>);
+        <span class="kwa">if</span> (is_smp)
+            <span class="kwd">pthread_attr_setaffinity_np</span>(&amp;chameneos[<span class="num">0</span>][i]-&gt;thread_attr,
+                <span class="kwa">sizeof</span>(cpu_set_t), affinity);
+        <span class="kwa">if</span> (<span class="kwd">pthread_create</span>(&amp;chameneos[<span class="num">0</span>][i]-&gt;thread,
+            &amp;chameneos[<span class="num">0</span>][i]-&gt;thread_attr, chameneos_func, chameneos[<span class="num">0</span>][i]))
+            <span class="kwd">exit</span>(<span class="num">1</span>);
+    }
+}
+
+<span class="kwb">void</span> <span class="kwd">join_and_output</span>(<span class="kwb">enum</span> color_t* initial_colors, <span class="kwb">size_t</span> chameneos_count,
+    <span class="kwb">struct</span> meeting_place_t* place, <span class="kwb">struct</span> chameneos_t** chameneos)
+{
+    <span class="kwb">size_t</span>                      total_meet_count;
+    <span class="kwb">size_t</span>                      i;
+
+    <span class="kwa">for</span> (i = <span class="num">0</span>; i != chameneos_count; i += <span class="num">1</span>)
+        <span class="kwd">printf</span>(<span class="str">&quot; %s&quot;</span>, color_names[initial_colors[i]]);
+    <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+
+    <span class="kwa">for</span> (i = <span class="num">0</span>; i != chameneos_count; i += <span class="num">1</span>)
+    {
+        <span class="kwd">pthread_join</span>(chameneos[i]-&gt;thread, <span class="num">0</span>);
+        <span class="kwd">pthread_attr_destroy</span>(&amp;chameneos[i]-&gt;thread_attr);
+    }
+
+    total_meet_count = <span class="num">0</span>;
+    <span class="kwa">for</span> (i = <span class="num">0</span>; i != chameneos_count; i += <span class="num">1</span>)
+    {
+        total_meet_count += chameneos[i]-&gt;meet_count;
+        <span class="kwd">printf</span>(<span class="str">&quot;%u%s</span><span class="esc">\n</span><span class="str">&quot;</span>, chameneos[i]-&gt;meet_count,
+            <span class="kwd">spell_number</span>(chameneos[i]-&gt;meet_same_count));
+        <span class="kwd">cache_aligned_free</span>(chameneos[i]);
+    }
+    <span class="kwd">printf</span>(<span class="str">&quot;%s</span><span class="esc">\n\n</span><span class="str">&quot;</span>, <span class="kwd">spell_number</span>(total_meet_count));
+
+    <span class="kwd">cache_aligned_free</span>(chameneos);
+    <span class="kwd">cache_aligned_free</span>(place);
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>** argv)
+{
+    <span class="kwb">enum</span> color_t                initial_colors1 [] = 
+        {color_blue, color_red, color_yellow};
+
+    <span class="kwb">enum</span> color_t                initial_colors2 [] = 
+        {color_blue, color_red, color_yellow, color_red, color_yellow,
+        color_blue, color_red, color_yellow, color_red, color_blue};
+
+    <span class="kwb">struct</span> meeting_place_t*     place1;
+    <span class="kwb">struct</span> chameneos_t**        chameneos1;
+    <span class="kwb">size_t</span>                      chameneos_count1;
+
+    <span class="kwb">struct</span> meeting_place_t*     place2;
+    <span class="kwb">struct</span> chameneos_t**        chameneos2;
+    <span class="kwb">size_t</span>                      chameneos_count2;
+
+    <span class="kwb">int</span>                         is_smp;
+    cpu_set_t                   affinity1;
+    cpu_set_t                   affinity2;
+    <span class="kwb">size_t</span>                      meet_count;
+
+    meet_count = <span class="num">6000000</span>;
+    <span class="kwa">if</span> (argc &gt; <span class="num">1</span> &amp;&amp; <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) &gt; <span class="num">0</span>)
+        meet_count = <span class="kwd">atoi</span>(argv[<span class="num">1</span>]);
+
+    <span class="kwd">print_colors</span>();
+
+    <span class="kwd">get_affinity</span>(&amp;is_smp, &amp;affinity1, &amp;affinity2);
+
+    chameneos_count1 = <span class="kwa">sizeof</span>(initial_colors1)/<span class="kwa">sizeof</span>(initial_colors1[<span class="num">0</span>]);
+    chameneos_count2 = <span class="kwa">sizeof</span>(initial_colors2)/<span class="kwa">sizeof</span>(initial_colors2[<span class="num">0</span>]);
+
+    <span class="kwa">if</span> (is_smp)
+    {
+        <span class="kwd">init_and_start</span>(initial_colors1, chameneos_count1, &amp;place1, &amp;chameneos1, meet_count, is_smp, &amp;affinity1);
+        <span class="kwd">init_and_start</span>(initial_colors2, chameneos_count2, &amp;place2, &amp;chameneos2, meet_count, is_smp, &amp;affinity2);
+        <span class="kwd">join_and_output</span>(initial_colors1, chameneos_count1, place1, chameneos1);
+        <span class="kwd">join_and_output</span>(initial_colors2, chameneos_count2, place2, chameneos2);
+    }
+    <span class="kwa">else</span>
+    {
+        <span class="kwd">init_and_start</span>(initial_colors1, chameneos_count1, &amp;place1, &amp;chameneos1, meet_count, is_smp, &amp;affinity1);
+        <span class="kwd">join_and_output</span>(initial_colors1, chameneos_count1, place1, chameneos1);
+        <span class="kwd">init_and_start</span>(initial_colors2, chameneos_count2, &amp;place2, &amp;chameneos2, meet_count, is_smp, &amp;affinity2);
+        <span class="kwd">join_and_output</span>(initial_colors2, chameneos_count2, place2, chameneos2);
+    }
+
+    <span class="kwa">return</span> <span class="num">0</span>;
+}
+

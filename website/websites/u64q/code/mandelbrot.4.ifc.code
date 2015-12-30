@@ -1,0 +1,79 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">! Contributed by Jason Blevins</span>
+<span class="slc">! Adapted from Fortran versions by George R. Gonzalez and Simon Geard</span>
+<span class="slc">!</span>
+<span class="slc">! ifort -fast -openmp -o mandelbrot mandelbrot.f90</span>
+<span class="kwa">program</span> mandelbrot
+  <span class="kwa">implicit none</span>
+
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: dp = <span class="kwd">selected_real_kind</span>(<span class="num">15</span>, <span class="num">307</span>)
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: int8 = <span class="kwd">selected_int_kind</span>(<span class="num">2</span>)
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: iter = <span class="num">50</span>
+  <span class="kwa">real</span>(dp), <span class="kwa">parameter</span> :: limit2 = <span class="num">4.0</span>_dp
+  <span class="kwa">character</span>(len=<span class="num">8</span>) :: argv
+  <span class="kwa">integer</span> :: w, h, x, y, i, pos, bit_num
+  <span class="kwa">integer</span>(int8) :: <span class="kwa">byte</span>
+  <span class="kwa">real</span>(dp) :: inv_w, inv_h, Zi, Zr, Ti, Tr, Cr, Ci
+  <span class="kwa">logical</span> :: inside
+  <span class="kwa">integer</span>(int8), <span class="kwa">dimension</span>(:,:), allocatable :: buf
+
+  <span class="slc">! read dimension from command line</span>
+  <span class="kwa">call</span> <span class="kwd">get_command_argument</span>(<span class="num">1</span>, argv)
+  <span class="kwa">read</span>(argv, *) w
+  h = w
+
+  <span class="slc">! allocate output buffer</span>
+  <span class="kwd">allocate</span>(<span class="kwd">buf</span>(<span class="kwd">ceiling</span>(w/<span class="num">8.0</span>_dp),h))
+
+  <span class="slc">! precalculate constants</span>
+  inv_w = <span class="num">2.0</span>_dp / w
+  inv_h = <span class="num">2.0</span>_dp / h
+
+  <span class="slc">! pbm header</span>
+  <span class="kwa">write</span>(*,<span class="str">'(&quot;P4&quot;,/,i0,&quot; &quot;,i0)'</span>) w, h
+
+  <span class="slc">!$OMP PARALLEL DO PRIVATE(y, x, bit_num, pos, byte, Zr, Cr, Ci, inside, i)</span>
+  <span class="kwa">do</span> y = <span class="num">0</span>, h - <span class="num">1</span>
+     bit_num = <span class="num">8</span> <span class="slc">! when moving left to right, bits are numbered 7 to 0</span>
+     <span class="kwa">byte</span> = <span class="num">0</span>_int8
+     pos = <span class="num">0</span>
+     <span class="kwa">do</span> x = <span class="num">0</span>, w - <span class="num">1</span>
+        bit_num = bit_num - <span class="num">1</span>
+
+        Zr = <span class="num">0.0</span>_dp; Zi = <span class="num">0.0</span>_dp; Tr = <span class="num">0.0</span>_dp; Ti = <span class="num">0.0</span>_dp;
+        Cr = inv_w * x - <span class="num">1.5</span>_dp
+        Ci = inv_h * y - <span class="num">1.0</span>_dp
+        inside = .true.
+        <span class="kwa">do</span> i = <span class="num">1</span>, iter
+           Zi = <span class="num">2.0</span> * Zr * Zi + Ci
+           Zr = Tr - Ti + Cr
+           Ti = Zi * Zi
+           Tr = Zr * Zr
+           <span class="kwa">if</span> (Tr + Ti &gt; limit2) <span class="kwa">then</span>
+              inside = .false.
+              exit
+           <span class="kwa">end if</span>
+        <span class="kwa">end do</span>
+
+        <span class="slc">! We're in the set, set this bit to 0</span>
+        <span class="kwa">if</span> (inside) <span class="kwa">byte</span> = <span class="kwd">ibset</span>(<span class="kwa">byte</span>, bit_num)
+
+        <span class="kwa">if</span> (bit_num == <span class="num">0</span> .or. x == w - <span class="num">1</span>) <span class="kwa">then</span>
+           <span class="slc">! All bits set or end of row, so store full byte</span>
+           pos = pos + <span class="num">1</span>
+           <span class="kwd">buf</span>(pos,y+<span class="num">1</span>) = <span class="kwa">byte</span>
+           <span class="kwa">byte</span> = <span class="num">0</span>_int8
+           bit_num = <span class="num">8</span>
+        <span class="kwa">end if</span>
+     <span class="kwa">end do</span>
+  <span class="kwa">end do</span>
+  <span class="slc">!$OMP END PARALLEL DO</span>
+
+  <span class="slc">! print output</span>
+  <span class="kwa">do</span> y = <span class="num">1</span>, h
+     <span class="kwa">write</span>(*, <span class="str">'(10000000a1)'</span>, advance=<span class="str">'no'</span>) <span class="kwd">buf</span>(:,y)
+  <span class="kwa">end do</span>
+  <span class="kwd">deallocate</span>(buf)
+<span class="kwa">end program</span> mandelbrot

@@ -1,0 +1,67 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Jim Rogers</span>
+<span class="slc">-- Fixed by Pascal Obry on 2005/03/21</span>
+<span class="slc">-- Modified Experimental version suggested by Pascal Obry</span>
+
+<span class="kwa">with</span> GNAT.IO;          <span class="kwa">use</span> GNAT.IO;
+<span class="kwa">with</span> Ada.Command_Line; <span class="kwa">use</span> Ada.Command_Line;
+<span class="kwa">with</span> Interfaces;       <span class="kwa">use</span> Interfaces;
+
+<span class="kwa">procedure</span> Mandelbrot <span class="kwa">is</span>
+   <span class="kwa">type</span> Real <span class="kwa">is digits</span> <span class="num">15</span>;
+   Iter                   : <span class="kwa">constant</span> := <span class="num">50</span>;
+   Limit                  : <span class="kwa">constant</span> := <span class="num">4.0</span>;
+   Width, Height          : <span class="kwb">Positive</span>;
+   Bit_Num                : <span class="kwb">Natural</span>    := <span class="num">0</span>;
+   Byte_Acc               : Unsigned_8 := <span class="num">0</span>;
+   Zr, Zi, Cr, Ci, Tr, Ti, Zr2, Zi2 : Real;
+<span class="kwa">begin</span>
+   Width := <span class="kwb">Positive</span><span class="kwd">'Value</span> (Argument (<span class="num">1</span>));
+
+   Height := Width;
+
+   Put_Line (<span class="str">&quot;P4&quot;</span>);
+   Put_Line (Argument (<span class="num">1</span>) &amp; <span class="str">&quot; &quot;</span> &amp; Argument (<span class="num">1</span>));
+
+   <span class="kwa">for</span> Y <span class="kwa">in</span> <span class="num">0</span> .. Height - <span class="num">1</span> <span class="kwa">loop</span>
+      <span class="kwa">for</span> X <span class="kwa">in</span> <span class="num">0</span> .. Width - <span class="num">1</span> <span class="kwa">loop</span>
+         Zr := <span class="num">0.0</span>;
+         Zi := <span class="num">0.0</span>;
+         Cr := <span class="num">2.0</span> * Real (X) / Real (Width) - <span class="num">1.5</span>;
+         Ci := <span class="num">2.0</span> * Real (Y) / Real (Height) - <span class="num">1.0</span>;
+
+         <span class="kwa">for</span> I <span class="kwa">in</span> <span class="num">1</span> .. Iter + <span class="num">1</span> <span class="kwa">loop</span>
+            Zr2 := Zr ** <span class="num">2</span>;
+            Zi2 := Zi ** <span class="num">2</span>;
+            Tr  := Zr2 - Zi2 + Cr;
+            Ti  := <span class="num">2.0</span> * Zr * Zi + Ci;
+            Zr  := Tr;
+            Zi  := Ti;
+
+            <span class="kwa">exit when</span> Zr2 + Zi2 &gt; Limit;
+         <span class="kwa">end loop</span>;
+         
+         <span class="kwa">if</span> Zr2 + Zi2 &gt; Limit <span class="kwa">then</span>
+            Byte_Acc := Shift_Left (Byte_Acc, <span class="num">1</span>) <span class="kwa">or</span> <span class="num">16</span>#<span class="num">00</span>#;
+         <span class="kwa">else</span>
+            Byte_Acc := Shift_Left (Byte_Acc, <span class="num">1</span>) <span class="kwa">or</span> <span class="num">16</span>#<span class="num">01</span>#;
+         <span class="kwa">end if</span>;
+
+         Bit_Num := Bit_Num + <span class="num">1</span>;
+
+         <span class="kwa">if</span> Bit_Num = <span class="num">8</span> <span class="kwa">then</span>
+            Put (<span class="kwb">Character</span><span class="kwd">'Val</span> (Byte_Acc));
+            Byte_Acc := <span class="num">0</span>;
+            Bit_Num  := <span class="num">0</span>;
+         <span class="kwa">elsif</span> X = Width - <span class="num">1</span> <span class="kwa">then</span>
+            Byte_Acc := Shift_Left (Byte_Acc, <span class="num">8</span> - (Width <span class="kwa">mod</span> <span class="num">8</span>));
+            Put (<span class="kwb">Character</span><span class="kwd">'Val</span> (Byte_Acc));
+            Byte_Acc := <span class="num">0</span>;
+            Bit_Num  := <span class="num">0</span>;
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end loop</span>;
+<span class="kwa">end</span> Mandelbrot;
+

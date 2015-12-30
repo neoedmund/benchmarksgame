@@ -1,0 +1,14 @@
+
+Fri, 18 Dec 2015 03:29:41 GMT
+
+MAKE:
+mv fannkuchredux.typescript fannkuchredux.ts
+/usr/local/src/node-v5.1.0-linux-x64/bin/tsc  fannkuchredux.ts
+2.08s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/node-v5.1.0-linux-x64/bin/node --use_strict fannkuchredux.js 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

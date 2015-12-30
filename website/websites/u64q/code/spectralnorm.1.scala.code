@@ -1,0 +1,56 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Isaac Gouy</span>
+<span class="com">   modified by Meiko Rachimow</span>
+<span class="com">   updated for 2.8 by Rex Kerr</span>
+<span class="com">*/</span>
+
+<span class="kwa">object</span> spectralnorm {
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) = {
+    <span class="kwa">val</span> n = (<span class="kwa">if</span> (args.length&gt;<span class="num">0</span>) <span class="kwd">args</span>(<span class="num">0</span>).toInt <span class="kwa">else</span> <span class="num">100</span>)
+    <span class="kwd">printf</span>(<span class="str">&quot;%.09f</span><span class="esc">\n</span><span class="str">&quot;</span>, (<span class="kwa">new</span> <span class="kwd">SpectralNorm</span>(n)).<span class="kwd">approximate</span>())
+  }
+}
+
+<span class="kwa">class</span> <span class="kwd">SpectralNorm</span>(n: Int) {
+
+  <span class="slc">// Ordinary and transposed versions of infinite matrix</span>
+  <span class="kwa">val</span> A = (i: Int, j: Int) =&gt; <span class="num">1.0</span>/((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span> +i+<span class="num">1</span>)
+  <span class="kwa">val</span> At = (j: Int, i: Int) =&gt; <span class="num">1.0</span>/((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span> +i+<span class="num">1</span>)
+
+  <span class="slc">// Matrix multiplication w &lt;- M*v</span>
+  <span class="kwa">def</span> <span class="kwd">mult</span>(v: Array[Double], w: Array[Double], M: (Int,Int)=&gt; Double ) {
+    <span class="kwa">var</span> i = <span class="num">0</span>
+    <span class="kwa">while</span> (i &lt; n) {
+     <span class="kwa">var</span> s = <span class="num">0.0</span>
+     <span class="kwa">var</span> j = <span class="num">0</span>
+     <span class="kwa">while</span> (j &lt; n) { s += <span class="kwd">M</span>(i,j)*<span class="kwd">v</span>(j); j += <span class="num">1</span> }
+     <span class="kwd">w</span>(i) =  s
+     i += <span class="num">1</span>
+    }
+  }
+
+  <span class="kwa">def</span> <span class="kwd">approximate</span>() = {
+    <span class="kwa">val</span> u,v,w = Array.<span class="kwd">fill</span>(n)(<span class="num">1.0</span>)
+
+    <span class="kwa">var</span> i = <span class="num">0</span>
+    <span class="kwa">while</span> (i &lt; <span class="num">10</span>) {
+      <span class="slc">// Multiply by matrix &amp; transpose</span>
+      <span class="kwd">mult</span>(u,w,A)
+      <span class="kwd">mult</span>(w,v,At)
+      <span class="kwd">mult</span>(v,w,A)
+      <span class="kwd">mult</span>(w,u,At)
+      i += <span class="num">1</span>
+    }
+
+    <span class="kwa">var</span> vbv,vv = <span class="num">0.0</span>
+    i = <span class="num">0</span>
+    <span class="kwa">while</span> (i &lt; n) {
+      vbv += <span class="kwd">u</span>(i)*<span class="kwd">v</span>(i)
+      vv += <span class="kwd">v</span>(i)*<span class="kwd">v</span>(i)
+      i += <span class="num">1</span>
+    }
+
+    math.<span class="kwd">sqrt</span>(vbv/vv)
+  }
+}

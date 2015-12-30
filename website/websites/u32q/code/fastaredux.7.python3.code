@@ -1,0 +1,108 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://shootout.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># modified by Ian Osgood</span>
+<span class="slc"># modified again by Heinrich Acker</span>
+<span class="slc"># modified by Justin Peel</span>
+<span class="slc"># modified by Mariano Chouza</span>
+<span class="slc"># modified by Ashley Hewson</span>
+<span class="slc"># modified by Valery Khamenya</span>
+<span class="slc"># modified again by Mariano Chouza</span>
+
+<span class="kwa">import</span> sys, bisect, array
+
+alu = (
+   <span class="str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG'</span>
+   <span class="str">'GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA'</span>
+   <span class="str">'CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT'</span>
+   <span class="str">'ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA'</span>
+   <span class="str">'GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG'</span>
+   <span class="str">'AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC'</span>
+   <span class="str">'AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span>)
+
+iub = <span class="kwb">zip</span>(<span class="str">'acgtBDHKMNRSVWY'</span>, [<span class="num">0.27</span>, <span class="num">0.12</span>, <span class="num">0.12</span>, <span class="num">0.27</span>] + [<span class="num">0.02</span>]*<span class="num">11</span>)
+
+homosapiens = [
+    (<span class="str">'a'</span>, <span class="num">0.3029549426680</span>),
+    (<span class="str">'c'</span>, <span class="num">0.1979883004921</span>),
+    (<span class="str">'g'</span>, <span class="num">0.1975473066391</span>),
+    (<span class="str">'t'</span>, <span class="num">0.3015094502008</span>),
+]
+
+IM = <span class="num">139968</span>
+INITIAL_STATE = <span class="num">42</span>
+
+<span class="kwa">def</span> <span class="kwd">makeCumulative</span>(table):
+    P = []
+    C = []
+    prob = <span class="num">0</span>.
+    <span class="kwa">for</span> char, p <span class="kwa">in</span> table:
+        prob += p
+        P += [prob]
+        C += [char]
+    <span class="kwa">return</span> (P, C)
+
+randomSeq = <span class="kwa">None</span>
+j = <span class="num">0</span>
+<span class="kwa">def</span> <span class="kwd">makeRandomSeq</span>():
+    <span class="kwa">global</span> randomSeq
+    ia = <span class="num">3877</span>; ic = <span class="num">29573</span>
+    randomSeq = []
+    s = INITIAL_STATE
+    <span class="kwa">while True</span>:
+        s = (s * ia + ic) % IM
+        randomSeq.<span class="kwd">append</span>(s)
+        <span class="kwa">if</span> s == INITIAL_STATE:
+            <span class="kwa">break</span>
+
+<span class="kwa">def</span> <span class="kwd">makeLookupTable</span>(table):
+    bb = bisect.bisect
+    probs, chars = <span class="kwd">makeCumulative</span>(table)
+    imf = <span class="kwb">float</span>(IM)
+    <span class="kwa">return</span> array.<span class="kwd">array</span>(<span class="str">&quot;u&quot;</span>, [chars[<span class="kwd">bb</span>(probs, i / imf)] <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(IM)])
+
+<span class="kwa">def</span> <span class="kwd">repeatFasta</span>(src, n):
+    width = <span class="num">60</span>
+    r = <span class="kwb">len</span>(src)
+    s = src + src + src[:n % r]
+    sow = sys.stdout.write
+    <span class="kwa">for</span> j <span class="kwa">in</span> <span class="kwb">range</span>(n // width):
+        i = j*width % r
+        <span class="kwd">sow</span>(s[i:i+width] + <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+    <span class="kwa">if</span> n % width:
+        <span class="kwd">sow</span>(s[-(n % width):] + <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+
+<span class="kwa">def</span> <span class="kwd">randomFasta</span>(table, n):
+    <span class="kwa">global</span> randomSeq, j
+    width = <span class="num">60</span>
+    
+    lut = <span class="kwd">makeLookupTable</span>(table)
+    luStr = <span class="str">''</span>.<span class="kwd">join</span>(lut[randomSeq[j]] <span class="kwa">for</span> j <span class="kwa">in</span> <span class="kwb">range</span>(IM))
+    luStr += luStr[:width]
+
+    lj = j
+    sow = sys.stdout.write
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(n // width):
+        <span class="kwd">sow</span>(luStr[lj:lj+width] + <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+        lj = (lj + width) % IM
+    j = lj
+    <span class="kwa">if</span> n % width:
+        k = (j + (n % width)) % IM
+        <span class="kwd">sow</span>((luStr[j:k] <span class="kwa">if</span> j &lt; k <span class="kwa">else</span> luStr[j:] + luStr[:k]) + <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+        j = k
+
+<span class="kwa">def</span> <span class="kwd">main</span>():
+    n = <span class="kwb">int</span>(sys.argv[<span class="num">1</span>])
+
+    <span class="kwd">makeRandomSeq</span>()
+
+    <span class="kwa">print</span>(<span class="str">'&gt;ONE Homo sapiens alu'</span>)
+    <span class="kwd">repeatFasta</span>(alu, n*<span class="num">2</span>)
+
+    <span class="kwa">print</span>(<span class="str">'&gt;TWO IUB ambiguity codes'</span>)
+    <span class="kwd">randomFasta</span>(iub, n*<span class="num">3</span>)
+
+    <span class="kwa">print</span>(<span class="str">'&gt;THREE Homo sapiens frequency'</span>)
+    <span class="kwd">randomFasta</span>(homosapiens, n*<span class="num">5</span>)
+    
+<span class="kwd">main</span>()

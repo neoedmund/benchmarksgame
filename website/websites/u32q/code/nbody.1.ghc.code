@@ -1,0 +1,189 @@
+<span class="slc">--</span>
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Olof Kraigher and Don Stewart.</span>
+<span class="slc">-- GHC 7.8.1 fix by Ersin Er</span>
+<span class="slc">--</span>
+<span class="slc">-- To be compiled with:</span>
+<span class="slc">--</span>
+<span class="slc">--  -O2 -fglasgow-exts -funbox-strict-fields -fbang-patterns -optc-O </span>
+<span class="slc">--</span>
+<span class="slc">-- Don't enable -optc-mfpmath=sse -optc-msse2, this triggers a gcc bug on x86</span>
+<span class="slc">--</span>
+
+<span class="kwd">import</span> Foreign
+<span class="kwd">import</span> Foreign.Storable
+<span class="kwd">import</span> Foreign.Marshal.Alloc
+<span class="kwd">import</span> Data.IORef
+<span class="kwd">import</span> Control.Monad
+<span class="kwd">import</span> System.Environment
+<span class="kwd">import</span> Text.Printf
+<span class="kwd">import</span> System.<span class="kwb">IO</span>.Unsafe
+
+main = <span class="kwd">do</span>
+    n &lt;- <span class="kwc">getArgs</span> &gt;&gt;= <span class="kwc">readIO</span>.<span class="kwc">head</span>
+    initialize
+    offset_momentum
+    energy <span class="num">0</span> planets &gt;&gt;= printf <span class="str">&quot;%.9f</span><span class="esc">\n</span><span class="str">&quot;</span>
+    replicateM_ n (advance planets)
+    energy <span class="num">0</span> planets &gt;&gt;= printf <span class="str">&quot;%.9f</span><span class="esc">\n</span><span class="str">&quot;</span>
+
+offset_momentum = <span class="kwd">do</span>
+    m &lt;- <span class="kwc">foldr</span> (.+.) (Vec <span class="num">0 0 0</span>)
+             `<span class="kwc">fmap</span>` (<span class="kwc">mapM</span> momentum
+                   . <span class="kwc">take</span> (nbodies - <span class="num">1</span>)
+                   . <span class="kwc">iterate next</span> $ <span class="kwc">next</span> planets)
+
+    setVec (vel planets) $ (-<span class="num">1</span>/solar_mass) *. m
+  <span class="kwd">where</span>
+    momentum !p = <span class="kwc">liftM2</span> (*.) (mass p) (getVec (vel p))
+
+energy :: <span class="kwb">Double</span> -&gt; Ptr <span class="kwb">Double</span> -&gt; <span class="kwb">IO Double</span>
+energy !e !p
+    | p == end = <span class="kwc">return</span> e
+    | <span class="kwc">otherwise</span>      = <span class="kwd">do</span>
+        p1 &lt;- getVec (pos p)
+        v1 &lt;- getVec (vel p)
+        m1 &lt;- mass p
+        e  &lt;- energy2 p1 m1 e p2
+        energy (e + <span class="num">0.5</span> * m1 * magnitude2 v1) p2
+    <span class="kwd">where</span> p2 = <span class="kwc">next</span> p
+
+energy2 !p1 !m1 !e !p
+    | p  == end = <span class="kwc">return</span> e
+    | <span class="kwc">otherwise</span> = <span class="kwd">do</span>
+        p2 &lt;- getVec (pos p)
+        v2 &lt;- getVec (vel p)
+        m2 &lt;- mass p
+        <span class="kwd">let</span> distance = <span class="kwc">sqrt</span> . magnitude2 $ p1 .-. p2
+        energy2 p1 m1 (e - m1 * m2 / distance) (<span class="kwc">next</span> p)
+
+advance :: Ptr <span class="kwb">Double</span> -&gt; <span class="kwb">IO</span> ()
+advance !p1 = <span class="kwc">when</span> (p1 /= end) $ <span class="kwd">do</span>
+    pos1 &lt;- getVec $ pos p1
+    m1   &lt;- mass p1
+    <span class="kwd">let</span> go !p2
+            | p2 /= end = <span class="kwd">do</span>
+                pos2 &lt;- getVec (pos p2)
+                m2   &lt;- mass p2
+                <span class="kwd">let</span> vel2       = vel p2
+                    difference = pos1 .-. pos2
+                    distance2  = magnitude2 difference
+                    distance   = <span class="kwc">sqrt</span> distance2
+                    <span class="kwc">magnitude</span>  = delta_t / (distance2 * distance)
+                    mass_magn  = <span class="kwc">magnitude</span> *. difference
+                vel1 -= m2 *. mass_magn
+                vel2 += m1 *. mass_magn
+                go (<span class="kwc">next</span> p2)
+
+            | <span class="kwc">otherwise</span> = <span class="kwd">do</span>
+                v1 &lt;- getVec vel1
+                p1 += delta_t *. v1
+    go p2
+    advance  p2
+  <span class="kwd">where</span>
+    vel1 = vel p1
+    p2   = <span class="kwc">next</span> p1
+
+<span class="slc">------------------------------------------------------------------------</span>
+
+planets :: Ptr <span class="kwb">Double</span>
+planets = unsafePerformIO $ mallocBytes (<span class="num">7</span> * nbodies * <span class="num">8</span>) <span class="slc">-- sizeOf double = 8</span>
+
+nbodies :: <span class="kwb">Int</span>
+nbodies = <span class="num">5</span>
+
+solar_mass, delta_t, days_per_year :: <span class="kwb">Double</span>
+days_per_year = <span class="num">365.24</span>
+solar_mass    = <span class="num">4</span> * <span class="kwc">pi</span> ** <span class="num">2</span>;
+delta_t       = <span class="num">0.01</span>
+
+initialize = <span class="kwc">mapM_</span> newPlanet planets
+  <span class="kwd">where</span>
+   dp = days_per_year
+   planets =
+    [<span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>,
+     <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>,
+     <span class="num">1</span> * solar_mass,
+     <span class="num">4.84143144246472090e+00</span>,        (-<span class="num">1.16032004402742839e+00</span>), (-<span class="num">1.03622044471123109e-01</span>),
+     <span class="num">1.66007664274403694e-03</span>*dp,     <span class="num">7.69901118419740425e-03</span>*dp, (-<span class="num">6.90460016972063023e-05</span>)*dp,
+     <span class="num">9.54791938424326609e-04</span> * solar_mass,
+
+     <span class="num">8.34336671824457987e+00</span>,        <span class="num">4.12479856412430479e+00</span>,    (-<span class="num">4.03523417114321381e-01</span>),
+     (-<span class="num">2.76742510726862411e-03</span>)*dp,  <span class="num">4.99852801234917238e-03</span>*dp, <span class="num">2.30417297573763929e-05</span>*dp,
+     <span class="num">2.85885980666130812e-04</span> * solar_mass,
+
+     <span class="num">1.28943695621391310e+01</span>,        (-<span class="num">1.51111514016986312e+01</span>), (-<span class="num">2.23307578892655734e-01</span>),
+     <span class="num">2.96460137564761618e-03</span>*dp,     <span class="num">2.37847173959480950e-03</span>*dp, (-<span class="num">2.96589568540237556e-05</span>)*dp,
+     <span class="num">4.36624404335156298e-05</span> * solar_mass,
+
+     <span class="num">1.53796971148509165e+01</span>,        (-<span class="num">2.59193146099879641e+01</span>), <span class="num">1.79258772950371181e-01</span>,
+     <span class="num">2.68067772490389322e-03</span>*dp,     <span class="num">1.62824170038242295e-03</span>*dp, (-<span class="num">9.51592254519715870e-05</span>)*dp,
+     <span class="num">5.15138902046611451e-05</span> * solar_mass
+    ]
+
+<span class="slc">------------------------------------------------------------------------</span>
+<span class="slc">-- Support for 3 dimensional mutable vectors</span>
+
+<span class="kwd">data</span> Vector3 = Vec !<span class="kwb">Double</span> !<span class="kwb">Double</span> !<span class="kwb">Double</span>
+
+end :: Ptr <span class="kwb">Double</span>
+end = inc planets $ nbodies * <span class="num">7</span>
+
+<span class="kwc">next</span>  :: Ptr <span class="kwb">Double</span> -&gt; Ptr <span class="kwb">Double</span>
+<span class="kwc">next</span> p = inc p <span class="num">7</span>
+
+cursor :: IORef (Ptr <span class="kwb">Double</span>)
+cursor = unsafePerformIO $ newIORef planets
+
+inc :: Ptr <span class="kwb">Double</span> -&gt; <span class="kwb">Int</span> -&gt; Ptr <span class="kwb">Double</span>
+inc ptr n = plusPtr ptr (n * <span class="num">8</span>)
+
+newPlanet :: <span class="kwb">Double</span> -&gt; <span class="kwb">IO</span> ()
+newPlanet !d = <span class="kwd">do</span>
+    ptr &lt;- readIORef cursor
+    pokeElemOff ptr <span class="num">0</span> d
+    writeIORef cursor (inc ptr <span class="num">1</span>)
+
+pos :: Ptr <span class="kwb">Double</span> -&gt; Ptr <span class="kwb">Double</span>
+pos ptr = ptr
+
+vel :: Ptr <span class="kwb">Double</span> -&gt; Ptr <span class="kwb">Double</span>
+vel ptr = inc ptr <span class="num">3</span>
+
+mass :: Ptr <span class="kwb">Double</span> -&gt; <span class="kwb">IO Double</span>
+mass ptr = peekElemOff ptr <span class="num">6</span>
+
+<span class="slc">------------------------------------------------------------------------</span>
+
+(Vec x y z) .+. (Vec u v w) = Vec (x+u) (y+v) (z+w)
+
+(Vec x y z) .-. (Vec u v w) = Vec (x-u) (y-v) (z-w)
+
+k *. (Vec x y z) = Vec (k*x) (k*y) (k*z) <span class="slc">-- allocates</span>
+
+magnitude2 (Vec x y z) = x*x + y*y + z*z
+
+<span class="slc">------------------------------------------------------------------------</span>
+
+getVec !p = <span class="kwc">liftM3</span> Vec (peek p) (f <span class="num">1</span>) (f <span class="num">2</span>)
+    <span class="kwd">where</span> f = peekElemOff p
+
+setVec p (Vec x y z)= <span class="kwd">do</span>
+    poke        p   x
+    pokeElemOff p <span class="num">1</span> y
+    pokeElemOff p <span class="num">2</span> z
+
+<span class="kwd">infix</span> <span class="num">4</span> +=
+<span class="kwd">infix</span> <span class="num">4</span> -=
+
+v1 += (Vec u v w) = <span class="kwd">do</span>
+    x &lt;- peek v1;          poke        v1   (x+u)
+    y &lt;- peekElemOff v1 <span class="num">1</span>; pokeElemOff v1 <span class="num">1</span> (y+v)
+    z &lt;- peekElemOff v1 <span class="num">2</span>; pokeElemOff v1 <span class="num">2</span> (z+w)
+
+v1 -= (Vec u v w)  = <span class="kwd">do</span>
+    x &lt;- peek v1;          poke        v1   (x-u)
+    y &lt;- peekElemOff v1 <span class="num">1</span>; pokeElemOff v1 <span class="num">1</span> (y-v)
+    z &lt;- peekElemOff v1 <span class="num">2</span>; pokeElemOff v1 <span class="num">2</span> (z-w)

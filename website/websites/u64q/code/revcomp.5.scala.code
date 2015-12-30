@@ -1,0 +1,27 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Rex Kerr</span>
+<span class="com"> */</span>
+
+<span class="kwa">object</span> revcomp {
+  <span class="kwa">def</span> <span class="kwd">hl</span>(s: String) = s + s.toLowerCase
+  <span class="kwa">val</span> table = <span class="kwd">Map</span>( (<span class="kwd">hl</span>(<span class="str">&quot;ACGTUMRWSYKVHDBN&quot;</span>) <span class="kwd">zip</span> (<span class="str">&quot;TGCAAKYWSRMBDHVN&quot;</span>*<span class="num">2</span>)): _* )
+
+  <span class="kwa">val</span> buf = <span class="kwa">new</span> collection.mutable.ArrayBuffer[Char]
+  <span class="kwa">def</span> out {
+    buf.reverseIterator.<span class="kwd">grouped</span>(<span class="num">60</span>).<span class="kwd">foreach</span>( s =&gt; <span class="kwd">println</span>(s.mkString) )
+    buf clear
+  }
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args:Array[String]) = {
+    io.Source.stdin.<span class="kwd">getLines</span>().<span class="kwd">foreach</span>(s =&gt; {
+      <span class="kwa">if</span> (s startsWith <span class="str">&quot;&gt;&quot;</span>) {
+        out
+        <span class="kwd">println</span>(s)
+      }
+      <span class="kwa">else</span> buf ++= s.<span class="kwd">map</span>(<span class="kwd">table</span>(_))
+    })
+    out
+  }
+}

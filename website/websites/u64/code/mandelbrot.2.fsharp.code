@@ -1,0 +1,115 @@
+﻿<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Adapted by Antti Lankila from the earlier Isaac Gouy's implementation</span>
+<span class="com">   Add multithread &amp; tweaks from C++ by The Anh Tran</span>
+<span class="com">   Ported to F# by Don Syme</span>
+<span class="com">   Add memory reduction and performance tweaks by Jomo Fisher</span>
+<span class="com">*)</span>
+
+<span class="kwa">open</span> <span class="kwd">System</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Threading</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">IO</span>
+
+<span class="kwa">let</span> out = <span class="kwd">Console</span>.<span class="kwd">OpenStandardOutput</span>()
+
+<span class="slc">// Helper type to accumulate a bit array</span>
+<span class="kwa">type</span> <span class="kwd">BitAccumulator</span>(n) = 
+    <span class="kwa">let</span> numBytes = (n+<span class="num">7</span>)/<span class="num">8</span>
+    <span class="kwa">let</span> numBits = n &amp;&amp;&amp; <span class="num">7</span>
+    <span class="kwa">let mutable</span> byteCount = <span class="num">0</span>
+    <span class="kwa">let mutable</span> bitNum = <span class="num">0</span>
+    <span class="kwa">let mutable</span> byteAcc = <span class="num">0</span>
+    <span class="kwa">let mutable</span> pdata : byte array = <span class="kwd">Array</span>.zeroCreate numBytes
+
+    <span class="kwa">member</span> x.<span class="kwd">Reinit</span>() = 
+        byteCount &lt;- <span class="num">0</span>
+        bitNum &lt;- <span class="num">0</span>
+        byteAcc &lt;- <span class="num">0</span>       
+
+    <span class="kwa">member</span> x.<span class="kwd">Add</span> b =     
+        byteAcc &lt;- (byteAcc &lt;&lt;&lt; <span class="num">1</span>) ||| (<span class="kwa">if</span> b <span class="kwa">then</span> <span class="num">1</span> <span class="kwa">else</span> <span class="num">0</span>);
+
+        bitNum &lt;- bitNum + <span class="num">1</span>
+        <span class="kwa">if</span> bitNum = <span class="num">8</span> <span class="kwa">then</span> 
+           pdata.[byteCount] &lt;- byte byteAcc;
+           byteCount &lt;- byteCount + <span class="num">1</span>;
+           byteAcc &lt;- <span class="num">0</span>;
+           bitNum &lt;- <span class="num">0</span>;
+
+    <span class="kwa">member</span> x.<span class="kwd">Close</span>() =     
+        <span class="slc">// write left over bits</span>
+        <span class="kwa">if</span> bitNum &lt;&gt; <span class="num">0</span> <span class="kwa">then</span>
+            byteAcc &lt;- byteAcc &lt;&lt;&lt; (<span class="num">8</span> - numBits)
+            pdata.[byteCount] &lt;- byte byteAcc
+            byteCount &lt;- byteCount+<span class="num">1</span>
+
+    <span class="kwa">member</span> x.<span class="kwd">Data</span> = pdata
+    <span class="kwa">member</span> x.<span class="kwd">ByteCount</span> = byteCount
+
+<span class="kwa">type</span> <span class="kwd">ThreadState</span>(n) = 
+    <span class="kwa">let</span> ba = <span class="kwd">BitAccumulator</span>(n)
+    <span class="kwa">let mutable</span> finishedLine = -<span class="num">1</span>
+    <span class="kwa">member</span> ts.<span class="kwd">BitAccumulator</span> = ba
+    <span class="kwa">member</span> ts.<span class="kwd">IsReadyToWork</span> = finishedLine = -<span class="num">1</span>
+    <span class="kwa">member</span> ts.<span class="kwd">SetFinishedLine</span>(lineNumber) =
+        finishedLine &lt;- lineNumber
+    <span class="kwa">member</span> ts.<span class="kwd">TryWriteLine</span>(nextLine) = 
+        <span class="kwa">if</span> finishedLine = nextLine <span class="kwa">then</span>
+            out.<span class="kwd">Write</span>( ba.<span class="kwd">Data</span>, <span class="num">0</span>, ba.<span class="kwd">ByteCount</span>);
+            finishedLine &lt;- -<span class="num">1</span>
+            ba.<span class="kwd">Reinit</span>()
+            <span class="kwa">true</span>
+        <span class="kwa">else false</span>
+
+<span class="slc">// Initialize an array by a parallel init using all available processors</span>
+<span class="kwa">let</span> parallelArrayInit n f = 
+    <span class="kwa">let</span> currentLine = <span class="kwb">ref</span> -<span class="num">1</span>
+    <span class="kwa">let</span> lastWritten = <span class="kwb">ref</span> -<span class="num">1</span>
+    <span class="kwa">let rec</span> loop (ts:<span class="kwd">ThreadState</span>) = 
+        <span class="kwa">if</span> ts.<span class="kwd">IsReadyToWork</span> <span class="kwa">then</span> 
+            <span class="kwa">let</span> y = <span class="kwd">Interlocked</span>.<span class="kwd">Increment</span>(&amp;currentLine.contents)
+            <span class="kwa">if</span> y &lt; n <span class="kwa">then</span> 
+                f ts.<span class="kwd">BitAccumulator</span> y
+                ts.<span class="kwd">SetFinishedLine</span>(y)
+                loop(ts)
+        elif ts.<span class="kwd">TryWriteLine</span>(!lastWritten + <span class="num">1</span>) <span class="kwa">then</span>
+            <span class="kwd">Interlocked</span>.<span class="kwd">Increment</span>(&amp;lastWritten.contents) |&gt; ignore
+            loop(ts)
+        <span class="kwa">else</span> loop(ts)
+
+    <span class="kwd">Async</span>.<span class="kwd">Parallel</span> [ <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">1</span> .. <span class="kwd">Environment</span>.<span class="kwd">ProcessorCount</span> -&gt; async {<span class="kwa">do</span> loop(<span class="kwd">ThreadState</span>(n)) } ] 
+       |&gt; <span class="kwd">Async</span>.<span class="kwd">Ignore</span> 
+       |&gt; <span class="kwd">Async</span>.<span class="kwd">RunSynchronously</span>
+
+[&lt;<span class="kwd">EntryPoint</span>&gt;]
+<span class="kwa">let</span> main args =
+    <span class="kwa">let</span> start = <span class="kwd">System</span>.<span class="kwd">DateTime</span>.<span class="kwd">Now</span>
+    <span class="kwa">let</span> numLines = <span class="kwa">if</span> (args.<span class="kwd">Length</span> &gt; <span class="num">0</span>) <span class="kwa">then</span> <span class="kwb">int</span> args.[<span class="num">0</span>] <span class="kwa">else</span> <span class="num">200</span> 
+    <span class="kwd">Console</span>.<span class="kwd">Out</span>.<span class="kwd">Write</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str"></span><span class="ipl">{0} {0}</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, numLines);
+    <span class="kwa">let</span> inversen = <span class="num">2.0</span> / <span class="kwb">float</span> numLines;
+
+    parallelArrayInit numLines (<span class="kwa">fun</span> ba y -&gt; 
+
+        <span class="kwa">let</span> civ = <span class="kwb">float</span> y * inversen - <span class="num">1.0</span>;
+
+        <span class="kwa">for</span> x = <span class="num">0</span> <span class="kwa">to</span> numLines - <span class="num">1</span> <span class="kwa">do</span> 
+            <span class="kwa">let</span> crv = <span class="kwb">float</span> x * inversen - <span class="num">1.5</span>;
+
+            <span class="kwa">let rec</span> innerLoop i zrv ziv trv tiv = 
+               <span class="kwa">let</span> ziv = (zrv*ziv) + (zrv*ziv) + civ;
+               <span class="kwa">let</span> zrv = trv - tiv + crv;
+
+               <span class="kwa">let</span> trv = zrv * zrv;
+               <span class="kwa">let</span> tiv = ziv * ziv;
+               <span class="kwa">if</span> ((trv + tiv) &lt;= <span class="num">4.0</span>) &amp;&amp; (i &gt; <span class="num">0</span>) <span class="kwa">then</span> 
+                   innerLoop (i-<span class="num">1</span>) zrv ziv trv tiv
+               <span class="kwa">else</span>
+                   i
+
+            <span class="kwa">let</span> i = innerLoop <span class="num">49</span> crv civ (crv * crv) (civ * civ)
+            ba.<span class="kwd">Add</span> ((i = <span class="num">0</span>))
+        ba.<span class="kwd">Close</span>())
+
+    <span class="num">0</span>
+

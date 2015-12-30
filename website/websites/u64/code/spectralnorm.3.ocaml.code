@@ -1,0 +1,89 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Sebastien Loisel</span>
+<span class="com"> * Cleanup by Troestler Christophe</span>
+<span class="com"> * Parallelized by Mauricio Fernandez</span>
+<span class="com"> *)</span>
+
+<span class="kwa">open</span> <span class="kwd">Bigarray</span>
+<span class="kwa">type</span> v = (<span class="kwb">float</span>, float64_elt, c_layout) <span class="kwc">Array1</span>.t
+
+<span class="kwa">let</span> max_workers = <span class="num">8</span>
+
+<span class="kwa">let</span> map_chunks f low hi =
+  <span class="kwa">let</span> step = (hi - low) / max_workers <span class="kwa">in</span>
+  <span class="kwa">let rec</span> loop acc n =
+    <span class="kwa">if</span> n &lt; hi <span class="kwa">then</span>
+      <span class="kwa">let</span> n' = n + step <span class="kwa">in</span> loop (f (n, (min hi n')) :: acc) n'
+    <span class="kwa">else</span> acc
+  <span class="kwa">in</span> loop [] low
+
+<span class="kwa">let</span> wait_for = <span class="kwc">List</span>.iter (<span class="kwa">fun</span> f -&gt; f())
+
+<span class="com">(* original function due to Jon D. Harrop *)</span>
+<span class="kwa">let</span> invoke (f : 'a -&gt; 'b) x : <span class="kwb">unit</span> -&gt; 'b =
+  <span class="kwa">let</span> input, output = <span class="kwc">Unix</span>.pipe() <span class="kwa">in</span>
+  <span class="kwa">match</span> <span class="kwc">Unix</span>.fork() <span class="kwa">with</span>
+  | -<span class="num">1</span> -&gt; <span class="kwc">Unix</span>.close input; <span class="kwc">Unix</span>.close output; (<span class="kwa">let</span> v = f x <span class="kwa">in fun</span> () -&gt; v)
+  | <span class="num">0</span> -&gt;
+      <span class="kwc">Unix</span>.close input;
+      <span class="kwa">let</span> output = <span class="kwc">Unix</span>.out_channel_of_descr output <span class="kwa">in</span>
+        <span class="kwc">Marshal</span>.to_channel output (<span class="kwa">try</span> `<span class="kwd">Res</span>(f x) <span class="kwa">with</span> e -&gt; `<span class="kwd">Exn</span> e) [];
+        close_out output;
+        exit <span class="num">0</span>
+  | pid -&gt;
+      <span class="kwc">Unix</span>.close output;
+      <span class="kwa">let</span> input = <span class="kwc">Unix</span>.in_channel_of_descr input <span class="kwa">in fun</span> () -&gt;
+        <span class="kwa">let</span> v = <span class="kwc">Marshal</span>.from_channel input <span class="kwa">in</span>
+        ignore (<span class="kwc">Unix</span>.waitpid [] pid);
+        close_in input;
+        <span class="kwa">match</span> v <span class="kwa">with</span> `<span class="kwd">Res</span> x -&gt; x | `<span class="kwd">Exn</span> e -&gt; raise e
+
+<span class="kwa">let</span> eval_A i j = <span class="num">1</span>. /. <span class="kwb">float</span>((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span>+i+<span class="num">1</span>)
+
+<span class="kwa">let</span> eval_A_times_u (u : v) (v : v) =
+  <span class="kwa">let</span> n = <span class="kwc">Array1</span>.dim v - <span class="num">1</span> <span class="kwa">in</span>
+  <span class="kwa">let</span> compute (p, q) =
+    <span class="kwa">for</span> i = p <span class="kwa">to</span> q <span class="kwa">do</span>
+      <span class="kwa">let</span> vi = <span class="kwb">ref</span> <span class="num">0</span>. <span class="kwa">in</span>
+        <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> n <span class="kwa">do</span> vi := !vi +. eval_A i j *. u.{j} <span class="kwa">done</span>;
+        v.{i} &lt;- !vi
+    <span class="kwa">done</span>
+  <span class="kwa">in</span> wait_for (map_chunks (invoke compute) <span class="num">0</span> n)
+
+<span class="kwa">let</span> eval_At_times_u (u : v) (v : v) =
+  <span class="kwa">let</span> n = <span class="kwc">Array1</span>.dim v - <span class="num">1</span> <span class="kwa">in</span>
+  <span class="kwa">let</span> compute (p, q) =
+    <span class="kwa">for</span> i = p <span class="kwa">to</span> q <span class="kwa">do</span>
+      <span class="kwa">let</span> vi = <span class="kwb">ref</span> <span class="num">0</span>. <span class="kwa">in</span>
+        <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> n <span class="kwa">do</span> vi := !vi +. eval_A j i *. u.{j} <span class="kwa">done</span>;
+        v.{i} &lt;- !vi
+    <span class="kwa">done</span>
+  <span class="kwa">in</span> wait_for (map_chunks (invoke compute) <span class="num">0</span> n)
+
+<span class="kwa">let</span> make_array n x =
+  <span class="kwa">let</span> v = <span class="kwc">Array1</span>.map_file
+            (<span class="kwc">Unix</span>.openfile <span class="str">&quot;/dev/zero&quot;</span> [<span class="kwc">Unix</span>.<span class="kwd">O_RDWR</span>] <span class="num">0</span>o755)
+            float64 c_layout <span class="kwa">true</span> n <span class="kwa">in</span>
+    <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> n - <span class="num">1</span> <span class="kwa">do</span> v.{i} &lt;- x <span class="kwa">done</span>;
+    v
+
+<span class="kwa">let</span> eval_AtA_times_u u v =
+  <span class="kwa">let</span> w = make_array (<span class="kwc">Array1</span>.dim u) <span class="num">0.0</span> <span class="kwa">in</span>
+  eval_A_times_u u w; eval_At_times_u w v
+
+<span class="kwa">let</span> () =
+  <span class="kwa">let</span> n = <span class="kwa">try</span> int_of_string(<span class="kwc">Array</span>.get <span class="kwc">Sys</span>.argv <span class="num">1</span>) <span class="kwa">with</span> _ -&gt;  <span class="num">2000</span> <span class="kwa">in</span>
+  <span class="kwa">let</span> u = make_array n <span class="num">1.0</span>  <span class="kwa">and</span>  v = make_array n <span class="num">0.0</span> <span class="kwa">in</span>
+  <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> <span class="num">9</span> <span class="kwa">do</span>
+    eval_AtA_times_u u v; eval_AtA_times_u v u
+  <span class="kwa">done</span>;
+
+  <span class="kwa">let</span> vv = <span class="kwb">ref</span> <span class="num">0.0</span>  <span class="kwa">and</span>  vBv = <span class="kwb">ref</span> <span class="num">0.0</span> <span class="kwa">in</span>
+  <span class="kwa">for</span> i=<span class="num">0</span> <span class="kwa">to</span> n-<span class="num">1</span> <span class="kwa">do</span>
+    vv := !vv +. v.{i} *. v.{i};
+    vBv := !vBv +. u.{i} *. v.{i}
+  <span class="kwa">done</span>;
+  <span class="kwc">Printf</span>.printf <span class="str">&quot;</span><span class="ipl">%0</span><span class="str">.9f</span><span class="esc">\n</span><span class="str">&quot;</span> (sqrt(!vBv /. !vv))
+

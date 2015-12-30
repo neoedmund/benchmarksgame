@@ -1,0 +1,62 @@
+&lt;?hh
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Thomas GODART (based on Greg Buchholz's C program) </span>
+<span class="com">   modified by anon</span>
+<span class="com">   PHP as HHVM/Hack by Isaac Gouy</span>
+<span class="com">*/</span>
+
+<span class="kwd">ob_implicit_flush</span>(<span class="num">1</span>);
+<span class="kwd">ob_start</span>(NULL, <span class="num">4096</span>);
+
+
+$h = ($argc == <span class="num">2</span>) ? ((<span class="kwb">int</span>)$argv[<span class="num">1</span>]) : <span class="num">600</span>;
+$w = $h;
+
+<span class="kwd">printf</span> (<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d %d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, $w, $h);
+
+$bit_num = <span class="num">128</span>;
+$byte_acc = <span class="num">0</span>;
+
+$yfac = <span class="num">2.0</span> / $h;
+$xfac = <span class="num">2.0</span> / $w;
+
+<span class="kwa">for</span> ($y = <span class="num">0</span> ; $y &lt; $h ; ++$y)
+{
+   $result = <span class="kwa">array</span>(<span class="str">'c*'</span>);
+
+   $Ci = $y * $yfac - <span class="num">1.0</span>;
+
+   <span class="kwa">for</span> ($x = <span class="num">0</span> ; $x &lt; $w ; ++$x)
+   {
+      $Zr = <span class="num">0</span>; $Zi = <span class="num">0</span>; $Tr = <span class="num">0</span>; $Ti = <span class="num">0.0</span>;
+
+      $Cr = $x * $xfac - <span class="num">1.5</span>;
+
+      <span class="kwa">do</span> {
+         <span class="kwa">for</span> ($i = <span class="num">0</span> ; $i &lt; <span class="num">50</span> ; ++$i)
+         {
+            $Zi = <span class="num">2.0</span> * $Zr * $Zi + $Ci;
+            $Zr = $Tr - $Ti + $Cr;
+            $Tr = $Zr * $Zr;
+            <span class="kwa">if</span> (($Tr+($Ti = $Zi * $Zi)) &gt; <span class="num">4.0</span>) <span class="kwa">break</span> <span class="num">2</span>;
+         }
+         $byte_acc += $bit_num;
+      } <span class="kwa">while</span> (FALSE);
+
+      <span class="kwa">if</span> ($bit_num === <span class="num">1</span>) {
+         $result[] = $byte_acc;
+         $bit_num = <span class="num">128</span>;
+         $byte_acc = <span class="num">0</span>;
+      } <span class="kwa">else</span> {
+         $bit_num &gt;&gt;= <span class="num">1</span>;
+      }
+   }
+   <span class="kwa">if</span> ($bit_num !== <span class="num">128</span>) {
+      $result[] = $byte_acc;
+      $bit_num = <span class="num">128</span>;
+      $byte_acc = <span class="num">0</span>;
+   }
+   <span class="kwa">echo</span> <span class="kwd">call_user_func_array</span>(<span class="str">'pack'</span>, $result);
+}
+

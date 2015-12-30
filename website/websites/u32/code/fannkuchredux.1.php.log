@@ -1,0 +1,9 @@
+
+Fri, 04 Dec 2015 01:24:10 GMT
+
+COMMAND LINE:
+/usr/local/src/php-7.0.0/bin/php -n  fannkuchredux.php 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

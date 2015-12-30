@@ -1,0 +1,528 @@
+<span class="com">{ The Computer Language Benchmarks Game</span>
+<span class="com">  http://benchmarksgame.alioth.debian.org</span>
+<span class="com"></span>
+<span class="com">  contributed by Vincent Snijders</span>
+<span class="com">}</span>
+
+<span class="com">{$mode objfpc}</span>
+
+
+<span class="kwa">program</span> pidigits;
+
+<span class="kwa">type</span>
+  <span class="com">{ TBigInt }</span>
+
+  PBigInt = ^TBigInt;
+
+  <span class="com">{ TBigInt }</span>
+
+  TBigInt = <span class="kwa">class</span>
+  <span class="kwa">private</span>
+    Digit: pdword;
+    FSize: <span class="kwb">integer</span>;
+    Capacity: <span class="kwb">integer</span>;
+    FNextFree: TBigInt; <span class="slc">// used to maintain the freelist</span>
+    <span class="kwa">procedure</span> Clear;
+    <span class="kwa">procedure</span> <span class="kwd">Resize</span>(NewSize: <span class="kwb">integer</span>);
+    <span class="kwa">function</span> IsNegative: <span class="kwb">boolean</span>; <span class="kwa">inline</span>;
+    <span class="kwa">function</span> IsZero: <span class="kwb">boolean</span>; <span class="kwa">inline</span>;
+    <span class="kwa">procedure</span> Negate;
+  <span class="kwa">public</span>
+    <span class="kwa">constructor</span> <span class="kwd">Create</span>(InitialSize: <span class="kwb">integer</span>);
+    <span class="kwa">destructor</span> Destroy; <span class="kwa">override</span>;
+    <span class="kwa">function</span> <span class="kwd">GetDigit</span>(i: <span class="kwb">integer</span>) : DWord; <span class="kwa">inline</span>;
+  <span class="kwa">end</span>;
+
+<span class="kwa">type</span>
+  TBigMatrix = <span class="kwa">array</span>[<span class="num">1</span>.<span class="num">.2</span>,<span class="num">1</span>.<span class="num">.2</span>] <span class="kwa">of</span> TBigInt;
+  TIntMatrix = <span class="kwa">array</span>[<span class="num">1</span>.<span class="num">.2</span>,<span class="num">1</span>.<span class="num">.2</span>] <span class="kwa">of</span> <span class="kwb">integer</span>;
+
+<span class="kwa">var</span>
+  BigIntStack: PBigInt;
+  BigIntStackLen: <span class="kwb">integer</span>;
+  BigIntTop: <span class="kwb">integer</span>;
+  FirstFreeBigInt: TBigInt;
+
+<span class="com">{ BigInt memory management }</span>
+
+<span class="kwa">procedure</span> FreeBigInts;
+<span class="kwa">var</span>
+  Next: TBigInt;
+<span class="kwa">begin</span>
+  <span class="kwc">while</span> <span class="kwd">assigned</span>(FirstFreeBigInt) <span class="kwc">do</span> <span class="kwa">begin</span>
+    Next := FirstFreeBigInt.FNextFree;
+    FirstFreeBigInt.Free;
+    FirstFreeBigInt := Next;
+  <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">GetBigInt</span>(Size: <span class="kwb">integer</span>; DoClear: <span class="kwb">boolean</span> = <span class="kwb">true</span>) : TBigInt;
+<span class="kwa">var</span>
+  Current, Previous: TBigInt;
+<span class="kwa">begin</span>
+  <span class="kwc">if</span> <span class="kwd">assigned</span>(FirstFreeBigInt) <span class="kwc">then</span> <span class="kwa">begin</span>
+    Previous := <span class="kwa">nil</span>;
+    Current := FirstFreeBigInt;
+    <span class="kwc">repeat</span>
+      <span class="kwc">if</span> (Current.Capacity&gt;=Size) <span class="kwc">then</span> <span class="kwa">begin</span>
+        Result:=Current;
+        Result.FSize:= Size;
+        <span class="kwc">if</span> DoClear <span class="kwc">then</span>
+          Result.Clear;
+        <span class="kwc">if</span> <span class="kwd">assigned</span>(previous) <span class="kwc">then</span>
+          Previous.FNextFree := Current.FNextFree
+        <span class="kwc">else</span>
+          FirstFreeBigInt := Current.FNextFree;
+        exit;
+      <span class="kwa">end</span>;
+      Previous := Current;
+      Current := Current.FNextFree;
+    <span class="kwc">until</span> Current=<span class="kwa">nil</span>;
+    Result := FirstFreeBigInt;
+    Result.<span class="kwd">Resize</span>(Size);
+    FirstFreeBigInt := FirstFreeBigInt.FNextFree;
+  <span class="kwa">end</span>
+  <span class="kwc">else</span> result := TBigInt.<span class="kwd">Create</span>(Size);
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">GetBigInt</span>(bi: TBigInt) : TBigInt; <span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  result := <span class="kwd">GetBigInt</span>(bi.FSize, <span class="kwb">false</span>);
+  <span class="kwd">Move</span>(bi.Digit^, Result.Digit^, bi.FSize*<span class="kwd">sizeof</span>(dword));
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">FreeBigInt</span>(bi: TBigInt);
+<span class="kwa">begin</span>
+  bi.FNextFree := FirstFreeBigInt;
+  FirstFreeBigInt := bi;
+<span class="kwa">end</span>;
+
+<span class="com">{ TBigInt }</span>
+
+operator := (i: <span class="kwb">integer</span>) : TBigInt; <span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  Result := <span class="kwd">GetBigInt</span>(<span class="num">1</span>);
+  Result.Digit[<span class="num">0</span>] := <span class="kwd">dword</span>(i);
+<span class="kwa">end</span>;
+
+<span class="kwa">constructor</span> TBigInt.<span class="kwd">Create</span>(InitialSize: <span class="kwb">integer</span>);
+<span class="kwa">begin</span>
+  FSize:= InitialSize;
+  Capacity:= <span class="num">2</span>*FSize;
+  <span class="kwd">GetMem</span>(Digit, Capacity*<span class="kwd">sizeof</span>(DWord));
+  Clear;
+<span class="kwa">end</span>;
+
+<span class="kwa">destructor</span> TBigInt.Destroy;
+<span class="kwa">begin</span>
+  <span class="kwd">FreeMem</span>(Digit);
+  <span class="kwa">inherited</span> Destroy;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> TBigInt.Clear;
+<span class="kwa">begin</span>
+  <span class="kwd">FillChar</span>(Digit[<span class="num">0</span>], FSize*<span class="kwd">sizeof</span>(DWord), <span class="num">0</span>);
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> TBigInt.<span class="kwd">Resize</span>(NewSize: <span class="kwb">integer</span>);
+<span class="kwa">begin</span>
+  <span class="kwd">FreeMem</span>(Digit);
+  FSize:= NewSize;
+  Capacity:= <span class="num">2</span>*FSize;
+  <span class="kwd">GetMem</span>(Digit, Capacity*<span class="kwd">sizeof</span>(DWord));
+  Clear;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> TBigInt.IsNegative: <span class="kwb">boolean</span>; <span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  result := (Digit[FSize-<span class="num">1</span>] <span class="kwa">and</span> <span class="num">$80000000</span>)&gt;<span class="num">0</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> TBigInt.IsZero:<span class="kwb">boolean</span>;<span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  result := (FSize=<span class="num">1</span>) <span class="kwa">and</span> (Digit^=<span class="num">0</span>);
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> TBigInt.Negate;
+<span class="kwa">var</span>
+  value: <span class="kwb">int64</span>;
+  valueparts : <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.1</span>] <span class="kwa">of</span> dword <span class="kwa">absolute</span> value;
+  carry: <span class="kwb">integer</span>;
+  CurDigit: PDWord;
+<span class="kwa">begin</span>
+  <span class="kwc">if</span> IsZero <span class="kwc">then</span> exit;
+  CurDigit:= &#64;Digit[FSize-<span class="num">1</span>];
+  <span class="kwc">repeat</span>
+    CurDigit^:= <span class="kwa">not</span> CurDigit^;
+    <span class="kwd">dec</span>(CurDigit);
+  <span class="kwc">until</span> CurDigit&lt;Digit;
+  carry := <span class="num">1</span>;
+  CurDigit:=Digit;
+  <span class="kwc">while</span> (carry&gt;<span class="num">0</span>) <span class="kwc">do</span> <span class="kwa">begin</span>
+    value := CurDigit^;
+    <span class="kwd">inc</span>(value);
+    CurDigit^ := valueparts[<span class="num">0</span>];
+    carry := valueparts[<span class="num">1</span>];
+    <span class="kwd">inc</span>(CurDigit);
+  <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> TBigInt.<span class="kwd">GetDigit</span>(i: <span class="kwb">integer</span>): DWord; <span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  <span class="kwc">if</span> (i&lt;FSize) <span class="kwc">then</span>
+    result := Digit[i]
+  <span class="kwc">else if</span> IsNegative <span class="kwc">then</span>
+    result := <span class="num">$FFFFFFFF</span>
+  <span class="kwc">else</span>
+    result := <span class="num">0</span>;
+<span class="kwa">end</span>;
+
+<span class="com">{ BigInt Calculation }</span>
+
+<span class="kwa">procedure</span> <span class="kwd">PushBigInt</span>(bi: TBigInt);
+<span class="kwa">begin</span>
+  <span class="kwd">inc</span>(BigIntTop);
+  <span class="kwc">if</span> (BigIntTop=BigIntStackLen) <span class="kwc">then</span>
+    <span class="kwd">RunError</span>(<span class="num">1025</span>); <span class="slc">// not implemented, too complicated calculation</span>
+  BigIntStack[BigIntTop]:=bi;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">PushBigIntByValue</span>(bi: TBigInt);
+<span class="kwa">begin</span>
+  <span class="kwd">inc</span>(BigIntTop);
+  <span class="kwc">if</span> (BigIntTop=BigIntStackLen) <span class="kwc">then</span>
+    <span class="kwd">RunError</span>(<span class="num">1025</span>); <span class="slc">// not implemented, too complicated calculation</span>
+  BigIntStack[BigIntTop]:= <span class="kwd">GetBigInt</span>(bi);
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> PopBigInt: TBigInt;
+<span class="kwa">begin</span>
+  result:=BigIntStack[BigIntTop];
+  <span class="kwd">dec</span>(BigIntTop);
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> BigIntAdd;
+<span class="kwa">var</span>
+  a, b: TBigInt;
+  bSignExtend: dword;
+  Result: TBigInt;
+  carry: <span class="kwb">integer</span>;
+  sum: <span class="kwb">int64</span>;
+  maxsize, minsize, i: <span class="kwb">integer</span>;
+  sumparts : <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.1</span>] <span class="kwa">of</span> <span class="kwb">integer</span> <span class="kwa">absolute</span> sum;
+  aDigit, bDigit, ResultDigit: PDWord;
+<span class="kwa">begin</span>
+  <span class="kwc">if</span> BigIntStack[BigIntTop-<span class="num">1</span>].FSize&lt;BigIntStack[BigIntTop].FSize <span class="kwc">then</span> <span class="kwa">begin</span>
+    a:= BigIntStack[BigIntTop];
+    b:= BigIntStack[BigIntTop-<span class="num">1</span>];
+  <span class="kwa">end</span>
+  <span class="kwc">else</span> <span class="kwa">begin</span>
+    a:= BigIntStack[BigIntTop-<span class="num">1</span>];
+    b:= BigIntStack[BigIntTop];
+  <span class="kwa">end</span>;
+  <span class="kwc">if</span> b.IsZero <span class="kwc">then</span>
+    Result := a
+  <span class="kwc">else</span> <span class="kwa">begin</span>
+    maxsize:=a.FSize;
+    minsize:=b.FSize;
+    Result := <span class="kwd">GetBigInt</span>(maxsize+<span class="num">1</span>);
+    carry := <span class="num">0</span>;
+    aDigit:= a.Digit; bDigit:= b.Digit; ResultDigit:= Result.Digit;
+    <span class="kwc">for</span> i:= <span class="num">0</span> <span class="kwc">to</span> minsize-<span class="num">1</span> <span class="kwc">do</span> <span class="kwa">begin</span>
+      sum := <span class="kwb">int64</span>(aDigit^) + <span class="kwb">int64</span>(bDigit^) + carry;
+      carry := sumparts[<span class="num">1</span>];
+      ResultDigit^ := sumparts[<span class="num">0</span>];
+      <span class="kwd">inc</span>(aDigit); <span class="kwd">inc</span>(bDigit); <span class="kwd">inc</span>(ResultDigit);
+    <span class="kwa">end</span>;
+    <span class="kwc">if</span> b.IsNegative <span class="kwc">then</span>
+      bSignExtend := <span class="num">$FFFFFFFF</span>
+    <span class="kwc">else</span>
+      bSignExtend := <span class="num">0</span>;
+    <span class="kwc">for</span> i:= minsize <span class="kwc">to</span> maxsize <span class="kwc">do</span> <span class="kwa">begin</span>
+      sum := <span class="kwb">int64</span>(a.<span class="kwd">GetDigit</span>(i)) + bSignExtend + carry;
+      carry := sumparts[<span class="num">1</span>];
+      ResultDigit^ := sumparts[<span class="num">0</span>];
+      <span class="kwd">inc</span>(ResultDigit);
+    <span class="kwa">end</span>;
+    <span class="kwc">while</span> (Result.FSize&gt;<span class="num">1</span>) <span class="kwa">and</span> (Result.Digit[Result.FSize-<span class="num">1</span>]=<span class="num">0</span>)
+      <span class="kwa">and</span> (Result.Digit[Result.FSize-<span class="num">2</span>] <span class="kwa">and</span> <span class="num">$80000000</span>=<span class="num">0</span>) <span class="kwc">do</span>
+      <span class="kwd">dec</span>(Result.FSize);
+    <span class="kwc">while</span> (Result.FSize&gt;<span class="num">1</span>) <span class="kwa">and</span>
+       (Result.Digit[Result.FSize-<span class="num">1</span>]=<span class="num">$FFFFFFFF</span>) <span class="kwa">and</span>
+       (Result.Digit[Result.FSize-<span class="num">2</span>] <span class="kwa">and</span> <span class="num">$80000000</span>&gt;<span class="num">0</span>) <span class="kwc">do</span>
+      <span class="kwd">dec</span>(Result.FSize);
+    <span class="kwd">FreeBigInt</span>(a);
+  <span class="kwa">end</span>;
+  <span class="kwd">FreeBigInt</span>(b);
+  <span class="kwd">dec</span>(BigIntTop);
+  BigIntStack[BigIntTop]:=Result;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">BigIntMulInt</span>(int: <span class="kwb">integer</span>);
+<span class="kwa">type</span>
+  TWordPart = <span class="kwa">record</span>
+    w1, w2: <span class="kwb">word</span>;
+  <span class="kwa">end</span>;
+<span class="kwa">var</span>
+  mcarry: dword;
+  value: qword;
+  valueparts : <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.1</span>] <span class="kwa">of</span> dword <span class="kwa">absolute</span> value;
+  BiNeg, IntNeg: <span class="kwb">boolean</span>;
+  i:<span class="kwb">Integer</span>;
+  TopBi, Result: TBigInt;
+  TopBiDigit, ResultDigit: PDWord;
+<span class="kwa">begin</span>
+  TopBi := BigIntStack[BigIntTop];
+  <span class="kwc">if</span> (int=<span class="num">0</span>) <span class="kwa">or</span> (TopBi.IsZero) <span class="kwc">then</span> <span class="kwa">begin</span>
+    TopBi.FSize := <span class="num">1</span>;
+    TopBi.Digit[<span class="num">0</span>]:=<span class="num">0</span>;
+  <span class="kwa">end</span>
+  <span class="kwc">else</span> <span class="kwa">begin</span>
+    BiNeg := TopBi.IsNegative;
+    <span class="kwc">if</span> BiNeg <span class="kwc">then</span>
+      TopBi.Negate;
+    IntNeg := int&lt;<span class="num">0</span>;
+    <span class="kwc">if</span> IntNeg <span class="kwc">then</span>
+      int := -int;
+    Result := <span class="kwd">GetBigInt</span>(TopBi.FSize+<span class="num">1</span>, <span class="kwb">false</span>);
+    mcarry := <span class="num">0</span>;
+    TopBiDigit := TopBi.Digit;
+    ResultDigit := Result.Digit;
+    <span class="kwc">if</span> (int <span class="kwa">and</span> <span class="num">$FFFF0000</span>)=<span class="num">0</span> <span class="kwc">then</span>
+      <span class="kwc">for</span> i:= <span class="num">0</span> <span class="kwc">to</span> Result.FSize-<span class="num">2</span> <span class="kwc">do</span> <span class="kwa">begin</span>
+        <span class="com">{this is what I want to do, but to get to the carry fpc compiles it into</span>
+<span class="com">        an expensive qword*qword mulitplication:   }</span>
+        <span class="com">{value := qword(TopBiDigit^) * int + mcarry;}</span>
+        value := <span class="kwd">TWordPart</span>(TopBiDigit^).w1 * <span class="kwb">word</span>(int) +
+          <span class="kwd">qword</span>(<span class="kwd">TWordPart</span>(TopBiDigit^).w2 * <span class="kwb">word</span>(int)) <span class="kwa">shl</span> <span class="num">16</span> + mcarry;
+        ResultDigit^ := valueparts[<span class="num">0</span>];
+        mcarry := valueparts[<span class="num">1</span>];
+        <span class="kwd">inc</span>(TopBiDigit); <span class="kwd">inc</span>(ResultDigit);
+      <span class="kwa">end</span>
+    <span class="kwc">else</span>
+    <span class="slc">// this branch is less often taken, so no hand code dword * dword multiplication</span>
+      <span class="kwc">for</span> i:= <span class="num">0</span> <span class="kwc">to</span> Result.FSize-<span class="num">2</span> <span class="kwc">do</span> <span class="kwa">begin</span>
+        value := <span class="kwd">qword</span>(TopBiDigit^) * int + mcarry;
+        ResultDigit^ := valueparts[<span class="num">0</span>];
+        mcarry := valueparts[<span class="num">1</span>];
+        <span class="kwd">inc</span>(TopBiDigit); <span class="kwd">inc</span>(ResultDigit);
+      <span class="kwa">end</span>;
+    ResultDigit^ := mcarry;
+    <span class="kwc">while</span> (Result.FSize&gt;<span class="num">1</span>) <span class="kwa">and</span> (Result.Digit[Result.FSize-<span class="num">1</span>]=<span class="num">0</span>) <span class="kwa">and</span>
+      ((Result.Digit[Result.FSize-<span class="num">2</span>] <span class="kwa">and</span> <span class="num">$80000000</span>)=<span class="num">0</span>) <span class="kwc">do</span>
+      <span class="kwd">dec</span>(Result.FSize);
+    <span class="kwc">if</span> (BiNeg&lt;&gt;IntNeg) <span class="kwc">then</span>
+      Result.Negate;
+    <span class="kwd">FreeBigInt</span>(TopBi);
+    BigIntStack[BigIntTop]:=Result;
+  <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> BigIntDivIntResult: <span class="kwb">integer</span>;
+<span class="kwa">var</span>
+  dividend: TBigInt;
+  divisor: TBigInt;
+  carry: dword;
+  diff: <span class="kwb">int64</span>;
+  diffparts: <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.1</span>] <span class="kwa">of</span> dword <span class="kwa">absolute</span> diff;
+  i: <span class="kwb">integer</span>;
+  DividendDigit: PDWord;
+  DivisorDigit: PDWord;
+
+  <span class="kwa">function</span> DividendIsSmallerThanDivisor : <span class="kwb">boolean</span>; <span class="kwa">inline</span>;
+  <span class="kwa">var</span>
+    i: <span class="kwb">integer</span>;
+  <span class="kwa">begin</span>
+    <span class="kwc">while</span> (Dividend.FSize&gt;<span class="num">1</span>) <span class="kwa">and</span> (Dividend.Digit[Dividend.FSize-<span class="num">1</span>]=<span class="num">0</span>)
+      <span class="kwa">and</span> (Dividend.Digit[Dividend.FSize-<span class="num">2</span>] <span class="kwa">and</span> <span class="num">$80000000</span>=<span class="num">0</span>) <span class="kwc">do</span>
+      <span class="kwd">dec</span>(Dividend.FSize);
+    <span class="kwc">if</span> dividend.FSize=divisor.FSize <span class="kwc">then</span> <span class="kwa">begin</span>
+      i := dividend.FSize-<span class="num">1</span>;
+      <span class="kwc">while</span> (i&gt;=<span class="num">0</span>) <span class="kwa">and</span> (dividend.Digit[i]=divisor.Digit[i]) <span class="kwc">do</span>
+        <span class="kwd">dec</span>(i);
+      Result:= (i&gt;=<span class="num">0</span>) <span class="kwa">and</span> (dividend.Digit[i]&lt;divisor.Digit[i]);
+    <span class="kwa">end</span>
+    <span class="kwc">else</span>
+      Result:=dividend.FSize&lt;divisor.FSize;
+  <span class="kwa">end</span>;
+
+<span class="kwa">begin</span>
+  dividend := BigIntStack[BigIntTop-<span class="num">1</span>];
+  divisor := BigIntStack[BigIntTop];
+  Result:=<span class="num">0</span>;
+  <span class="kwc">while</span> <span class="kwa">not</span> DividendIsSmallerThanDivisor <span class="kwc">do</span> <span class="kwa">begin</span>
+    <span class="kwd">inc</span>(Result);
+    carry := <span class="num">0</span>;
+    DividendDigit := Dividend.Digit;
+    DivisorDigit := Divisor.Digit;
+    <span class="kwc">for</span> i:= <span class="num">0</span> <span class="kwc">to</span> divisor.FSize-<span class="num">1</span> <span class="kwc">do</span> <span class="kwa">begin</span>
+      diff := <span class="kwb">int64</span>(dividendDigit^) - (divisorDigit^ + carry);
+      carry := diffparts[<span class="num">1</span>] <span class="kwa">and</span> <span class="num">$1</span>;
+      dividendDigit^ := diffparts[<span class="num">0</span>];
+      <span class="kwd">inc</span>(DividendDigit); <span class="kwd">inc</span>(DivisorDigit);
+    <span class="kwa">end</span>;
+    <span class="kwc">for</span> i:= divisor.FSize <span class="kwc">to</span> dividend.FSize-<span class="num">1</span> <span class="kwc">do</span> <span class="kwa">begin</span>
+      diff := <span class="kwb">int64</span>(dividendDigit^) - (divisor.<span class="kwd">GetDigit</span>(i) + carry);
+      carry := diffparts[<span class="num">1</span>] <span class="kwa">and</span> <span class="num">$1</span>;
+      dividendDigit^ := diffparts[<span class="num">0</span>];
+      dividend.Digit[i] := diffparts[<span class="num">0</span>];
+      <span class="kwd">inc</span>(DividendDigit);
+    <span class="kwa">end</span>;
+  <span class="kwa">end</span>;
+  <span class="kwd">FreeBigInt</span>(dividend);
+  <span class="kwd">FreeBigInt</span>(divisor);
+  <span class="kwd">dec</span>(BigIntTop,<span class="num">2</span>);
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> Init;
+<span class="kwa">begin</span>
+  BigIntStackLen := <span class="num">8</span>;
+  <span class="kwd">GetMem</span>(BigIntStack, BigIntStackLen * <span class="kwd">sizeof</span>(TBigInt));
+  BigIntTop := -<span class="num">1</span>;
+  FirstFreeBigInt := <span class="kwa">nil</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> Finalize;
+<span class="kwa">begin</span>
+  <span class="kwd">Freemem</span>(BigIntStack);
+  FreeBigInts;
+<span class="kwa">end</span>;
+
+<span class="com">{ Matrix manipulation }</span>
+
+<span class="kwa">procedure</span> <span class="kwd">FreeBigIntMatrix</span>(a: TBigMatrix); <span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  <span class="kwd">FreeBigInt</span>(a[<span class="num">1</span>,<span class="num">1</span>]);
+  <span class="kwd">FreeBigInt</span>(a[<span class="num">1</span>,<span class="num">2</span>]);
+  <span class="kwd">FreeBigInt</span>(a[<span class="num">2</span>,<span class="num">1</span>]);
+  <span class="kwd">FreeBigInt</span>(a[<span class="num">2</span>,<span class="num">2</span>]);
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">DotProduct</span>(a1,a2: TBigInt; b1,b2: <span class="kwb">integer</span>; FreeBigInt: <span class="kwb">boolean</span>) : TBigInt; <span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  <span class="kwc">if</span> FreeBigInt <span class="kwc">then</span>
+    <span class="kwd">PushBigInt</span>(a1)
+  <span class="kwc">else</span>
+    <span class="kwd">PushBigIntByValue</span>(a1);
+  <span class="kwd">BigIntMulInt</span>(b1);
+  <span class="kwc">if</span> FreeBigInt <span class="kwc">then</span>
+    <span class="kwd">PushBigInt</span>(a2)
+  <span class="kwc">else</span>
+    <span class="kwd">PushBigIntByValue</span>(a2);
+  <span class="kwd">BigIntMulInt</span>(b2);
+  BigIntAdd;
+  Result:= PopBigInt;
+<span class="kwa">end</span>;
+
+operator * (a: TBigMatrix; b : TIntMatrix) : TBigMatrix;
+<span class="kwa">begin</span>
+  result[<span class="num">1</span>,<span class="num">1</span>] := <span class="kwd">DotProduct</span>(a[<span class="num">1</span>,<span class="num">1</span>],a[<span class="num">1</span>,<span class="num">2</span>], b[<span class="num">1</span>,<span class="num">1</span>], b[<span class="num">2</span>,<span class="num">1</span>], <span class="kwb">false</span>);
+  result[<span class="num">1</span>,<span class="num">2</span>] := <span class="kwd">DotProduct</span>(a[<span class="num">1</span>,<span class="num">1</span>],a[<span class="num">1</span>,<span class="num">2</span>], b[<span class="num">1</span>,<span class="num">2</span>], b[<span class="num">2</span>,<span class="num">2</span>], <span class="kwb">true</span>);
+  result[<span class="num">2</span>,<span class="num">1</span>] := <span class="kwd">DotProduct</span>(a[<span class="num">2</span>,<span class="num">1</span>],a[<span class="num">2</span>,<span class="num">2</span>], b[<span class="num">1</span>,<span class="num">1</span>], b[<span class="num">2</span>,<span class="num">1</span>], <span class="kwb">false</span>);
+  result[<span class="num">2</span>,<span class="num">2</span>] := <span class="kwd">DotProduct</span>(a[<span class="num">2</span>,<span class="num">1</span>],a[<span class="num">2</span>,<span class="num">2</span>], b[<span class="num">1</span>,<span class="num">2</span>], b[<span class="num">2</span>,<span class="num">2</span>], <span class="kwb">true</span>);
+<span class="kwa">end</span>;
+
+operator * (a: TIntMatrix; b : TBigMatrix) : TBigMatrix;
+<span class="kwa">begin</span>
+  result[<span class="num">1</span>,<span class="num">1</span>] := <span class="kwd">DotProduct</span>(b[<span class="num">1</span>,<span class="num">1</span>],b[<span class="num">2</span>,<span class="num">1</span>],a[<span class="num">1</span>,<span class="num">1</span>],a[<span class="num">1</span>,<span class="num">2</span>], <span class="kwb">false</span>);
+  result[<span class="num">1</span>,<span class="num">2</span>] := <span class="kwd">DotProduct</span>(b[<span class="num">1</span>,<span class="num">2</span>],b[<span class="num">2</span>,<span class="num">2</span>],a[<span class="num">1</span>,<span class="num">1</span>],a[<span class="num">1</span>,<span class="num">2</span>], <span class="kwb">false</span>);
+  result[<span class="num">2</span>,<span class="num">1</span>] := <span class="kwd">DotProduct</span>(b[<span class="num">1</span>,<span class="num">1</span>],b[<span class="num">2</span>,<span class="num">1</span>],a[<span class="num">2</span>,<span class="num">1</span>],a[<span class="num">2</span>,<span class="num">2</span>], <span class="kwb">true</span>);
+  result[<span class="num">2</span>,<span class="num">2</span>] := <span class="kwd">DotProduct</span>(b[<span class="num">1</span>,<span class="num">2</span>],b[<span class="num">2</span>,<span class="num">2</span>],a[<span class="num">2</span>,<span class="num">1</span>],a[<span class="num">2</span>,<span class="num">2</span>], <span class="kwb">true</span>);
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">InitBigMatrix</span>(a,b,c,d: <span class="kwb">integer</span>): TBigMatrix;
+<span class="kwa">begin</span>
+  result[<span class="num">1</span>,<span class="num">1</span>] := a;
+  result[<span class="num">1</span>,<span class="num">2</span>] := b;
+  result[<span class="num">2</span>,<span class="num">1</span>] := c;
+  result[<span class="num">2</span>,<span class="num">2</span>] := d;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">InitIntMatrix</span>(a,b,c,d: <span class="kwb">integer</span>): TIntMatrix; <span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  result[<span class="num">1</span>,<span class="num">1</span>] := a;
+  result[<span class="num">1</span>,<span class="num">2</span>] := b;
+  result[<span class="num">2</span>,<span class="num">1</span>] := c;
+  result[<span class="num">2</span>,<span class="num">2</span>] := d;
+<span class="kwa">end</span>;
+
+<span class="com">{ calculating pidigits}</span>
+
+<span class="kwa">procedure</span> <span class="kwd">PrintPiDigits</span>(<span class="kwa">const</span> NumDigits: <span class="kwb">integer</span>);
+<span class="kwa">var</span>
+  n: <span class="kwb">integer</span> = <span class="num">0</span>;
+  k: <span class="kwb">integer</span> = <span class="num">0</span>;
+  z: TBigMatrix;
+  x,p: TIntMatrix;
+  Digit: <span class="kwb">integer</span>;
+
+  <span class="kwa">function</span> <span class="kwd">Extract</span>(x:<span class="kwb">integer</span>) : <span class="kwb">integer</span>;
+  <span class="kwa">begin</span>
+    <span class="kwd">PushBigIntByValue</span>(z[<span class="num">1</span>,<span class="num">1</span>]);
+    <span class="kwd">BigIntMulInt</span>(x);
+    <span class="kwd">PushBigIntByValue</span>(z[<span class="num">1</span>,<span class="num">2</span>]);
+    BigIntAdd;
+    <span class="kwd">PushBigIntByValue</span>(z[<span class="num">2</span>,<span class="num">1</span>]);
+    <span class="kwd">BigIntMulInt</span>(x);
+    <span class="kwd">PushBigIntByValue</span>(z[<span class="num">2</span>,<span class="num">2</span>]);
+    BigIntAdd;
+    result := BigIntDivIntResult;
+  <span class="kwa">end</span>;
+  
+  <span class="kwa">function</span> GetDigit : <span class="kwb">integer</span>;
+  <span class="kwa">begin</span>
+    result := <span class="kwd">Extract</span>(<span class="num">3</span>);
+  <span class="kwa">end</span>;
+
+  <span class="kwa">function</span> IsSafe : <span class="kwb">boolean</span>;
+  <span class="kwa">begin</span>
+    result := Digit = <span class="kwd">Extract</span>(<span class="num">4</span>);
+  <span class="kwa">end</span>;
+
+  <span class="kwa">procedure</span> Produce;
+  <span class="kwa">begin</span>
+    p[<span class="num">1</span>,<span class="num">2</span>] := -<span class="num">10</span> * digit;
+    z := p * z;
+  <span class="kwa">end</span>;
+
+  <span class="kwa">procedure</span> Consume;
+  <span class="kwa">begin</span>
+    <span class="kwd">inc</span>(k);
+    x[<span class="num">1</span>,<span class="num">1</span>] := k;
+    x[<span class="num">1</span>,<span class="num">2</span>] := <span class="num">4</span>*k+<span class="num">2</span>;
+    x[<span class="num">2</span>,<span class="num">2</span>] := <span class="num">2</span>*k+<span class="num">1</span>;
+    z:= z * x;
+  <span class="kwa">end</span>;
+
+<span class="kwa">begin</span>
+  z := <span class="kwd">InitBigMatrix</span>(<span class="num">1</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>);
+  p := <span class="kwd">InitIntMatrix</span>(<span class="num">10</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>);
+  x[<span class="num">2</span>,<span class="num">1</span>] := <span class="num">0</span>;
+  <span class="kwc">while</span> (n&lt;NumDigits) <span class="kwc">do</span> <span class="kwa">begin</span>
+    Digit := GetDigit;
+    <span class="kwc">while</span> <span class="kwa">not</span> IsSafe <span class="kwc">do</span> <span class="kwa">begin</span>
+      Consume;
+      Digit:= GetDigit;
+    <span class="kwa">end</span>;
+    Produce;
+    <span class="kwd">write</span>(Digit);
+    <span class="kwd">inc</span>(n);
+    <span class="kwc">if</span> (n <span class="kwa">mod</span> <span class="num">10</span>)=<span class="num">0</span> <span class="kwc">then</span>
+      <span class="kwd">writeln</span>(<span class="esc">#9</span><span class="str">':'</span>, n);
+  <span class="kwa">end</span>;
+  <span class="kwd">FreeBigIntMatrix</span>(z);
+<span class="kwa">end</span>;
+
+<span class="kwa">var</span>
+  n: <span class="kwb">integer</span>;
+  errorcode: <span class="kwb">integer</span>;
+
+<span class="kwa">begin</span>
+  Init;
+  <span class="kwc">if</span> (ParamCount=<span class="num">1</span>) <span class="kwc">then</span> <span class="kwa">begin</span>
+    <span class="kwd">val</span>(<span class="kwd">ParamStr</span>(<span class="num">1</span>), n, errorcode);
+    <span class="kwd">PrintPiDigits</span>(n);
+  <span class="kwa">end</span>;
+  Finalize;
+<span class="kwa">end</span>.
+

@@ -1,0 +1,13 @@
+
+Wed, 26 Aug 2015 23:12:27 GMT
+
+MAKE:
+mv mandelbrot.jruby-4.jruby mandelbrot.rb
+0.01s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jruby-9.0.0.0/bin/jruby -X+C --server  mandelbrot.rb 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

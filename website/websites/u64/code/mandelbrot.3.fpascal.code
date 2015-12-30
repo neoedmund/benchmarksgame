@@ -1,0 +1,70 @@
+<span class="com">{ The Computer Language Benchmarks Game</span>
+<span class="com">  http://benchmarksgame.alioth.debian.org</span>
+<span class="com"></span>
+<span class="com">  contributed by Ales Katona</span>
+<span class="com">  modified by Vincent Snijders</span>
+<span class="com">}</span>
+
+<span class="kwa">program</span> mandelbrot;
+
+<span class="kwa">var</span> n: <span class="kwb">longint</span>;
+    TextBuf: <span class="kwa">array</span>[<span class="num">0</span>..<span class="num">$FFF</span>] <span class="kwa">of</span> <span class="kwb">byte</span>;
+    OutFile: PText;
+    
+
+<span class="kwa">procedure</span> run;
+<span class="kwa">var</span>
+  Cy, Step: <span class="kwb">double</span>;
+  x, y, bits,bit: <span class="kwb">Longint</span>;
+  <span class="kwa">function</span> <span class="kwd">CalculatePoint</span>(Cx, Cy: <span class="kwb">double</span>): <span class="kwb">boolean</span>; nostackframe; <span class="kwa">inline</span>;
+  <span class="kwa">const</span>
+    Limit = <span class="num">4</span>;
+  <span class="kwa">var</span>
+    i: <span class="kwb">longint</span>;
+    Zr, Zi, Ti, Tr: <span class="kwb">Double</span>;
+
+  <span class="kwa">begin</span>
+    Zr := <span class="num">0</span>;  Zi := <span class="num">0</span>; Tr := <span class="num">0</span>; Ti := <span class="num">0</span>;
+    <span class="kwc">for</span> i := <span class="num">1</span> <span class="kwc">to</span> <span class="num">50</span> <span class="kwc">do</span> <span class="kwa">begin</span>
+      Zi := <span class="num">2</span>*Zr*Zi + Cy;
+      Zr := Tr - Ti + Cx;
+      Ti := Zi * Zi;
+      Tr := Zr * Zr;
+      <span class="kwc">if</span> (Tr + Ti&gt;=limit) <span class="kwc">then</span> <span class="kwd">exit</span>(<span class="kwb">true</span>);
+    <span class="kwa">end</span>;
+
+    CalculatePoint := <span class="kwb">false</span>;
+  <span class="kwa">end</span>;
+
+<span class="kwa">begin</span>
+  Step := <span class="num">2</span>/n;
+  <span class="kwc">for</span> y := <span class="num">0</span> <span class="kwc">to</span> n-<span class="num">1</span> <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    Cy := y * Step - <span class="num">1</span>;
+    bits := <span class="num">255</span>;  bit := <span class="num">128</span>;
+    <span class="kwc">for</span> x := <span class="num">0</span> <span class="kwc">to</span> n-<span class="num">1</span> <span class="kwc">do</span>
+    <span class="kwa">begin</span>
+      <span class="kwc">if</span> <span class="kwd">CalculatePoint</span>(x * Step  - <span class="num">1.5</span>, Cy) <span class="kwc">then</span>
+        bits := bits <span class="kwa">xor</span> bit;
+
+      <span class="kwc">if</span> bit &gt; <span class="num">1</span> <span class="kwc">then</span>
+        bit := bit <span class="kwa">shr</span> <span class="num">1</span>
+      <span class="kwc">else</span>
+      <span class="kwa">begin</span>
+        <span class="kwd">write</span>(OutFile^, <span class="kwd">chr</span>(bits));
+        bits := <span class="num">255</span>;  bit := <span class="num">128</span>;
+      <span class="kwa">end</span>;
+    <span class="kwa">end</span>;
+    <span class="kwc">if</span> bit &lt; <span class="num">128</span> <span class="kwc">then</span> <span class="kwd">write</span>(OutFile^, <span class="kwd">chr</span>(bits <span class="kwa">xor</span>((bit <span class="kwa">shl</span> <span class="num">1</span>)-<span class="num">1</span>)));
+  <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">begin</span>
+  OutFile := &#64;Output;
+  <span class="kwd">SetTextBuf</span>(OutFile^, TextBuf);
+
+  <span class="kwd">Val</span>(<span class="kwd">ParamStr</span>(<span class="num">1</span>), n);
+  <span class="kwd">writeln</span>(OutFile^, <span class="str">'P4'</span>);
+  <span class="kwd">writeln</span>(OutFile^, n,<span class="str">' '</span>,n);
+  run;
+<span class="kwa">end</span>.

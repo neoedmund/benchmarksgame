@@ -1,0 +1,112 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * based on Go program by The Go Authors.</span>
+<span class="com"> * based on C program by Kevin Carson</span>
+<span class="com"> * flag.Arg hack by Isaac Gouy</span>
+<span class="com"> * modified by Jamil Djadala to use goroutines</span>
+<span class="com"> * modified by Chai Shushan</span>
+<span class="com"> * modified by Chandra Sekar S to use arenas</span>
+<span class="com"> */</span>
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+	<span class="str">&quot;flag&quot;</span>
+	<span class="str">&quot;fmt&quot;</span>
+	<span class="str">&quot;runtime&quot;</span>
+	<span class="str">&quot;strconv&quot;</span>
+	<span class="str">&quot;sync&quot;</span>
+)
+
+<span class="kwa">var</span> minDepth = <span class="num">4</span>
+<span class="kwa">var</span> n = <span class="num">0</span>
+
+<span class="kwa">type</span> NodeArena []Node
+
+<span class="kwa">func</span> (na *NodeArena) <span class="kwd">Get</span>() *Node {
+	<span class="kwa">if</span> <span class="kwb">len</span>(*na) == <span class="num">0</span> {
+		*na = <span class="kwb">make</span>([]Node, <span class="num">10000</span>)
+	}
+
+	n := &amp;(*na)[<span class="kwb">len</span>(*na)-<span class="num">1</span>]
+	*na = (*na)[:<span class="kwb">len</span>(*na)-<span class="num">1</span>]
+	<span class="kwa">return</span> n
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+	runtime.<span class="kwd">GOMAXPROCS</span>(runtime.<span class="kwd">NumCPU</span>() * <span class="num">2</span>)
+
+	flag.<span class="kwd">Parse</span>()
+	<span class="kwa">if</span> flag.<span class="kwd">NArg</span>() &gt; <span class="num">0</span> {
+		n, _ = strconv.<span class="kwd">Atoi</span>(flag.<span class="kwd">Arg</span>(<span class="num">0</span>))
+	}
+
+	maxDepth := n
+	<span class="kwa">if</span> minDepth+<span class="num">2</span> &gt; n {
+		maxDepth = minDepth + <span class="num">2</span>
+	}
+	stretchDepth := maxDepth + <span class="num">1</span>
+
+	mainArena := <span class="kwb">new</span>(NodeArena)
+
+	check_l := <span class="kwd">bottomUpTree</span>(<span class="num">0</span>, stretchDepth, mainArena).<span class="kwd">ItemCheck</span>()
+	fmt.<span class="kwd">Printf</span>(<span class="str">&quot;stretch tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, stretchDepth, check_l)
+
+	longLivedTree := <span class="kwd">bottomUpTree</span>(<span class="num">0</span>, maxDepth, mainArena)
+
+	result_trees := <span class="kwb">make</span>([]<span class="kwb">int</span>, maxDepth+<span class="num">1</span>)
+	result_check := <span class="kwb">make</span>([]<span class="kwb">int</span>, maxDepth+<span class="num">1</span>)
+
+	<span class="kwa">var</span> wg sync.WaitGroup
+	<span class="kwa">for</span> depth_l := minDepth; depth_l &lt;= maxDepth; depth_l += <span class="num">2</span> {
+		wg.<span class="kwd">Add</span>(<span class="num">1</span>)
+		<span class="kwa">go func</span>(depth <span class="kwb">int</span>) {
+			localArena := <span class="kwb">new</span>(NodeArena)
+			iterations := <span class="num">1</span> &lt;&lt; <span class="kwb">uint</span>(maxDepth-depth+minDepth)
+			check := <span class="num">0</span>
+
+			<span class="kwa">for</span> i := <span class="num">1</span>; i &lt;= iterations; i++ {
+				check += <span class="kwd">bottomUpTree</span>(i, depth, localArena).<span class="kwd">ItemCheck</span>()
+				check += <span class="kwd">bottomUpTree</span>(-i, depth, localArena).<span class="kwd">ItemCheck</span>()
+			}
+			result_trees[depth] = iterations * <span class="num">2</span>
+			result_check[depth] = check
+
+			wg.<span class="kwd">Done</span>()
+		}(depth_l)
+	}
+	wg.<span class="kwd">Wait</span>()
+
+	<span class="kwa">for</span> depth := minDepth; depth &lt;= maxDepth; depth += <span class="num">2</span> {
+		fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">trees of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>,
+			result_trees[depth], depth, result_check[depth])
+	}
+	fmt.<span class="kwd">Printf</span>(<span class="str">&quot;long lived tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>,
+		maxDepth, longLivedTree.<span class="kwd">ItemCheck</span>())
+}
+
+<span class="kwa">func</span> <span class="kwd">bottomUpTree</span>(item, depth <span class="kwb">int</span>, arena *NodeArena) *Node {
+	n := arena.<span class="kwd">Get</span>()
+	<span class="kwa">if</span> depth &lt;= <span class="num">0</span> {
+		*n = Node{item, <span class="kwb">nil</span>, <span class="kwb">nil</span>}
+	} <span class="kwa">else</span> {
+		*n = Node{
+			item,
+			<span class="kwd">bottomUpTree</span>(<span class="num">2</span>*item-<span class="num">1</span>, depth-<span class="num">1</span>, arena),
+			<span class="kwd">bottomUpTree</span>(<span class="num">2</span>*item, depth-<span class="num">1</span>, arena),
+		}
+	}
+	<span class="kwa">return</span> n
+}
+
+<span class="kwa">type</span> Node <span class="kwa">struct</span> {
+	item        <span class="kwb">int</span>
+	left, right *Node
+}
+
+<span class="kwa">func</span> (self *Node) <span class="kwd">ItemCheck</span>() <span class="kwb">int</span> {
+	<span class="kwa">if</span> self.left == <span class="kwb">nil</span> {
+		<span class="kwa">return</span> self.item
+	}
+	<span class="kwa">return</span> self.item + self.left.<span class="kwd">ItemCheck</span>() - self.right.<span class="kwd">ItemCheck</span>()
+}

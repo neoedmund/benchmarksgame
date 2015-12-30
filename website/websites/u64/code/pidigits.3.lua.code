@@ -1,0 +1,25 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- contributed by Mike Pall</span>
+<span class="slc">-- requires LGMP &quot;A GMP package for Lua 5.1&quot;</span>
+
+<span class="kwa">local</span> g = {}; require<span class="str">&quot;c-gmp&quot;</span>(g, {})
+<span class="kwa">local</span> add, mul, submul = g.mpz_add, g.mpz_mul_si, g.mpz_submul_ui
+<span class="kwa">local</span> mul2x, div, cmp = g.mpz_mul_2exp, g.mpz_fdiv_qr, g.mpz_cmp
+<span class="kwa">local</span> init, get, <span class="kwb">write</span> = g.mpz_init_set_d, g.mpz_get_d, io.<span class="kwb">write</span>
+
+<span class="kwa">local</span> N = <span class="kwb">tonumber</span>(arg <span class="kwa">and</span> arg[<span class="num">1</span>]) <span class="kwa">or</span> <span class="num">100</span>
+<span class="kwa">local</span> i, n, a, d, t, u = <span class="num">0</span>, <span class="kwd">init</span>(<span class="num">1</span>), <span class="kwd">init</span>(<span class="num">0</span>), <span class="kwd">init</span>(<span class="num">1</span>), <span class="kwd">init</span>(<span class="num">0</span>), <span class="kwd">init</span>(<span class="num">0</span>)
+<span class="kwa">for</span> k=<span class="num">1</span>,<span class="num">1000000</span> <span class="kwa">do</span>
+  <span class="kwd">mul2x</span>(n, <span class="num">1</span>, t) <span class="kwd">mul</span>(n, k, n) <span class="kwd">add</span>(a, t, a) <span class="kwd">mul</span>(a, k+k+<span class="num">1</span>, a) <span class="kwd">mul</span>(d, k+k+<span class="num">1</span>, d)
+  <span class="kwa">if</span> <span class="kwd">cmp</span>(a, n) &gt;= <span class="num">0</span> <span class="kwa">then</span>
+    <span class="kwd">mul2x</span>(n, <span class="num">1</span>, t) <span class="kwd">add</span>(t, n, t) <span class="kwd">add</span>(t, a, t) <span class="kwd">div</span>(t, d, t, u) <span class="kwd">add</span>(u, n, u)
+    <span class="kwa">if</span> <span class="kwd">cmp</span>(d, u) &gt; <span class="num">0</span> <span class="kwa">then</span>
+      <span class="kwa">local</span> y = <span class="kwd">get</span>(t)
+      <span class="kwb">write</span>(y); i = i + <span class="num">1</span>; <span class="kwa">if</span> i % <span class="num">10</span> == <span class="num">0</span> <span class="kwa">then</span> <span class="kwb">write</span>(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>, i, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>) <span class="kwa">end</span>
+      <span class="kwa">if</span> i &gt;= N <span class="kwa">then break end</span>
+      <span class="kwd">submul</span>(a, d, y) <span class="kwd">mul</span>(a, <span class="num">10</span>, a) <span class="kwd">mul</span>(n, <span class="num">10</span>, n)
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+<span class="kwa">if</span> i % <span class="num">10</span> ~= <span class="num">0</span> <span class="kwa">then</span> <span class="kwb">write</span>(<span class="kwb">string</span>.<span class="kwd">rep</span>(<span class="str">&quot; &quot;</span>, <span class="num">10</span> - N % <span class="num">10</span>), <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>, N, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>) <span class="kwa">end</span>

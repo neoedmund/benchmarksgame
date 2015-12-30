@@ -1,0 +1,72 @@
+#lang racket/base
+
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;;; Derived from the Chicken Scheme variant by Anthony Borla</span>
+<span class="slc">;;; contributed by Matthew Flatt</span>
+<span class="slc">;;</span>
+<span class="slc">;; This version uses unsafe operations</span>
+
+(<span class="kwa">require</span> racket/cmdline
+	 racket/require (<span class="kwa">for-syntax</span> racket/base)
+	 (<span class="kwa">filtered-in</span>
+	  (<span class="kwa">lambda</span> (<span class="kwa">name</span>) (<span class="kwa">regexp-replace</span> #rx<span class="str">&quot;unsafe-&quot;</span> name <span class="str">&quot;&quot;</span>))
+	  racket/unsafe/ops))
+
+(<span class="kwa">define</span> +limit-sqr+ <span class="num">4.0</span>)
+
+(<span class="kwa">define</span> +iterations+ <span class="num">50</span>)
+
+<span class="slc">;; -------------------------------</span>
+
+(<span class="kwa">define</span> (<span class="kwa">mandelbrot</span> x y n ci)
+  (<span class="kwa">let</span> ((<span class="kwa">cr</span> (<span class="kwa">fl-</span> (<span class="kwa">fl</span>/ (<span class="kwa">fl</span>* <span class="num">2.0</span> (<span class="kwa">fx-</span>&gt;fl x)) (<span class="kwa">fx-</span>&gt;fl n)) <span class="num">1.5</span>)))
+    (<span class="kwa">let</span> loop ((<span class="kwa">i</span> <span class="num">0</span>) (<span class="kwa">zr</span> <span class="num">0.0</span>) (<span class="kwa">zi</span> <span class="num">0.0</span>))
+      (<span class="kwa">if</span> (<span class="kwa">fx</span>&gt; i +iterations+)
+          <span class="num">1</span>
+          (<span class="kwa">cond</span>
+           ((<span class="kwa">fl</span>&gt; (<span class="kwa">fl</span>+ (<span class="kwa">fl</span>* zr zr) (<span class="kwa">fl</span>* zi zi)) +limit-sqr+) <span class="num">0</span>)
+           (<span class="kwa">else</span> (<span class="kwa">loop</span> (<span class="kwa">fx</span>+ <span class="num">1</span> i) 
+                       (<span class="kwa">fl</span>+ (<span class="kwa">fl-</span> (<span class="kwa">fl</span>* zr zr) (<span class="kwa">fl</span>* zi zi)) cr) 
+                       (<span class="kwa">fl</span>+ (<span class="kwa">fl</span>* <span class="num">2.0</span> (<span class="kwa">fl</span>* zr zi)) ci))))))))
+
+<span class="slc">;; -------------------------------</span>
+
+(<span class="kwa">define</span> (<span class="kwa">main</span> n)
+  (<span class="kwa">let</span> ((<span class="kwa">out</span> (<span class="kwa">current-output-port</span>)))
+
+    (<span class="kwa">fprintf</span> out <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">~a ~a</span><span class="esc">\n</span><span class="str">&quot;</span> n n)
+
+    (<span class="kwa">let</span> loop-y ((<span class="kwa">y</span> <span class="num">0</span>))
+
+      (<span class="kwa">when</span> (<span class="kwa">fx</span>&lt; y n)
+        
+        (<span class="kwa">let</span> ([ci (<span class="kwa">fl-</span> (<span class="kwa">fl</span>/ (<span class="kwa">fl</span>* <span class="num">2.0</span> (<span class="kwa">fx-</span>&gt;fl y)) (<span class="kwa">fx-</span>&gt;fl n)) <span class="num">1.0</span>)])
+          
+          (<span class="kwa">let</span> loop-x ((<span class="kwa">x</span> <span class="num">0</span>) (<span class="kwa">bitnum</span> <span class="num">0</span>) (<span class="kwa">byteacc</span> <span class="num">0</span>))
+
+            (<span class="kwa">if</span> (<span class="kwa">fx</span>&lt; x n)
+                (<span class="kwa">let</span> ([bitnum (<span class="kwa">fx</span>+ <span class="num">1</span> bitnum)]
+                      [byteacc (<span class="kwa">fx</span>+ (<span class="kwa">fxlshift</span> byteacc <span class="num">1</span>) 
+                                           (<span class="kwa">mandelbrot</span> x y n ci))])
+
+                  (<span class="kwa">cond</span>
+                   ((<span class="kwa">fx</span>= bitnum <span class="num">8</span>)
+                    (<span class="kwa">write-byte</span> byteacc out)
+                    (<span class="kwa">loop-x</span> (<span class="kwa">fx</span>+ <span class="num">1</span> x) <span class="num">0 0</span>))
+                   
+                   [else (<span class="kwa">loop-x</span> (<span class="kwa">fx</span>+ <span class="num">1</span> x) bitnum byteacc)]))
+
+                (<span class="kwa">begin</span>
+                  (<span class="kwa">when</span> (<span class="kwa">positive</span>? bitnum)
+                    (<span class="kwa">write-byte</span> (<span class="kwa">arithmetic-shift</span> byteacc 
+                                                  (<span class="kwa">-</span> <span class="num">8</span> (<span class="kwa">bitwise-and</span> n #x7))) 
+                                out))
+
+                  (<span class="kwa">loop-y</span> (<span class="kwa">add1</span> y))))))))))
+
+<span class="slc">;; -------------------------------</span>
+
+(<span class="kwa">command-line</span> #:args (<span class="kwa">n</span>)
+              (<span class="kwa">main</span> (<span class="kwa">string-</span>&gt;number n)))

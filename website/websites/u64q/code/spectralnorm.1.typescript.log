@@ -1,0 +1,13 @@
+
+Thu, 17 Dec 2015 22:04:11 GMT
+
+MAKE:
+mv spectralnorm.typescript spectralnorm.ts
+/usr/local/src/node-v5.1.0-linux-x64/bin/tsc -t ES6 spectralnorm.ts
+2.14s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/node-v5.1.0-linux-x64/bin/node --use_strict spectralnorm.js 5500
+
+PROGRAM OUTPUT:
+1.274224153

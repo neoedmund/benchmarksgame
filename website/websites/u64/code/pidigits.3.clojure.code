@@ -1,0 +1,42 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; Based on the Racket version of the benchmark by Matthew Flatt</span>
+<span class="slc">;;; contributed by PheliX</span>
+<span class="slc">;; Minor changes by Andy Fingerhut so it runs on both Clojure 1.2 and 1.3</span>
+<span class="slc">;; Minor changes by Koji Yusa to use cl-format instead of printf </span>
+
+(ns pidigits
+  (:use [clojure.pprint :only (cl-format)])
+  (:gen-class))
+
+(<span class="kwa">defn</span> floor-ev [q r s t x]
+  (quot (+ (* q x) r) (+ (* s x) t)))
+
+(<span class="kwa">defn</span> ncomp [q r s t q2 r2 s2 t2]
+  [(+ (* q q2) (* r s2))
+   (+ (* q r2) (* r t2))
+   (+ (* s q2) (* t s2))
+   (+ (* s r2) (* t t2))])
+
+(<span class="kwa">defn</span> digit [k q r s t n row col]
+  (<span class="kwc">if</span> (&gt; n <span class="num">0</span>)
+    (<span class="kwc">let</span> [y (floor-ev q r s t <span class="num">3</span>)]
+      (<span class="kwc">if</span> (== y (floor-ev q r s t <span class="num">4</span>))
+	(<span class="kwc">let</span> [[q r s t] (ncomp <span class="num">10</span> (* -<span class="num">10</span> y) <span class="num">0 1</span> q r s t)]
+	  (<span class="kwc">if</span> (== col <span class="num">10</span>)
+	    (<span class="kwc">let</span> [row (+ row <span class="num">10</span>)]
+	      (cl-format true <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:~d</span><span class="esc">\n</span><span class="str">~d&quot;</span> row y)
+	      (<span class="kwb">recur</span> k q r s t (dec n) row <span class="num">1</span>))
+	    (do (cl-format true <span class="str">&quot;~d&quot;</span> y)
+		(<span class="kwb">recur</span> k q r s t (dec n) row (inc col)))))
+	(<span class="kwc">let</span> [[q r s t] (ncomp q r s t k (* <span class="num">2</span> (inc (* <span class="num">2</span> k))) <span class="num">0</span> (inc (* <span class="num">2</span> k)))]
+	  (<span class="kwb">recur</span> (inc k) q r s t n row col))))
+    (cl-format true <span class="str">&quot;~a</span><span class="esc">\t</span><span class="str">:~d</span><span class="esc">\n</span><span class="str">&quot;</span> (apply str (<span class="kwd">repeat</span> (- <span class="num">10</span> col) <span class="str">&quot; &quot;</span>)) (+ row col))))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [n (try (Integer/parseInt (<span class="kwd">first</span> args))
+               (catch NumberFormatException e <span class="num">27</span>))]
+    (digit <span class="num">1</span> (bigint <span class="num">1</span>) (bigint <span class="num">0</span>) (bigint <span class="num">0</span>) (bigint <span class="num">1</span>) n <span class="num">0 0</span>))
+  (flush))
+

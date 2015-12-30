@@ -1,0 +1,14 @@
+
+Wed, 12 Aug 2015 05:16:57 GMT
+
+MAKE:
+mv spectralnorm.csharp spectralnorm.cs
+/usr/local/bin/mcs  -optimize+ -platform:x64 -out:spectralnorm.csharp_run spectralnorm.cs
+rm spectralnorm.cs
+0.22s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/mono --llvm --gc=sgen spectralnorm.csharp_run 5500
+
+PROGRAM OUTPUT:
+1.274224153

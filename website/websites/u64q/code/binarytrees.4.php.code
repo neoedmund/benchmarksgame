@@ -1,0 +1,167 @@
+&lt;?php 
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   binarytree by Ludovic Urbain</span>
+<span class="com">*/</span>
+
+<span class="kwa">function</span> <span class="kwd">tree</span>(&amp;$n,&amp;$i,&amp;$depth){
+   $n[<span class="num">2</span>]=$i;
+   <span class="kwa">if</span>(!$depth){
+      <span class="kwa">return</span> $n;
+   }
+   $i2=$i+$i;
+   $depth--;
+   <span class="slc">//tree($n[1],$i2,$depth); </span>
+      $n[<span class="num">1</span>][<span class="num">2</span>]=$i2;
+      <span class="kwa">if</span>($depth){
+         $i3=$i2+$i2;
+         $depth--;
+         <span class="slc">//tree($n[1][1],$i3,$depth);</span>
+            $n[<span class="num">1</span>][<span class="num">1</span>][<span class="num">2</span>]=$i3;
+            <span class="kwa">if</span>($depth){
+               $i4=$i3+$i3;
+               $depth--;
+               <span class="kwd">tree</span>($n[<span class="num">1</span>][<span class="num">1</span>][<span class="num">1</span>],$i4,$depth);
+               $i4--;
+               <span class="kwd">tree</span>($n[<span class="num">1</span>][<span class="num">1</span>][<span class="num">0</span>],$i4,$depth);
+               $depth++;
+            }
+         $i3--;
+         <span class="slc">//tree($n[1][0],$i3,$depth);</span>
+            $n[<span class="num">1</span>][<span class="num">0</span>][<span class="num">2</span>]=$i3;
+            <span class="kwa">if</span>($depth){
+               $i4=$i3+$i3;
+               $depth--;
+               <span class="kwd">tree</span>($n[<span class="num">1</span>][<span class="num">0</span>][<span class="num">1</span>],$i4,$depth);
+               $i4--;
+               <span class="kwd">tree</span>($n[<span class="num">1</span>][<span class="num">0</span>][<span class="num">0</span>],$i4,$depth);
+               $depth++;
+            }
+         $depth++;
+      }
+   $i2--;
+   <span class="slc">//tree($n[0],$i2,$depth);</span>
+      $n[<span class="num">0</span>][<span class="num">2</span>]=$i2;
+      <span class="kwa">if</span>($depth){
+         $i3=$i2+$i2;
+         $depth--;
+         <span class="slc">//tree($n[0][1],$i3,$depth);</span>
+            $n[<span class="num">0</span>][<span class="num">1</span>][<span class="num">2</span>]=$i3;
+            <span class="kwa">if</span>($depth){
+               $i4=$i3+$i3;
+               $depth--;
+               <span class="kwd">tree</span>($n[<span class="num">0</span>][<span class="num">1</span>][<span class="num">1</span>],$i4,$depth);
+               $i4--;
+               <span class="kwd">tree</span>($n[<span class="num">0</span>][<span class="num">1</span>][<span class="num">0</span>],$i4,$depth);
+               $depth++;
+            }
+         $i3--;
+         <span class="slc">//tree($n[0][0],$i3,$depth);</span>
+            $n[<span class="num">0</span>][<span class="num">0</span>][<span class="num">2</span>]=$i3;
+            <span class="kwa">if</span>($depth){
+               $i4=$i3+$i3;
+               $depth--;
+               <span class="kwd">tree</span>($n[<span class="num">0</span>][<span class="num">0</span>][<span class="num">1</span>],$i4,$depth);
+               $i4--;
+               <span class="kwd">tree</span>($n[<span class="num">0</span>][<span class="num">0</span>][<span class="num">0</span>],$i4,$depth);
+               $depth++;
+            }
+         $depth++;
+      }
+   $depth++;
+}
+
+<span class="kwa">function</span> <span class="kwd">check</span>(&amp;$n) {<span class="slc">//checks look like free from a performance standpoint.</span>
+   $r=$n[<span class="num">2</span>];
+   <span class="kwa">if</span>($n[<span class="num">0</span>][<span class="num">0</span>] === null){
+      $r+=<span class="kwd">check</span>($n[<span class="num">0</span>]);
+   }<span class="kwa">else</span>{
+      $r+=$n[<span class="num">0</span>][<span class="num">2</span>];
+   }
+   <span class="kwa">if</span>($n[<span class="num">1</span>][<span class="num">0</span>] === null){
+      $r-=<span class="kwd">check</span>($n[<span class="num">1</span>]);
+   }<span class="kwa">else</span>{
+      $r-=$n[<span class="num">1</span>][<span class="num">2</span>];
+   }
+   <span class="kwa">return</span> $r;
+}
+
+$threads=<span class="num">2</span>;
+<span class="slc">// Currently limited to two threads, designed for 2n-threads, </span>
+<span class="slc">// can be updated to 4 threads when PHP releases a better array / memory limit</span>
+<span class="slc">// on the benchmarks game goes up to at least 4.8G</span>
+
+
+$min_depth = <span class="num">4</span>;
+<span class="kwa">if</span>($argc == <span class="num">2</span>){
+   $max_depth=$argv[<span class="num">1</span>];
+}<span class="kwa">else</span>{
+   $max_depth=$min_depth+<span class="num">2</span>;
+}
+$stretch_depth=$max_depth+<span class="num">1</span>;
+$stree=<span class="kwa">array</span>();
+$i=<span class="num">0</span>;
+<span class="kwd">tree</span>($stree,$i,$stretch_depth);
+<span class="kwd">printf</span>(<span class="str">&quot;stretch tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>,$stretch_depth, <span class="kwd">check</span>($stree));
+<span class="kwa">unset</span>($stree);
+$bigtree=<span class="kwa">array</span>();
+<span class="kwd">tree</span>($bigtree,$i,$max_depth);
+$runs = <span class="num">1</span> &lt;&lt; ($max_depth);
+
+
+$tok = <span class="kwd">ftok</span>(__FILE__, <span class="kwd">chr</span>(<span class="kwd">time</span>() &amp; <span class="num">255</span>));
+$queue = <span class="kwd">msg_get_queue</span>($tok);
+
+$parent = TRUE;
+<span class="kwa">for</span> ($i = <span class="num">0</span>; $i &lt; $threads-<span class="num">1</span>; ++$i) {
+   $pid = <span class="kwd">pcntl_fork</span>();
+   <span class="kwa">if</span> ($pid === -<span class="num">1</span>) {
+      <span class="kwa">die</span>(<span class="str">'could not fork'</span>);
+   } <span class="kwa">else if</span> ($pid) {
+      <span class="kwa">continue</span>;
+   }
+   $parent = FALSE;
+   <span class="kwa">break</span>;
+}
+<span class="kwa">if</span>(!$parent){
+   <span class="kwa">unset</span>($bigtree);
+}
+$tmptree=<span class="kwa">array</span>();
+$return=<span class="kwa">array</span>();
+<span class="kwa">while</span>($min_depth &lt;= $max_depth){
+   $check = <span class="num">0</span>;
+   <span class="kwa">for</span>($i=<span class="num">0</span>;$i&lt;$runs&gt;&gt;(<span class="num">2</span>/$threads);$i++){
+      <span class="kwd">tree</span>($tmptree,$i,$min_depth);
+      $check+=<span class="kwd">check</span>($tmptree);
+      $j=-$i;
+      <span class="kwd">tree</span>($tmptree,$j,$min_depth);
+      $check+=<span class="kwd">check</span>($tmptree);
+   }
+   $return[$min_depth]=<span class="kwa">array</span>($runs,$check);
+   $min_depth+=<span class="num">2</span>;
+   $runs&gt;&gt;=<span class="num">2</span>;
+}
+<span class="kwa">unset</span>($tmptree);
+<span class="kwa">if</span> (!<span class="kwd">msg_send</span>($queue, <span class="num">2</span>, $return, TRUE, FALSE, $errno)) {
+   <span class="kwd">var_dump</span>(<span class="str">&quot;</span><span class="ipl">$errno</span><span class="str">&quot;</span>);
+   <span class="kwd">var_dump</span>(<span class="kwd">msg_stat_queue</span>($queue));
+}
+
+<span class="kwa">if</span> (!$parent) {
+   <span class="kwa">exit</span>(<span class="num">0</span>);
+}
+
+$result2=<span class="kwa">array</span>();
+<span class="kwa">for</span>($i=<span class="num">0</span>;$i&lt;$threads;$i++){
+   <span class="kwd">msg_receive</span>($queue, <span class="num">2</span>, $msgtype, <span class="num">2048</span>, $result, TRUE);
+   <span class="kwa">foreach</span>($result <span class="kwa">as</span> $depth =&gt; $res){
+      $result2[$depth][<span class="num">0</span>]+=$res[<span class="num">0</span>];
+      $result2[$depth][<span class="num">1</span>]-=$res[<span class="num">1</span>];
+   }
+   <span class="kwd">pcntl_wait</span>($s);
+}
+<span class="kwa">foreach</span>($result2 <span class="kwa">as</span> $depth =&gt; $res){
+   <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">trees of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, $result2[$depth][<span class="num">0</span>], $depth, -$result2[$depth][<span class="num">1</span>]);
+}
+<span class="kwd">printf</span>(<span class="str">&quot;long lived tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>,
+$max_depth, <span class="kwd">check</span>($bigtree));

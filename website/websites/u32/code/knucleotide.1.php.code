@@ -1,0 +1,127 @@
+&lt;?
+<span class="com">/* </span>
+<span class="com">   The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Damien Bonvillain</span>
+<span class="com">   fixed by Isaac Gouy</span>
+<span class="com">   modified by Levi Cameron</span>
+<span class="com">   modified by Ludovic Urbain</span>
+<span class="com">*/</span>
+
+
+<span class="kwa">function</span> <span class="kwd">read_sequence</span>($id) {
+   $id = <span class="str">'&gt;'</span> . $id;
+   $ln_id = <span class="kwd">strlen</span>($id);
+   $fd = STDIN;
+
+   <span class="slc">// reach sequence three</span>
+   
+   <span class="kwa">while</span> (<span class="kwd">strpos</span>($line, $id) ===false){
+      $line = <span class="kwd">stream_get_line</span>($fd, <span class="num">64</span>, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>); <span class="slc">// returns faster when the length is too large</span>
+      <span class="kwa">if</span>(<span class="kwd">feof</span>($fd)){
+         <span class="kwa">exit</span>(-<span class="num">1</span>);
+      }
+   }
+   <span class="slc">// next, read the content of the sequence</span>
+   $r=<span class="str">''</span>;
+   <span class="kwa">while</span> (!<span class="kwd">feof</span>($fd)) {
+      $line = <span class="kwd">stream_get_line</span>($fd, <span class="num">64</span>, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+      <span class="kwa">if</span> (!<span class="kwa">isset</span>($line[<span class="num">0</span>])) <span class="kwa">continue</span>;
+      $c = $line[<span class="num">0</span>];
+      <span class="kwa">if</span> ($c === <span class="str">';'</span>) <span class="kwa">continue</span>;
+      <span class="kwa">if</span> ($c === <span class="str">'&gt;'</span>) <span class="kwa">break</span>;
+      $r.=$line;
+   }
+   <span class="kwa">return</span> <span class="kwd">strtoupper</span>($r);
+}
+
+<span class="kwa">function</span> <span class="kwd">write_freq</span>(&amp;$sequence,&amp;$seqlen, &amp;$keys) {
+   $map = <span class="kwa">array</span>();
+   $total=<span class="num">0</span>;
+   <span class="kwa">if</span>(<span class="kwd">strlen</span>($keys[<span class="num">0</span>])==<span class="num">1</span>){
+      <span class="kwa">foreach</span>($keys <span class="kwa">as</span> $p){
+         $map[$p]=<span class="kwd">substr_count</span>($sequence,$p);
+         $total+=$map[$p];
+      }
+   }<span class="kwa">elseif</span>(<span class="kwd">strlen</span>($keys[<span class="num">0</span>])==<span class="num">2</span>){
+      <span class="slc">//this is here only because substr_count does not count overlapping strings,</span>
+      <span class="slc">// it can be replaced by anything counting overlapping strings and with better performance</span>
+      <span class="kwa">for</span>($i=<span class="num">0</span>;$i&lt;$seqlen-<span class="num">1</span>;$i++){
+         $map[$sequence[$i].$sequence[$i+<span class="num">1</span>]]++;
+      }
+      <span class="kwa">foreach</span>($keys <span class="kwa">as</span> $p){
+         $total+=$map[$p];
+      }
+   }
+   <span class="kwa">foreach</span>($keys <span class="kwa">as</span> $p){
+      $map[$p]=( $map[$p] / $total ) *<span class="num">100</span>;
+   }
+   <span class="kwd">uasort</span>($map, <span class="str">'freq_name_comparator'</span>);
+   $r=<span class="str">''</span>;
+   <span class="kwa">foreach</span>($map <span class="kwa">as</span> $key =&gt; $val) {
+      $r.=<span class="kwd">sprintf</span> (<span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">%.3f</span><span class="esc">\n</span><span class="str">&quot;</span>, $key, $val);
+   }
+   <span class="kwa">return</span> $r.<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+}
+
+<span class="kwa">function</span> <span class="kwd">write_count</span>(&amp;$sequence,&amp;$seqlen, $key){
+   <span class="kwa">return</span> <span class="kwd">sprintf</span> (<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">%s</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">substr_count</span>($sequence,$key), $key);
+}
+
+<span class="kwa">function</span> <span class="kwd">freq_name_comparator</span>($a, $b) {
+   <span class="kwa">if</span> ($a == $b) <span class="kwa">return</span> <span class="num">0</span>;
+   <span class="kwa">return</span>  ($a &lt; $b) ? <span class="num">1</span> : -<span class="num">1</span>;
+}
+$sequence = <span class="kwd">read_sequence</span>(<span class="str">'THREE'</span>);
+$seqlen=<span class="kwd">strlen</span>($sequence);
+<span class="kwd">fclose</span>(STDIN);
+
+$jobs = <span class="kwa">array</span>(
+   <span class="kwa">array</span>(<span class="str">'write_freq'</span>, <span class="kwa">array</span>(<span class="str">'A'</span>,<span class="str">'T'</span>,<span class="str">'G'</span>,<span class="str">'C'</span>)),
+   <span class="kwa">array</span>(<span class="str">'write_freq'</span>, <span class="kwa">array</span>(<span class="str">'AA'</span>,<span class="str">'AT'</span>,<span class="str">'TA'</span>,<span class="str">'TT'</span>,<span class="str">'CA'</span>,<span class="str">'GA'</span>,<span class="str">'AG'</span>,<span class="str">'AC'</span>,<span class="str">'TG'</span>,<span class="str">'GT'</span>,<span class="str">'TC'</span>,<span class="str">'CT'</span>,<span class="str">'GG'</span>,<span class="str">'GC'</span>,<span class="str">'CG'</span>,<span class="str">'CC'</span>)),
+   <span class="kwa">array</span>(<span class="str">'write_count'</span>, <span class="str">'GGT'</span>),
+   <span class="kwa">array</span>(<span class="str">'write_count'</span>, <span class="str">'GGTA'</span>),
+   <span class="kwa">array</span>(<span class="str">'write_count'</span>, <span class="str">'GGTATT'</span>),
+   <span class="kwa">array</span>(<span class="str">'write_count'</span>, <span class="str">'GGTATTTTAATT'</span>),
+   <span class="kwa">array</span>(<span class="str">'write_count'</span>, <span class="str">'GGTATTTTAATTTATAGT'</span>)
+);
+
+$tok = <span class="kwd">ftok</span>(__FILE__, <span class="kwd">chr</span>(<span class="kwd">time</span>() &amp; <span class="num">255</span>));
+$queue = <span class="kwd">msg_get_queue</span>($tok);
+
+$parent = TRUE;
+$count = <span class="kwd">count</span>($jobs);
+<span class="kwa">for</span> ($i = <span class="num">0</span>; $i &lt; $count-<span class="num">1</span>; ++$i) {
+   $pid = <span class="kwd">pcntl_fork</span>();
+   <span class="kwa">if</span> ($pid === -<span class="num">1</span>) {
+      <span class="kwa">die</span>(<span class="str">'could not fork'</span>);
+   } <span class="kwa">else if</span> ($pid) {
+      <span class="kwa">continue</span>;
+   }
+   $parent = FALSE;
+   <span class="kwa">break</span>;
+}
+$result = <span class="kwa">array</span>($i,$jobs[$i][<span class="num">0</span>]($sequence, $seqlen, $jobs[$i][<span class="num">1</span>]));
+<span class="kwa">if</span> (!<span class="kwd">msg_send</span>($queue, <span class="num">2</span>, $result, TRUE, FALSE, $errno)) {
+   <span class="kwd">var_dump</span>(<span class="str">&quot;</span><span class="ipl">$errno</span><span class="str">&quot;</span>);
+   <span class="kwd">var_dump</span>(<span class="kwd">msg_stat_queue</span>($queue));
+}
+
+<span class="kwa">if</span> (!$parent) {
+   <span class="kwa">exit</span>(<span class="num">0</span>);
+}
+
+$results = <span class="kwa">array</span>();
+<span class="kwa">foreach</span>($jobs <span class="kwa">as</span> $job) {
+   <span class="kwd">msg_receive</span>($queue, <span class="num">2</span>, $msgtype, <span class="num">256</span>, $result, TRUE);
+   $results[$result[<span class="num">0</span>]] = $result[<span class="num">1</span>];
+   <span class="kwd">pcntl_wait</span>($s);
+}
+
+<span class="kwd">ksort</span>($results);
+<span class="kwa">foreach</span> ($results <span class="kwa">as</span> $result) {
+   <span class="kwa">echo</span> $result;
+}
+
+<span class="kwd">msg_remove_queue</span>($queue);

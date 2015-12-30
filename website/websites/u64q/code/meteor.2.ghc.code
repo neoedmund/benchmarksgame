@@ -1,0 +1,184 @@
+<span class="com">{-</span>
+<span class="com">   The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Olof Kraigher</span>
+<span class="com">-}</span>
+
+<span class="kwd">module</span> Main <span class="kwd">where</span>
+
+<span class="kwd">import</span> System.Environment; <span class="kwd">import</span> Data.List; <span class="kwd">import</span> Data.Bits; <span class="kwd">import</span> Data.<span class="kwb">Array</span>.IArray;
+<span class="kwd">import</span> Data.Word(Word64); <span class="kwd">import</span> Data.<span class="kwb">Maybe</span>; <span class="kwd">import</span> Control.Monad;
+
+<span class="kwd">data</span> Direction = E | SE | SW | W | NW | NE <span class="kwd">deriving</span> (Enum, Eq, Ord, <span class="kwb">Show</span>)
+<span class="kwd">type</span> Piece = [Direction]
+<span class="kwd">type</span> Cell = (<span class="kwb">Int</span>, <span class="kwb">Int</span>)
+<span class="kwd">type</span> Mask = Word64
+<span class="kwd">type</span> Color = <span class="kwb">Int</span>
+
+<span class="kwd">class</span> Rotatable a <span class="kwd">where</span>
+   rot :: a -&gt; a 
+
+<span class="kwd">class</span> Floppable a <span class="kwd">where</span>
+   flop :: a -&gt; a   
+   
+<span class="kwd">class</span> Maskable a <span class="kwd">where</span>
+   mask :: a -&gt; Mask
+
+<span class="kwd">instance</span> Rotatable Direction <span class="kwd">where</span>
+   rot NE = E
+   rot d = <span class="kwc">succ</span> d
+
+<span class="kwd">instance</span> Rotatable Piece <span class="kwd">where</span>
+   rot a = <span class="kwc">map</span> rot a
+
+<span class="kwd">instance</span> Floppable Direction <span class="kwd">where</span>
+   flop E = W
+   flop W = E
+   flop SE = SW
+   flop SW = SE
+   flop NE = NW
+   flop NW = NE
+
+<span class="kwd">instance</span> Floppable Piece <span class="kwd">where</span>
+   flop a = <span class="kwc">map</span> flop a
+   
+<span class="kwd">instance</span> Maskable Cell <span class="kwd">where</span>
+   mask (x,y) = bit (x + y*width)
+
+<span class="kwd">instance</span> Maskable [Cell] <span class="kwd">where</span>
+   mask p = <span class="kwc">foldl</span>' (<span class="esc">\a</span> b -&gt; a .|. mask b) <span class="num">0</span> p
+
+width :: <span class="kwb">Int</span>
+width = <span class="num">5</span>
+
+height :: <span class="kwb">Int</span>
+height = <span class="num">10</span>
+
+cells :: [Cell]
+cells = [(x,y) | y &lt;- [<span class="num">0</span>..height-<span class="num">1</span>], x &lt;- [<span class="num">0</span>..width-<span class="num">1</span>]]
+
+fullMask :: Mask
+fullMask = <span class="num">0x3FFFFFFFFFFFF</span> 
+      
+pieces :: <span class="kwb">Array</span> Color Piece
+pieces = <span class="kwa">array</span> (<span class="num">0</span>,<span class="num">9</span>) $ <span class="kwc">zip</span> [<span class="num">0</span>.<span class="num">.9</span>] $ 
+      [   [E,    E,  E,  SE],
+         [SE, SW, W,  SW],
+         [W,  W,  SW, SE],
+         [E,  E,  SW, SE],
+         [NW, W,  NW, SE, SW],
+         [E,  E,  NE, W],
+         [NW, NE, NE, W],
+         [NE, SE, E,  NE],
+         [SE, SE, E,  SE],
+         [E,  NW, NW, NW]]
+
+valid :: Cell -&gt; <span class="kwb">Maybe</span> Cell
+valid p&#64;(x,y)
+   | <span class="num">0</span> &lt;= x, x &lt; width, <span class="num">0</span> &lt;= y, y &lt; height = Just p
+   |<span class="kwc">otherwise</span> = Nothing
+
+move :: Cell -&gt; Direction -&gt; <span class="kwb">Maybe</span> Cell
+move (x,y) E = valid (x+<span class="num">1</span>,y)
+move (x,y) W = valid (x-<span class="num">1</span>,y)
+move (x,y) NE = valid (x+(<span class="kwc">mod</span> y <span class="num">2</span>),y-<span class="num">1</span>)
+move (x,y) NW = valid (x+(<span class="kwc">mod</span> y <span class="num">2</span>)-<span class="num">1</span>,y-<span class="num">1</span>)
+move (x,y) SE = valid (x+(<span class="kwc">mod</span> y <span class="num">2</span>),y+<span class="num">1</span>)
+move (x,y) SW = valid (x+(<span class="kwc">mod</span> y <span class="num">2</span>)-<span class="num">1</span>,y+<span class="num">1</span>)
+
+overlap :: Mask -&gt; Mask -&gt; <span class="kwb">Bool</span>
+overlap a b = (a .&amp;. b) /= <span class="num">0</span>
+
+bitCount :: Mask -&gt; <span class="kwb">Int</span>
+bitCount <span class="num">0</span> = <span class="num">0</span>
+bitCount mask = (<span class="kwc">fromIntegral</span> $ (mask .&amp;. <span class="num">1</span>)) + (bitCount (shiftR mask <span class="num">1</span>))
+
+floodFill :: Mask -&gt; Cell -&gt; Mask
+floodFill mask cell&#64;(x,y)
+   | overlap mask (bit $ x + y*width) = mask
+   | <span class="kwc">otherwise</span> = 
+      <span class="kwd">let</span> mask' = mask .|. (bit $ x + y*width)
+      <span class="kwd">in</span>   <span class="kwc">foldl</span>' floodFill mask' $ <span class="kwc">mapMaybe</span> (move cell) [E .. NE]
+
+findFreeCell :: Mask -&gt; Cell
+findFreeCell mask = 
+   <span class="kwc">fromJust</span> $ <span class="kwc">find</span> (\(x,y) -&gt; <span class="kwc">not</span> $ overlap mask (bit $ x + y*width)) cells
+
+noIslands :: Mask -&gt; <span class="kwb">Bool</span>
+noIslands mask = <span class="kwc">not</span> $ <span class="kwc">any</span> (&lt;<span class="num">5</span>) $ diffs $ noIslands' mask <span class="kwd">where</span>
+   noIslands' mask
+      | mask == fullMask = [bitCount mask]
+      | <span class="kwc">otherwise</span> = (bitCount mask) : (noIslands' $ floodFill mask $ findFreeCell mask)
+   diffs l = <span class="kwc">zipWith</span> (-) (<span class="kwc">tail</span> l) l
+   
+
+placePiece :: Piece -&gt; Cell -&gt; <span class="kwb">Maybe</span> [Cell]
+placePiece [] cell = Just [cell]
+placePiece (p:ps) cell = move cell p &gt;&gt;= (placePiece ps) &gt;&gt;= <span class="kwc">return</span> . (cell:)
+
+pieceMasks :: <span class="kwb">Array</span> Color [Mask]
+pieceMasks = amap pieceMasks' pieces <span class="kwd">where</span>      
+   pieceMasks' piece
+      | piece == (pieces!<span class="num">5</span>) = <span class="kwd">do</span>
+         piece' &lt;- (<span class="kwc">take</span> <span class="num">3</span> $ <span class="kwc">iterate</span> rot piece) ++ (<span class="kwc">take</span> <span class="num">3</span> $ <span class="kwc">iterate</span> rot $ flop $ piece)
+         <span class="kwc">filter</span> noIslands $ <span class="kwc">map</span> mask $ <span class="kwc">mapMaybe</span> (placePiece piece') cells
+      
+      | <span class="kwc">otherwise</span> = <span class="kwd">do</span>
+         piece' &lt;- (<span class="kwc">take</span> <span class="num">6</span> $ <span class="kwc">iterate</span> rot piece) ++ (<span class="kwc">take</span> <span class="num">6</span> $ <span class="kwc">iterate</span> rot $ flop $ piece)
+         <span class="kwc">filter</span> noIslands $ <span class="kwc">map</span> mask $ <span class="kwc">mapMaybe</span> (placePiece piece') cells
+
+pieceMasksAtCell :: <span class="kwb">Array</span> Color (<span class="kwb">Array</span> Cell [Mask])
+pieceMasksAtCell = amap pieceMasksAtCell' pieceMasks <span class="kwd">where</span>
+   pieceMasksAtCell' masks = <span class="kwa">array</span> ((<span class="num">0</span>,<span class="num">0</span>),(width-<span class="num">1</span>,height-<span class="num">1</span>)) $ pieceMasksAtCell'' masks cells <span class="kwd">where</span>
+      pieceMasksAtCell'' masks [] = []
+      pieceMasksAtCell'' masks (c:cs) = 
+         <span class="kwd">let</span> (a,b) = <span class="kwc">partition</span> (overlap (mask c)) masks
+         <span class="kwd">in</span> (c,a) : (pieceMasksAtCell'' b cs)
+
+nextCell :: Cell -&gt; Cell
+nextCell (<span class="num">4</span>,y) = (<span class="num">0</span>,y+<span class="num">1</span>)
+nextCell (x,y) =  (x+<span class="num">1</span>,y)
+
+solutions :: [<span class="kwb">String</span>]
+solutions = solutions' <span class="num">0</span> (<span class="num">0</span>,<span class="num">0</span>) [<span class="num">0</span>.<span class="num">.9</span>] [] <span class="kwd">where</span>
+
+   solutions' :: Mask -&gt; Cell -&gt; [Color] -&gt; [(Color, Mask)]-&gt; [<span class="kwb">String</span>]
+   solutions' _ _ [] usedMasks =    <span class="kwd">let</span> s = stringOfColorMasks usedMasks <span class="kwd">in</span>   [s, invertString s]
+   solutions' board cell colorsLeft usedMasks 
+      | overlap board (mask cell) = solutions' board (nextCell cell) colorsLeft usedMasks
+      | <span class="kwc">otherwise</span> = <span class="kwd">do</span>
+         color &lt;- colorsLeft
+         mask &lt;- <span class="kwc">filter</span> (<span class="kwc">not</span>.(overlap board)) $ pieceMasksAtCell!color!cell
+         solutions' (board .|. mask) (nextCell cell) (colorsLeft <span class="esc">\\</span> [color]) ((color, mask):usedMasks)
+
+stringOfColorMasks :: [(Color, Mask)] -&gt; <span class="kwb">String</span>
+stringOfColorMasks colorMasks = 
+   <span class="kwc">tail</span>.<span class="kwc">show</span>.(+<span class="num">10</span>^(width*height)).<span class="kwa">sum</span> $ <span class="kwc">map</span> (\(c,m) -&gt; (<span class="kwc">fromIntegral</span> c) * (binToDec m)) colorMasks <span class="kwd">where</span>
+   binToDec :: Mask -&gt; <span class="kwb">Integer</span>
+   binToDec <span class="num">0</span> = <span class="num">0</span>
+   binToDec n = (<span class="kwc">fromIntegral</span> (<span class="kwc">mod</span> n <span class="num">2</span>)) + <span class="num">10</span>*(binToDec $ <span class="kwc">div</span> n <span class="num">2</span>)
+
+invertString :: <span class="kwb">String</span> -&gt; <span class="kwb">String</span>
+invertString s = <span class="kwc">map</span> (\(x,y) -&gt; s!!(width-x-<span class="num">1</span> + (height-y-<span class="num">1</span>)*width)) cells
+
+printSolution :: <span class="kwb">String</span> -&gt; <span class="kwb">IO</span> ()
+printSolution solution = printSolution' <span class="num">0</span> solution <span class="kwd">where</span>
+   printSolution' cell [] = <span class="kwc">return</span> ()
+   printSolution' cell (s:ss) = <span class="kwd">do</span>
+      <span class="kwc">putStr</span> $ s:<span class="str">&quot; &quot;</span>
+      <span class="kwd">case</span> <span class="kwc">mod</span> (cell+<span class="num">1</span>) width <span class="kwd">of</span>
+         <span class="num">0</span> -&gt; <span class="kwd">case</span> <span class="kwc">mod</span> (cell+<span class="num">1</span>) (<span class="num">2</span>*width) <span class="kwd">of</span>
+            <span class="num">0</span> -&gt; <span class="kwc">putStr</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>
+            _ -&gt; <span class="kwc">putStr</span> <span class="str">&quot;</span><span class="esc">\n</span> <span class="str">&quot;</span>
+         _ -&gt; <span class="kwc">return</span> ()
+
+      printSolution' (cell+<span class="num">1</span>) ss
+
+main = <span class="kwd">do</span> 
+   (n :: <span class="kwb">Int</span>) &lt;- <span class="kwc">return</span>.<span class="kwc">read</span>.<span class="kwc">head</span> =&lt;&lt; <span class="kwc">getArgs</span>
+   <span class="kwd">let</span> nsolutions = <span class="kwc">take</span> n solutions
+   <span class="kwc">putStrLn</span> $ (<span class="kwc">show</span> $ <span class="kwa">length</span> nsolutions) ++ <span class="str">&quot; solutions found</span><span class="esc">\n</span><span class="str">&quot;</span>
+   printSolution $ <span class="kwc">minimum</span> nsolutions
+   <span class="kwc">putStr</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>
+   printSolution $ <span class="kwc">maximum</span> nsolutions
+   <span class="kwc">putStr</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>

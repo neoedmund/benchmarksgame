@@ -1,0 +1,31 @@
+#lang racket/base
+
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;;; contributed by Matthew Flatt</span>
+
+<span class="slc">;; Uses Racket threads</span>
+
+(<span class="kwa">require</span> racket/cmdline)
+
+<span class="slc">;; Each thread runs this loop:</span>
+(<span class="kwa">define</span> (<span class="kwa">run</span> id next)
+  (<span class="kwa">let</span> ([v (<span class="kwa">thread-receive</span>)])
+    (<span class="kwa">cond</span>
+     [(<span class="kwa">zero</span>? v) <span class="slc">;; Done</span>
+      (<span class="kwa">printf</span> <span class="str">&quot;~a</span><span class="esc">\n</span><span class="str">&quot;</span> id)
+      (<span class="kwa">exit</span>)]
+     [else <span class="slc">;; Keep going</span>
+      (<span class="kwa">thread-send</span> next (<span class="kwa">sub1</span> v))
+      (<span class="kwa">run</span> id next)])))
+                       
+
+(<span class="kwa">let</span> ([n (<span class="kwa">command-line</span> #:args (<span class="kwa">n</span>) (<span class="kwa">string-</span>&gt;number n))])
+  <span class="slc">;; The original thread is #503. Create the rest:</span>
+  (<span class="kwa">let</span> ([t1 (<span class="kwa">for</span>/fold ([next (<span class="kwa">current-thread</span>)])
+                      ([id (<span class="kwa">in-range</span> <span class="num">502 0</span> -<span class="num">1</span>)])
+              (<span class="kwa">thread</span> (<span class="kwa">lambda</span> () (<span class="kwa">run</span> id next))))])
+    <span class="slc">;; Start:</span>
+    (<span class="kwa">thread-send</span> t1 n)
+    (<span class="kwa">run</span> <span class="num">503</span> t1)))

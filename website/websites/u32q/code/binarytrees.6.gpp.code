@@ -1,0 +1,114 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Jon Harrop</span>
+<span class="com"> * modified by Alex Mizrahi</span>
+<span class="com"> * modified by Andreas Schäfer</span>
+<span class="com"> * very minor omp tweak by The Anh Tran</span>
+<span class="com"> */</span>
+
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;omp.h&gt;</span>
+
+<span class="ppc">#include &lt;boost/pool/object_pool.hpp&gt;</span>
+
+
+<span class="kwb">const size_t</span>	LINE_SIZE = <span class="num">64</span>;
+
+
+<span class="kwb">struct</span> Node 
+{
+    Node *l, *r;
+    <span class="kwb">int</span> i;
+    
+    <span class="kwd">Node</span>(<span class="kwb">int</span> i2) : <span class="kwd">l</span>(<span class="num">0</span>), <span class="kwd">r</span>(<span class="num">0</span>), <span class="kwd">i</span>(i2) 
+    {}
+    <span class="kwd">Node</span>(Node *l2, <span class="kwb">int</span> i2, Node *r2) : <span class="kwd">l</span>(l2), <span class="kwd">r</span>(r2), <span class="kwd">i</span>(i2) 
+    {}
+
+    <span class="kwb">int</span> <span class="kwd">check</span>() <span class="kwb">const</span> 
+    {
+        <span class="kwa">if</span> (l)
+            <span class="kwa">return</span> l-&gt;<span class="kwd">check</span>() + i - r-&gt;<span class="kwd">check</span>();
+        <span class="kwa">else return</span> i;
+    }
+};
+
+<span class="kwc">typedef</span> boost::object_pool&lt;Node&gt; NodePool;
+
+
+Node *<span class="kwd">make</span>(<span class="kwb">int</span> i, <span class="kwb">int</span> d, NodePool &amp;store) 
+{
+    <span class="kwa">if</span> (d &gt; <span class="num">0</span>) 
+	    <span class="kwa">return</span> store.<span class="kwd">construct</span>(	<span class="kwd">make</span>(<span class="num">2</span>*i-<span class="num">1</span>, d-<span class="num">1</span>, store), 
+	    						i, 
+	    						<span class="kwd">make</span>(<span class="num">2</span>*i, d-<span class="num">1</span>, store)	);
+   	<span class="kwa">return</span> store.<span class="kwd">construct</span>(i);
+}
+
+<span class="kwb">int</span> <span class="kwd">GetThreadCount</span>()
+{
+	cpu_set_t cs;
+	<span class="kwd">CPU_ZERO</span>(&amp;cs);
+	<span class="kwd">sched_getaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(cs), &amp;cs);
+
+	<span class="kwb">int</span> count = <span class="num">0</span>;
+	<span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">8</span>; i++)
+	{
+		<span class="kwa">if</span> (<span class="kwd">CPU_ISSET</span>(i, &amp;cs))
+			count++;
+	}
+	<span class="kwa">return</span> count;
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[]) 
+{
+    <span class="kwb">int</span> min_depth = <span class="num">4</span>;
+    <span class="kwb">int</span> max_depth = std::<span class="kwd">max</span>(min_depth+<span class="num">2</span>,
+                             (argc == <span class="num">2</span> ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">10</span>));
+    <span class="kwb">int</span> stretch_depth = max_depth+<span class="num">1</span>;
+
+	<span class="slc">// Alloc then dealloc stretchdepth tree</span>
+    {
+        NodePool store;
+        Node *c = <span class="kwd">make</span>(<span class="num">0</span>, stretch_depth, store);
+        std::cout &lt;&lt; <span class="str">&quot;stretch tree of depth &quot;</span> &lt;&lt; stretch_depth &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">&quot;</span>
+                  &lt;&lt; <span class="str">&quot;check: &quot;</span> &lt;&lt; c-&gt;<span class="kwd">check</span>() &lt;&lt; std::endl;
+    }
+
+    NodePool long_lived_store;
+    Node *long_lived_tree = <span class="kwd">make</span>(<span class="num">0</span>, max_depth, long_lived_store);
+
+	<span class="slc">// buffer to store output of each thread</span>
+	<span class="kwb">char</span> *outputstr = (<span class="kwb">char</span>*)<span class="kwd">malloc</span>(LINE_SIZE * (max_depth +<span class="num">1</span>) * <span class="kwa">sizeof</span>(<span class="kwb">char</span>));
+
+	<span class="ppc">#pragma omp parallel for default(shared) num_threads(GetThreadCount()) schedule(dynamic, 1)</span>
+    <span class="kwa">for</span> (<span class="kwb">int</span> d = min_depth; d &lt;= max_depth; d += <span class="num">2</span>) 
+    {
+        <span class="kwb">int</span> iterations = <span class="num">1</span> &lt;&lt; (max_depth - d + min_depth);
+        <span class="kwb">int</span> c = <span class="num">0</span>;
+
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">1</span>; i &lt;= iterations; ++i) 
+        {
+            NodePool store;
+            Node *a = <span class="kwd">make</span>(i, d, store), *b = <span class="kwd">make</span>(-i, d, store);
+            c += a-&gt;<span class="kwd">check</span>() + b-&gt;<span class="kwd">check</span>();
+        }
+
+		<span class="slc">// each thread write to separate location</span>
+		<span class="kwd">sprintf</span>(outputstr + LINE_SIZE * d, <span class="str">&quot;%d</span><span class="esc">\t</span> <span class="str">trees of depth %d</span><span class="esc">\t</span> <span class="str">check: %d</span><span class="esc">\n</span><span class="str">&quot;</span>, (<span class="num">2</span> * iterations), d, c);
+	}
+
+	<span class="slc">// print all results</span>
+	<span class="kwa">for</span> (<span class="kwb">int</span> d = min_depth; d &lt;= max_depth; d += <span class="num">2</span>) 
+		<span class="kwd">printf</span>(<span class="str">&quot;%s&quot;</span>, outputstr + (d * LINE_SIZE) );
+	<span class="kwd">free</span>(outputstr);
+
+    std::cout &lt;&lt; <span class="str">&quot;long lived tree of depth &quot;</span> &lt;&lt; max_depth &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">&quot;</span>
+              &lt;&lt; <span class="str">&quot;check: &quot;</span> &lt;&lt; (long_lived_tree-&gt;<span class="kwd">check</span>()) &lt;&lt; <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+
+    <span class="kwa">return</span> <span class="num">0</span>;
+}
+

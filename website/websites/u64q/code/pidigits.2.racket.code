@@ -1,0 +1,95 @@
+#lang racket/base
+
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; Based on the Perl version of the benchmark</span>
+<span class="slc">;; adapted with a GMP interface by Eli Barzilay</span>
+
+(<span class="kwa">require</span> racket/cmdline
+         (<span class="kwa">for-syntax</span> racket/base)
+         ffi/unsafe)
+
+<span class="slc">;; quick libgmp interface, limited to what we need below</span>
+(<span class="kwa">define</span> libgmp (<span class="kwa">ffi-lib</span> <span class="str">&quot;libgmp&quot;</span>))
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">defgmp</span> op type ...)
+  (<span class="kwa">define</span> op (<span class="kwa">get-ffi-obj</span> (<span class="kwa">format</span> <span class="str">&quot;__gmpz_~a&quot;</span> 'op) libgmp (<span class="kwa">_fun</span> type ...))))
+(<span class="kwa">define-cstruct</span> _mpz ([alloc _int] [size _int] [limbs _pointer]))
+(<span class="kwa">defgmp</span> init_set_ui _mpz-pointer _ulong -&gt; _void)
+(<span class="kwa">defgmp</span> set_ui _mpz-pointer _ulong -&gt; _void)
+(<span class="kwa">defgmp</span> get_ui    _mpz-pointer -&gt; _ulong)
+(<span class="kwa">defgmp</span> add       _mpz-pointer _mpz-pointer _mpz-pointer -&gt; _void)
+(<span class="kwa">defgmp</span> mul       _mpz-pointer _mpz-pointer _mpz-pointer -&gt; _void)
+(<span class="kwa">defgmp</span> mul_ui    _mpz-pointer _mpz-pointer _long        -&gt; _void)
+(<span class="kwa">defgmp</span> addmul    _mpz-pointer _mpz-pointer _mpz-pointer -&gt; _void)
+(<span class="kwa">defgmp</span> addmul_ui _mpz-pointer _mpz-pointer _ulong       -&gt; _void)
+(<span class="kwa">defgmp</span> submul_ui _mpz-pointer _mpz-pointer _ulong       -&gt; _void)
+(<span class="kwa">defgmp</span> tdiv_q    _mpz-pointer _mpz-pointer _mpz-pointer -&gt; _void)
+(<span class="kwa">defgmp</span> cmp       _mpz-pointer _mpz-pointer              -&gt; _int)
+(<span class="kwa">define</span> (<span class="kwa">make-ui</span> n) (<span class="kwa">let</span> ([i (<span class="kwa">make-mpz</span> <span class="num">0 0</span> #f)]) (<span class="kwa">init_set_ui</span> i n) i))
+<span class="slc">;; &quot;fancy&quot; parser, for fun (only for the limited subset we use)</span>
+(<span class="kwa">define-syntax</span> (<span class="kwa">gmp</span> stx)
+  (<span class="kwa">define</span> (<span class="kwa">sym</span>=? x y)
+    (<span class="kwa">eq</span>? (<span class="kwa">if</span> (<span class="kwa">syntax</span>? x) (<span class="kwa">syntax-e</span> x) x) (<span class="kwa">if</span> (<span class="kwa">syntax</span>? y) (<span class="kwa">syntax-e</span> y) y)))
+  (<span class="kwa">define</span> (<span class="kwa">_</span>? stx)
+    (<span class="kwa">and</span> (<span class="kwa">identifier</span>? stx)
+         (<span class="kwa">regexp-match</span>? #rx<span class="str">&quot;^_&quot;</span> (<span class="kwa">symbol-</span>&gt;string (<span class="kwa">syntax-e</span> stx)))))
+  (<span class="kwa">define</span> (<span class="kwa">split</span> xs)
+    (<span class="kwa">let</span> loop ([xs xs] [cur '()] [r '()])
+      (<span class="kwa">define</span> (<span class="kwa">add</span>) (<span class="kwa">cons</span> (<span class="kwa">reverse</span> cur) r))
+      (<span class="kwa">cond</span> [(<span class="kwa">null</span>? xs) (<span class="kwa">reverse</span> (<span class="kwa">add</span>))]
+            [(<span class="kwa">syntax-case</span> (<span class="kwa">car</span> xs) (<span class="kwa">unquote</span>) [,x #'x] [else #f])
+             =&gt; (<span class="kwa">lambda</span> (<span class="kwa">x</span>) (<span class="kwa">loop</span> (<span class="kwa">cdr</span> xs) (<span class="kwa">list</span> x) (<span class="kwa">add</span>)))]
+            [else (<span class="kwa">loop</span> (<span class="kwa">cdr</span> xs) (<span class="kwa">cons</span> (<span class="kwa">car</span> xs) cur) r)])))
+  (<span class="kwa">define</span> (<span class="kwa">translate</span> expr)
+    (<span class="kwa">syntax-case</span>* expr (= += -= + * / &lt; &gt;) sym=?
+      [(<span class="kwa">x</span> = y + z)  #'(<span class="kwa">add</span> x y z)]
+      [(<span class="kwa">x</span> = y * z)  #`(#,(<span class="kwa">if</span> (<span class="kwa">_</span>? #'z) #'mul #'mul_ui) x y z)]
+      [(<span class="kwa">x</span> += y * z) #`(#,(<span class="kwa">if</span> (<span class="kwa">_</span>? #'z) #'addmul #'addmul_ui) x y z)]
+      [(<span class="kwa">x</span> -= y * z) #`(#,(<span class="kwa">if</span> (<span class="kwa">_</span>? #'z) #'submul #'submul_ui) x y z)]
+      [(<span class="kwa">x</span> = y / z)  #'(<span class="kwa">tdiv_q</span> x y z)]
+      [(<span class="kwa">x</span> &lt; y)      #'(&lt; (<span class="kwa">cmp</span> x y) <span class="num">0</span>)]
+      [(<span class="kwa">x</span> &gt; y)      #'(&gt; (<span class="kwa">cmp</span> x y) <span class="num">0</span>)]
+      [(<span class="kwa">get</span> x)      #'(<span class="kwa">get_ui</span> x)]))
+  (<span class="kwa">syntax-case</span> stx ()
+    [(<span class="kwa">_</span> x ...) #`(<span class="kwa">begin</span> #,&#64;(<span class="kwa">map</span> translate (<span class="kwa">split</span> (<span class="kwa">syntax-</span>&gt;list #'(<span class="kwa">x</span> ...)))))]))
+
+<span class="slc">;; the actual code</span>
+
+(<span class="kwa">define</span> (<span class="kwa">digits</span> n)
+  (<span class="kwa">define</span> i <span class="num">0</span>)
+  (<span class="kwa">define</span> _x0 (<span class="kwa">make-ui</span> <span class="num">1</span>))
+  (<span class="kwa">define</span> _x1 (<span class="kwa">make-ui</span> <span class="num">0</span>))
+  (<span class="kwa">define</span> _x2 (<span class="kwa">make-ui</span> <span class="num">1</span>))
+  (<span class="kwa">define</span> _r  (<span class="kwa">make-ui</span> <span class="num">0</span>))
+
+  (<span class="kwa">define</span> (<span class="kwa">extract-digit</span> n)
+    (<span class="kwa">gmp</span> _r = _x0 * n, _r = _r + _x1, _r = _r / _x2, get _r))
+
+  (<span class="kwa">let</span> loop ([k <span class="num">0</span>])
+
+    (<span class="kwa">define-syntax-rule</span> (<span class="kwa">compose1</span>!+loop)
+      (<span class="kwa">let</span>* ([k (<span class="kwa">add1</span> k)] [y2 (<span class="kwa">add1</span> (* k <span class="num">2</span>))])
+        (<span class="kwa">gmp</span> _x1 = _x1 * y2, _x1 += _x0 * (* y2 <span class="num">2</span>), _x0 = _x0 * k,_x2 = _x2 * y2)
+        (<span class="kwa">loop</span> k)))
+    (<span class="kwa">define-syntax-rule</span> (<span class="kwa">compose2</span>! d)
+      (<span class="kwa">begin</span> (<span class="kwa">gmp</span> _x1 -= _x2 * d, _x1 = _x1 * <span class="num">10</span>, _x0 = _x0 * <span class="num">10</span>)
+             (<span class="kwa">loop</span> k)))
+
+    (<span class="kwa">if</span> (<span class="kwa">gmp</span> _x0 &gt; _x1)
+      (<span class="kwa">compose1</span>!+loop)
+      (<span class="kwa">let</span> ([d (<span class="kwa">extract-digit</span> <span class="num">3</span>)])
+        (<span class="kwa">if</span> (<span class="kwa">not</span> (= d (<span class="kwa">extract-digit</span> <span class="num">4</span>)))
+          (<span class="kwa">compose1</span>!+loop)
+          (<span class="kwa">begin</span> (<span class="kwa">display</span> d)
+                 (<span class="kwa">set</span>! i (<span class="kwa">add1</span> i))
+                 (<span class="kwa">let</span> ([m (<span class="kwa">modulo</span> i <span class="num">10</span>)])
+                   (<span class="kwa">when</span> (<span class="kwa">zero</span>? m) (<span class="kwa">printf</span> <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:~a</span><span class="esc">\n</span><span class="str">&quot;</span> i))
+                   (<span class="kwa">if</span> (&lt; i n)
+                     (<span class="kwa">compose2</span>! d)
+                     (<span class="kwa">unless</span> (<span class="kwa">zero</span>? m)
+                       (<span class="kwa">printf</span> <span class="str">&quot;~a</span><span class="esc">\t</span><span class="str">:~a</span><span class="esc">\n</span><span class="str">&quot;</span>
+                               (<span class="kwa">make-string</span> (<span class="kwa">-</span> <span class="num">10</span> m) #\space)
+                               n))))))))))
+
+(<span class="kwa">digits</span> (<span class="kwa">command-line</span> #:args (<span class="kwa">n</span>) (<span class="kwa">string-</span>&gt;number n)))

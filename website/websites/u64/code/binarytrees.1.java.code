@@ -1,0 +1,137 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> </span>
+<span class="com">   contributed by Leonhard Holz</span>
+<span class="com">   based on contribution by Jarkko Miettinen</span>
+<span class="com">*/</span>
+
+<span class="kwa">public class</span> binarytrees {
+
+   <span class="kwa">private final static</span> <span class="kwb">int</span> minDepth = <span class="num">4</span>;
+   <span class="kwa">private final static</span> <span class="kwb">int</span> threadCount = Runtime.<span class="kwd">getRuntime</span>().<span class="kwd">availableProcessors</span>() &gt; <span class="num">1</span> ? <span class="num">2</span> : <span class="num">1</span>;
+   <span class="kwa">private final static</span> TreeGenerator[] threads = <span class="kwa">new</span> TreeGenerator[threadCount + <span class="num">1</span>];
+   
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args)
+   {
+      <span class="kwb">int</span> n = <span class="num">0</span>;
+      <span class="kwa">if</span> (args.length &gt; <span class="num">0</span>) n = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+      <span class="kwb">int</span> maxDepth = (minDepth + <span class="num">2</span> &gt; n) ? minDepth + <span class="num">2</span> : n;
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; threadCount + <span class="num">1</span>; i++) {
+         threads[i] = <span class="kwa">new</span> <span class="kwd">TreeGenerator</span>();
+         threads[i].<span class="kwd">start</span>();
+      }
+      
+      TreeGenerator lastThread = threads[threadCount];
+      lastThread.depth = maxDepth + <span class="num">1</span>;
+      lastThread.run = true;
+      <span class="kwa">try</span> {
+         <span class="kwa">synchronized</span>(lastThread) {
+            lastThread.<span class="kwd">notify</span>();
+            lastThread.<span class="kwd">wait</span>();
+         }
+      } <span class="kwa">catch</span> (InterruptedException e) {}
+
+      System.out.<span class="kwd">println</span>(<span class="str">&quot;stretch tree of depth &quot;</span> + lastThread.depth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + lastThread.result);
+
+      lastThread.depth = maxDepth;
+      lastThread.run = true;
+      <span class="kwa">try</span> {
+         <span class="kwa">synchronized</span>(lastThread) {
+            lastThread.<span class="kwd">notify</span>();
+            lastThread.<span class="kwd">wait</span>();
+         }
+      } <span class="kwa">catch</span> (InterruptedException e) {}
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> depth = minDepth; depth &lt;= maxDepth; depth+=<span class="num">2</span> ) {
+
+         <span class="kwb">int</span> check = <span class="num">0</span>;
+         <span class="kwb">int</span> iterations = <span class="num">1</span> &lt;&lt; (maxDepth - depth + minDepth);
+         <span class="kwb">int</span> length = iterations / threadCount;
+
+         <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; threadCount; i++) <span class="kwa">synchronized</span>(threads[i]) {
+            threads[i].depth = depth;
+            threads[i].start = i * length;
+            threads[i].end = (i + <span class="num">1</span>) * length;
+            threads[i].run = true;
+            threads[i].<span class="kwd">notify</span>();
+         }
+         <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; threadCount; i++) <span class="kwa">try</span> {
+            <span class="kwa">synchronized</span>(threads[i]) {
+               <span class="kwa">if</span> (threads[i].run) threads[i].<span class="kwd">wait</span>();
+            }
+            check += threads[i].result;
+         } <span class="kwa">catch</span> (InterruptedException e) {}
+
+         System.out.<span class="kwd">println</span>((iterations * <span class="num">2</span>) + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">trees of depth &quot;</span> + depth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + check);
+      }
+
+      System.out.<span class="kwd">println</span>(<span class="str">&quot;long lived tree of depth &quot;</span> + maxDepth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span>+ lastThread.result);
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; threadCount + <span class="num">1</span>; i++) {
+         threads[i].terminate = true;
+         <span class="kwa">synchronized</span>(threads[i]) {
+            threads[i].<span class="kwd">notify</span>();
+         }
+      }
+   }
+
+   <span class="kwa">private static class</span> TreeGenerator <span class="kwa">extends</span> Thread
+   {
+      <span class="kwa">private</span> <span class="kwb">boolean</span> run = false;
+      <span class="kwa">private</span> <span class="kwb">boolean</span> terminate = false;
+
+      <span class="kwa">private</span> <span class="kwb">int</span> start = <span class="num">0</span>;
+      <span class="kwa">private</span> <span class="kwb">int</span> end = <span class="num">0</span>;
+      <span class="kwa">private</span> <span class="kwb">int</span> result = <span class="num">0</span>;
+      <span class="kwa">private</span> <span class="kwb">int</span> depth;
+      
+      <span class="kwa">private static</span> TreeNode <span class="kwd">bottomUpTree</span>(<span class="kwb">int</span> item, <span class="kwb">int</span> depth)
+      {
+         TreeNode node = <span class="kwa">new</span> <span class="kwd">TreeNode</span>();
+         node.item = item;
+         <span class="kwa">if</span> (depth &gt; <span class="num">0</span>) {
+            node.left = <span class="kwd">bottomUpTree</span>(<span class="num">2</span> * item - <span class="num">1</span>, depth - <span class="num">1</span>);
+            node.right = <span class="kwd">bottomUpTree</span>(<span class="num">2</span> * item, depth - <span class="num">1</span>);
+         } <span class="kwa">else</span> {
+            node.left = null;
+         }
+         <span class="kwa">return</span> node;
+      }
+
+      <span class="kwa">private static</span> <span class="kwb">int</span> <span class="kwd">checkItems</span>(TreeNode node)
+      {
+         <span class="kwa">if</span> (node.left == null) {
+            <span class="kwa">return</span> node.item;
+         } <span class="kwa">else</span> {
+            <span class="kwa">return</span> node.item + <span class="kwd">checkItems</span>(node.left) - <span class="kwd">checkItems</span>(node.right);
+         }
+      }
+      
+      
+      <span class="kwa">public synchronized</span> <span class="kwb">void</span> <span class="kwd">run</span>()
+      {
+         <span class="kwa">while</span> (!terminate) {
+            <span class="kwa">if</span> (run) {
+               result = <span class="num">0</span>;
+               <span class="kwa">if</span> (start == end) {
+                  result += <span class="kwd">checkItems</span>(<span class="kwd">bottomUpTree</span>(start, depth));
+               } <span class="kwa">else for</span> (<span class="kwb">int</span> i = start; i &lt; end; i++) {
+                  result += <span class="kwd">checkItems</span>(<span class="kwd">bottomUpTree</span>(i, depth)) + <span class="kwd">checkItems</span>(<span class="kwd">bottomUpTree</span>(-i, depth));
+               }
+               run = false;
+               <span class="kwd">notify</span>();
+            }
+            <span class="kwa">try</span> {
+               <span class="kwd">wait</span>();
+            } <span class="kwa">catch</span> (InterruptedException e) {}
+         }
+      }
+   }
+   
+   <span class="kwa">private static class</span> TreeNode
+   {
+      <span class="kwa">private</span> <span class="kwb">int</span> item;
+      <span class="kwa">private</span> TreeNode left, right;
+   }
+}

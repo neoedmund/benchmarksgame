@@ -1,0 +1,58 @@
+
+Mon, 30 Nov 2015 01:25:02 GMT
+
+MAKE:
+mv fannkuchredux.fpascal fannkuchredux.pas
+/usr/local/src/fpc-3.0.0.x86_64-linux/bin/fpc -FuInclude/fpascal -XXs -O3 -Tlinux  -oFPASCAL_RUN fannkuchredux.pas
+Free Pascal Compiler version 3.0.0 [2015/11/20] for x86_64
+Copyright (c) 1993-2015 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling fannkuchredux.pas
+fannkuchredux.pas(99,14) Warning: Local variable "list" does not seem to be initialized
+fannkuchredux.pas(173,5) Warning: Local variable "list" does not seem to be initialized
+fannkuchredux.pas(171,21) Warning: Local variable "limits" does not seem to be initialized
+fannkuchredux.pas(170,23) Warning: Local variable "counters" does not seem to be initialized
+fannkuchredux.pas(169,19) Warning: Local variable "list" does not seem to be initialized
+Linking FPASCAL_RUN
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/usr/bin/ld: warning: link.res contains output sections; did you forget -T?
+200 lines compiled, 0.9 sec
+5 warning(s) issued
+mv FPASCAL_RUN fannkuchredux.fpascal_run
+rm fannkuchredux.pas
+0.90s to complete and log all make actions
+
+COMMAND LINE:
+./fannkuchredux.fpascal_run 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

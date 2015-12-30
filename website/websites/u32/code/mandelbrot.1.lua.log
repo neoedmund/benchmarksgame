@@ -1,0 +1,15 @@
+
+Tue, 13 Jan 2015 00:43:13 GMT
+
+COMMAND LINE:
+/usr/local/src/lua-5.3.0/bin/lua  mandelbrot.lua 1000
+
+PROGRAM FAILED 
+
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN
+
+/usr/local/src/lua-5.3.0/bin/lua: mandelbrot.lua:25: attempt to call a nil value (local 'unpack')
+stack traceback:
+	mandelbrot.lua:25: in main chunk
+	[C]: in ?

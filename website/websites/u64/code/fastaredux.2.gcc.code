@@ -1,0 +1,144 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   based on C++ program by Andrew Moon</span>
+<span class="com">   contributed by Damien Grassart</span>
+<span class="com">*/</span>
+
+<span class="ppc">#define _GNU_SOURCE</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+
+<span class="ppc">#define MIN(x, y) ((x &lt; y) ? x : y)</span>
+<span class="ppc">#define LINELEN 60</span>
+<span class="ppc">#define SLOTS 4095</span>
+
+<span class="kwb">struct</span> aminoacid {
+   <span class="kwb">char</span> c;
+   <span class="kwb">float</span> p;
+};
+
+<span class="kwb">static struct</span> aminoacid *lu[SLOTS + <span class="num">1</span>];
+
+<span class="kwb">static void</span> <span class="kwd">repeat_fasta</span>(<span class="kwb">const char</span> *alu, <span class="kwb">size_t</span> n)
+{
+   <span class="kwb">const size_t</span> alulen = <span class="kwd">strlen</span>(alu);
+   <span class="kwb">char</span> buf[alulen + LINELEN];
+   <span class="kwb">size_t</span> pos = <span class="num">0</span>, bytes;
+
+   <span class="kwd">memcpy</span>(buf, alu, alulen);
+   <span class="kwd">memcpy</span>(buf + alulen, alu, LINELEN);
+   <span class="kwa">while</span> (n) {
+      bytes = <span class="kwd">MIN</span>(LINELEN, n);
+      <span class="kwd">fwrite_unlocked</span>(buf + pos, bytes, <span class="num">1</span>, stdout);
+      <span class="kwd">putchar_unlocked</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>);
+      pos += bytes;
+      <span class="kwa">if</span> (pos &gt; alulen)
+         pos -= alulen;
+      n -= bytes;
+   }
+}
+
+<span class="kwb">static void</span> <span class="kwd">acc_probs</span>(<span class="kwb">struct</span> aminoacid *table)
+{
+   <span class="kwb">struct</span> aminoacid *iter = table;
+
+   <span class="kwa">while</span> ((++iter)-&gt;c) {
+      iter-&gt;p += (iter-<span class="num">1</span>)-&gt;p;
+   }
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt;= SLOTS; ++i) {
+      <span class="kwa">while</span> (i &gt; (table-&gt;p * SLOTS))
+         ++table;
+      lu[i] = table;
+   }
+}
+
+<span class="kwb">static float</span> <span class="kwd">rng</span>(<span class="kwb">float</span> max)
+{
+   <span class="kwb">const unsigned int</span> IM = <span class="num">139968</span>, IA = <span class="num">3877</span>, IC = <span class="num">29573</span>;
+   <span class="kwb">static unsigned int</span> seed = <span class="num">42</span>;
+
+   seed = (seed * IA + IC) % IM;
+   <span class="kwa">return</span> max * seed / IM;
+}
+
+<span class="kwb">static char</span> <span class="kwd">nextc</span>()
+{
+   <span class="kwb">float</span> r;
+   <span class="kwb">struct</span> aminoacid *iter;
+
+   r = <span class="kwd">rng</span>(<span class="num">1.0</span>f);
+   iter = lu[(<span class="kwb">int</span>)(r * SLOTS)];
+   <span class="kwa">while</span> (iter-&gt;p &lt; r)
+      ++iter;
+   <span class="kwa">return</span> iter-&gt;c;
+}
+
+<span class="kwb">static void</span> <span class="kwd">random_fasta</span>(<span class="kwb">struct</span> aminoacid *table, <span class="kwb">size_t</span> n)
+{
+   <span class="kwb">size_t</span> i, lines = n / LINELEN;
+   <span class="kwb">const size_t</span> chars_left = n % LINELEN;
+   <span class="kwb">char</span> buf[LINELEN + <span class="num">1</span>];
+
+   <span class="kwa">while</span> (lines--) {
+      <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; LINELEN; ++i) {
+         buf[i] = <span class="kwd">nextc</span>();
+      }
+      buf[i] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+      <span class="kwd">fwrite_unlocked</span>(buf, i + <span class="num">1</span>, <span class="num">1</span>, stdout);
+   }
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; chars_left; ++i)
+      buf[i] = <span class="kwd">nextc</span>();
+   <span class="kwd">fwrite_unlocked</span>(buf, i, <span class="num">1</span>, stdout);
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> **argv)
+{
+   <span class="kwb">const size_t</span> n = (argc &gt; <span class="num">1</span>) ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">1000</span>;
+   <span class="kwb">const char</span> alu[] =
+      <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTG&quot;</span>
+      <span class="str">&quot;GGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGA&quot;</span>
+      <span class="str">&quot;GACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAA&quot;</span>
+      <span class="str">&quot;AATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAAT&quot;</span>
+      <span class="str">&quot;CCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAAC&quot;</span>
+      <span class="str">&quot;CCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTG&quot;</span>
+      <span class="str">&quot;CACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+   <span class="kwb">struct</span> aminoacid iub[] = {
+      { <span class="str">'a'</span>, <span class="num">0.27</span> },
+      { <span class="str">'c'</span>, <span class="num">0.12</span> },
+      { <span class="str">'g'</span>, <span class="num">0.12</span> },
+      { <span class="str">'t'</span>, <span class="num">0.27</span> },
+      { <span class="str">'B'</span>, <span class="num">0.02</span> },
+      { <span class="str">'D'</span>, <span class="num">0.02</span> },
+      { <span class="str">'H'</span>, <span class="num">0.02</span> },
+      { <span class="str">'K'</span>, <span class="num">0.02</span> },
+      { <span class="str">'M'</span>, <span class="num">0.02</span> },
+      { <span class="str">'N'</span>, <span class="num">0.02</span> },
+      { <span class="str">'R'</span>, <span class="num">0.02</span> },
+      { <span class="str">'S'</span>, <span class="num">0.02</span> },
+      { <span class="str">'V'</span>, <span class="num">0.02</span> },
+      { <span class="str">'W'</span>, <span class="num">0.02</span> },
+      { <span class="str">'Y'</span>, <span class="num">0.02</span> },
+      { <span class="num">0</span>, <span class="num">0</span> }
+   };
+   <span class="kwb">struct</span> aminoacid homosapiens[] = {
+      { <span class="str">'a'</span>, <span class="num">0.3029549426680</span> },
+      { <span class="str">'c'</span>, <span class="num">0.1979883004921</span> },
+      { <span class="str">'g'</span>, <span class="num">0.1975473066391</span> },
+      { <span class="str">'t'</span>, <span class="num">0.3015094502008</span> },
+      { <span class="num">0</span>, <span class="num">0</span> }
+   };
+
+   <span class="kwd">fputs_unlocked</span>(<span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>, stdout);
+   <span class="kwd">repeat_fasta</span>(alu, n * <span class="num">2</span>);
+   <span class="kwd">fputs_unlocked</span>(<span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>, stdout);
+   <span class="kwd">acc_probs</span>(iub);
+   <span class="kwd">random_fasta</span>(iub, n * <span class="num">3</span>);
+   <span class="kwd">fputs_unlocked</span>(<span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>, stdout);
+   <span class="kwd">acc_probs</span>(homosapiens);
+   <span class="kwd">random_fasta</span>(homosapiens, n * <span class="num">5</span>);
+   <span class="kwd">putchar_unlocked</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>);
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}

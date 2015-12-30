@@ -1,0 +1,378 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by by Robert F. Tobler</span>
+<span class="com"> *  + byte processing, C# 3.0 idioms, frame level paralellism</span>
+<span class="com"> * modified by Jonathan C. Dickinson</span>
+<span class="com"> *  + unsafe code, string-free, micro-optimizations, best performance practices</span>
+<span class="com"> *   (33% faster on MSFT CLR)</span>
+<span class="com"> */</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.IO;
+<span class="kwa">using</span> System.Collections.Generic;
+<span class="kwa">using</span> System.Linq;
+<span class="kwa">using</span> System.Text;
+<span class="kwa">using</span> System.Threading;
+<span class="kwa">using</span> System.Diagnostics;
+
+<span class="kwa">public sealed class</span> ByteString : IEquatable&lt;ByteString&gt;, IComparable&lt;ByteString&gt;
+{
+   <span class="kwa">public readonly</span> <span class="kwb">byte</span>[] Array;
+   <span class="kwa">public readonly</span> <span class="kwb">int</span> Start;
+   <span class="kwa">public readonly</span> <span class="kwb">int</span> Length;
+   <span class="kwa">private</span> <span class="kwb">int</span> HashCode;
+
+   <span class="kwa">public</span> unsafe <span class="kwd">ByteString</span>(<span class="kwb">byte</span>[] array, <span class="kwb">int</span> start, <span class="kwb">int</span> length)
+   {
+      Array = array; Start = start; Length = length;
+      HashCode = <span class="num">0</span>;
+      <span class="kwd">fixed</span> (<span class="kwb">byte</span>* ptrFixed = &amp;Array[Start])
+      {
+         <span class="kwb">byte</span>* ptr = ptrFixed;
+         <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; Length; i++)
+            HashCode = HashCode * <span class="num">31</span> + *ptr++;
+      }
+   }
+
+   <span class="kwa">public</span> unsafe <span class="kwd">ByteString</span>(<span class="kwb">string</span> text)
+   {
+      Start = <span class="num">0</span>; Length = text.Length;
+      Array = Encoding.ASCII.<span class="kwd">GetBytes</span>(text);
+      HashCode = <span class="num">0</span>;
+      <span class="kwd">fixed</span> (<span class="kwb">byte</span>* ptrFixed = &amp;Array[Start])
+      {
+         <span class="kwb">byte</span>* ptr = ptrFixed;
+         <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; Length; i++)
+            HashCode = HashCode * <span class="num">31</span> + *ptr++;
+      }
+   }
+
+   <span class="kwa">public override</span> <span class="kwb">int</span> <span class="kwd">GetHashCode</span>()
+   {
+      <span class="kwa">return</span> HashCode;
+   }
+
+   <span class="kwa">public</span> unsafe <span class="kwb">bool</span> <span class="kwd">Equals</span>(ByteString other)
+   {
+      <span class="kwa">if</span> (Length != other.Length) <span class="kwa">return false</span>;
+      <span class="kwd">fixed</span> (<span class="kwb">byte</span>* thisFixed = &amp;Array[Start], otherFixed = &amp;other.Array[other.Start])
+      {
+         var tf = thisFixed;
+         var of = otherFixed;
+         <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; Length; i++)
+            <span class="kwa">if</span> (*(tf++) != *(of++)) <span class="kwa">return false</span>;
+      }
+      <span class="kwa">return true</span>;
+   }
+
+   <span class="kwa">public</span> unsafe <span class="kwb">int</span> <span class="kwd">CompareTo</span>(ByteString other)
+   {
+      <span class="slc">// Converting to strings to compare is just wasteful.</span>
+
+      var len = Math.<span class="kwd">Min</span>(<span class="kwa">this</span>.Length, other.Length);
+      <span class="kwd">fixed</span> (<span class="kwb">byte</span>* thisFixed = &amp;Array[Start], otherFixed = &amp;other.Array[other.Start])
+      {
+         var tf = thisFixed;
+         var of = otherFixed;
+         <span class="slc">// We have to do this loop because of how strings compare.</span>
+         <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; len; i++)
+         {
+            var c1 = (<span class="kwb">char</span>)(*(tf++));
+            var c2 = (<span class="kwb">char</span>)(*(of++));
+            var c = c1.<span class="kwd">CompareTo</span>(c2);
+            <span class="kwa">if</span> (c != <span class="num">0</span>)
+               <span class="kwa">return</span> c;
+         }
+      }
+
+      <span class="kwa">return this</span>.Length.<span class="kwd">CompareTo</span>(other.Length);
+   }
+
+   <span class="kwa">public override</span> <span class="kwb">string</span> <span class="kwd">ToString</span>()
+   {
+      <span class="kwa">return</span> Encoding.ASCII.<span class="kwd">GetString</span>(Array, Start, Length);
+   }
+}
+
+<span class="kwa">public static class</span> Extensions
+{
+   <span class="kwa">public static readonly</span> <span class="kwb">byte</span>[] NewLine;
+
+   <span class="kwa">static</span> <span class="kwd">Extensions</span>()
+   {
+      <span class="slc">//NewLine = Environment.NewLine.Select(x =&gt; (byte)x).ToArray();</span>
+      NewLine = <span class="kwa">new</span>[] { (<span class="kwb">byte</span>)<span class="str">'</span><span class="esc">\n</span><span class="str">'</span> };
+   }
+
+   <span class="kwa">public static</span> <span class="kwb">bool</span> <span class="kwd">Contains</span>(<span class="kwa">this</span> <span class="kwb">byte</span>[] buffer, <span class="kwb">byte</span>[] data)
+   {
+      var index = <span class="num">0</span>;
+      <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; buffer.Length - data.Length; i++)
+      {
+         var b = buffer[i];
+
+         <span class="slc">// ToUpper</span>
+         <span class="kwa">if</span> (b &gt; <span class="num">96</span> &amp;&amp; b &lt; <span class="num">123</span>)
+            b = (<span class="kwb">byte</span>)(b - <span class="num">32</span>);
+
+         <span class="kwa">if</span> (data[index] == b)
+         {
+            index++;
+            <span class="kwa">if</span> (index == data.Length)
+            {
+               <span class="kwa">return true</span>;
+            }
+         }
+         <span class="kwa">else</span>
+         {
+            index = <span class="num">0</span>;
+         }
+      }
+      <span class="kwa">return false</span>;
+   }
+
+   <span class="kwa">public static</span> IEnumerable&lt;<span class="kwb">byte</span>[]&gt; <span class="kwd">ReadByteLines</span>(<span class="kwa">this</span> Stream stream)
+   {
+      <span class="slc">// Read a stream as a set of byte arrays representing strings.</span>
+      var dynamic = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">85</span>];
+      var lineLength = <span class="num">0</span>;
+
+      var buffer = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">4096</span>]; <span class="slc">// Ideally the system page size but I am not sure what Linux uses.</span>
+      var index = <span class="num">0</span>;
+      var readCount = <span class="num">0</span>;
+
+      <span class="kwa">while</span> ((readCount = stream.<span class="kwd">Read</span>(buffer, <span class="num">0</span>, buffer.Length)) != <span class="num">0</span>)
+      {
+         <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; readCount; i++)
+         {
+            var b = buffer[i];
+
+            <span class="slc">// ToUpper</span>
+            <span class="kwa">if</span> (b &gt; <span class="num">96</span> &amp;&amp; b &lt; <span class="num">123</span>)
+               b = (<span class="kwb">byte</span>)(b - <span class="num">32</span>);
+
+            <span class="slc">// Check for a newline.</span>
+            <span class="kwa">if</span> (NewLine[index] == b)
+            {
+               index++;
+               <span class="kwa">if</span> (index == NewLine.Length)
+               {
+                  <span class="kwa">if</span> (lineLength == <span class="num">0</span>)
+                     <span class="kwa">yield return new</span> <span class="kwb">byte</span>[<span class="num">0</span>];
+                  var result = <span class="kwa">new</span> <span class="kwb">byte</span>[lineLength];
+                  Buffer.<span class="kwd">BlockCopy</span>(dynamic, <span class="num">0</span>, result, <span class="num">0</span>, lineLength);
+                  <span class="kwa">yield return</span> result;
+                  lineLength = <span class="num">0</span>;
+                  index = <span class="num">0</span>;
+               }
+            }
+            <span class="kwa">else</span>
+            {
+               <span class="slc">// Otherwise append what we had of the newline.</span>
+               <span class="kwa">for</span> (var j = <span class="num">0</span>; j &lt; index; j++)
+               {
+                  <span class="kwd">Append</span>(<span class="kwa">ref</span> dynamic, <span class="kwa">ref</span> lineLength, NewLine[j]);
+               }
+
+               <span class="slc">// And the data.</span>
+               index = <span class="num">0</span>;
+               <span class="kwd">Append</span>(<span class="kwa">ref</span> dynamic, <span class="kwa">ref</span> lineLength, b);
+            }
+         }
+      }
+   }
+
+   <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">Append</span>(<span class="kwa">ref</span> <span class="kwb">byte</span>[] dynamic, <span class="kwa">ref</span> <span class="kwb">int</span> lineLength, <span class="kwb">byte</span> b)
+   {
+      var newLength = lineLength + <span class="num">1</span>;
+      <span class="kwa">if</span> (dynamic.Length &lt; newLength)
+      {
+         <span class="slc">// Allocate into an new array but use a DMA function</span>
+         <span class="slc">// instead of a silly O(n) Array.Copy/Resize.</span>
+         var newArr = <span class="kwa">new</span> <span class="kwb">byte</span>[dynamic.Length + <span class="num">85</span>];
+         Buffer.<span class="kwd">BlockCopy</span>(dynamic, <span class="num">0</span>, newArr, <span class="num">0</span>, dynamic.Length);
+         dynamic = newArr;
+      }
+      dynamic[lineLength] = b;
+      lineLength = newLength;
+   }
+
+   <span class="kwa">public static</span> <span class="kwb">byte</span>[] <span class="kwd">Concat</span>(<span class="kwa">this</span> IList&lt;<span class="kwb">byte</span>[]&gt; bytes, <span class="kwb">int</span> totalCount)
+   {
+      <span class="slc">// Once again we use DMA.</span>
+      var buffer = <span class="kwa">new</span> <span class="kwb">byte</span>[totalCount];
+      var pos = <span class="num">0</span>;
+      <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; bytes.Count; i++)
+      {
+         var arr = bytes[i];
+         Buffer.<span class="kwd">BlockCopy</span>(arr, <span class="num">0</span>, buffer, pos, arr.Length);
+         pos += arr.Length;
+      }
+      <span class="kwa">return</span> buffer;
+   }
+}
+
+<span class="kwa">public static class</span> Program
+{
+   <span class="kwa">public static</span> <span class="kwb">int</span> TaskCount;
+   <span class="kwa">public static</span> <span class="kwb">int</span> Current = -<span class="num">1</span>;
+   <span class="kwa">public static</span> KNucleotide[] kna;
+
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(<span class="kwb">string</span>[] args)
+   {
+      <span class="slc">// The help page asks to deal with command-line args.</span>
+      var source = Console.<span class="kwd">OpenStandardInput</span>();
+      var input = <span class="kwa">new</span> List&lt;<span class="kwb">byte</span>[]&gt;();
+      var totalCount = <span class="num">0</span>;
+
+      var hasSeenThree = <span class="kwa">false</span>;
+      <span class="kwa">foreach</span> (var line <span class="kwa">in</span> source.<span class="kwd">ReadByteLines</span>())
+      {
+         <span class="kwa">if</span> (!hasSeenThree)
+         {
+            hasSeenThree = line.<span class="kwd">Contains</span>(<span class="kwa">new</span>[] { (<span class="kwb">byte</span>)<span class="str">'&gt;'</span>, (<span class="kwb">byte</span>)<span class="str">'T'</span>, (<span class="kwb">byte</span>)<span class="str">'H'</span>, (<span class="kwb">byte</span>)<span class="str">'R'</span>, (<span class="kwb">byte</span>)<span class="str">'E'</span>, (<span class="kwb">byte</span>)<span class="str">'E'</span> });
+            <span class="kwa">continue</span>;
+         }
+         <span class="kwa">if</span> (line[<span class="num">0</span>] == (<span class="kwb">byte</span>)<span class="str">'&gt;'</span>) <span class="kwa">break</span>;
+         <span class="kwa">if</span> (line[<span class="num">0</span>] != (<span class="kwb">byte</span>)<span class="str">';'</span>)
+         {
+            totalCount += line.Length;
+            input.<span class="kwd">Add</span>(line);
+         }
+      }
+
+      var lengths = <span class="kwa">new</span>[] { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>, <span class="num">6</span>, <span class="num">12</span>, <span class="num">18</span> };
+      TaskCount = lengths.<span class="kwd">Aggregate</span>(<span class="num">0</span>, (cnt, len) =&gt; cnt + len); <span class="slc">// Wasteful but likely not an issue.</span>
+      kna = <span class="kwa">new</span> KNucleotide[TaskCount];
+
+      var bytes = input.<span class="kwd">Concat</span>(totalCount);
+      lengths.<span class="kwd">Aggregate</span>(<span class="num">0</span>, (cnt, len) =&gt;
+      {
+         <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; len; i++)
+            kna[cnt + i] = <span class="kwa">new</span> <span class="kwd">KNucleotide</span>(bytes, len, i);
+         <span class="kwa">return</span> cnt + len;
+      });
+
+      <span class="slc">// This technically should be faster, but my profiler is broken.</span>
+      var events = <span class="kwa">new</span> AutoResetEvent[Environment.ProcessorCount];
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; events.Length; i++)
+      {
+         events[i] = <span class="kwa">new</span> <span class="kwd">AutoResetEvent</span>(<span class="kwa">false</span>);
+         <span class="kwa">new</span> <span class="kwd">Thread</span>(CountFrequencies).<span class="kwd">Start</span>(events[i]);
+      }
+
+      WaitHandle.<span class="kwd">WaitAll</span>(events);
+
+      <span class="slc">// Converting these to byte arrays at compile time is slightly wasteful but likely premature.</span>
+      var seqs = <span class="kwa">new</span>[] { <span class="kwa">null</span>, <span class="kwa">null</span>,
+            <span class="str">&quot;GGT&quot;</span>, <span class="str">&quot;GGTA&quot;</span>, <span class="str">&quot;GGTATT&quot;</span>, <span class="str">&quot;GGTATTTTAATT&quot;</span>,
+            <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>};
+
+      <span class="kwb">int</span> index = <span class="num">0</span>;
+      lengths.<span class="kwd">Aggregate</span>(<span class="num">0</span>, (cnt, len) =&gt;
+      {
+         <span class="kwa">if</span> (len &lt; <span class="num">3</span>)
+         {
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">1</span>; i &lt; len; i++)
+               kna[cnt].<span class="kwd">AddFrequencies</span>(kna[cnt + i]);
+            kna[cnt].<span class="kwd">WriteFrequencies</span>();
+         }
+         <span class="kwa">else</span>
+         {
+            var fragment = seqs[index];
+            <span class="kwb">int</span> freq = <span class="num">0</span>;
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; len; i++)
+               freq += kna[cnt + i].<span class="kwd">GetCount</span>(fragment);
+            Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="ipl">{0}</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">{1}</span><span class="str">&quot;</span>, freq, fragment);
+         }
+         index++;
+         <span class="kwa">return</span> cnt + len;
+      });
+   }
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">CountFrequencies</span>(<span class="kwb">object</span> state)
+   {
+      <span class="kwb">int</span> index;
+      <span class="kwa">while</span> ((index = Interlocked.<span class="kwd">Increment</span>(<span class="kwa">ref</span> Current)) &lt; TaskCount)
+         kna[index].<span class="kwd">KFrequency</span>();
+      ((AutoResetEvent)state).<span class="kwd">Set</span>();
+   }
+
+}
+
+<span class="kwa">public sealed class</span> KNucleotide
+{
+
+   <span class="kwa">private sealed class</span> Count
+   {
+      <span class="kwa">public</span> <span class="kwb">int</span> V;
+      <span class="kwa">public</span> <span class="kwd">Count</span>(<span class="kwb">int</span> v) { V = v; }
+   }
+
+   <span class="kwa">private</span> Dictionary&lt;ByteString, Count&gt; frequencies
+      = <span class="kwa">new</span> Dictionary&lt;ByteString, Count&gt;();
+
+   <span class="kwa">private</span> <span class="kwb">byte</span>[] sequence;
+   <span class="kwb">int</span> length;
+   <span class="kwb">int</span> frame;
+
+   <span class="kwa">public</span> <span class="kwd">KNucleotide</span>(<span class="kwb">byte</span>[] s, <span class="kwb">int</span> l, <span class="kwb">int</span> f)
+   {
+      sequence = s; length = l; frame = f;
+   }
+
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">AddFrequencies</span>(KNucleotide other)
+   {
+      <span class="kwa">foreach</span> (var kvp <span class="kwa">in</span> other.frequencies)
+      {
+         Count count;
+         <span class="kwa">if</span> (frequencies.<span class="kwd">TryGetValue</span>(kvp.Key, out count))
+            count.V += kvp.Value.V;
+         <span class="kwa">else</span>
+            frequencies[kvp.Key] = kvp.Value;
+      }
+   }
+
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">WriteFrequencies</span>()
+   {
+      var items = frequencies.<span class="kwd">ToArray</span>();
+      Array.<span class="kwd">Sort</span>(items, SortByFrequencyAndCode); <span class="slc">// Apparantly faster, who knows?</span>
+      <span class="kwb">double</span> percent = <span class="num">100.0</span> / (sequence.Length - length + <span class="num">1</span>);
+      <span class="kwa">foreach</span> (var item <span class="kwa">in</span> items)
+         Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="ipl">{0}</span> <span class="str">{1:f3}&quot;</span>,
+                  item.Key.<span class="kwd">ToString</span>(), item.Value.V * percent);
+      Console.<span class="kwd">WriteLine</span>();
+   }
+
+   <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">GetCount</span>(<span class="kwb">string</span> fragment)
+   {
+      Count count;
+      <span class="kwa">if</span> (!frequencies.<span class="kwd">TryGetValue</span>(<span class="kwa">new</span> <span class="kwd">ByteString</span>(fragment), out count))
+         count = <span class="kwa">new</span> <span class="kwd">Count</span>(<span class="num">0</span>);
+      <span class="kwa">return</span> count.V;
+   }
+
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">KFrequency</span>()
+   {
+      <span class="kwb">int</span> n = sequence.Length - length + <span class="num">1</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = frame; i &lt; n; i += length)
+      {
+         var key = <span class="kwa">new</span> <span class="kwd">ByteString</span>(sequence, i, length);
+         Count count;
+         <span class="kwa">if</span> (frequencies.<span class="kwd">TryGetValue</span>(key, out count))
+            count.V++;
+         <span class="kwa">else</span>
+            frequencies[key] = <span class="kwa">new</span> <span class="kwd">Count</span>(<span class="num">1</span>);
+      }
+   }
+
+   <span class="kwb">int</span> <span class="kwd">SortByFrequencyAndCode</span>(
+         KeyValuePair&lt;ByteString, Count&gt; i0,
+         KeyValuePair&lt;ByteString, Count&gt; i1)
+   {
+      <span class="kwb">int</span> order = i1.Value.V.<span class="kwd">CompareTo</span>(i0.Value.V);
+      <span class="kwa">if</span> (order != <span class="num">0</span>) <span class="kwa">return</span> order;
+      <span class="kwa">return</span> i0.Key.<span class="kwd">CompareTo</span>(i1.Key);
+   }
+}

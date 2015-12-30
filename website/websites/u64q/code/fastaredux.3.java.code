@@ -1,0 +1,165 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * modified by Enotus</span>
+<span class="com"> *</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.io.*;
+
+<span class="kwa">public class</span> fastaredux {
+
+    <span class="kwa">static final</span> <span class="kwb">int</span> LINE_LENGTH = <span class="num">60</span>;
+    <span class="kwa">static final</span> <span class="kwb">int</span> OUT_BUFFER_SIZE = <span class="num">256</span>*<span class="num">1024</span>;
+    <span class="kwa">static final</span> <span class="kwb">int</span> LOOKUP_SIZE = <span class="num">4</span>*<span class="num">1024</span>;
+    <span class="kwa">static final</span> <span class="kwb">double</span> LOOKUP_SCALE = LOOKUP_SIZE - <span class="num">1</span>;
+
+    <span class="kwa">static final class</span> Freq {
+        <span class="kwb">byte</span> c;
+        <span class="kwb">double</span> p;
+        <span class="kwd">Freq</span>(<span class="kwb">char</span> cc, <span class="kwb">double</span> pp) {c = (<span class="kwb">byte</span>) cc;p = pp;}
+    }
+
+    <span class="kwa">static final</span> String ALU =
+            <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>
+            + <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>
+            + <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>
+            + <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>
+            + <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>
+            + <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>
+            + <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+    <span class="kwa">static final</span> Freq[] IUB = {
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'a'</span>, <span class="num">0.27</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'c'</span>, <span class="num">0.12</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'g'</span>, <span class="num">0.12</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'t'</span>, <span class="num">0.27</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'B'</span>, <span class="num">0.02</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'D'</span>, <span class="num">0.02</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'H'</span>, <span class="num">0.02</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'K'</span>, <span class="num">0.02</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'M'</span>, <span class="num">0.02</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'N'</span>, <span class="num">0.02</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'R'</span>, <span class="num">0.02</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'S'</span>, <span class="num">0.02</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'V'</span>, <span class="num">0.02</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'W'</span>, <span class="num">0.02</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'Y'</span>, <span class="num">0.02</span>)};
+    <span class="kwa">static final</span> Freq[] HomoSapiens = {
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'a'</span>, <span class="num">0.3029549426680</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'c'</span>, <span class="num">0.1979883004921</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'g'</span>, <span class="num">0.1975473066391</span>),
+        <span class="kwa">new</span> <span class="kwd">Freq</span>(<span class="str">'t'</span>, <span class="num">0.3015094502008</span>)};
+
+    <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">sumAndScale</span>(Freq[] a) {
+        <span class="kwb">double</span> p = <span class="num">0</span>;
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; a.length; i++)
+            a[i].p = (p += a[i].p) * LOOKUP_SCALE;
+        a[a.length - <span class="num">1</span>].p = LOOKUP_SCALE;
+    }
+
+    <span class="kwa">static final class</span> Random {
+    
+        <span class="kwa">static final</span> <span class="kwb">int</span> IM = <span class="num">139968</span>;
+        <span class="kwa">static final</span> <span class="kwb">int</span> IA = <span class="num">3877</span>;
+        <span class="kwa">static final</span> <span class="kwb">int</span> IC = <span class="num">29573</span>;
+        <span class="kwa">static final</span> <span class="kwb">double</span> SCALE = LOOKUP_SCALE / IM;
+        <span class="kwa">static</span> <span class="kwb">int</span> last = <span class="num">42</span>;
+
+        <span class="kwa">static</span> <span class="kwb">double</span> <span class="kwd">next</span>() {
+            <span class="kwa">return</span> SCALE * (last = (last * IA + IC) % IM);
+        }
+    }
+
+    <span class="kwa">static final class</span> Out {
+    
+        <span class="kwa">static final</span> <span class="kwb">byte</span> buf[] = <span class="kwa">new</span> <span class="kwb">byte</span>[OUT_BUFFER_SIZE];
+        <span class="kwa">static final</span> <span class="kwb">int</span> lim = OUT_BUFFER_SIZE - <span class="num">2</span>*LINE_LENGTH - <span class="num">1</span>;
+        <span class="kwa">static</span> <span class="kwb">int</span> ct = <span class="num">0</span>;
+        <span class="kwa">static</span> OutputStream stream;
+
+        <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">checkFlush</span>() <span class="kwa">throws</span> IOException {
+            <span class="kwa">if</span> (ct &gt;= lim) { stream.<span class="kwd">write</span>(buf, <span class="num">0</span>, ct); ct = <span class="num">0</span>;}
+        }
+        
+        <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">close</span>() <span class="kwa">throws</span> IOException {
+            stream.<span class="kwd">write</span>(buf, <span class="num">0</span>, ct);ct = <span class="num">0</span>;
+            stream.<span class="kwd">close</span>();
+        }
+    }
+    
+    <span class="kwa">static final class</span> RandomFasta {
+
+        <span class="kwa">static final</span> Freq[] lookup=<span class="kwa">new</span> Freq[LOOKUP_SIZE];
+        
+        <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">makeLookup</span>(Freq[] a) {
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>, j = <span class="num">0</span>; i &lt; LOOKUP_SIZE; i++) {
+                <span class="kwa">while</span> (a[j].p &lt; i) j++;
+                lookup[i] = a[j];
+            }
+        }
+
+        <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">addLine</span>(<span class="kwb">int</span> bytes) <span class="kwa">throws</span> IOException{
+            Out.<span class="kwd">checkFlush</span>();
+            <span class="kwb">int</span> lct=Out.ct;
+            <span class="kwa">while</span>(lct&lt;Out.ct+bytes){
+                <span class="kwb">double</span> r = Random.<span class="kwd">next</span>();
+                <span class="kwb">int</span> ai = (<span class="kwb">int</span>) r; <span class="kwa">while</span> (lookup[ai].p &lt; r) ai++;
+                Out.buf[lct++] = lookup[ai].c;
+            }
+            Out.buf[lct++] = (<span class="kwb">byte</span>)<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+            Out.ct=lct;
+        }
+
+        <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">make</span>(String desc, Freq[] a, <span class="kwb">int</span> n) <span class="kwa">throws</span> IOException {
+            <span class="kwd">makeLookup</span>(a);
+
+            System.<span class="kwd">arraycopy</span>(desc.<span class="kwd">getBytes</span>(), <span class="num">0</span>, Out.buf, Out.ct, desc.<span class="kwd">length</span>());
+            Out.ct+=desc.<span class="kwd">length</span>();
+            
+            <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+                <span class="kwb">int</span> bytes = Math.<span class="kwd">min</span>(LINE_LENGTH, n);
+                <span class="kwd">addLine</span>(bytes);
+                n -= bytes;
+            }
+        }
+    }
+
+    <span class="kwa">static final class</span> RepeatFasta {
+
+        <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">make</span>(String desc, <span class="kwb">byte</span>[] alu, <span class="kwb">int</span> n) <span class="kwa">throws</span> IOException {
+            System.<span class="kwd">arraycopy</span>(desc.<span class="kwd">getBytes</span>(), <span class="num">0</span>, Out.buf, Out.ct, desc.<span class="kwd">length</span>());
+            Out.ct+=desc.<span class="kwd">length</span>();
+
+            <span class="kwb">byte</span> buf[] = <span class="kwa">new</span> <span class="kwb">byte</span>[alu.length + LINE_LENGTH];
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; buf.length; i += alu.length)
+                System.<span class="kwd">arraycopy</span>(alu, <span class="num">0</span>, buf, i, Math.<span class="kwd">min</span>(alu.length, buf.length - i));
+
+            <span class="kwb">int</span> pos = <span class="num">0</span>;
+            <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+                <span class="kwb">int</span> bytes = Math.<span class="kwd">min</span>(LINE_LENGTH, n);
+                Out.<span class="kwd">checkFlush</span>();
+                System.<span class="kwd">arraycopy</span>(buf, pos, Out.buf, Out.ct, bytes); Out.ct+=bytes;
+                Out.buf[Out.ct++] = (<span class="kwb">byte</span>)<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+                pos = (pos + bytes) % alu.length;
+                n -= bytes;
+            }
+        }
+    }
+
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) <span class="kwa">throws</span> IOException {
+        <span class="kwb">int</span> n = <span class="num">2500000</span>;
+        <span class="kwa">if</span> (args.length &gt; <span class="num">0</span>) 
+            n = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+
+        <span class="kwd">sumAndScale</span>(IUB);
+        <span class="kwd">sumAndScale</span>(HomoSapiens);
+
+        Out.stream=System.out;
+        RepeatFasta.<span class="kwd">make</span>(<span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>, ALU.<span class="kwd">getBytes</span>(), n * <span class="num">2</span>);
+        RandomFasta.<span class="kwd">make</span>(<span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>, IUB, n * <span class="num">3</span>);
+        RandomFasta.<span class="kwd">make</span>(<span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>, HomoSapiens, n * <span class="num">5</span>);
+        Out.<span class="kwd">close</span>();
+    }
+}

@@ -1,0 +1,217 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Andrew Moon</span>
+<span class="com">   modified by Krzysztof Jakubowski</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;assert.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+<span class="ppc">#include &lt;algorithm&gt;</span>
+
+<span class="kwb">struct</span> Random {
+   <span class="kwb">enum</span> { IM = <span class="num">139968</span>, IA = <span class="num">3877</span>, IC = <span class="num">29573</span> };
+   <span class="kwd">Random</span>() : <span class="kwd">last</span>(<span class="num">42</span>) {}
+   <span class="kwb">float</span> <span class="kwd">get</span>( <span class="kwb">float</span> max = <span class="num">1.0</span>f ) {
+      last = ( last * IA + IC ) % IM;
+      <span class="kwa">return</span> max * last / IM;
+   }
+   
+   <span class="kwb">unsigned int</span> last;
+} rng;
+
+<span class="kwb">struct</span> IUB {
+   <span class="kwb">int</span> c;
+   <span class="kwb">double</span> p;
+   <span class="kwb">unsigned int</span> pi;
+};
+
+<span class="kwb">struct</span> Cumulative {
+   <span class="kwb">enum</span> { slots = <span class="num">512</span> };
+
+   <span class="kwd">Cumulative</span>( IUB *start ) {
+      <span class="kwb">double</span> p = <span class="num">0</span>;
+      <span class="kwa">for</span> ( IUB *iter = start; iter-&gt;c; ++iter ) {
+         p += iter-&gt;p;
+         iter-&gt;p = std::<span class="kwd">min</span>( p, <span class="num">1.0</span> );
+         iter-&gt;pi = (<span class="kwb">unsigned int</span> )( iter-&gt;p * slots );
+      }
+
+      <span class="kwa">for</span> ( <span class="kwb">unsigned int</span> i = <span class="num">0</span>; i &lt;= slots; i++ ) {
+         <span class="kwa">while</span> ( i &gt; start-&gt;pi )
+            ++start;
+         table[i] = start;
+      }
+   }
+
+   <span class="kwb">const char</span> <span class="kwc">operator</span>[] ( <span class="kwb">float</span> pct ) <span class="kwb">const</span> {
+      IUB *iter = table[(<span class="kwb">unsigned int</span> )( pct * slots )];
+      <span class="kwa">while</span> ( iter-&gt;p &lt; pct )
+         ++iter;
+      <span class="kwa">return</span> iter-&gt;c;
+   }
+
+<span class="kwc">protected</span>:
+   IUB *table[slots + <span class="num">1</span>];
+};
+
+<span class="kwb">enum</span> { lineLength = <span class="num">60</span> };
+
+<span class="kwb">struct</span> LineBuffer {
+   <span class="kwd">LineBuffer</span>() : <span class="kwd">lastN</span>(<span class="num">0</span>) {}
+   LineBuffer &amp;<span class="kwd">genrand</span>( Cumulative &amp;table, <span class="kwb">size_t</span> N ) {
+      <span class="kwa">for</span> ( <span class="kwb">size_t</span> i = <span class="num">0</span>; i &lt; N; i++ )
+         buffer[i] = table[rng.<span class="kwd">get</span>()];
+      buffer[N] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+      lastN = N + <span class="num">1</span>;
+      <span class="kwa">return</span> *<span class="kwa">this</span>;
+   }
+   <span class="kwb">void</span> <span class="kwd">writeline</span>() <span class="kwb">const</span> {
+	   <span class="kwd">fwrite_unlocked</span>( buffer, <span class="num">1</span>, lastN, stdout );
+   }
+<span class="kwc">protected</span>:
+   <span class="kwb">char</span> buffer[lineLength + <span class="num">1</span>];
+   <span class="kwb">size_t</span> lastN;
+};
+
+<span class="kwb">struct</span> RotatingString {
+   <span class="kwd">RotatingString</span>( <span class="kwb">const char</span> *in ) : <span class="kwd">pos</span>(<span class="num">0</span>) {
+      size = <span class="kwd">strlen</span>( in );
+      buffer = <span class="kwa">new</span> <span class="kwb">char</span>[size + lineLength];
+      <span class="kwd">memcpy</span>( buffer, in, size );
+      <span class="kwd">memcpy</span>( buffer + size, in, lineLength );
+   }
+   ~<span class="kwd">RotatingString</span>() { <span class="kwa">delete</span>[] buffer; }
+   <span class="kwb">void</span> <span class="kwd">write</span>( <span class="kwb">size_t</span> bytes ) {
+      <span class="kwd">fwrite_unlocked</span>( buffer + pos, <span class="num">1</span>, bytes, stdout );
+      <span class="kwd">fputc_unlocked</span>( <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>, stdout );
+      pos += bytes;
+      <span class="kwa">if</span> ( pos &gt; size )
+         pos -= size;
+   }
+<span class="kwc">protected</span>:
+   <span class="kwb">char</span> *buffer;
+   <span class="kwb">size_t</span> size, pos;
+};
+
+<span class="kwc">template</span>&lt; <span class="kwc">class</span> Output &gt;
+<span class="kwb">void</span> <span class="kwd">makeFasta</span>( <span class="kwb">const char</span> *id, <span class="kwb">const char</span> *desc, <span class="kwb">size_t</span> N, Output &amp;output ) {
+   <span class="kwd">fprintf</span>( stdout, <span class="str">&quot;&gt;%s %s</span><span class="esc">\n</span><span class="str">&quot;</span>, id, desc );
+
+   <span class="kwa">while</span> ( N ) {
+      <span class="kwb">const size_t</span> bytes = std::<span class="kwd">min</span>( N, <span class="kwb">size_t</span>(lineLength));
+      output.<span class="kwd">writeline</span>( bytes );
+      N -= bytes;
+   }
+}
+
+<span class="kwb">struct</span> Repeater {
+   <span class="kwd">Repeater</span>( <span class="kwb">const char</span> *alu ) : <span class="kwd">rot</span>(alu) {}
+	<span class="kwb">void</span> <span class="kwd">writeline</span>( <span class="kwb">size_t</span> bytes ) { rot.<span class="kwd">write</span>( bytes ); }
+	<span class="kwb">void</span> <span class="kwd">run</span>(<span class="kwb">const char</span> *id, <span class="kwb">const char</span> *desc, <span class="kwb">size_t</span> N) {
+		<span class="kwd">makeFasta</span>(id, desc, N, *<span class="kwa">this</span>);
+	}
+
+<span class="kwc">protected</span>:
+   RotatingString rot;
+};
+   
+
+<span class="kwb">struct</span> Randomized {
+	<span class="kwd">Randomized</span>( IUB *start ) : <span class="kwd">table</span>(start) {}
+	<span class="kwb">void</span> <span class="kwd">writeline</span>(<span class="kwb">size_t</span> bytes) {
+		line.<span class="kwd">genrand</span>(table, bytes).<span class="kwd">writeline</span>();
+	}
+
+	<span class="kwb">void</span> <span class="kwd">run</span>(<span class="kwb">const char</span> *id, <span class="kwb">const char</span> *desc, <span class="kwb">size_t</span> N) {
+	<span class="slc">//	makeFasta(id, desc, N, *this);</span>
+		<span class="kwd">fprintf</span>(stdout, <span class="str">&quot;&gt;%s %s</span><span class="esc">\n</span><span class="str">&quot;</span>, id, desc);
+
+		<span class="kwb">char</span> buffer[<span class="num">140000</span> + lineLength];
+
+		<span class="kwb">unsigned int</span> rStart = rng.last;
+		buffer[<span class="num">0</span>] = table[rng.<span class="kwd">get</span>()];
+		<span class="kwb">size_t</span> count = <span class="num">1</span>;
+		<span class="kwa">for</span>(;rng.last != rStart &amp;&amp; count &lt; N; count++)
+			buffer[count] = table[rng.<span class="kwd">get</span>()];
+		std::<span class="kwd">copy</span>(buffer, buffer + lineLength, buffer + count);
+
+		<span class="kwb">int</span> lines = N / lineLength;
+		<span class="kwb">char</span> line[lineLength + <span class="num">1</span>];
+		line[lineLength] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+
+		<span class="kwa">for</span>(<span class="kwb">int</span> l = <span class="num">0</span>; l &lt; lines; l++) {
+			<span class="kwb">char</span> *src = buffer + (l * lineLength) % count;
+			<span class="kwb">char</span> tmp = src[lineLength];
+			src[lineLength] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+			<span class="kwd">fwrite_unlocked</span>(src, <span class="num">1</span>, <span class="num">61</span>, stdout);
+			src[lineLength] = tmp;
+		}
+		<span class="kwa">if</span>(N % lineLength) {
+			<span class="kwd">fwrite_unlocked</span>(buffer + (N - N % lineLength) % count, <span class="num">1</span>,
+					N % lineLength, stdout);
+			<span class="kwd">fwrite_unlocked</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="num">1</span>, <span class="num">1</span>, stdout);
+		}
+
+		<span class="kwa">if</span>(N &gt; count) {
+			<span class="kwb">int</span> riters = N % count;
+			<span class="kwa">for</span>(<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; riters; i++) rng.<span class="kwd">get</span>();
+		}
+	}
+
+<span class="kwc">protected</span>:
+   Cumulative table;
+   LineBuffer line;
+};
+   
+IUB iub[] = {
+   { <span class="str">'a'</span>, <span class="num">0.27</span> },
+   { <span class="str">'c'</span>, <span class="num">0.12</span> },
+   { <span class="str">'g'</span>, <span class="num">0.12</span> },
+   { <span class="str">'t'</span>, <span class="num">0.27</span> },
+
+   { <span class="str">'B'</span>, <span class="num">0.02</span> },
+   { <span class="str">'D'</span>, <span class="num">0.02</span> },
+   { <span class="str">'H'</span>, <span class="num">0.02</span> },
+   { <span class="str">'K'</span>, <span class="num">0.02</span> },
+   { <span class="str">'M'</span>, <span class="num">0.02</span> },
+   { <span class="str">'N'</span>, <span class="num">0.02</span> },
+   { <span class="str">'R'</span>, <span class="num">0.02</span> },
+   { <span class="str">'S'</span>, <span class="num">0.02</span> },
+   { <span class="str">'V'</span>, <span class="num">0.02</span> },
+   { <span class="str">'W'</span>, <span class="num">0.02</span> },
+   { <span class="str">'Y'</span>, <span class="num">0.02</span> },
+   {   <span class="num">0</span>,    <span class="num">0</span> },
+};
+
+IUB homosapiens[] = {
+   { <span class="str">'a'</span>, <span class="num">0.3029549426680</span> },
+   { <span class="str">'c'</span>, <span class="num">0.1979883004921</span> },
+   { <span class="str">'g'</span>, <span class="num">0.1975473066391</span> },
+   { <span class="str">'t'</span>, <span class="num">0.3015094502008</span> },
+   {   <span class="num">0</span>,               <span class="num">0</span> },
+};
+
+<span class="kwb">static const char</span> alu[] =
+   <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTG&quot;</span>
+   <span class="str">&quot;GGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGA&quot;</span>
+   <span class="str">&quot;GACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAA&quot;</span>
+   <span class="str">&quot;AATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAAT&quot;</span>
+   <span class="str">&quot;CCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAAC&quot;</span>
+   <span class="str">&quot;CCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTG&quot;</span>
+   <span class="str">&quot;CACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+<span class="kwb">int</span> <span class="kwd">main</span>( <span class="kwb">int</span> argc, <span class="kwb">const char</span> *argv[] ) {
+   <span class="kwb">const size_t</span> n = ( argc &gt; <span class="num">1</span> ) ? <span class="kwd">atoi</span>( argv[<span class="num">1</span>] ) : <span class="num">512</span>;
+
+   <span class="kwd">Repeater</span>(alu)
+     .<span class="kwd">run</span>( <span class="str">&quot;ONE&quot;</span>, <span class="str">&quot;Homo sapiens alu&quot;</span>, n*<span class="num">2</span> );
+   <span class="kwd">Randomized</span>(iub)
+      .<span class="kwd">run</span>( <span class="str">&quot;TWO&quot;</span>, <span class="str">&quot;IUB ambiguity codes&quot;</span>, n*<span class="num">3</span> );
+   <span class="kwd">Randomized</span>(homosapiens)
+      .<span class="kwd">run</span>( <span class="str">&quot;THREE&quot;</span>, <span class="str">&quot;Homo sapiens frequency&quot;</span>, n*<span class="num">5</span> );
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+

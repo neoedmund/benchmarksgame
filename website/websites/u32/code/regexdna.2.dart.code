@@ -1,0 +1,79 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Jos Hirth, based on the JavaScript version</span>
+<span class="com">     which was created by Jesse Millikan, jose fco. gonzalez, and Matthew Wilson</span>
+<span class="com">*/</span>
+
+<span class="kwc">import</span> <span class="str">'dart:io'</span>;
+<span class="kwc">import</span> <span class="str">'dart:convert'</span>;
+
+<span class="kwa">void</span> main() {
+  <span class="kwa">var</span> text = <span class="kwa">new</span> StringBuffer();
+  <span class="kwa">var</span> src = stdin.transform(UTF8.decoder).transform(<span class="kwa">new</span> LineSplitter());
+
+  src.listen((line) {
+    <span class="kwa">if</span> (line != <span class="kwa">null</span>) {
+      text.write(line);
+      text.write(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>);
+    }
+  },
+  onDone: () {
+    regexAllTheThings(text.toString());
+  });
+}
+
+<span class="kwa">void</span> regexAllTheThings (String fullText) {
+  <span class="kwa">var</span> lengthA, lengthB, lengthC, regexp, replacements;
+
+  regexp = ((){
+    <span class="kwa">var</span> pattern = [
+      <span class="str">'agggtaaa|tttaccct'</span>,
+      <span class="str">'[cgt]gggtaaa|tttaccc[acg]'</span>,
+      <span class="str">'a[act]ggtaaa|tttacc[agt]t'</span>,
+      <span class="str">'ag[act]gtaaa|tttac[agt]ct'</span>,
+      <span class="str">'agg[act]taaa|ttta[agt]cct'</span>,
+      <span class="str">'aggg[acg]aaa|ttt[cgt]ccct'</span>,
+      <span class="str">'agggt[cgt]aa|tt[acg]accct'</span>,
+      <span class="str">'agggta[cgt]a|t[acg]taccct'</span>,
+      <span class="str">'agggtaa[cgt]|[acg]ttaccct'</span>
+    ];
+    <span class="kwa">var</span> regexp = [];
+    <span class="kwa">for</span>(<span class="kwa">var</span> p <span class="kwa">in</span> pattern) {
+      regexp.add(<span class="kwa">new</span> RegExp(p, caseSensitive: <span class="kwa">false</span>));
+    }
+    <span class="kwa">return</span> regexp;
+  }());
+
+  replacements = [
+    <span class="str">'B'</span>, <span class="str">'(c|g|t)'</span>,
+    <span class="str">'D'</span>, <span class="str">'(a|g|t)'</span>,
+    <span class="str">'H'</span>, <span class="str">'(a|c|t)'</span>,
+    <span class="str">'K'</span>, <span class="str">'(g|t)'</span>,
+    <span class="str">'M'</span>, <span class="str">'(a|c)'</span>,
+    <span class="str">'N'</span>, <span class="str">'(a|c|g|t)'</span>,
+    <span class="str">'R'</span>, <span class="str">'(a|g)'</span>,
+    <span class="str">'S'</span>, <span class="str">'(c|g)'</span>,
+    <span class="str">'V'</span>, <span class="str">'(a|c|g)'</span>,
+    <span class="str">'W'</span>, <span class="str">'(a|t)'</span>,
+    <span class="str">'Y'</span>, <span class="str">'(c|t)'</span>
+  ];
+
+  lengthA = fullText.length;
+
+  fullText = fullText.replaceAll(<span class="kwa">new</span> RegExp(<span class="str">'^&gt;.*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">'</span>, multiLine: <span class="kwa">true</span>), <span class="str">''</span>); <span class="slc">// still ridiculously slow with r21658</span>
+
+  lengthB = fullText.length;
+
+  <span class="kwa">for</span>(<span class="kwa">var</span> i = <span class="num">0</span>; i &lt; regexp.length; ++i) {
+    print(<span class="str">'${regexp[i].pattern} ${regexp[i].allMatches(fullText).length}'</span>);
+  }
+
+  <span class="kwa">for</span>(<span class="kwa">var</span> i = -<span class="num">1</span>; i &lt; replacements.length - <span class="num">1</span>;) {
+    fullText = fullText.replaceAll(replacements[++i], replacements[++i]);
+  }
+
+  lengthC = fullText.length;
+
+  print(<span class="str">'</span><span class="esc">\n</span><span class="str">$lengthA</span><span class="esc">\n</span><span class="str">$lengthB</span><span class="esc">\n</span><span class="str">$lengthC'</span>);
+}

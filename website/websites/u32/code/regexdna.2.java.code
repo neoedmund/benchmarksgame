@@ -1,0 +1,259 @@
+<span class="com">/*</span>
+<span class="com">   The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by The Anh Tran</span>
+<span class="com"> */</span>
+
+
+<span class="kwa">import</span> java.io.*;
+<span class="kwa">import</span> java.util.concurrent.*;
+<span class="kwa">import</span> java.util.concurrent.atomic.*;
+<span class="kwa">import</span> java.util.regex.*;
+<span class="kwa">import</span> java.util.*;
+
+
+<span class="kwa">public class</span> regexdna
+{
+    <span class="slc">// source data is duplicated into 2 arrays</span>
+    <span class="kwa">static</span> ArrayList&lt;StringBuilder&gt; source_as_segments = <span class="kwa">new</span> ArrayList&lt;StringBuilder&gt;();;
+    <span class="kwa">static</span> ArrayList&lt;StringBuilder&gt; source_as_lines = <span class="kwa">new</span> ArrayList&lt;StringBuilder&gt;();;
+    
+    <span class="slc">// read data from stdin to StringBuilder</span>
+    <span class="slc">// return initial data size</span>
+    <span class="kwa">private static</span> <span class="kwb">int</span> <span class="kwd">ReadInput</span>(StringBuilder sb)
+    {
+        <span class="kwa">try</span>
+        {
+            BufferedReader reader = <span class="kwa">new</span> <span class="kwd">BufferedReader</span> (<span class="kwa">new</span> <span class="kwd">InputStreamReader</span> (System.<span class="kwa">in</span>, <span class="str">&quot;US-ASCII&quot;</span>));
+            
+            <span class="kwb">char</span>[] buf = <span class="kwa">new</span> <span class="kwb">char</span>[<span class="num">64</span> *<span class="num">1024</span>];
+            <span class="kwb">int</span> read = <span class="num">0</span>, total = <span class="num">0</span>;
+            
+            <span class="kwa">while</span> ((read = reader.<span class="kwd">read</span> (buf)) != -<span class="num">1</span>)
+            {
+                total += read;
+                sb.<span class="kwd">append</span> (buf, <span class="num">0</span>, read);
+            }
+
+            <span class="kwa">return</span> total;
+        }
+        <span class="kwa">catch</span> (IOException ie)
+        {
+            ie.<span class="kwd">printStackTrace</span> ();
+        }
+        
+        <span class="kwa">return</span> <span class="num">0</span>;
+    }
+    
+    <span class="slc">// strip header and newline</span>
+    <span class="slc">// duplicate each data line into 2 arrays</span>
+    <span class="kwa">private static</span> <span class="kwb">int</span> <span class="kwd">StripHeader</span>(StringBuilder sb)
+    {
+        Pattern pat = Pattern.<span class="kwd">compile</span>(<span class="str">&quot;(&gt;.*</span><span class="esc">\n</span><span class="str">)|</span><span class="esc">\n</span><span class="str">&quot;</span>);
+        Matcher mt = pat.<span class="kwd">matcher</span>(sb);   <span class="slc">// scan all data</span>
+        
+        StringBuilder desti = null;
+        StringBuffer tmp = <span class="kwa">new</span> <span class="kwd">StringBuffer</span>();
+        
+        <span class="kwa">while</span> (mt.<span class="kwd">find</span>())
+        {
+            mt.<span class="kwd">appendReplacement</span>(tmp, <span class="str">&quot;&quot;</span>);
+
+            <span class="kwa">if</span> (mt.<span class="kwd">start</span>(<span class="num">1</span>) &gt;= <span class="num">0</span>)   <span class="slc">// this is header line</span>
+            {
+                desti = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>();    <span class="slc">// alloc new dna sequence</span>
+                source_as_segments.<span class="kwd">add</span>(desti);
+            }
+
+            desti.<span class="kwd">append</span>(tmp);  <span class="slc">// append this line to current dna sequence</span>
+            source_as_lines.<span class="kwd">add</span>(<span class="kwa">new</span> <span class="kwd">StringBuilder</span>(tmp));    <span class="slc">// also append this line to 2nd array</span>
+
+            <span class="slc">// reset buffer len, re-use in next match</span>
+            tmp.<span class="kwd">setLength</span>(<span class="num">0</span>);
+        }
+
+        <span class="kwb">int</span> strip_len = <span class="num">0</span>;
+        <span class="kwa">for</span> (StringBuilder b : source_as_segments)
+            strip_len += b.<span class="kwd">length</span>();
+        
+        <span class="kwa">return</span> strip_len;
+    }
+    
+    <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">CountMatch</span>()
+    {
+        <span class="kwa">final</span> String[] patterns = 
+        {   <span class="str">&quot;agggtaaa|tttaccct&quot;</span> ,
+            <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+            <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+            <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+            <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+            <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+            <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+            <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+            <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>
+        };
+    
+        <span class="kwa">final</span> AtomicIntegerArray results = <span class="kwa">new</span> <span class="kwd">AtomicIntegerArray</span>(patterns.length);
+        <span class="kwa">final</span> AtomicIntegerArray tasks = <span class="kwa">new</span> <span class="kwd">AtomicIntegerArray</span>(patterns.length);
+        
+        Thread[] pool = <span class="kwa">new</span> Thread[Runtime.<span class="kwd">getRuntime</span>().<span class="kwd">availableProcessors</span>()];
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; pool.length; i++)
+        {
+            pool[i] = <span class="kwa">new</span> <span class="kwd">Thread</span>()
+            {
+                <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>()
+                {
+                    <span class="slc">// for each search pattern</span>
+                    <span class="kwa">for</span> (<span class="kwb">int</span> pt = <span class="num">0</span>; pt &lt; patterns.length; pt++)
+                    {
+                        Pattern expression = Pattern.<span class="kwd">compile</span>(patterns[pt]);
+
+                        <span class="kwb">int</span> total_seg = source_as_segments.<span class="kwd">size</span>();
+                        <span class="kwb">int</span> seq;
+                        Matcher mt = expression.<span class="kwd">matcher</span>(<span class="str">&quot;&quot;</span>);
+                        
+                        <span class="slc">// fetch not-yet-processed sequence</span>
+                        <span class="kwa">while</span> ((seq = tasks.<span class="kwd">getAndIncrement</span>(pt)) &lt; total_seg)
+                        {
+                            mt.<span class="kwd">reset</span>(source_as_segments.<span class="kwd">get</span>(seq));
+
+                            <span class="kwa">while</span> (mt.<span class="kwd">find</span>())
+                                results.<span class="kwd">incrementAndGet</span>(pt);
+                        }
+                    }
+                }
+            };
+            pool[i].<span class="kwd">start</span>();
+        }
+        
+        <span class="slc">// wait for result</span>
+        <span class="kwa">for</span> (Thread t : pool)
+        {
+            <span class="kwa">try</span>
+            {
+                t.<span class="kwd">join</span>();
+            }
+            <span class="kwa">catch</span> (InterruptedException e)
+            {
+                e.<span class="kwd">printStackTrace</span>();
+            }
+        }
+        
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i&lt; patterns.length; i++)
+        {
+            System.out.<span class="kwd">format</span>(<span class="str">&quot;%s %d</span><span class="esc">\n</span><span class="str">&quot;</span>, patterns[i], results.<span class="kwd">get</span>(i));
+        }
+    }
+    
+    <span class="kwa">private static</span> <span class="kwb">int</span> <span class="kwd">Replace</span>()
+    {
+        <span class="kwa">final</span> String[] pat_search = 
+        {
+            <span class="str">&quot;W&quot;</span>, <span class="str">&quot;Y&quot;</span>, <span class="str">&quot;K&quot;</span>, <span class="str">&quot;M&quot;</span>, 
+            <span class="str">&quot;S&quot;</span>, <span class="str">&quot;R&quot;</span>, <span class="str">&quot;B&quot;</span>, <span class="str">&quot;D&quot;</span>, 
+            <span class="str">&quot;V&quot;</span>, <span class="str">&quot;H&quot;</span>, <span class="str">&quot;N&quot;</span>
+        };
+        <span class="kwa">final</span> String[] pat_replace = 
+        {
+            <span class="str">&quot;(a|t)&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>, 
+            <span class="str">&quot;(c|g)&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>, 
+            <span class="str">&quot;(a|c|g)&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>
+        };
+        
+        <span class="kwa">final</span> AtomicIntegerArray tasks = <span class="kwa">new</span> <span class="kwd">AtomicIntegerArray</span>(pat_search.length);
+        <span class="kwa">final</span> AtomicIntegerArray result = <span class="kwa">new</span> <span class="kwd">AtomicIntegerArray</span>(pat_search.length);
+        
+        Thread[] pool = <span class="kwa">new</span> Thread[Runtime.<span class="kwd">getRuntime</span>().<span class="kwd">availableProcessors</span>()];
+        <span class="kwa">final</span> CyclicBarrier barrier = <span class="kwa">new</span> <span class="kwd">CyclicBarrier</span>(pool.length);
+
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; pool.length; i++)
+        {
+            pool[i] = <span class="kwa">new</span> <span class="kwd">Thread</span>()
+            {
+                <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>()
+                {
+                    StringBuffer des_buf = <span class="kwa">new</span> <span class="kwd">StringBuffer</span>();
+                    
+                    <span class="kwa">for</span> (<span class="kwb">int</span> pt = <span class="num">0</span>; pt &lt; pat_search.length; pt++)
+                    {
+                        Pattern pattern = Pattern.<span class="kwd">compile</span>(pat_search[pt]);
+                        Matcher m = pattern.<span class="kwd">matcher</span>(<span class="str">&quot;&quot;</span>);
+
+                        <span class="kwb">int</span> total_line = source_as_lines.<span class="kwd">size</span>();
+                        <span class="kwb">int</span> line;
+
+                        <span class="kwa">while</span> ((line = tasks.<span class="kwd">getAndIncrement</span>(pt)) &lt; total_line)
+                        {
+                            StringBuilder src_buf = source_as_lines.<span class="kwd">get</span>(line);
+                            m.<span class="kwd">reset</span>(src_buf);
+                            <span class="kwb">boolean</span> change = false;
+
+                            <span class="kwa">while</span> (m.<span class="kwd">find</span>())
+                            {
+                                m.<span class="kwd">appendReplacement</span>(des_buf, pat_replace[pt]);
+                                change = true;
+                            }
+
+                            <span class="kwa">if</span> (change)
+                            {
+                                m.<span class="kwd">appendTail</span>(des_buf);
+                                src_buf.<span class="kwd">setLength</span>(<span class="num">0</span>);
+                                src_buf.<span class="kwd">append</span>(des_buf);
+                            }
+
+                            <span class="kwa">if</span> (pt == (pat_search.length -<span class="num">1</span>))
+                                result.<span class="kwd">addAndGet</span>(pt, src_buf.<span class="kwd">length</span>());
+                            
+                            des_buf.<span class="kwd">setLength</span>(<span class="num">0</span>);
+                        }
+                        
+                        <span class="kwa">try</span>
+                        {
+                            barrier.<span class="kwd">await</span>();
+                        }
+                        <span class="kwa">catch</span> (Exception ie)
+                        {
+                            ie.<span class="kwd">printStackTrace</span>();
+                        }
+                    }
+                }
+            };
+            
+            pool[i].<span class="kwd">start</span>();
+        }
+        
+        <span class="kwa">for</span> (Thread t : pool)
+        {
+            <span class="kwa">try</span>
+            {
+                t.<span class="kwd">join</span>();
+            }
+            <span class="kwa">catch</span> (InterruptedException e)
+            {
+                e.<span class="kwd">printStackTrace</span>();
+            }
+        }
+        
+        <span class="kwb">int</span> replace_len = <span class="num">0</span>;
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; result.<span class="kwd">length</span>(); i++)
+            replace_len += result.<span class="kwd">get</span>(i);
+        <span class="kwa">return</span> replace_len;
+    }
+    
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span> (String[] args)
+    {
+        StringBuilder sb = <span class="kwa">new</span> <span class="kwd">StringBuilder</span> ();
+        <span class="kwb">int</span> init_len = <span class="kwd">ReadInput</span>(sb);
+        
+        <span class="kwb">int</span> strip_len = <span class="kwd">StripHeader</span>(sb);
+        sb = null;
+        
+        <span class="kwd">CountMatch</span>();
+        source_as_segments = null;
+        
+        <span class="kwb">int</span> replace_len = <span class="kwd">Replace</span>();
+        source_as_lines = null;
+        
+        System.out.<span class="kwd">format</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">&quot;</span>, init_len, strip_len, replace_len);
+    }
+}

@@ -1,0 +1,20 @@
+
+Tue, 28 Apr 2015 16:42:00 GMT
+
+MAKE:
+/usr/bin/g++ -c -pipe -O3 -fomit-frame-pointer -march=native  -fopenmp binarytrees.gpp-7.c++ -o binarytrees.gpp-7.c++.o &&  \
+        /usr/bin/g++ binarytrees.gpp-7.c++.o -o binarytrees.gpp-7.gpp_run -fopenmp -lboost_system 
+binarytrees.gpp-7.c++:14:23: fatal error: apr_pools.h: No such file or directory
+ #include <apr_pools.h>
+                       ^
+compilation terminated.
+/home/dunham/benchmarksgame/nanobench/makefiles/u32q.programs.Makefile:67: recipe for target 'binarytrees.gpp-7.gpp_run' failed
+make: [binarytrees.gpp-7.gpp_run] Error 1 (ignored)
+rm binarytrees.gpp-7.c++
+0.25s to complete and log all make actions
+
+COMMAND LINE:
+./binarytrees.gpp-7.gpp_run 12
+
+MAKE ERROR 
+

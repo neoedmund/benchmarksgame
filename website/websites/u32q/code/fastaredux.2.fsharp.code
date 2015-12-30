@@ -1,0 +1,82 @@
+﻿<span class="com">(*  The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">    contributed by Jimmy Tang *)</span>
+
+<span class="kwa">open</span> <span class="kwd">System</span>;
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">IO</span>;
+
+<span class="kwa">let</span> <span class="kwd">IM</span>, <span class="kwd">IA</span>, <span class="kwd">IC</span> = <span class="num">139968</span>, <span class="num">3877</span>, <span class="num">29573</span>
+<span class="kwa">let</span> cols, <span class="kwd">LUTLEN</span> = <span class="num">60</span>, <span class="num">1</span>&lt;&lt;&lt;<span class="num">9</span>
+<span class="kwa">let mutable</span> s = <span class="num">42</span>
+
+<span class="kwa">let</span> alu = <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG\</span>
+<span class="str">    GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA\</span>
+<span class="str">    CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT\</span>
+<span class="str">    ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA\</span>
+<span class="str">    GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG\</span>
+<span class="str">    AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC\</span>
+<span class="str">    AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span><span class="kwd">B</span>
+    
+<span class="kwa">let</span> iubvalues = [<span class="num">0.27</span>; <span class="num">0.12</span>; <span class="num">0.12</span>; <span class="num">0.27</span>] &#64; <span class="kwd">List</span>.replicate <span class="num">12 0.02</span>
+<span class="kwa">let</span> iub = <span class="kwd">Seq</span>.zip <span class="str">&quot;acgtBDHKMNRSVWY&quot;</span><span class="kwd">B</span> iubvalues
+<span class="kwa">let</span> homosapien = [ 'a'<span class="kwd">B</span>, <span class="num">0.3029549426680</span>
+                   'c'<span class="kwd">B</span>, <span class="num">0.1979883004921</span>
+                   'g'<span class="kwd">B</span>, <span class="num">0.1975473066391</span>
+                   't'<span class="kwd">B</span>, <span class="num">0.3015094502008</span> ]
+
+<span class="kwa">let</span> os = <span class="kwa">new</span> <span class="kwd">BufferedStream</span>(<span class="kwd">Console</span>.<span class="kwd">OpenStandardOutput</span>(), <span class="num">1</span>&lt;&lt;&lt;<span class="num">16</span>)
+<span class="kwa">let</span> repeatFasta alu n =
+    <span class="kwa">let</span> r = <span class="kwd">Array</span>.length alu
+    <span class="kwa">let</span> s = <span class="kwd">Array</span>.concat [alu;alu]
+    <span class="kwa">for</span> j <span class="kwa">in</span> <span class="num">0</span>..cols..n-cols <span class="kwa">do</span>
+        os.<span class="kwd">Write</span>(s, j%r, cols)
+        os.<span class="kwd">WriteByte</span>('<span class="esc">\n</span>'<span class="kwd">B</span>)
+    os.<span class="kwd">Write</span>(s,(n/cols*cols)%r, n % cols)
+    <span class="kwa">if</span> n%cols &lt;&gt; <span class="num">0</span> <span class="kwa">then</span> os.<span class="kwd">WriteByte</span>('<span class="esc">\n</span>'<span class="kwd">B</span>)
+    os.<span class="kwd">Flush</span>()
+
+<span class="kwa">let</span> randomFasta src n = 
+    <span class="slc">// cumulative probability for each nucleotide</span>
+    <span class="kwa">let</span> cumuArray =
+        <span class="kwa">let</span> f (a,c,d) (x,y) = (x,c+y,d+<span class="num">1</span>)
+        src |&gt; <span class="kwd">Seq</span>.scan f (<span class="num">0uy</span>,<span class="num">0.0</span>,<span class="num">0</span>) |&gt; <span class="kwd">Seq</span>.toArray
+    <span class="slc">// lookup table optimization</span>
+    <span class="kwa">let</span> lut = 
+        <span class="kwa">let</span> arr = <span class="kwd">Array</span>.zeroCreate <span class="kwd">LUTLEN</span>
+        <span class="kwa">let mutable</span> j = <span class="num">0</span>
+        <span class="kwa">for</span> key, cum, i <span class="kwa">in</span> cumuArray <span class="kwa">do</span>
+            <span class="kwa">let</span> v = j
+            <span class="kwa">while</span> j &lt;= <span class="kwb">int</span>(<span class="kwb">float</span>(<span class="kwd">LUTLEN</span>-<span class="num">1</span>) * cum) <span class="kwa">do</span>
+                arr.[j] &lt;- key, i
+                j &lt;- j + <span class="num">1</span>
+            <span class="kwa">if</span> j &lt;&gt; v <span class="kwa">then</span> arr.[j-<span class="num">1</span>] &lt;- <span class="num">0uy</span>, i
+        arr
+    <span class="kwa">let</span> lookup x = 
+        <span class="kwa">match</span> lut.[x*(<span class="kwd">LUTLEN</span>-<span class="num">1</span>)/<span class="kwd">IM</span>] <span class="kwa">with</span>
+        | <span class="num">0uy</span>,p -&gt; 
+            <span class="kwa">let</span> a,b,c = cumuArray.[p]
+            <span class="kwa">let</span> i,j,k = cumuArray.[p+<span class="num">1</span>]
+            <span class="kwa">if</span> <span class="kwb">float</span>(x)/<span class="kwb">float</span>(<span class="kwd">IM</span>) &lt; b <span class="kwa">then</span> a <span class="kwa">else</span> i
+        | c,p -&gt; c
+    <span class="slc">// write output one line at a time</span>
+    <span class="kwa">let</span> buf = <span class="kwd">Array</span>.zeroCreate (cols+<span class="num">1</span>)
+    <span class="kwa">for</span> x <span class="kwa">in</span> n..(-cols).<span class="num">.1</span> <span class="kwa">do</span>
+        <span class="kwa">let</span> e = <span class="kwa">if</span> x &lt; cols <span class="kwa">then</span> x <span class="kwa">else</span> cols
+        buf.[e] &lt;- '<span class="esc">\n</span>'<span class="kwd">B</span>
+        <span class="kwa">for</span> y <span class="kwa">in</span> <span class="num">0</span>..e-<span class="num">1</span> <span class="kwa">do</span> 
+            s &lt;- (s*<span class="kwd">IA</span> + <span class="kwd">IC</span>)%IM
+            buf.[y] &lt;- lookup s
+        os.<span class="kwd">Write</span>(buf,<span class="num">0</span>,e+<span class="num">1</span>)
+    os.<span class="kwd">Flush</span>()
+
+[&lt;<span class="kwd">EntryPoint</span>&gt;]
+<span class="kwa">let</span> main args =
+    <span class="kwa">let</span> n = <span class="kwa">try</span> <span class="kwb">int</span> args.[<span class="num">0</span>] <span class="kwa">with</span> _ -&gt; <span class="num">2500000</span>;
+    printfn <span class="str">&quot;&gt;ONE Homo sapiens alu&quot;</span>
+    repeatFasta alu (<span class="num">2</span>*n)
+    printfn <span class="str">&quot;&gt;TWO IUB ambiguity codes&quot;</span>
+    randomFasta iub (<span class="num">3</span>*n)
+    printfn <span class="str">&quot;&gt;THREE Homo sapiens frequency&quot;</span>
+    randomFasta homosapien (<span class="num">5</span>*n)
+    <span class="num">0</span>

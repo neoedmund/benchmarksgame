@@ -1,0 +1,25 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># contributed Daniel Nanz</span>
+
+<span class="kwa">import</span> sys
+<span class="kwa">import</span> gmpy2
+
+
+<span class="kwa">def</span> <span class="kwd">get_pistring</span>(n, pi=gmpy2.pi):
+
+    <span class="kwa">return</span> <span class="kwb">str</span>(<span class="kwd">pi</span>(<span class="kwb">int</span>(<span class="num">3.35</span> * n))).<span class="kwd">replace</span>(<span class="str">'.'</span>, <span class="str">''</span>)[<span class="num">0</span> : n]
+
+
+<span class="kwa">def</span> <span class="kwd">main</span>(n, width=<span class="num">10</span>, line=<span class="str">'{}</span><span class="esc">\t</span><span class="str">:{}'</span>):
+
+    pistring = <span class="kwd">get_pistring</span>(n)
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">0</span>, n - width + <span class="num">1</span>, width):
+        <span class="kwa">print</span>(line.<span class="kwd">format</span>(pistring[i : i + width], i + width))
+    <span class="kwa">if</span> n % width &gt; <span class="num">0</span>:
+        <span class="kwa">print</span>(line.<span class="kwd">format</span>(pistring[-(n % width) : ].<span class="kwd">ljust</span>(width), n))
+
+
+<span class="kwd">main</span>(<span class="kwb">int</span>(sys.argv[<span class="num">1</span>]))
+

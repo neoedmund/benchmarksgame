@@ -1,0 +1,127 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">! contributed by Andrei Jirnyi, modified from version by Steve Decker</span>
+<span class="slc">!</span>
+<span class="slc">! compilation:</span>
+<span class="slc">!   ifort -ipo -O3 revcomp.f90</span>
+
+<span class="kwa">program</span> revcomp
+  <span class="kwa">use</span> iso_fortran_env
+  <span class="kwa">implicit none</span>
+
+  <span class="kwa">integer</span>(<span class="num">1</span>), <span class="kwa">parameter</span> :: iEndStr = <span class="kwd">iachar</span>(<span class="str">&quot;&gt;&quot;</span>), EOL=<span class="num">10</span>
+  <span class="kwa">integer</span>,   <span class="kwa">parameter</span> :: LW = <span class="num">60</span>, BUFSIZE = <span class="num">1000</span> 
+
+  <span class="kwa">integer</span>(<span class="num">1</span>), <span class="kwa">dimension</span>(:), allocatable :: <span class="kwa">data</span>, w
+  <span class="kwa">integer</span>(<span class="num">1</span>) :: c, <span class="kwd">buf</span>(BUFSIZE+<span class="num">1</span>)
+  <span class="kwa">integer</span> :: i=<span class="num">0</span>, j=<span class="num">0</span>, k=<span class="num">0</span>, dsize = <span class="num">1000000</span>, newdsize, stat
+  <span class="kwa">logical</span> :: intitle = .true.
+
+  <span class="kwa">integer</span>(<span class="num">1</span>), <span class="kwa">dimension</span>(LW) :: title
+  <span class="kwa">character</span>(len=LW) :: stitle
+  <span class="kwa">equivalence</span>(title, stitle)
+  
+  <span class="kwa">integer</span>(<span class="num">1</span>), <span class="kwa">dimension</span>(<span class="num">65</span>:<span class="num">121</span>),<span class="kwa">parameter</span> :: &amp;
+       Complement = <span class="kwd">iachar</span>((/ <span class="str">&quot;T&quot;</span>, <span class="str">&quot;V&quot;</span>, <span class="str">&quot;G&quot;</span>, &amp;
+       <span class="str">&quot;H&quot;</span>, <span class="str">&quot;E&quot;</span>, <span class="str">&quot;F&quot;</span>, <span class="str">&quot;C&quot;</span>, <span class="str">&quot;D&quot;</span>, <span class="str">&quot;I&quot;</span>, <span class="str">&quot;J&quot;</span>, <span class="str">&quot;M&quot;</span>, <span class="str">&quot;L&quot;</span>, <span class="str">&quot;K&quot;</span>, <span class="str">&quot;N&quot;</span>, <span class="str">&quot;O&quot;</span>, <span class="str">&quot;P&quot;</span>,  &amp;
+       <span class="str">&quot;Q&quot;</span>, <span class="str">&quot;Y&quot;</span>, <span class="str">&quot;S&quot;</span>, <span class="str">&quot;A&quot;</span>, <span class="str">&quot;A&quot;</span>, <span class="str">&quot;B&quot;</span>, <span class="str">&quot;W&quot;</span>, <span class="str">&quot;X&quot;</span>, <span class="str">&quot;R&quot;</span>, (<span class="str">&quot; &quot;</span>, stat = <span class="num">90</span>, <span class="num">96</span>),  &amp;
+       <span class="str">&quot;T&quot;</span>, <span class="str">&quot;V&quot;</span>, <span class="str">&quot;G&quot;</span>, <span class="str">&quot;H&quot;</span>, <span class="str">&quot;E&quot;</span>, <span class="str">&quot;F&quot;</span>, <span class="str">&quot;C&quot;</span>, <span class="str">&quot;D&quot;</span>, <span class="str">&quot;I&quot;</span>, <span class="str">&quot;J&quot;</span>, <span class="str">&quot;M&quot;</span>, <span class="str">&quot;L&quot;</span>, <span class="str">&quot;K&quot;</span>,  &amp;
+       <span class="str">&quot;N&quot;</span>, <span class="str">&quot;O&quot;</span>, <span class="str">&quot;P&quot;</span>, <span class="str">&quot;Q&quot;</span>, <span class="str">&quot;Y&quot;</span>, <span class="str">&quot;S&quot;</span>, <span class="str">&quot;A&quot;</span>, <span class="str">&quot;A&quot;</span>, <span class="str">&quot;B&quot;</span>, <span class="str">&quot;W&quot;</span>, <span class="str">&quot;X&quot;</span>, <span class="str">&quot;R&quot;</span> /))
+
+  <span class="slc">! Unformatted I/O is faster in ifort under linux.</span>
+  <span class="kwa">close</span>(input_unit)
+  <span class="kwa">open</span>(unit=input_unit,access=<span class="str">'stream'</span>,form=<span class="str">'unformatted'</span>)
+  <span class="kwa">close</span>(output_unit)
+  <span class="kwa">open</span>(unit=output_unit, access=<span class="str">'stream'</span>,form=<span class="str">'unformatted'</span>)
+
+  <span class="kwd">allocate</span>(<span class="kwa">data</span>(dsize))  
+  k = dsize    <span class="slc">! position in the data array, decrementing</span>
+
+  intitle = .true.
+  readFile: <span class="kwa">do</span>
+     buf = EOL
+     <span class="kwa">read</span>(input_unit, iostat=stat) <span class="kwd">buf</span>(<span class="num">1</span>:BUFSIZE)
+     i = <span class="num">0</span>     <span class="slc">! position in buffer</span>
+     readBlock: <span class="kwa">do</span>
+        <span class="kwa">if</span>(intitle) <span class="kwa">then</span>
+           readTitle: <span class="kwa">do</span>           <span class="slc">! read title until EOL</span>
+              i = i+<span class="num">1</span>
+              <span class="kwa">if</span>(i&gt;BUFSIZE) cycle readFile
+              c = <span class="kwd">buf</span>(i)
+              <span class="kwa">if</span>(c /= EOL) <span class="kwa">then</span>
+                 j = j+<span class="num">1</span>           <span class="slc">! position in title</span>
+                 <span class="kwd">title</span>(j) = c
+              <span class="kwa">else</span>
+                 intitle = .false.
+                 exit readTitle
+              <span class="kwa">end if</span>
+           <span class="kwa">end do</span> readTitle
+        <span class="kwa">else</span>
+           readData: <span class="kwa">do</span>
+              i = i+<span class="num">1</span>
+              <span class="kwa">if</span>(i&gt;BUFSIZE) cycle readFile
+              c = <span class="kwd">buf</span>(i)
+              <span class="kwa">if</span>(c /= EOL) <span class="kwa">then</span>   
+                 <span class="kwa">data</span>(k) = <span class="kwd">Complement</span>(c)
+                 k = k-<span class="num">1</span>
+              <span class="kwa">else</span>                 <span class="slc">! === EOL</span>
+                 <span class="kwa">if</span>(k &lt; <span class="num">256</span>) <span class="kwa">then</span>  <span class="slc">! reallocate array</span>
+                    newdsize = dsize*<span class="num">3</span>
+                    <span class="kwd">allocate</span>(<span class="kwd">w</span>(newdsize))
+                    <span class="kwd">w</span>(newdsize-dsize+<span class="num">1</span>:) = <span class="kwa">data</span>
+                    <span class="kwa">call</span> <span class="kwd">move_alloc</span>(w,<span class="kwa">data</span>)
+                    k = k+newdsize-dsize
+                    dsize = newdsize
+                 <span class="kwa">end if</span>
+                 
+                 <span class="kwa">if</span>(stat /=<span class="num">0</span>) <span class="kwa">then</span>
+                    <span class="kwa">if</span>(i&lt;BUFSIZE .and. <span class="kwd">buf</span>(i+<span class="num">1</span>) == EOL) exit readFile
+                 <span class="kwa">end if</span>
+                 <span class="kwa">if</span>(<span class="kwd">buf</span>(i+<span class="num">1</span>) == iEndStr) <span class="kwa">then</span>
+                    intitle = .true.
+                    <span class="kwa">call</span> print_data
+                    j = <span class="num">0</span>
+                    k = dsize
+                    cycle readBlock
+                 <span class="kwa">end if</span>
+              <span class="kwa">end if</span>
+           <span class="kwa">end do</span> readData
+        <span class="kwa">end if</span>
+     <span class="kwa">end do</span> readBlock
+  <span class="kwa">end do</span> readFile
+  <span class="kwa">call</span> print_data
+
+<span class="kwa">contains</span>
+
+  <span class="kwa">subroutine</span> print_data
+    <span class="kwa">integer</span>(<span class="num">1</span>), <span class="kwa">dimension</span>(:), allocatable:: data1
+    <span class="kwa">integer</span> :: lines, last, dlen, d1len, i1, j1
+
+    dlen = dsize-k
+    lines = dlen/LW
+    last = dlen - lines*LW
+
+    d1len = lines*(LW+<span class="num">1</span>)
+    <span class="kwa">if</span>(last&gt;<span class="num">0</span>) d1len=d1len+last+<span class="num">1</span>
+    <span class="kwd">allocate</span>(<span class="kwd">data1</span>(d1len))
+
+    i1=<span class="num">1</span>; j1=<span class="num">1</span>;
+    <span class="slc">! copy to data1, inserting EOL's</span>
+    <span class="kwa">do</span> i1=k+<span class="num">1</span>, dsize-last, LW
+       <span class="kwd">data1</span>(j1:j1+LW-<span class="num">1</span>) = <span class="kwa">data</span>(i1:i1+LW-<span class="num">1</span>)
+       <span class="kwd">data1</span>(j1+LW) = EOL
+       j1 = j1+LW+<span class="num">1</span>
+    <span class="kwa">end do</span>
+    <span class="kwa">if</span>(last&gt;<span class="num">0</span>) <span class="kwa">then</span>
+       <span class="kwd">data1</span>(d1len-last:d1len-<span class="num">1</span>) = <span class="kwa">data</span>(dsize-last+<span class="num">1</span>:dsize)
+       <span class="kwd">data1</span>(d1len) = EOL
+    <span class="kwa">end if</span>
+    
+    <span class="kwa">write</span>(output_unit) <span class="kwd">trim</span>(<span class="kwd">stitle</span>(<span class="num">1</span>:j)), EOL
+    <span class="kwa">write</span>(output_unit) data1
+    <span class="kwd">flush</span>(output_unit)
+    <span class="kwd">deallocate</span>(data1)
+  <span class="kwa">end subroutine</span> print_data
+
+<span class="kwa">end program</span> revcomp

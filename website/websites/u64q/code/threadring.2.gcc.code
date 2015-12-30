@@ -1,0 +1,71 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Ricardo Garcia</span>
+<span class="com"> */</span>
+
+<span class="ppc">#include &lt;assert.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;semaphore.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;limits.h&gt;</span>
+
+<span class="ppc">#define NUM_THREADS (503)</span>
+
+pthread_t threads[NUM_THREADS];   <span class="com">/* Threads. */</span>
+<span class="kwb">int</span> names[NUM_THREADS];      <span class="com">/* Thread &quot;names&quot;. */</span>
+<span class="kwb">long</span> mailboxes[NUM_THREADS];   <span class="com">/* Read tokens from here. */</span>
+sem_t greenlights[NUM_THREADS];   <span class="com">/* Semaphores to signal token presence. */</span>
+
+<span class="kwb">void</span> *<span class="kwd">ring_routine</span>(<span class="kwb">void</span> *myname)
+{
+   <span class="kwb">int</span> name = *(<span class="kwb">int</span> *)(myname);   <span class="com">/* My name (1..NUM_THREADS). */</span>
+   <span class="kwb">int</span> index = name - <span class="num">1</span>;      <span class="com">/* My index for the arrays. */</span>
+   <span class="kwb">int</span> next = (index + <span class="num">1</span>) % NUM_THREADS;
+   <span class="kwb">long</span> token;
+
+   <span class="kwa">for</span> (;;) {
+      <span class="kwd">sem_wait</span>(greenlights + index);   <span class="com">/* Wait for a new token. */</span>
+      token = mailboxes[index];   <span class="com">/* Get token. */</span>
+      <span class="kwa">if</span> (token == <span class="num">0</span>) {      <span class="com">/* Game over. */</span>
+         <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\n</span><span class="str">&quot;</span>, name);
+         <span class="kwd">exit</span>(EXIT_SUCCESS);
+      }
+      mailboxes[next] = token - <span class="num">1</span>;   <span class="com">/* Decrement and pass. */</span>
+      <span class="kwd">sem_post</span>(greenlights + next);   <span class="com">/* Green ligh for next thr. */</span>
+   }
+   <span class="kwa">return</span> NULL;
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[])
+{
+   <span class="kwb">long</span> first_token;
+   <span class="kwb">int</span> ii;
+   pthread_attr_t attributes;
+   sem_t permanent_red;
+   
+   <span class="com">/* Read first token. */</span>
+   first_token = <span class="kwd">strtol</span>(argv[<span class="num">1</span>], NULL, <span class="num">10</span>);
+
+   <span class="com">/* Initialize attributes. */</span>
+   <span class="kwd">pthread_attr_init</span>(&amp;attributes);
+   <span class="kwd">pthread_attr_setdetachstate</span>(&amp;attributes, PTHREAD_CREATE_DETACHED);
+   <span class="kwd">pthread_attr_setstacksize</span>(&amp;attributes, PTHREAD_STACK_MIN);
+
+   <span class="com">/* Initialize arrays and create threads. */</span>
+   <span class="kwa">for</span> (ii = <span class="num">0</span>; ii &lt; NUM_THREADS; ++ii) {
+      names[ii] = ii + <span class="num">1</span>;
+      <span class="kwd">sem_init</span>(greenlights + ii, <span class="num">0</span>, <span class="num">0</span>);
+      <span class="kwd">pthread_create</span>(threads + ii, &amp;attributes, ring_routine, names + ii);
+   }
+
+   <span class="com">/* Pass first token. */</span>
+   mailboxes[<span class="num">0</span>] = first_token;
+   <span class="kwd">sem_post</span>(greenlights + <span class="num">0</span>);
+
+   <span class="com">/* Wait forever. */</span>
+   <span class="kwd">sem_init</span>(&amp;permanent_red, <span class="num">0</span>, <span class="num">0</span>);
+   <span class="kwd">sem_wait</span>(&amp;permanent_red);
+   <span class="kwa">return</span> <span class="num">0</span>;
+}

@@ -1,0 +1,181 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by The Go Authors.</span>
+<span class="com"> * Based on C program by by Petr Prokhorenkov.</span>
+<span class="com"> * flag.Arg hack by Isaac Gouy</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;flag&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;strconv&quot;</span>
+)
+
+<span class="kwa">var</span> out = <span class="kwb">make</span>(buffer, <span class="num">0</span>, <span class="num">32768</span>)
+
+<span class="slc">// var n = flag.Int(&quot;n&quot;, 1000, &quot;length of result&quot;)</span>
+<span class="kwa">var</span> n = <span class="num">0</span>
+
+<span class="kwa">const</span> Line = <span class="num">60</span>
+
+<span class="kwa">func</span> <span class="kwd">Repeat</span>(alu []<span class="kwb">byte</span>, n <span class="kwb">int</span>) {
+   buf := <span class="kwd">append</span>(alu, alu...)
+   off := <span class="num">0</span>
+   <span class="kwa">for</span> n &gt; <span class="num">0</span> {
+      m := n
+      <span class="kwa">if</span> m &gt; Line {
+         m = Line
+      }
+      buf1 := out.<span class="kwd">NextWrite</span>(m + <span class="num">1</span>)
+      <span class="kwd">copy</span>(buf1, buf[off:])
+      buf1[m] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>
+      <span class="kwa">if</span> off += m; off &gt;= <span class="kwb">len</span>(alu) {
+         off -= <span class="kwb">len</span>(alu)
+      }
+      n -= m
+   }
+}
+
+<span class="kwa">const</span> (
+   IM = <span class="num">139968</span>
+   IA = <span class="num">3877</span>
+   IC = <span class="num">29573</span>
+
+   LookupSize  = <span class="num">4096</span>
+   LookupScale <span class="kwb">float64</span> = LookupSize - <span class="num">1</span>
+)
+
+<span class="kwa">var</span> rand <span class="kwb">uint32</span> = <span class="num">42</span>
+
+<span class="kwa">type</span> Acid <span class="kwa">struct</span> {
+   sym   <span class="kwb">byte</span>
+   prob  <span class="kwb">float64</span>
+   cprob <span class="kwb">float64</span>
+   next  *Acid
+}
+
+<span class="kwa">func</span> <span class="kwd">computeLookup</span>(acid []Acid) *[LookupSize]*Acid {
+   <span class="kwa">var</span> lookup [LookupSize]*Acid
+   <span class="kwa">var</span> p <span class="kwb">float64</span>
+   <span class="kwa">for</span> i := <span class="kwa">range</span> acid {
+      p += acid[i].prob
+      acid[i].cprob = p * LookupScale
+      <span class="kwa">if</span> i &gt; <span class="num">0</span> {
+         acid[i-<span class="num">1</span>].next = &amp;acid[i]
+      }
+   }
+   acid[<span class="kwb">len</span>(acid)-<span class="num">1</span>].cprob = <span class="num">1.0</span> * LookupScale
+
+   j := <span class="num">0</span>
+   <span class="kwa">for</span> i := <span class="kwa">range</span> lookup {
+      <span class="kwa">for</span> acid[j].cprob &lt; <span class="kwb">float64</span>(i) {
+         j++
+      }
+      lookup[i] = &amp;acid[j]
+   }
+
+   <span class="kwa">return</span> &amp;lookup
+}
+
+<span class="kwa">func</span> <span class="kwd">Random</span>(acid []Acid, n <span class="kwb">int</span>) {
+   lookup := <span class="kwd">computeLookup</span>(acid)
+   <span class="kwa">for</span> n &gt; <span class="num">0</span> {
+      m := n
+      <span class="kwa">if</span> m &gt; Line {
+         m = Line
+      }
+      buf := out.<span class="kwd">NextWrite</span>(m + <span class="num">1</span>)
+      f := LookupScale / IM
+      myrand := rand
+      <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; m; i++ {
+         myrand = (myrand*IA + IC) % IM
+         r := <span class="kwb">float64</span>(<span class="kwb">int</span>(myrand)) * f
+         a := lookup[<span class="kwb">int</span>(r)]
+         <span class="kwa">for</span> a.cprob &lt; r {
+            a = a.next
+         }
+         buf[i] = a.sym
+      }
+      rand = myrand
+      buf[m] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>
+      n -= m
+   }
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   <span class="kwa">defer</span> out.<span class="kwd">Flush</span>()
+
+   flag.<span class="kwd">Parse</span>()
+   <span class="kwa">if</span> flag.<span class="kwd">NArg</span>() &gt; <span class="num">0</span> { n,_ = strconv.<span class="kwd">Atoi</span>( flag.<span class="kwd">Arg</span>(<span class="num">0</span>) ) }
+
+   iub := []Acid{
+      {prob: <span class="num">0.27</span>, sym: <span class="str">'a'</span>},
+      {prob: <span class="num">0.12</span>, sym: <span class="str">'c'</span>},
+      {prob: <span class="num">0.12</span>, sym: <span class="str">'g'</span>},
+      {prob: <span class="num">0.27</span>, sym: <span class="str">'t'</span>},
+      {prob: <span class="num">0.02</span>, sym: <span class="str">'B'</span>},
+      {prob: <span class="num">0.02</span>, sym: <span class="str">'D'</span>},
+      {prob: <span class="num">0.02</span>, sym: <span class="str">'H'</span>},
+      {prob: <span class="num">0.02</span>, sym: <span class="str">'K'</span>},
+      {prob: <span class="num">0.02</span>, sym: <span class="str">'M'</span>},
+      {prob: <span class="num">0.02</span>, sym: <span class="str">'N'</span>},
+      {prob: <span class="num">0.02</span>, sym: <span class="str">'R'</span>},
+      {prob: <span class="num">0.02</span>, sym: <span class="str">'S'</span>},
+      {prob: <span class="num">0.02</span>, sym: <span class="str">'V'</span>},
+      {prob: <span class="num">0.02</span>, sym: <span class="str">'W'</span>},
+      {prob: <span class="num">0.02</span>, sym: <span class="str">'Y'</span>},
+   }
+
+   homosapiens := []Acid{
+      {prob: <span class="num">0.3029549426680</span>, sym: <span class="str">'a'</span>},
+      {prob: <span class="num">0.1979883004921</span>, sym: <span class="str">'c'</span>},
+      {prob: <span class="num">0.1975473066391</span>, sym: <span class="str">'g'</span>},
+      {prob: <span class="num">0.3015094502008</span>, sym: <span class="str">'t'</span>},
+   }
+
+   alu := []<span class="kwb">byte</span>(
+      <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span> +
+         <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span> +
+         <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span> +
+         <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span> +
+         <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span> +
+         <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span> +
+         <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>)
+
+   out.<span class="kwd">WriteString</span>(<span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>)
+   <span class="kwd">Repeat</span>(alu, <span class="num">2</span>*n)
+   out.<span class="kwd">WriteString</span>(<span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>)
+   <span class="kwd">Random</span>(iub, <span class="num">3</span>*n)
+   out.<span class="kwd">WriteString</span>(<span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>)
+   <span class="kwd">Random</span>(homosapiens, <span class="num">5</span>*n)
+}
+
+
+<span class="kwa">type</span> buffer []<span class="kwb">byte</span>
+
+<span class="kwa">func</span> (b *buffer) <span class="kwd">Flush</span>() {
+   p := *b
+   <span class="kwa">if</span> <span class="kwb">len</span>(p) &gt; <span class="num">0</span> {
+      os.Stdout.<span class="kwd">Write</span>(p)
+   }
+   *b = p[<span class="num">0</span>:<span class="num">0</span>]
+}
+
+<span class="kwa">func</span> (b *buffer) <span class="kwd">WriteString</span>(s <span class="kwb">string</span>) {
+   p := b.<span class="kwd">NextWrite</span>(<span class="kwb">len</span>(s))
+   <span class="kwd">copy</span>(p, s)
+}
+
+<span class="kwa">func</span> (b *buffer) <span class="kwd">NextWrite</span>(n <span class="kwb">int</span>) []<span class="kwb">byte</span> {
+   p := *b
+   <span class="kwa">if</span> <span class="kwb">len</span>(p)+n &gt; <span class="kwb">cap</span>(p) {
+      b.<span class="kwd">Flush</span>()
+      p = *b
+   }
+   out := p[<span class="kwb">len</span>(p) : <span class="kwb">len</span>(p)+n]
+   *b = p[:<span class="kwb">len</span>(p)+n]
+   <span class="kwa">return</span> out
+}

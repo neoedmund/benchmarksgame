@@ -1,0 +1,107 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; ported from Java #2</span>
+<span class="slc">;; provided by Alex Miller</span>
+
+(ns spectralnorm
+  (:import [java.util.concurrent CyclicBarrier]
+           [clojure.lang Numbers])
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* true)
+
+(<span class="kwa">defmacro</span> a [i j]
+  `(/ <span class="num">1.0</span> (double (+ (Numbers/unsignedShiftRightInt (* (+ ~i ~j) (+ ~i ~j <span class="num">1</span>)) <span class="num">1</span>) (inc ~i)))))
+
+(<span class="kwa">defn</span> mul-av [^doubles v ^doubles av ^long begin ^long end]
+  (<span class="kwc">let</span> [vl (alength v)]
+    (<span class="kwb">loop</span> [i begin
+           j <span class="num">0</span>
+           sum <span class="num">0.0</span>]
+      (<span class="kwc">when</span> (&lt; i end)
+        (<span class="kwc">if</span> (&lt; j vl)
+          (<span class="kwb">recur</span> i (inc j) (+ sum (* (a i j) (aget v j))))
+          (do
+            (aset av i sum)
+            (<span class="kwb">recur</span> (inc i) <span class="num">0 0.0</span>)))))))
+
+(<span class="kwa">defn</span> mul-atv [^doubles v ^doubles atv ^long begin ^long end]
+  (<span class="kwc">let</span> [vl (alength v)]
+    (<span class="kwb">loop</span> [i begin
+           j <span class="num">0</span>
+           sum <span class="num">0.0</span>]
+      (<span class="kwc">when</span> (&lt; i end)
+        (<span class="kwc">if</span> (&lt; j vl)
+          (<span class="kwb">recur</span> i (inc j) (+ sum (* (a j i) (aget v j))))
+          (do
+            (aset atv i sum)
+            (<span class="kwb">recur</span> (inc i) <span class="num">0 0.0</span>)))))))
+
+(<span class="kwa">defn</span> approximate [^doubles u ^doubles v ^doubles tmp
+                   begin end ^CyclicBarrier barrier
+                   t ^doubles mvbvs ^doubles mvvs]
+  (<span class="kwc">let</span> [begin (long begin)
+        end (long end)
+        t (int t)]
+    (<span class="kwb">loop</span> [i <span class="num">0</span>]
+      (<span class="kwc">when</span> (&lt; i <span class="num">10</span>)
+        (mul-av u tmp begin end)
+        (.await barrier)
+        (mul-atv tmp v begin end)
+        (.await barrier)
+        (mul-av v tmp begin end)
+        (.await barrier)
+        (mul-atv tmp u begin end)
+        (.await barrier)
+        (<span class="kwb">recur</span> (inc i))))
+    (<span class="kwb">loop</span> [i begin
+           mvbv <span class="num">0.0</span>
+           mvv <span class="num">0.0</span>]
+      (<span class="kwc">if</span> (&lt; i end)
+        (<span class="kwc">let</span> [vi (aget v i)]
+          (<span class="kwb">recur</span> (inc i)
+                 (+ mvbv (* (aget u i) vi))
+                 (+ mvv (* vi vi))))
+        (do
+          (aset mvbvs t mvbv)
+          (aset mvvs t mvv))))))
+
+(<span class="kwa">defn</span> game [^long n]
+  (<span class="kwc">let</span> [u (double-array n)
+        v (double-array n)
+        tmp (double-array n)
+        nthread (.availableProcessors (Runtime/getRuntime))
+        nthread' (dec nthread)
+        th (object-array nthread)
+        mvbv (double-array nthread)
+        mvv (double-array nthread)
+        barrier (CyclicBarrier. nthread)
+        chunk (quot n nthread)]
+    (<span class="kwb">loop</span> [i <span class="num">0</span>]
+      (<span class="kwc">when</span> (&lt; i n)
+        (aset u i <span class="num">1.0</span>)
+        (<span class="kwb">recur</span> (inc i))))
+    (<span class="kwb">loop</span> [i <span class="num">0</span>]
+      (<span class="kwc">when</span> (&lt; i nthread)
+        (<span class="kwc">let</span> [r1 (* i chunk)
+              r2 (long (<span class="kwc">if</span> (&lt; i nthread') (+ r1 chunk) n))
+              thr (Thread. ^Runnable (<span class="kwa">fn</span> [] (approximate u v tmp r1 r2 barrier i mvbv mvv)))]
+          (aset th i thr)
+          (.start thr)
+          (<span class="kwb">recur</span> (inc i)))))
+    (<span class="kwb">loop</span> [i <span class="num">0</span>
+           vBv <span class="num">0.0</span>
+           vv <span class="num">0.0</span>]
+      (<span class="kwc">if</span> (&lt; i nthread)
+        (<span class="kwc">let</span> [t ^Thread (nth th i)]
+          (.join t)
+          (<span class="kwb">recur</span> (inc i) (+ vBv (aget mvbv i)) (+ vv (aget mvv i))))
+        (println (format <span class="str">&quot;%.9f&quot;</span> (Math/sqrt (/ vBv vv))))))))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [n (long (<span class="kwc">if</span> (empty? args)
+                  <span class="num">1000</span>
+                  (Long/parseLong ^String (<span class="kwd">first</span> args))))]
+    (game n)))

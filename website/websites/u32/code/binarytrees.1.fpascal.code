@@ -1,0 +1,140 @@
+<span class="com">(*</span>
+<span class="com">  The Computer Language Benchmarks Game</span>
+<span class="com">  http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">  contributed by Vitaly Trifonof based on a contribution of Ales Katona</span>
+<span class="com">*)</span>
+
+<span class="kwa">program</span> BinaryTrees;
+
+<span class="kwa">type</span>
+  PNode = ^TNode;
+  TNode = <span class="kwa">record</span>
+    l, r: PNode;
+    i: <span class="kwb">Longint</span>;
+  <span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">CreateNode</span>(l2, r2: PNode; <span class="kwa">const</span> i2: <span class="kwb">Longint</span>): PNode; <span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  CreateNode := <span class="kwd">GetMem</span>(<span class="kwd">SizeOf</span>(TNode));
+  CreateNode^.l:=l2;
+  CreateNode^.r:=r2;
+  CreateNode^.i:=i2;
+<span class="kwa">end</span>;
+
+
+<span class="com">(* Destroy node and it subnodes in one procedure *)</span>
+
+<span class="kwa">procedure</span> <span class="kwd">DestroyNode</span>(ANode: PNode); <span class="kwa">inline</span>;
+<span class="kwa">var</span>
+  LNode, RNode: PNode;
+<span class="kwa">begin</span>
+  LNode := ANode^.l;
+  <span class="kwc">if</span> LNode &lt;&gt; <span class="kwa">nil</span> <span class="kwc">then</span>
+  <span class="kwa">begin</span>
+    RNode := ANode^.r;
+    <span class="kwc">if</span> LNode^.l &lt;&gt; <span class="kwa">nil</span> <span class="kwc">then</span>
+    <span class="kwa">begin</span>
+      <span class="kwd">DestroyNode</span>(LNode^.l);
+      <span class="kwd">DestroyNode</span>(LNode^.r);
+      <span class="kwd">FreeMem</span>(LNode, <span class="kwd">SizeOf</span>(TNode));
+
+      <span class="kwd">DestroyNode</span>(RNode^.l);
+      <span class="kwd">DestroyNode</span>(RNode^.r);
+      <span class="kwd">FreeMem</span>(RNode, <span class="kwd">SizeOf</span>(TNode));
+    <span class="kwa">end</span>
+    <span class="kwc">else</span>
+    <span class="kwa">begin</span>
+      <span class="kwd">DestroyNode</span>(LNode);
+      <span class="kwd">DestroyNode</span>(RNode);
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>;
+
+  <span class="kwd">FreeMem</span>(ANode, <span class="kwd">SizeOf</span>(TNode));
+<span class="kwa">end</span>;
+
+
+<span class="com">(* Left subnodes check in cycle, right recursive *)</span>
+
+<span class="kwa">function</span> <span class="kwd">CheckNode</span>(ANode: PNode): <span class="kwb">Longint</span>; <span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  CheckNode := <span class="num">0</span>;
+  <span class="kwc">while</span> ANode^.l &lt;&gt; <span class="kwa">nil</span> <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    CheckNode += ANode^.i - <span class="kwd">CheckNode</span>(ANode^.r);
+    ANode := ANode^.l
+  <span class="kwa">end</span>;
+  CheckNode += ANode^.i;
+<span class="kwa">end</span>;
+
+
+<span class="com">(*</span>
+<span class="com">   Create node and it subnodes in one function</span>
+<span class="com"></span>
+<span class="com">   make(1,a)=(2I-1)=Ia make(2,Ia-1)=(2(2I-1)-1)=(4I-3)</span>
+<span class="com">                       make(2,Ia)  =(2(2I-1))  =(4I-2)</span>
+<span class="com"></span>
+<span class="com">   make(1,b)=(2I)=Ib   make(2,Ib-1)=(2(2I)-1)  =(4I-1)</span>
+<span class="com">                       make(2,Ib)  =(2(2I))    =(4I)</span>
+<span class="com">*)</span>
+
+<span class="kwa">function</span> <span class="kwd">Make</span>(d, i: <span class="kwb">Longint</span>): PNode;
+<span class="kwa">var</span>
+  fi: <span class="kwb">Longint</span>;
+<span class="kwa">begin</span>
+  <span class="kwa">case</span> d <span class="kwa">of</span>
+   <span class="num">0</span>: Make:=<span class="kwd">CreateNode</span>(<span class="kwa">nil</span>, <span class="kwa">nil</span>, i);
+   <span class="num">1</span>: Make:=<span class="kwd">CreateNode</span>(<span class="kwd">CreateNode</span>(<span class="kwa">nil</span>, <span class="kwa">nil</span>, <span class="num">2</span>*i-<span class="num">1</span>), <span class="kwd">CreateNode</span>(<span class="kwa">nil</span>, <span class="kwa">nil</span>, <span class="num">2</span>*i),i);
+  <span class="kwc">else</span>
+      d -= <span class="num">2</span>; fi := <span class="num">4</span>*i;
+      Make:=<span class="kwd">CreateNode</span>(
+                           <span class="kwd">CreateNode</span>( <span class="kwd">Make</span>(d, fi-<span class="num">3</span>),<span class="kwd">Make</span>(d, fi-<span class="num">2</span>), <span class="num">2</span>*i-<span class="num">1</span> ),
+                           <span class="kwd">CreateNode</span>( <span class="kwd">Make</span>(d, fi-<span class="num">1</span>),<span class="kwd">Make</span>(d, fi), <span class="num">2</span>*i ),
+                           i
+                        )
+  <span class="kwa">end</span>
+<span class="kwa">end</span>;
+
+<span class="kwa">const</span>
+  mind = <span class="num">4</span>;
+
+<span class="kwa">var</span>
+  maxd : <span class="kwb">Longint</span> = <span class="num">10</span>;
+  strd,
+  iter,
+  c, d, i : <span class="kwb">Longint</span>;
+  tree, llt : PNode;
+
+<span class="kwa">begin</span>
+  <span class="kwc">if</span> ParamCount = <span class="num">1</span> <span class="kwc">then</span>
+    <span class="kwd">Val</span>(<span class="kwd">ParamStr</span>(<span class="num">1</span>), maxd);
+
+  <span class="kwc">if</span> maxd &lt; mind+<span class="num">2</span> <span class="kwc">then</span>
+     maxd := mind + <span class="num">2</span>;
+
+  strd:=maxd + <span class="num">1</span>;
+  tree:=<span class="kwd">Make</span>(strd, <span class="num">0</span>);
+  <span class="kwd">Writeln</span>(<span class="str">'stretch tree of depth '</span>, strd, <span class="esc">#9</span><span class="str">' check: '</span>, <span class="kwd">CheckNode</span>(tree));
+  <span class="kwd">DestroyNode</span>(tree);
+
+  llt:=<span class="kwd">Make</span>(maxd, <span class="num">0</span>);
+
+  d:=mind;
+  <span class="kwc">while</span> d &lt;= maxd <span class="kwc">do</span> <span class="kwa">begin</span>
+    iter:=<span class="num">1</span> <span class="kwa">shl</span> (maxd - d + mind);
+    c:=<span class="num">0</span>;
+    <span class="kwc">for</span> i:=<span class="num">1</span> <span class="kwc">to</span> Iter <span class="kwc">do</span> <span class="kwa">begin</span>
+      tree:=<span class="kwd">Make</span>(d, i);
+      c:=c + <span class="kwd">CheckNode</span>(tree);
+      <span class="kwd">DestroyNode</span>(tree);
+      tree:=<span class="kwd">Make</span>(d, -i);
+      c:=c + <span class="kwd">CheckNode</span>(tree);
+      <span class="kwd">DestroyNode</span>(tree);
+    <span class="kwa">end</span>;
+    <span class="kwd">Writeln</span>(<span class="num">2</span> * Iter, <span class="esc">#9</span><span class="str">' trees of depth '</span>, d, <span class="esc">#9</span><span class="str">' check: '</span>, c);
+    <span class="kwd">Inc</span>(d, <span class="num">2</span>);
+  <span class="kwa">end</span>;
+
+  <span class="kwd">Writeln</span>(<span class="str">'long lived tree of depth '</span>, maxd, <span class="esc">#9</span><span class="str">' check: '</span>, <span class="kwd">CheckNode</span>(llt));
+  <span class="kwd">DestroyNode</span>(llt);
+<span class="kwa">end</span>.

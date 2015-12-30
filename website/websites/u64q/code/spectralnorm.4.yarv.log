@@ -1,0 +1,8 @@
+
+Sun, 27 Dec 2015 00:39:38 GMT
+
+COMMAND LINE:
+/usr/local/src/ruby/bin/ruby -W0 spectralnorm.yarv-4.yarv 5500
+
+PROGRAM OUTPUT:
+1.274224153

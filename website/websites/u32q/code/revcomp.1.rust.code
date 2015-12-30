@@ -1,0 +1,198 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by TeXitoi</span>
+
+<span class="slc">//extern crate libc;</span>
+<span class="slc">// exporting needed things from libc for linux x64 (still unstable)</span>
+#[cfg(all(target_os = <span class="str">&quot;linux&quot;</span>, any(target_arch = <span class="str">&quot;x86_64&quot;</span>, target_arch = <span class="str">&quot;x86&quot;</span>)))]
+<span class="kwa">mod</span> libc {
+    #![allow(non_camel_case_types)]
+    #[repr(u8)]
+    <span class="kwa">pub enum</span> c_void { __variant1, __variant2 }
+    <span class="kwa">pub type</span> c_int = i32;
+    #[cfg(target_arch = <span class="str">&quot;x86_64&quot;</span>)] <span class="kwa">pub type</span> size_t = u64;
+    #[cfg(target_arch = <span class="str">&quot;x86&quot;</span>)] <span class="kwa">pub type</span> size_t = u32;
+    <span class="kwa">extern</span> { <span class="kwa">pub fn</span> memchr(cx: *<span class="kwa">const</span> c_void, c: c_int, n: size_t) -&gt; *<span class="kwa">mut</span> c_void; }
+}
+
+<span class="kwa">use</span> std::io::{Read, Write};
+<span class="kwa">use</span> std::ptr::copy;
+<span class="kwa">use</span> std::thread;
+
+<span class="kwa">struct</span> Tables {
+    table8: [u8;<span class="num">1</span> &lt;&lt; <span class="num">8</span>],
+    table16: [u16;<span class="num">1</span> &lt;&lt; <span class="num">16</span>]
+}
+
+<span class="kwa">impl</span> Tables {
+    <span class="kwa">fn</span> new() -&gt; Tables {
+        <span class="kwa">let mut</span> table8 = [<span class="num">0</span>;<span class="num">1</span> &lt;&lt; <span class="num">8</span>];
+        <span class="kwa">for</span> (i, v) <span class="kwa">in</span> table8.iter_mut().enumerate() {
+            *v = Tables::computed_cpl8(i <span class="kwa">as</span> u8);
+        }
+        <span class="kwa">let mut</span> table16 = [<span class="num">0</span>;<span class="num">1</span> &lt;&lt; <span class="num">16</span>];
+        <span class="kwa">for</span> (i, v) <span class="kwa">in</span> table16.iter_mut().enumerate() {
+            *v = (table8[i &amp; <span class="num">255</span>] <span class="kwa">as</span> u16) &lt;&lt; <span class="num">8</span> |
+                 table8[i &gt;&gt; <span class="num">8</span>]  <span class="kwa">as</span> u16;
+        }
+        Tables { table8: table8, table16: table16 }
+    }
+
+    <span class="kwa">fn</span> computed_cpl8(c: u8) -&gt; u8 {
+        <span class="kwa">match</span> c {
+            b'A' | b'a' =&gt; b'T',
+            b'C' | b'c' =&gt; b'G',
+            b'G' | b'g' =&gt; b'C',
+            b'T' | b't' =&gt; b'A',
+            b'U' | b'u' =&gt; b'A',
+            b'M' | b'm' =&gt; b'K',
+            b'R' | b'r' =&gt; b'Y',
+            b'W' | b'w' =&gt; b'W',
+            b'S' | b's' =&gt; b'S',
+            b'Y' | b'y' =&gt; b'R',
+            b'K' | b'k' =&gt; b'M',
+            b'V' | b'v' =&gt; b'B',
+            b'H' | b'h' =&gt; b'D',
+            b'D' | b'd' =&gt; b'H',
+            b'B' | b'b' =&gt; b'V',
+            b'N' | b'n' =&gt; b'N',
+            i =&gt; i,
+        }
+    }
+
+    <span class="slc">/// Retrieves the complement for `i`.</span>
+    <span class="kwa">fn</span> cpl8(&amp;<span class="kwa">self</span>, i: u8) -&gt; u8 {
+        <span class="kwa">self</span>.table8[i <span class="kwa">as</span> usize]
+    }
+
+    <span class="slc">/// Retrieves the complement for `i`.</span>
+    <span class="kwa">fn</span> cpl16(&amp;<span class="kwa">self</span>, i: u16) -&gt; u16 {
+        <span class="kwa">self</span>.table16[i <span class="kwa">as</span> usize]
+    }
+}
+
+<span class="slc">/// Finds the first position at which `b` occurs in `s`.</span>
+<span class="kwa">fn</span> memchr(h: &amp;[u8], n: u8) -&gt; Option&lt;usize&gt; {
+    <span class="kwa">use</span> libc::{c_void, c_int, size_t};
+    <span class="kwa">let</span> res = <span class="kwa">unsafe</span> {
+        libc::memchr(h.as_ptr() <span class="kwa">as</span> *<span class="kwa">const</span> c_void, n <span class="kwa">as</span> c_int, h.len() <span class="kwa">as</span> size_t)
+    };
+    <span class="kwa">if</span> res.is_null() {
+        None
+    } <span class="kwa">else</span> {
+        Some(res <span class="kwa">as</span> usize - h.as_ptr() <span class="kwa">as</span> usize)
+    }
+}
+
+<span class="slc">/// A mutable iterator over DNA sequences</span>
+<span class="kwa">struct</span> MutDnaSeqs&lt;'a&gt; { s: &amp;'a <span class="kwa">mut</span> [u8] }
+<span class="kwa">fn</span> mut_dna_seqs&lt;'a&gt;(s: &amp;'a <span class="kwa">mut</span> [u8]) -&gt; MutDnaSeqs&lt;'a&gt; {
+    MutDnaSeqs { s: s }
+}
+<span class="kwa">impl</span>&lt;'a&gt; Iterator <span class="kwa">for</span> MutDnaSeqs&lt;'a&gt; {
+    <span class="kwa">type</span> Item = &amp;'a <span class="kwa">mut</span> [u8];
+
+    <span class="kwa">fn</span> next(&amp;<span class="kwa">mut self</span>) -&gt; Option&lt;&amp;'a <span class="kwa">mut</span> [u8]&gt; {
+        <span class="kwa">let</span> tmp = std::mem::replace(&amp;<span class="kwa">mut self</span>.s, &amp;<span class="kwa">mut</span> []);
+        <span class="kwa">let</span> tmp = <span class="kwa">match</span> memchr(tmp, b'<span class="esc">\n</span>') {
+            Some(i) =&gt; &amp;<span class="kwa">mut</span> tmp[i + <span class="num">1</span> ..],
+            None =&gt; <span class="kwa">return</span> None,
+        };
+        <span class="kwa">let</span> (seq, tmp) = <span class="kwa">match</span> memchr(tmp, b'&gt;') {
+            Some(i) =&gt; tmp.split_at_mut(i),
+            None =&gt; {
+                <span class="kwa">let</span> len = tmp.len();
+                tmp.split_at_mut(len)
+            }
+        };
+        <span class="kwa">self</span>.s = tmp;
+        Some(seq)
+    }
+}
+
+<span class="slc">/// Length of a normal line without the terminating \n.</span>
+<span class="kwa">const</span> LINE_LEN: usize = <span class="num">60</span>;
+
+<span class="slc">/// Compute the reverse complement.</span>
+<span class="kwa">fn</span> reverse_complement(seq: &amp;<span class="kwa">mut</span> [u8], tables: &amp;Tables) {
+    <span class="kwa">let</span> len = seq.len() - <span class="num">1</span>;
+    <span class="kwa">let</span> seq = &amp;<span class="kwa">mut</span> seq[..len];<span class="slc">// Drop the last newline</span>
+    <span class="kwa">let</span> off = LINE_LEN - len % (LINE_LEN + <span class="num">1</span>);
+    <span class="kwa">let mut</span> i = LINE_LEN;
+    <span class="kwa">while</span> i &lt; len {
+        <span class="kwa">unsafe</span> {
+            copy(seq.as_ptr().offset((i - off) <span class="kwa">as</span> isize),
+                 seq.as_mut_ptr().offset((i - off + <span class="num">1</span>) <span class="kwa">as</span> isize), off);
+            *seq.get_unchecked_mut(i - off) = b'<span class="esc">\n</span>';
+        }
+        i += LINE_LEN + <span class="num">1</span>;
+    }
+
+    <span class="kwa">let</span> div = len / <span class="num">4</span>;
+    <span class="kwa">let</span> rem = len % <span class="num">4</span>;
+    <span class="kwa">unsafe</span> {
+        <span class="kwa">let mut</span> left = seq.as_mut_ptr() <span class="kwa">as</span> *<span class="kwa">mut</span> u16;
+        <span class="slc">// This is slow if len % 2 != 0 but still faster than bytewise operations.</span>
+        <span class="kwa">let mut</span> right = seq.as_mut_ptr().offset(len <span class="kwa">as</span> isize - <span class="num">2</span>) <span class="kwa">as</span> *<span class="kwa">mut</span> u16;
+        <span class="kwa">let</span> end = left.offset(div <span class="kwa">as</span> isize);
+        <span class="kwa">while</span> left != end {
+            <span class="kwa">let</span> tmp = tables.cpl16(*left);
+            *left = tables.cpl16(*right);
+            *right = tmp;
+            left = left.offset(<span class="num">1</span>);
+            right = right.offset(-<span class="num">1</span>);
+        }
+
+        <span class="kwa">let</span> end = end <span class="kwa">as</span> *<span class="kwa">mut</span> u8;
+        <span class="kwa">match</span> rem {
+            <span class="num">1</span> =&gt; *end = tables.cpl8(*end),
+            <span class="num">2</span> =&gt; {
+                <span class="kwa">let</span> tmp = tables.cpl8(*end);
+                *end = tables.cpl8(*end.offset(<span class="num">1</span>));
+                *end.offset(<span class="num">1</span>) = tmp;
+            },
+            <span class="num">3</span> =&gt; {
+                *end.offset(<span class="num">1</span>) = tables.cpl8(*end.offset(<span class="num">1</span>));
+                <span class="kwa">let</span> tmp = tables.cpl8(*end);
+                *end = tables.cpl8(*end.offset(<span class="num">2</span>));
+                *end.offset(<span class="num">2</span>) = tmp;
+            },
+            _ =&gt; { },
+        }
+    }
+}
+
+<span class="kwa">struct</span> Racy&lt;T&gt;(T);
+<span class="kwa">unsafe impl</span>&lt;T: '<span class="kwa">static</span>&gt; Send <span class="kwa">for</span> Racy&lt;T&gt; {}
+
+<span class="slc">/// Executes a closure in parallel over the given iterator over mutable slice.</span>
+<span class="slc">/// The closure `f` is run in parallel with an element of `iter`.</span>
+<span class="kwa">fn</span> parallel&lt;'a, I, T, F&gt;(iter: I, <span class="kwa">ref</span> f: F)
+        <span class="kwa">where</span> T: '<span class="kwa">static</span> + Send + Sync,
+              I: Iterator&lt;Item=&amp;'a <span class="kwa">mut</span> [T]&gt;,
+              F: Fn(&amp;<span class="kwa">mut</span> [T]) + Sync {
+    <span class="kwa">let</span> jhs = iter.map(|chunk| {
+        <span class="slc">// Need to convert `f` and `chunk` to something that can cross the task</span>
+        <span class="slc">// boundary.</span>
+        <span class="kwa">let</span> f = Racy(f <span class="kwa">as</span> *<span class="kwa">const</span> F <span class="kwa">as</span> *<span class="kwa">const</span> usize);
+        <span class="kwa">let</span> raw = Racy((&amp;<span class="kwa">mut</span> chunk[<span class="num">0</span>] <span class="kwa">as</span> *<span class="kwa">mut</span> T, chunk.len()));
+        thread::spawn(<span class="kwa">move</span>|| {
+            <span class="kwa">let</span> f = f<span class="num">.0</span> <span class="kwa">as</span> *<span class="kwa">const</span> F;
+            <span class="kwa">let</span> raw = raw<span class="num">.0</span>;
+            <span class="kwa">unsafe</span> { (*f)(std::slice::from_raw_parts_mut(raw<span class="num">.0</span>, raw<span class="num">.1</span>)) }
+        })
+    }).collect::&lt;Vec&lt;_&gt;&gt;();
+    <span class="kwa">for</span> jh <span class="kwa">in</span> jhs { jh.join().unwrap(); }
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> stdin = std::io::stdin();
+    <span class="kwa">let mut</span> data = Vec::with_capacity(<span class="num">1024</span> * <span class="num">1024</span>);
+    stdin.lock().read_to_end(&amp;<span class="kwa">mut</span> data).unwrap();
+    <span class="kwa">let</span> tables = &amp;Tables::new();
+    parallel(mut_dna_seqs(&amp;<span class="kwa">mut</span> data), |seq| reverse_complement(seq, tables));
+    <span class="kwa">let</span> stdout = std::io::stdout();
+    stdout.lock().write_all(&amp;data).unwrap();
+}

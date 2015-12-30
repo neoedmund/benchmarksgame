@@ -1,0 +1,15 @@
+
+Sat, 18 Jul 2015 18:44:49 GMT
+
+MAKE:
+mv fannkuchredux.hipe fannkuchredux.erl
+/usr/local/src/otp_src_18.0_nosmp/bin/erlc +native +"{hipe, [o3]}"  fannkuchredux.erl
+rm fannkuchredux.erl
+1.57s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/otp_src_18.0_nosmp/bin/erl -smp disable -noshell -run  fannkuchredux main 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

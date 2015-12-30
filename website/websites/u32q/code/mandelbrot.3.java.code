@@ -1,0 +1,117 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> </span>
+<span class="com">   contributed by Stefan Krause</span>
+<span class="com">   slightly modified by Chad Whipkey</span>
+<span class="com">   parallelized by Colin D Bennett 2008-10-04</span>
+<span class="com">   reduce synchronization cost by The Anh Tran</span>
+<span class="com">  */</span>
+
+<span class="slc">//package mandelbrot;</span>
+
+<span class="kwa">import</span> java.io.*;
+<span class="kwa">import</span> java.io.IOException;
+<span class="kwa">import</span> java.util.concurrent.atomic.AtomicInteger;
+
+<span class="kwa">public final class</span> mandelbrot
+{
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) <span class="kwa">throws</span> Exception
+    {
+        <span class="kwb">int</span> size = <span class="num">200</span>;
+        <span class="kwa">if</span> (args.length &gt;= <span class="num">1</span>)
+            size = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+        
+        System.out.<span class="kwd">format</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">%d %d</span><span class="esc">\n</span><span class="str">&quot;</span>, size, size);
+        
+        <span class="kwb">int</span> width_bytes = size /<span class="num">8</span> +<span class="num">1</span>;
+        <span class="kwb">byte</span>[][] output_data = <span class="kwa">new</span> <span class="kwb">byte</span>[size][width_bytes];
+        <span class="kwb">int</span>[] bytes_per_line = <span class="kwa">new</span> <span class="kwb">int</span>[size];
+        
+        <span class="kwd">Compute</span>(size, output_data, bytes_per_line);
+        
+        BufferedOutputStream ostream = <span class="kwa">new</span> <span class="kwd">BufferedOutputStream</span>(System.out);
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; size; i++)
+            ostream.<span class="kwd">write</span>(output_data[i], <span class="num">0</span>, bytes_per_line[i]);
+        ostream.<span class="kwd">close</span>();
+    }
+    
+    <span class="kwa">private static final</span> <span class="kwb">void</span> <span class="kwd">Compute</span>(<span class="kwa">final</span> <span class="kwb">int</span> N, <span class="kwa">final</span> <span class="kwb">byte</span>[][] output, <span class="kwa">final</span> <span class="kwb">int</span>[] bytes_per_line)
+    {
+        <span class="kwa">final</span> <span class="kwb">double</span> inverse_N = <span class="num">2.0</span> / N;
+        <span class="kwa">final</span> AtomicInteger current_line = <span class="kwa">new</span> <span class="kwd">AtomicInteger</span>(<span class="num">0</span>);
+        
+        <span class="kwa">final</span> Thread[] pool = <span class="kwa">new</span> Thread[Runtime.<span class="kwd">getRuntime</span>().<span class="kwd">availableProcessors</span>()];
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; pool.length; i++)
+        {
+            pool[i] = <span class="kwa">new</span> <span class="kwd">Thread</span>()
+            {
+                <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>()
+                {
+                    <span class="kwb">int</span> y;
+                    <span class="kwa">while</span> ((y = current_line.<span class="kwd">getAndIncrement</span>()) &lt; N)
+                    {
+                        <span class="kwb">byte</span>[] pdata = output[y];
+                        
+                        <span class="kwb">int</span> bit_num = <span class="num">0</span>;
+                        <span class="kwb">int</span> byte_count = <span class="num">0</span>;
+                        <span class="kwb">int</span> byte_accumulate = <span class="num">0</span>;
+                        
+                        <span class="kwb">double</span> Civ = (<span class="kwb">double</span>)y * inverse_N - <span class="num">1.0</span>;
+                        <span class="kwa">for</span> (<span class="kwb">int</span> x = <span class="num">0</span>; x &lt; N; x++)
+                        {
+                            <span class="kwb">double</span> Crv = (<span class="kwb">double</span>)x * inverse_N - <span class="num">1.5</span>;
+                            
+                            <span class="kwb">double</span> Zrv = Crv;
+                            <span class="kwb">double</span> Ziv = Civ;
+                            
+                            <span class="kwb">double</span> Trv = Crv * Crv;
+                            <span class="kwb">double</span> Tiv = Civ * Civ;
+                            
+                            <span class="kwb">int</span> i = <span class="num">49</span>;
+                            <span class="kwa">do</span>
+                            {
+                                Ziv = (Zrv * Ziv) + (Zrv * Ziv) + Civ;
+                                Zrv = Trv - Tiv + Crv;
+                                
+                                Trv = Zrv * Zrv;
+                                Tiv = Ziv * Ziv;
+                            } <span class="kwa">while</span> ( ((Trv + Tiv) &lt;= <span class="num">4.0</span>) &amp;&amp; (--i &gt; <span class="num">0</span>));
+
+                            byte_accumulate &lt;&lt;= <span class="num">1</span>;
+                            <span class="kwa">if</span> (i == <span class="num">0</span>)
+                                byte_accumulate++;
+                            
+                            <span class="kwa">if</span> (++bit_num == <span class="num">8</span>)
+                            {
+                                pdata[ byte_count++ ] = (<span class="kwb">byte</span>)byte_accumulate;
+                                bit_num = byte_accumulate = <span class="num">0</span>;
+                            }
+                        } <span class="slc">// end foreach column</span>
+                        
+                        <span class="kwa">if</span> (bit_num != <span class="num">0</span>)
+                        {
+                            byte_accumulate &lt;&lt;= (<span class="num">8</span> - (N &amp; <span class="num">7</span>));
+                            pdata[ byte_count++ ] = (<span class="kwb">byte</span>)byte_accumulate;
+                        }
+                        
+                        bytes_per_line[y] = byte_count;
+                    } <span class="slc">// end while (y &lt; N)</span>
+                } <span class="slc">// end void run()</span>
+            }; <span class="slc">// end inner class definition</span>
+            
+            pool[i].<span class="kwd">start</span>();
+        }
+        
+        <span class="kwa">for</span> (Thread t : pool)
+        {
+            <span class="kwa">try</span>
+            {
+                t.<span class="kwd">join</span>();
+            }
+            <span class="kwa">catch</span> (InterruptedException e)
+            {
+                e.<span class="kwd">printStackTrace</span>();
+            }
+        }
+    }
+}

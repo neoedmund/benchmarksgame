@@ -1,0 +1,49 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc"># contributed by Danny Sauer</span>
+<span class="slc"># completely rewritten and</span>
+<span class="slc"># cleaned up for speed and fun by Mirco Wahab</span>
+<span class="slc"># improved STDIN read, regex clean up by Jake Berner</span>
+
+<span class="kwa">use</span> strict;
+<span class="kwa">use</span> warnings;
+
+<span class="kwc">my</span> <span class="kwb">$l_file</span>  = -s STDIN;
+<span class="kwc">my</span> <span class="kwb">$content</span>; <span class="kwc">read</span> STDIN, <span class="kwb">$content</span>, <span class="kwb">$l_file</span>;
+<span class="slc"># this is significantly faster than using &lt;&gt; in this case</span>
+
+<span class="kwc">my</span> <span class="kwb">$dispose</span> =  <span class="kwd">qr/(^&gt;.*)?\n/m</span>; <span class="slc"># slight performance gain here</span>
+   <span class="kwb">$content</span> =~ <span class="kwd">s/$dispose//g</span>;
+<span class="kwc">my</span> <span class="kwb">$l_code</span>  =  <span class="kwc">length</span> <span class="kwb">$content</span>;
+
+<span class="kwc">my</span> <span class="kwb">&#64;seq</span> = ( <span class="str">'agggtaaa|tttaccct'</span>,
+        <span class="str">'[cgt]gggtaaa|tttaccc[acg]'</span>,
+        <span class="str">'a[act]ggtaaa|tttacc[agt]t'</span>,
+        <span class="str">'ag[act]gtaaa|tttac[agt]ct'</span>,
+        <span class="str">'agg[act]taaa|ttta[agt]cct'</span>,
+        <span class="str">'aggg[acg]aaa|ttt[cgt]ccct'</span>,
+        <span class="str">'agggt[cgt]aa|tt[acg]accct'</span>,
+        <span class="str">'agggta[cgt]a|t[acg]taccct'</span>,
+        <span class="str">'agggtaa[cgt]|[acg]ttaccct'</span> );
+
+<span class="kwc">my</span> <span class="kwb">&#64;cnt</span> = (<span class="num">0</span>) x <span class="kwb">&#64;seq</span>;
+<span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$k</span> (<span class="num">0</span>..<span class="kwb">$#seq</span>) {
+  ++<span class="kwb">$cnt</span>[<span class="kwb">$k</span>] <span class="kwa">while</span> <span class="kwb">$content</span>=~<span class="kwd">/$seq[$k]/gi</span>;
+  <span class="kwc">printf</span> <span class="str">&quot;</span><span class="ipl">$seq</span><span class="str">[</span><span class="ipl">$k</span><span class="str">]</span> <span class="ipl">$cnt</span><span class="str">[</span><span class="ipl">$k</span><span class="str">]</span><span class="esc">\n</span><span class="str">&quot;</span>
+}
+
+<span class="kwc">my</span> <span class="kwb">%iub</span> = (         B =&gt; <span class="str">'(c|g|t)'</span>,  D =&gt; <span class="str">'(a|g|t)'</span>,
+  H =&gt; <span class="str">'(a|c|t)'</span>,   K =&gt; <span class="str">'(g|t)'</span>,    M =&gt; <span class="str">'(a|c)'</span>,
+  N =&gt; <span class="str">'(a|c|g|t)'</span>, R =&gt; <span class="str">'(a|g)'</span>,    S =&gt; <span class="str">'(c|g)'</span>,
+  V =&gt; <span class="str">'(a|c|g)'</span>,   W =&gt; <span class="str">'(a|t)'</span>,    Y =&gt; <span class="str">'(c|t)'</span> );
+
+<span class="slc"># using $&amp; and no submatch marginally improves the</span>
+<span class="slc"># speed here, but mentioning $&amp; causes perl to </span>
+<span class="slc"># define that value for the &#64;seq patterns too, which</span>
+<span class="slc"># slows those down considerably. No change.</span>
+
+<span class="kwc">my</span> <span class="kwb">$findiub</span> = <span class="str">'(['</span>.(<span class="kwc">join</span> <span class="str">''</span>, <span class="kwc">keys</span> <span class="kwb">%iub</span>).<span class="str">'])'</span>;
+
+<span class="kwb">$content</span> =~ <span class="kwd">s/$findiub/$iub{$1}/g</span>;
+
+<span class="kwc">printf</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwb">$l_file</span>, <span class="kwb">$l_code</span>, <span class="kwc">length</span> <span class="kwb">$content</span>;

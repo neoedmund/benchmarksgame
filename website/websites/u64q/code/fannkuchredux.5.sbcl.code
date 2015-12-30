@@ -1,0 +1,72 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;; </span>
+<span class="slc">;; Contributed by Karel Belohlavek</span>
+<span class="slc">;; </span>
+<span class="slc">;; Single core implementation.</span>
+<span class="slc">;; Inspired by the Erlang one by Alkis Gotovos and Maria Christakis.</span>
+
+(<span class="kwa">eval-when</span> (:execute) (<span class="kwa">proclaim</span> '(<span class="kwa">optimize</span> (<span class="kwa">speed</span>))))
+
+(<span class="kwa">defun</span> fannkuch (<span class="kwa">n</span>)
+   (<span class="kwa">labels</span>
+    ((<span class="kwa">mkperm</span> (<span class="kwa">n</span>)
+     (<span class="kwa">let</span>*
+      ((<span class="kwa">params</span> (<span class="kwa">loop</span> for i from <span class="num">1</span> to n collect (<span class="kwa">gensym</span>)))
+       (<span class="kwa">flip-branches</span>
+         (<span class="kwa">loop</span>
+          for j from <span class="num">2</span> to n
+          collect
+            `((,j)
+              ,(<span class="kwa">append</span> '(<span class="kwa">flip</span> (<span class="kwa">the</span> fixnum (<span class="kwa">1</span>+ acc)))
+                       (<span class="kwa">reverse</span> (<span class="kwa">subseq</span> params <span class="num">0</span> j))
+                       (<span class="kwa">subseq</span> params j)))))
+       (<span class="kwa">nextperm-branches</span>
+         (<span class="kwa">loop</span>
+          for j from <span class="num">0</span> below n
+          for rparams = (<span class="kwa">append</span> (<span class="kwa">subseq</span> params <span class="num">1</span> (<span class="kwa">1</span>+ j))
+                                (<span class="kwa">list</span> (<span class="kwa">car</span> params))
+                                (<span class="kwa">subseq</span> params (<span class="kwa">1</span>+ j)))
+          collect
+            `((,j)
+              (<span class="kwa">if</span> (&lt; (<span class="kwa">aref</span> c i) i) 
+               (<span class="kwa">progn</span>
+                (<span class="kwa">incf</span> (<span class="kwa">aref</span> c i))
+                (<span class="kwa">let</span> ((<span class="kwa">nflips</span> (<span class="kwa">the</span> fixnum (<span class="kwa">flip</span> <span class="num">0</span> ,&#64;rparams))))
+                  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum nflips))
+		  (<span class="kwa">cond</span> (<span class="kwa">even</span> (<span class="kwa">incf</span> csum nflips)
+		              (<span class="kwa">setf</span> even nil))
+		        (<span class="kwa">t</span> (<span class="kwa">decf</span> csum nflips)
+			   (<span class="kwa">setf</span> even t)))
+                  (<span class="kwa">when</span> (&gt; nflips max-flips)
+                   (<span class="kwa">setf</span> max-flips nflips)))
+                (<span class="kwa">perm</span> <span class="num">1</span> ,&#64;rparams))
+               (<span class="kwa">progn</span>
+                (<span class="kwa">setf</span> (<span class="kwa">aref</span> c i) <span class="num">0</span>)
+                (<span class="kwa">perm</span> (+ i <span class="num">1</span>) ,&#64;rparams)))))))
+      `(<span class="kwa">lambda</span> ()
+	(<span class="kwa">let</span> ((<span class="kwa">csum</span> <span class="num">0</span>)
+	      (<span class="kwa">max-flips</span> <span class="num">0</span>)
+	      (<span class="kwa">even</span> nil)
+	      (<span class="kwa">c</span> (<span class="kwa">make-array</span> ,n :initial-element <span class="num">0</span> :element-type 'fixnum)))
+	  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum csum max-flips)
+	           (<span class="kwa">type</span> boolean even)
+	           (<span class="kwa">type</span> (<span class="kwa">simple-array</span> fixnum (,n)) c))
+	  (<span class="kwa">labels</span>
+	   ((<span class="kwa">flip</span> (<span class="kwa">acc</span> ,&#64;params)
+             (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum acc ,&#64;params))
+             (<span class="kwa">ecase</span> ,(<span class="kwa">car</span> params) ((<span class="kwa">1</span>) acc) ,&#64;flip-branches))
+            (<span class="kwa">perm</span> (<span class="kwa">i</span> ,&#64;params)
+	     (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum i ,&#64;params))
+	     (<span class="kwa">ecase</span> i
+	       (,n (<span class="kwa">format</span> t <span class="str">&quot;~s~%Pfannkuchen(~s) = ~s~%&quot;</span> csum ,n max-flips))
+	       ,&#64;nextperm-branches)))
+	   (<span class="kwa">apply</span> #'perm
+	    <span class="num">1</span>
+	    (<span class="kwa">loop</span> for j of-type fixnum from <span class="num">1</span> to ,n collect j))))))))
+    (<span class="kwa">funcall</span> (<span class="kwa">compile</span> nil (<span class="kwa">mkperm</span> n)))))
+
+(<span class="kwa">defun</span> main ()  
+  (<span class="kwa">let</span>* ((<span class="kwa">args</span> (<span class="kwa">cdr</span> sb-ext:*posix-argv*))
+         (<span class="kwa">n</span> (<span class="kwa">parse-integer</span> (<span class="kwa">car</span> args))))
+    (<span class="kwa">fannkuch</span> n)))

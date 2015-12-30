@@ -1,0 +1,97 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   original contributed by Isaac Gouy</span>
+<span class="com">   made to use single array and parallelized by Stephen Marsh</span>
+<span class="com">   converted to Scala 2.8 by Rex Kerr</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> java.io.BufferedOutputStream
+
+<span class="kwa">object</span> mandelbrot {
+  <span class="kwa">var</span> size: Int = <span class="num">0</span>
+  <span class="kwa">var</span> bytesPerRow: Int = <span class="num">0</span>
+  <span class="kwa">var</span> bitmap: Array[Byte] = _
+  <span class="kwa">var</span> donerows: Array[Boolean] = _
+  <span class="kwa">var</span> nextRow = <span class="num">0</span>
+  <span class="kwa">val</span> limitSquared = <span class="num">4.0</span>
+  <span class="kwa">val</span> max = <span class="num">50</span>
+
+  <span class="kwa">def</span> getNextRow: Int = <span class="kwa">synchronized</span> {
+    <span class="kwd">notify</span>() <span class="slc">// wakes up main thread</span>
+    <span class="kwa">if</span> (nextRow == size) <span class="kwa">return</span> -<span class="num">1</span>
+    nextRow += <span class="num">1</span>
+    <span class="kwa">return</span> nextRow - <span class="num">1</span>
+  }
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) {
+    size = <span class="kwd">args</span>(<span class="num">0</span>).toInt
+    bytesPerRow = (size+<span class="num">7</span>)/<span class="num">8</span> <span class="slc">// ceiling of (size / 8)</span>
+    bitmap = <span class="kwa">new</span> <span class="kwd">Array</span>(bytesPerRow*size)
+    donerows = <span class="kwa">new</span> <span class="kwd">Array</span>(size)
+
+    <span class="kwa">for</span> (i &lt;- <span class="num">0</span> until Runtime.<span class="kwd">getRuntime</span>().<span class="kwd">availableProcessors</span>())
+      <span class="kwa">new</span> <span class="kwd">Thread</span>(<span class="kwa">new</span> <span class="kwd">CalcThread</span>()).<span class="kwd">start</span>()
+
+    <span class="slc">// main thread prints rows as they finish</span>
+    <span class="kwd">println</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">&quot;</span> + size + <span class="str">&quot; &quot;</span> + size)
+    <span class="kwa">val</span> w = <span class="kwa">new</span> <span class="kwd">BufferedOutputStream</span>(System.out)
+    <span class="kwa">var</span> y = <span class="num">0</span>
+    <span class="kwa">while</span> (y &lt; size) {
+      <span class="kwa">while</span> (!<span class="kwd">donerows</span>(y)) <span class="kwa">synchronized</span>{<span class="kwd">wait</span>()}
+      w.<span class="kwd">write</span>(bitmap, y * bytesPerRow, bytesPerRow)
+      y += <span class="num">1</span>
+    }
+    w.close
+  }
+
+  <span class="kwa">class</span> CalcThread <span class="kwa">extends</span> Runnable {
+    <span class="kwa">def</span> <span class="kwd">run</span> () {
+      <span class="kwa">while</span> (true) {
+	<span class="kwa">var</span> y = getNextRow
+	<span class="kwa">if</span> (y == -<span class="num">1</span>) <span class="kwa">return</span>
+
+	<span class="kwa">var</span> bits = <span class="num">0</span>
+	<span class="kwa">var</span> bitnum = <span class="num">0</span>
+	<span class="kwa">var</span> x = <span class="num">0</span>
+	<span class="kwa">var</span> aindex = y * bytesPerRow
+
+	<span class="kwa">while</span> (x &lt; size) {
+
+        <span class="kwa">val</span> cr = <span class="num">2.0</span> * x / size - <span class="num">1.5</span>
+        <span class="kwa">val</span> ci = <span class="num">2.0</span> * y / size - <span class="num">1.0</span>
+
+        <span class="kwa">var</span> zr, tr, zi, ti = <span class="num">0.0</span>
+
+        <span class="kwa">var</span> j = max
+            <span class="kwa">do</span> {
+              zi = <span class="num">2.0</span> * zr * zi + ci
+              zr = tr - ti + cr
+              ti = zi*zi
+              tr = zr*zr
+
+              j = j - <span class="num">1</span>
+            } <span class="kwa">while</span> (!(tr + ti &gt; limitSquared) &amp;&amp; j &gt; <span class="num">0</span>)
+
+         bits = bits &lt;&lt; <span class="num">1</span>
+         <span class="kwa">if</span> (!(tr + ti &gt; limitSquared)) bits += <span class="num">1</span>
+         bitnum += <span class="num">1</span>
+
+         <span class="kwa">if</span> (x == size - <span class="num">1</span>) {
+           bits = bits &lt;&lt; (<span class="num">8</span> - bitnum)
+           bitnum = <span class="num">8</span>
+         }
+
+         <span class="kwa">if</span> (bitnum == <span class="num">8</span>) {
+           <span class="kwd">bitmap</span>(aindex) = bits.toByte
+	   aindex += <span class="num">1</span>
+           bits = <span class="num">0</span>
+           bitnum = <span class="num">0</span>
+         }
+
+         x += <span class="num">1</span>
+	}
+	<span class="kwd">donerows</span>(y) = true
+      }
+    }
+  }
+}

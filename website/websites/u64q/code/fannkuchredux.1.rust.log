@@ -1,0 +1,22 @@
+
+Fri, 15 May 2015 17:27:50 GMT
+
+MAKE:
+/usr/local/src/rust-1.0.0-x86_64-unknown-linux-gnu/rustc/bin/rustc -C opt-level=3 -C target-cpu=core2 -C lto fannkuchredux.rs -o fannkuchredux.rust_run
+fannkuchredux.rs:8:5: 8:24 error: use of unstable library feature 'scoped': memory unsafe if destructor is avoided, see #24292
+fannkuchredux.rs:8 use std::thread::scoped;
+                       ^~~~~~~~~~~~~~~~~~~
+fannkuchredux.rs:133:22: 133:28 error: use of unstable library feature 'scoped': memory unsafe if destructor is avoided, see #24292
+fannkuchredux.rs:133         futures.push(scoped(move|| {
+                                          ^~~~~~
+error: aborting due to 2 previous errors
+/home/dunham/benchmarksgame/nanobench/makefiles/u64q.programs.Makefile:627: recipe for target 'fannkuchredux.rust_run' failed
+make: [fannkuchredux.rust_run] Error 101 (ignored)
+rm fannkuchredux.rs
+0.54s to complete and log all make actions
+
+COMMAND LINE:
+./fannkuchredux.rust_run 10
+
+MAKE ERROR 
+

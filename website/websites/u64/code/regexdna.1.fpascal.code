@@ -1,0 +1,204 @@
+<span class="com">(*</span>
+<span class="com">  The Computer Language Benchmarks Game</span>
+<span class="com">  http://benchmarksgame.alioth.debian.org</span>
+<span class="com"></span>
+<span class="com">  contributed by Vitaly Trifonov</span>
+<span class="com">*)</span>
+
+<span class="com">{$mode objfpc}</span>
+
+
+<span class="kwa">uses</span> sysutils;
+
+<span class="com">(******************************    pcre wrap   *****************************)</span>
+
+<span class="kwa">const</span>
+  libpcre = <span class="str">'pcre'</span>;
+  PCRE_CASELESS = <span class="num">$00000001</span>;
+
+<span class="kwa">type</span>
+  pcre = <span class="kwb">Pointer</span>;
+  pcre_extra = <span class="kwb">Pointer</span>;
+  PPChar = ^PChar;
+
+
+<span class="kwa">function</span> <span class="kwd">pcre_compile</span>( <span class="kwa">const</span> pattern: PChar;
+                       options: <span class="kwb">Integer</span>;
+                       <span class="kwa">const</span> errptr: PPChar;
+                       erroffset: PInteger;
+                       <span class="kwa">const</span> tableptr: PChar ): pcre; <span class="kwa">cdecl</span>; <span class="kwa">external</span> libpcre;
+
+<span class="kwa">function</span> <span class="kwd">pcre_exec</span>( <span class="kwa">const</span> code: pcre;
+                    <span class="kwa">const</span> extra: pcre_extra;
+                    <span class="kwa">const</span> subject: PChar;
+                    length, startoffset, options: <span class="kwb">Integer</span>;
+                    ovector: PInteger;
+                    ovecsize: <span class="kwb">Integer</span> ): <span class="kwb">Integer</span>; <span class="kwa">cdecl</span>; <span class="kwa">external</span> libpcre;
+
+<span class="kwa">function</span> <span class="kwd">pcre_study</span>( <span class="kwa">const</span> external_re: pcre;
+                     options: <span class="kwb">integer</span>;
+                     errorptr: PPChar ): pcre_extra; <span class="kwa">cdecl</span>; <span class="kwa">external</span> libpcre;
+
+<span class="com">(***************************************************************************)</span>
+
+<span class="kwa">const</span>
+  patt: <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.10</span>] <span class="kwa">of</span> PChar = (<span class="str">'B'</span>,<span class="str">'D'</span>,<span class="str">'H'</span>,<span class="str">'K'</span>,<span class="str">'M'</span>,<span class="str">'N'</span>,<span class="str">'R'</span>,<span class="str">'S'</span>,<span class="str">'V'</span>,<span class="str">'W'</span>,<span class="str">'Y'</span>);
+  repl: <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.10</span>] <span class="kwa">of</span> PChar = (<span class="str">'(c|g|t)'</span>, <span class="str">'(a|g|t)'</span>, <span class="str">'(a|c|t)'</span>, <span class="str">'(g|t)'</span>,
+      <span class="str">'(a|c)'</span>,<span class="str">'(a|c|g|t)'</span>, <span class="str">'(a|g)'</span>, <span class="str">'(c|g)'</span>, <span class="str">'(a|c|g)'</span>, <span class="str">'(a|t)'</span>, <span class="str">'(c|t)'</span>);
+
+<span class="kwa">var</span>
+  patterns: <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.8</span>] <span class="kwa">of</span> PChar =
+    (
+      <span class="str">'agggtaaa|tttaccct'</span>,
+      <span class="str">'[cgt]gggtaaa|tttaccc[acg]'</span>,
+      <span class="str">'a[act]ggtaaa|tttacc[agt]t'</span>,
+      <span class="str">'ag[act]gtaaa|tttac[agt]ct'</span>,
+      <span class="str">'agg[act]taaa|ttta[agt]cct'</span>,
+      <span class="str">'aggg[acg]aaa|ttt[cgt]ccct'</span>,
+      <span class="str">'agggt[cgt]aa|tt[acg]accct'</span>,
+      <span class="str">'agggta[cgt]a|t[acg]taccct'</span>,
+      <span class="str">'agggtaa[cgt]|[acg]ttaccct'</span>
+    );
+
+
+<span class="com">(* Count match with pattern of regexp in seq buffer. *)</span>
+<span class="kwa">function</span> <span class="kwd">count</span>( <span class="kwa">const</span> pattern, seq: PChar; len: <span class="kwb">Integer</span> ): <span class="kwb">Longint</span>;
+<span class="kwa">var</span>
+  cre: pcre;
+  cre_ex: pcre_extra;
+  err: PChar;
+  ofs: <span class="kwb">Integer</span>;
+  ind: <span class="kwb">Longint</span> = <span class="num">0</span>;
+  m: <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.2</span>] <span class="kwa">of</span> <span class="kwb">Integer</span>;
+<span class="kwa">begin</span>
+  cre := <span class="kwd">pcre_compile</span>(pattern, <span class="num">0</span>, &#64;err, &#64;ofs, <span class="kwa">nil</span>);
+  cre_ex := <span class="kwd">pcre_study</span>(cre, <span class="num">0</span>, &#64;err);
+  m[<span class="num">1</span>] := <span class="num">0</span>;
+
+  <span class="kwc">while</span> <span class="kwd">pcre_exec</span>(cre,   cre_ex, seq, len,   m[<span class="num">1</span>], <span class="num">0</span>, m, <span class="num">3</span>) &gt;= <span class="num">0</span> <span class="kwc">do</span>
+    ind += <span class="num">1</span>;
+
+  count := ind
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">split_count</span> ( <span class="kwa">const</span> pattern, seq: PChar; len: <span class="kwb">Integer</span> ): <span class="kwb">Longint</span>; <span class="kwa">inline</span>;
+<span class="kwa">var</span>
+  split: PChar;
+  vcount: <span class="kwb">Longint</span>;
+<span class="kwa">begin</span>
+  split := <span class="kwd">strscan</span>(pattern, <span class="str">'|'</span>);
+  <span class="kwb">Byte</span>(split^) := <span class="num">0</span>;
+
+  vcount := <span class="kwd">count</span>(pattern, seq, len);
+  vcount += <span class="kwd">count</span>(&#64;split[<span class="num">1</span>], seq, len);
+
+  split^ := <span class="str">'|'</span>;
+  split_count := vcount
+<span class="kwa">end</span>;
+
+<span class="com">(* Substitute pattern of regexp with repl, return new length. *)</span>
+<span class="kwa">function</span> <span class="kwd">subst</span>( <span class="kwa">const</span> pattern, repl: PChar; <span class="kwa">var</span> seq: PChar; len: <span class="kwb">Integer</span> ): <span class="kwb">Longint</span>;
+<span class="kwa">var</span>
+  cre: pcre;
+  cre_ex: pcre_extra;
+  err: PChar;
+  ofs: <span class="kwb">Integer</span>;
+  size_repl, size, bsize, pos: <span class="kwb">Longint</span>;
+  m: <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.2</span>] <span class="kwa">of</span> <span class="kwb">Integer</span>;
+  newSeq, otmpseq: PChar;
+<span class="kwa">begin</span>
+  cre := <span class="kwd">pcre_compile</span>(pattern, <span class="num">0</span>, &#64;err, &#64;ofs, <span class="kwa">nil</span>);
+  cre_ex := <span class="kwd">pcre_study</span>(cre, <span class="num">0</span>, &#64;err);
+  size_repl := <span class="kwd">strlen</span>(repl);
+  m[<span class="num">1</span>] := <span class="num">0</span>; size := <span class="num">0</span>;
+
+<span class="com">(* Calculate required size for malloc. *)</span>
+  <span class="kwc">while</span> <span class="kwd">pcre_exec</span>(cre,   cre_ex, seq, len,   m[<span class="num">1</span>], <span class="num">0</span>, m, <span class="num">3</span>) &gt;= <span class="num">0</span> <span class="kwc">do</span>
+    size += size_repl - m[<span class="num">1</span>] + m[<span class="num">0</span>];
+  size += len;
+
+  <span class="kwd">GetMem</span>(newSeq, <span class="kwd">SizeOf</span>(<span class="kwb">Char</span>)*size);
+
+<span class="com">(* Do substitute. *)</span>
+  m[<span class="num">1</span>] := <span class="num">0</span>; pos := <span class="num">0</span>;
+  otmpseq := newSeq;
+
+
+  <span class="kwc">if</span> size_repl &lt;&gt; <span class="num">0</span> <span class="kwc">then</span>
+    <span class="kwc">while</span> <span class="kwd">pcre_exec</span>(cre,   cre_ex, seq, len,   m[<span class="num">1</span>], <span class="num">0</span>, m, <span class="num">3</span>) &gt;= <span class="num">0</span> <span class="kwc">do</span>
+    <span class="kwa">begin</span>
+      bsize := m[<span class="num">0</span>] - pos;
+      <span class="kwd">strlcopy</span>(otmpseq, &#64;seq[pos], bsize);
+
+      otmpseq := &#64;otmpseq[bsize];
+      pos := m[<span class="num">1</span>];
+
+      otmpseq := <span class="kwd">strecopy</span>(otmpseq, repl);
+    <span class="kwa">end</span>
+  <span class="kwc">else</span>
+    <span class="kwc">while</span> <span class="kwd">pcre_exec</span>(cre,   cre_ex, seq, len,   m[<span class="num">1</span>], <span class="num">0</span>, m, <span class="num">3</span>) &gt;= <span class="num">0</span> <span class="kwc">do</span>
+    <span class="kwa">begin</span>
+      bsize := m[<span class="num">0</span>] - pos;
+      <span class="kwd">strlcopy</span>(otmpseq, &#64;seq[pos], bsize);
+
+      otmpseq := &#64;otmpseq[bsize];
+      pos := m[<span class="num">1</span>];
+    <span class="kwa">end</span>;
+
+  <span class="kwd">strcopy</span>(otmpseq, &#64;seq[pos]);
+
+  <span class="kwd">FreeMem</span>(seq);
+  seq := newSeq;
+
+  subst := size
+<span class="kwa">end</span>;
+
+
+<span class="kwa">var</span>
+  readLen: <span class="kwb">Longint</span> = <span class="num">0</span>;
+  maxSeqLen: <span class="kwb">Longint</span> = <span class="num">6000000</span>;
+  seqLen: <span class="kwb">Longint</span> = <span class="num">0</span>;
+  seq, newSeq: PChar;
+  ch: <span class="kwb">Char</span>;
+  i: <span class="kwb">Longint</span>;
+<span class="kwa">begin</span>
+  <span class="kwd">GetMem</span>(seq, <span class="kwd">SizeOf</span>(<span class="kwb">Char</span>)*(maxSeqLen+<span class="num">1</span>));
+
+<span class="com">(* Read FASTA format file from stdin and count length. *)</span>
+  <span class="kwc">while</span> <span class="kwa">not</span> eof <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    <span class="kwc">if</span> readLen = maxSeqLen <span class="kwc">then</span>
+    <span class="kwa">begin</span>
+      maxSeqLen += <span class="num">3000000</span>;
+      seq := <span class="kwd">ReAllocMem</span>(seq, <span class="kwd">SizeOf</span>(<span class="kwb">Char</span>)*(maxSeqLen+<span class="num">1</span>));
+    <span class="kwa">end</span>;
+    <span class="kwd">read</span>(seq[readLen]);
+    readLen += <span class="num">1</span>
+  <span class="kwa">end</span>;
+  <span class="kwb">Byte</span>(seq[readLen]) := <span class="num">0</span>; <span class="slc">//end read data</span>
+
+
+<span class="com">(* Remove FASTA sequence descriptions and all linefeed characters.  *)</span>
+  seqLen := <span class="kwd">subst</span>(<span class="str">'&gt;.*|\n'</span>, <span class="str">''</span>, seq, readLen);
+
+
+<span class="com">(* Count all matches of patterns[i] in  seq buffer. *)</span>
+  <span class="kwc">for</span> i := <span class="num">0</span> <span class="kwc">to</span> <span class="num">8</span> <span class="kwc">do</span>
+    <span class="kwd">writeln</span>(patterns[i], <span class="str">' '</span>, <span class="kwd">split_count</span>(patterns[i], seq, seqLen));
+    <span class="slc">//writeln(patterns[i], ' ', count(patterns[i], seq, seqLen));</span>
+
+  writeln;
+  <span class="kwd">writeln</span>(readLen);
+
+  <span class="kwd">writeln</span>(seqLen);
+  <span class="slc">//writeln(strlen(seq));</span>
+
+<span class="com">(* All IUB substitutes. *)</span>
+  <span class="kwc">for</span> i := <span class="num">0</span> <span class="kwc">to</span> <span class="num">10</span> <span class="kwc">do</span>
+    seqLen := <span class="kwd">subst</span>(patt[i], repl[i], seq, seqLen);
+
+  <span class="kwd">writeln</span>(seqLen);
+  <span class="slc">//writeln(strlen(seq));</span>
+
+  <span class="kwd">FreeMem</span>(seq);
+<span class="kwa">end</span>.

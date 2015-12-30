@@ -1,0 +1,170 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">contributed by Miroslav Rubanets</span>
+<span class="com">based on Java 6 source code by Oleg Mazurov.</span>
+<span class="com"></span>
+<span class="com">License full text is here: http://shootout.alioth.debian.org/license.php</span>
+<span class="com"></span>
+<span class="com">Building checked in Ubuntu 10.4 with g++ 4.4 (both x86 and amd64).</span>
+<span class="com">   one needs to install libboost-thread-dev package to get this working </span>
+<span class="com">   g++ -c -O3 -pipe -pthread -fomit-frame-pointer -march=native f.cpp</span>
+<span class="com">   g++ -lpthread -lboost_thread f.o</span>
+<span class="com">*/</span>
+<span class="slc">//std stuff</span>
+<span class="ppc">#include &lt;cassert&gt;</span>
+<span class="ppc">#include &lt;algorithm&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="kwa">using</span> std::copy;<span class="kwa">using</span> std::max;<span class="kwa">using</span> std::min; <span class="kwa">using</span> std::atoi;
+<span class="kwa">using</span> std::printf;<span class="kwa">using</span> std::swap;
+<span class="slc">//threads stuff</span>
+<span class="ppc">#include &lt;boost/thread.hpp&gt;</span>
+<span class="kwa">using</span> boost::thread;<span class="kwa">using</span> boost::thread_group;<span class="kwa">using</span> boost::ref;
+
+<span class="kwb">struct</span> P{<span class="slc">//permutation</span>
+    <span class="kwb">char</span> data[<span class="num">16</span>];
+    <span class="kwb">char</span>&amp; <span class="kwc">operator</span>[](<span class="kwb">int</span> i){ <span class="kwa">return</span> data[i]; }
+    <span class="kwb">const char</span>&amp; <span class="kwc">operator</span>[](<span class="kwb">int</span> i)<span class="kwb">const</span>{ <span class="kwa">return</span> data[i]; }
+    <span class="kwb">void</span> <span class="kwd">assign</span>( <span class="kwb">const char</span>* p, <span class="kwb">int</span> len){ <span class="kwd">copy</span>(p, p+len, &amp;data[<span class="num">0</span>] ); }
+    <span class="kwb">void</span> <span class="kwd">rotate</span>(<span class="kwb">int</span> i){
+        <span class="kwb">int</span> first = data[<span class="num">0</span>];
+        <span class="kwa">for</span> (<span class="kwb">int</span> j=<span class="num">0</span>; j&lt;i; ++j)
+            data[j] = data[j+<span class="num">1</span>];
+        data[i] = first;
+    }
+    <span class="kwb">void</span> <span class="kwd">reverse</span>(<span class="kwb">int</span> n){
+        <span class="slc">// following lines are very carefully written to meet both test </span>
+        <span class="slc">// conditions and reasonable timings. </span>
+        <span class="kwb">char</span> * lo = &amp;data[<span class="num">0</span>], * hi = &amp;data[n];
+        <span class="kwa">for</span> (; lo &lt; hi; ++lo, --hi) 
+            <span class="kwd">swap</span>( *lo, *hi );
+    }
+};
+<span class="kwc">class</span> G{<span class="slc">// permutation generator</span>
+    P p;
+    <span class="kwb">int</span> count[<span class="num">16</span>];
+    <span class="kwb">union</span>{<span class="slc">//for alignment</span>
+        <span class="kwb">struct</span>{
+            <span class="kwb">const int</span> * fact;
+            <span class="kwb">int</span> len;
+        };
+        <span class="kwb">int</span> padding[<span class="num">4</span>];
+    };
+<span class="kwc">public</span>:
+    <span class="kwd">G</span>():<span class="kwd">fact</span>(), <span class="kwd">len</span>(){}
+    <span class="kwb">void</span> <span class="kwd">init</span>(<span class="kwb">const int</span>*p, <span class="kwb">int</span> n){
+        fact = p;
+        len = n;
+        std::<span class="kwd">fill</span>(&amp;count[<span class="num">0</span>], &amp;count[<span class="num">16</span>], <span class="num">0</span>);
+    }
+    <span class="kwb">bool</span> <span class="kwd">constructed</span>()<span class="kwb">const</span>{ <span class="kwa">return</span> fact != <span class="num">0</span>;}
+    <span class="kwb">void</span> <span class="kwd">first_permutation</span>(<span class="kwb">int</span> idx){
+        <span class="kwb">char</span> p[<span class="num">16</span>]={};
+        <span class="kwb">char</span> pp[<span class="num">16</span>]={};
+        <span class="kwa">for</span> ( <span class="kwb">int</span> i=<span class="num">0</span>; i&lt;len; ++i ) 
+           p[i] = i;
+        <span class="kwa">for</span> ( <span class="kwb">int</span> i=len-<span class="num">1</span>; i&gt;<span class="num">0</span>; --i ) {
+            <span class="kwb">int</span> d = idx / fact[i];
+            count[i] = d;
+            idx = idx % fact[i];
+            <span class="kwd">copy</span>( &amp;p[<span class="num">0</span>], &amp;p[i+<span class="num">1</span>], &amp;pp[<span class="num">0</span>] );
+            <span class="kwa">for</span> ( <span class="kwb">int</span> j=<span class="num">0</span>; j&lt;=i; ++j ){
+                p[j] = j+d &lt;= i ? pp[j+d] : pp[j+d-i-<span class="num">1</span>];
+            }
+        }
+        <span class="kwa">this</span>-&gt;p.<span class="kwd">assign</span>(p, <span class="num">16</span>);
+    }
+    <span class="kwb">void</span> <span class="kwd">next_permutation</span>(){
+        p.<span class="kwd">rotate</span>(<span class="num">1</span>);
+        <span class="kwb">int</span> i=<span class="num">1</span>;
+        <span class="kwa">while</span> (++count[i] &gt; i){
+            count[i++] = <span class="num">0</span>;
+            p.<span class="kwd">rotate</span>( i );
+        }
+    }
+    <span class="kwb">char</span> <span class="kwd">get_first_item</span>()<span class="kwb">const</span>{ <span class="kwa">return</span> p[<span class="num">0</span>];}
+    <span class="kwb">void</span> <span class="kwd">get_permutation</span>( P &amp; out ){ out = p;}
+};
+<span class="kwb">struct</span> Fannkuchredux{
+    <span class="kwb">struct</span> R{ <span class="kwb">int</span> maxflips, checksum; };
+    R <span class="kwd">run</span>(G* g, <span class="kwb">int</span> i, <span class="kwb">int</span> N){
+        R r = { <span class="num">0</span>, <span class="num">0</span> };
+        g-&gt;<span class="kwd">first_permutation</span>(i);
+        <span class="kwa">for</span>(; i &lt; N; ++i, g-&gt;<span class="kwd">next_permutation</span>()){
+            <span class="slc">//count flips</span>
+            <span class="kwc">register</span> <span class="kwb">int</span> flips = <span class="num">0</span>;
+            <span class="kwb">char</span> f = g-&gt;<span class="kwd">get_first_item</span>();
+            <span class="kwa">if</span>(f){
+                P p;
+                g-&gt;<span class="kwd">get_permutation</span>(p);
+                <span class="kwa">do</span>{
+                    ++flips;
+                    p.<span class="kwd">reverse</span>(f);
+                }<span class="kwa">while</span>(f = p[<span class="num">0</span>]);
+            }
+            <span class="kwb">int</span> total_flips = flips;
+            r.maxflips = <span class="kwd">max</span>(r.maxflips, total_flips);
+            r.checksum += i%<span class="num">2</span> ==<span class="num">0</span> ? total_flips : -total_flips;
+        }
+        <span class="kwa">return</span> r;
+    }
+};
+<span class="slc">//two phase construction to be default constructible</span>
+<span class="kwc">class</span> Task : <span class="kwc">public</span> Fannkuchredux {
+    G g;
+    <span class="kwb">int</span> first_index, last_index;
+    <span class="kwb">int</span> padding[<span class="num">14</span>];
+<span class="kwc">public</span>:
+    Fannkuchredux::R r;
+    <span class="kwb">void</span> <span class="kwd">init</span>(<span class="kwb">const int</span> *p, <span class="kwb">int</span> n, <span class="kwb">int</span> b, <span class="kwb">int</span> e){
+        g.<span class="kwd">init</span>( p, n );
+        first_index = b;
+        last_index = e;
+        r.checksum = r.maxflips = <span class="num">0</span>;
+    }
+    <span class="kwb">void</span> <span class="kwc">operator</span>()()
+    {
+        <span class="kwa">assert</span>( g.<span class="kwd">constructed</span>() );
+        r = <span class="kwd">run</span>( &amp;g, first_index, last_index );
+    }
+};
+<span class="kwb">const char</span>* usage = <span class="str">&quot;usage fannkuchredux number</span><span class="esc">\n</span><span class="str">\</span>
+<span class="str">number has to be in range [3-12]</span><span class="esc">\n</span><span class="str">&quot;</span>;
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>* argv[])
+{
+    <span class="kwa">if</span>( argc &lt; <span class="num">2</span> ){
+        <span class="kwd">printf</span>(<span class="str">&quot;%s&quot;</span>, usage);
+        <span class="kwa">return</span> <span class="num">1</span>;
+    }
+    <span class="kwb">int</span> len = <span class="kwd">atoi</span>(argv[<span class="num">1</span>] ); 
+    <span class="kwa">if</span>( len &lt; <span class="num">3</span> || len &gt; <span class="num">12</span> ){
+        <span class="kwd">printf</span>(<span class="str">&quot;%s&quot;</span>, usage);
+        <span class="kwa">return</span> <span class="num">2</span>;
+    }
+    <span class="kwb">int</span> fact[<span class="num">16</span>];
+    fact[<span class="num">0</span>] = <span class="num">1</span>;
+    <span class="kwa">for</span>(<span class="kwb">int</span> i = <span class="num">1</span>; i&lt;len+<span class="num">1</span>; ++i)
+        fact[i] = fact[i-<span class="num">1</span>]*i;
+    <span class="kwb">unsigned</span> n_cpu = thread::<span class="kwd">hardware_concurrency</span>();
+    Fannkuchredux::R r= { <span class="num">0</span>, <span class="num">0</span>};
+    <span class="kwb">const unsigned</span> max_cpu_limit = <span class="num">4</span>;
+    Task parts[max_cpu_limit];
+    <span class="kwb">unsigned</span> n = <span class="kwd">min</span>(n_cpu, max_cpu_limit);
+    thread_group tg;
+    <span class="kwb">int</span> index = <span class="num">0</span>;
+    <span class="kwb">int</span> index_max = fact[len]; 
+    <span class="kwb">int</span> index_step = (index_max + n-<span class="num">1</span>)/n;
+    <span class="kwa">for</span>(<span class="kwb">unsigned</span> i = <span class="num">0</span>; i&lt;n; ++i, index += index_step){
+        Task&amp; p = parts[i];
+        p.<span class="kwd">init</span>(fact, len, index, index + index_step);
+        tg.<span class="kwd">create_thread</span>(<span class="kwd">ref</span>(p));
+    }
+    tg.<span class="kwd">join_all</span>();
+    <span class="kwa">for</span>(<span class="kwb">unsigned</span> i = <span class="num">0</span>; i&lt;n; ++i){
+        Task <span class="kwb">const</span>&amp; p = parts[i];
+        r.maxflips = <span class="kwd">max</span>( p.r.maxflips, r.maxflips );
+        r.checksum += p.r.checksum;
+    }
+    <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\n</span><span class="str">Pfannkuchen(%d) = %d</span><span class="esc">\n</span><span class="str">&quot;</span>, r.checksum, len, r.maxflips);
+    <span class="kwa">return</span> <span class="num">0</span>;
+}

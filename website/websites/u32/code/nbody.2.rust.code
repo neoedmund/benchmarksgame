@@ -1,0 +1,204 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by Cristi Cobzarenco</span>
+
+<span class="kwa">use</span> std::ops::{Add, Sub, Mul};
+
+<span class="kwa">const</span> PI: f64 = <span class="num">3.141592653589793</span>;
+<span class="kwa">const</span> SOLAR_MASS: f64 = <span class="num">4.0</span> * PI * PI;
+<span class="kwa">const</span> YEAR: f64 = <span class="num">365.24</span>;
+<span class="kwa">const</span> N_BODIES: usize = <span class="num">5</span>;
+<span class="kwa">const</span> N_PAIRS: usize = N_BODIES * (N_BODIES - <span class="num">1</span>) / <span class="num">2</span>;
+
+<span class="kwa">static</span> BODIES: [Planet; N_BODIES] = [
+    <span class="slc">// Sun</span>
+    Planet {
+        pos: Vec3(<span class="num">0.0</span>, <span class="num">0.0</span>, <span class="num">0.0</span>),
+        vel: Vec3(<span class="num">0.0</span>, <span class="num">0.0</span>, <span class="num">0.0</span>),
+        mass: SOLAR_MASS,
+    },
+    <span class="slc">// Jupiter</span>
+    Planet {
+        pos: Vec3(<span class="num">4.84143144246472090e+00</span>,
+                    -<span class="num">1.16032004402742839e+00</span>,
+                    -<span class="num">1.03622044471123109e-01</span>),
+        vel: Vec3(<span class="num">1.66007664274403694e-03</span> * YEAR,
+                    <span class="num">7.69901118419740425e-03</span> * YEAR,
+                    -<span class="num">6.90460016972063023e-05</span> * YEAR),
+        mass: <span class="num">9.54791938424326609e-04</span> * SOLAR_MASS,
+    },
+    <span class="slc">// Saturn</span>
+    Planet {
+        pos: Vec3(<span class="num">8.34336671824457987e+00</span>,
+                    <span class="num">4.12479856412430479e+00</span>,
+                    -<span class="num">4.03523417114321381e-01</span>),
+        vel: Vec3(-<span class="num">2.76742510726862411e-03</span> * YEAR,
+                    <span class="num">4.99852801234917238e-03</span> * YEAR,
+                    <span class="num">2.30417297573763929e-05</span> * YEAR),
+        mass: <span class="num">2.85885980666130812e-04</span> * SOLAR_MASS,
+    },
+    <span class="slc">// Uranus</span>
+    Planet {
+        pos: Vec3(<span class="num">1.28943695621391310e+01</span>,
+                    -<span class="num">1.51111514016986312e+01</span>,
+                    -<span class="num">2.23307578892655734e-01</span>),
+        vel: Vec3(<span class="num">2.96460137564761618e-03</span> * YEAR,
+                    <span class="num">2.37847173959480950e-03</span> * YEAR,
+                    -<span class="num">2.96589568540237556e-05</span> * YEAR),
+        mass: <span class="num">4.36624404335156298e-05</span> * SOLAR_MASS,
+    },
+    <span class="slc">// Neptune</span>
+    Planet {
+        pos: Vec3(<span class="num">1.53796971148509165e+01</span>,
+                    -<span class="num">2.59193146099879641e+01</span>,
+                    <span class="num">1.79258772950371181e-01</span>),
+        vel: Vec3(<span class="num">2.68067772490389322e-03</span> * YEAR,
+                    <span class="num">1.62824170038242295e-03</span> * YEAR,
+                    -<span class="num">9.51592254519715870e-05</span> * YEAR),
+        mass: <span class="num">5.15138902046611451e-05</span> * SOLAR_MASS,
+    },
+];
+
+<span class="slc">/// A 3d Vector type with oveloaded operators to improve readability.</span>
+#[derive(Clone, Copy)]
+<span class="kwa">struct</span> Vec3(<span class="kwa">pub</span> f64, <span class="kwa">pub</span> f64, <span class="kwa">pub</span> f64);
+
+<span class="kwa">impl</span> Vec3 {
+    <span class="kwa">fn</span> zero() -&gt; <span class="kwa">Self</span> { Vec3(<span class="num">0.0</span>, <span class="num">0.0</span>, <span class="num">0.0</span>) }
+
+    <span class="kwa">fn</span> norm(&amp;<span class="kwa">self</span>) -&gt; f64 { <span class="kwa">self</span>.squared_norm().sqrt() }
+
+    <span class="kwa">fn</span> squared_norm(&amp;<span class="kwa">self</span>) -&gt; f64 {
+        <span class="kwa">self</span><span class="num">.0</span> * <span class="kwa">self</span><span class="num">.0</span> + <span class="kwa">self</span><span class="num">.1</span> * <span class="kwa">self</span><span class="num">.1</span> + <span class="kwa">self</span><span class="num">.2</span> * <span class="kwa">self</span><span class="num">.2</span>
+    }
+}
+
+<span class="kwa">impl</span> Add <span class="kwa">for</span> Vec3 {
+    <span class="kwa">type</span> Output = <span class="kwa">Self</span>;
+    <span class="kwa">fn</span> add(<span class="kwa">self</span>, rhs: <span class="kwa">Self</span>) -&gt; <span class="kwa">Self</span> {
+        Vec3(<span class="kwa">self</span><span class="num">.0</span> + rhs<span class="num">.0</span>, <span class="kwa">self</span><span class="num">.1</span> + rhs<span class="num">.1</span>, <span class="kwa">self</span><span class="num">.2</span> + rhs<span class="num">.2</span>)
+    }
+}
+
+<span class="kwa">impl</span> Sub <span class="kwa">for</span> Vec3 {
+    <span class="kwa">type</span> Output = <span class="kwa">Self</span>;
+    <span class="kwa">fn</span> sub(<span class="kwa">self</span>, rhs: <span class="kwa">Self</span>) -&gt; <span class="kwa">Self</span> {
+        Vec3(<span class="kwa">self</span><span class="num">.0</span> - rhs<span class="num">.0</span>, <span class="kwa">self</span><span class="num">.1</span> - rhs<span class="num">.1</span>, <span class="kwa">self</span><span class="num">.2</span> - rhs<span class="num">.2</span>)
+    }
+}
+
+<span class="kwa">impl</span> Mul&lt;f64&gt; <span class="kwa">for</span> Vec3 {
+    <span class="kwa">type</span> Output = <span class="kwa">Self</span>;
+    <span class="kwa">fn</span> mul(<span class="kwa">self</span>, rhs: f64) -&gt; <span class="kwa">Self</span> {
+        Vec3(<span class="kwa">self</span><span class="num">.0</span> * rhs, <span class="kwa">self</span><span class="num">.1</span> * rhs, <span class="kwa">self</span><span class="num">.2</span> * rhs)
+    }
+}
+
+#[derive(Clone, Copy)]
+<span class="kwa">struct</span> Planet {
+    pos: Vec3,
+    vel: Vec3,
+    mass: f64,
+}
+
+<span class="slc">/// Computes all pairwise position differences between the planets.</span>
+<span class="kwa">fn</span> pairwise_diffs(bodies: &amp;[Planet; N_BODIES], diff: &amp;<span class="kwa">mut</span> [Vec3; N_PAIRS]) {
+    <span class="kwa">let mut</span> bodies = bodies.iter();
+    <span class="kwa">let mut</span> diff = diff.iter_mut();
+    <span class="kwa">while let</span> Some(bi) = bodies.next() {
+        <span class="kwa">for</span> bj <span class="kwa">in</span> bodies.clone() {
+            *diff.next().unwrap() = bi.pos - bj.pos;
+        }
+    }
+}
+
+<span class="slc">/// Computes the magnitude of the force between each pair of planets.</span>
+<span class="kwa">fn</span> magnitudes(diff: &amp;[Vec3; N_PAIRS], dt: f64, mag: &amp;<span class="kwa">mut</span> [f64; N_PAIRS]) {
+    <span class="kwa">for</span> (mag, diff) <span class="kwa">in</span> mag.iter_mut().zip(diff.iter()) {
+        <span class="kwa">let</span> d2 = diff.squared_norm();
+        *mag = dt / (d2 * d2.sqrt());
+    }
+}
+
+<span class="slc">/// Updates the velocities of the planets by computing their gravitational</span>
+<span class="slc">/// accelerations and performing one step of Euler integration.</span>
+<span class="kwa">fn</span> update_velocities(bodies: &amp;<span class="kwa">mut</span> [Planet; N_BODIES], dt: f64,
+                     diff: &amp;<span class="kwa">mut</span> [Vec3; N_PAIRS], mag: &amp;<span class="kwa">mut</span> [f64; N_PAIRS]) {
+    pairwise_diffs(bodies, diff);
+    magnitudes(&amp;diff, dt, mag);
+
+    <span class="kwa">let mut</span> bodies = &amp;<span class="kwa">mut</span> bodies[..];
+    <span class="kwa">let mut</span> mag = mag.iter();
+    <span class="kwa">let mut</span> diff = diff.iter();
+    <span class="kwa">while let</span> Some(bi) = shift_mut_ref(&amp;<span class="kwa">mut</span> bodies) {
+        <span class="kwa">for</span> bj <span class="kwa">in</span> bodies.iter_mut() {
+            <span class="kwa">let</span> diff = *diff.next().unwrap();
+            <span class="kwa">let</span> mag = *mag.next().unwrap();
+            bi.vel = bi.vel - diff * (bj.mass * mag);
+            bj.vel = bj.vel + diff * (bi.mass * mag);
+        }
+    }
+}
+
+<span class="slc">/// Advances the solar system by one timestep by first updating the</span>
+<span class="slc">/// velocities and then integrating the positions using the updated velocities.</span>
+<span class="slc">///</span>
+<span class="slc">/// Note: the `diff` &amp; `mag` arrays are effectively scratch space. They're</span>
+<span class="slc">/// provided as arguments to avoid re-zeroing them every time `advance` is</span>
+<span class="slc">/// called.</span>
+<span class="kwa">fn</span> advance(<span class="kwa">mut</span> bodies: &amp;<span class="kwa">mut</span> [Planet; N_BODIES], dt: f64,
+           diff: &amp;<span class="kwa">mut</span> [Vec3; N_PAIRS], mag: &amp;<span class="kwa">mut</span> [f64; N_PAIRS]) {
+    update_velocities(bodies, dt, diff, mag);
+    <span class="kwa">for</span> body <span class="kwa">in</span> bodies.iter_mut() {
+        body.pos = body.pos + body.vel * dt;
+    }
+}
+
+<span class="slc">/// Computes the total energy of the solar system.</span>
+<span class="kwa">fn</span> energy(bodies: &amp;[Planet; N_BODIES]) -&gt; f64 {
+    <span class="kwa">let mut</span> e = <span class="num">0.0</span>;
+    <span class="kwa">let mut</span> bodies = bodies.iter();
+    <span class="kwa">while let</span> Some(bi) = bodies.next() {
+        e += bi.vel.squared_norm() * bi.mass / <span class="num">2.0</span>
+           - bi.mass * bodies.clone()
+                             .map(|bj| bj.mass / (bi.pos - bj.pos).norm())
+                             .fold(<span class="num">0.0</span>, |a, b| a + b);
+    }
+    e
+}
+
+<span class="slc">/// Offsets the sun's velocity to make the overall momentum of the system zero.</span>
+<span class="kwa">fn</span> offset_momentum(bodies: &amp;<span class="kwa">mut</span> [Planet; N_BODIES]) {
+    <span class="kwa">let</span> p = bodies.iter().fold(Vec3::zero(), |v, b| v + b.vel * b.mass);
+    bodies[<span class="num">0</span>].vel = p * (-<span class="num">1.0</span> / bodies[<span class="num">0</span>].mass);
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> n = std::env::args_os().nth(<span class="num">1</span>)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">1000</span>);
+    <span class="kwa">let mut</span> bodies = BODIES;
+    <span class="kwa">let mut</span> diff = [Vec3::zero(); N_PAIRS];
+    <span class="kwa">let mut</span> mag = [<span class="num">0.0</span>f64; N_PAIRS];
+
+    offset_momentum(&amp;<span class="kwa">mut</span> bodies);
+    println!(<span class="str">&quot;{:.9}&quot;</span>, energy(&amp;bodies));
+
+    <span class="kwa">for</span> _ <span class="kwa">in</span> (<span class="num">0</span>..n) {
+        advance(&amp;<span class="kwa">mut</span> bodies, <span class="num">0.01</span>, &amp;<span class="kwa">mut</span> diff, &amp;<span class="kwa">mut</span> mag);
+    }
+
+    println!(<span class="str">&quot;{:.9}&quot;</span>, energy(&amp;bodies));
+}
+
+<span class="slc">/// Pop a mutable reference off the head of a slice, mutating the slice to no</span>
+<span class="slc">/// longer contain the mutable reference.</span>
+<span class="kwa">fn</span> shift_mut_ref&lt;'a, T&gt;(r: &amp;<span class="kwa">mut</span> &amp;'a <span class="kwa">mut</span> [T]) -&gt; Option&lt;&amp;'a <span class="kwa">mut</span> T&gt; {
+    <span class="kwa">if</span> r.len() == <span class="num">0</span> { <span class="kwa">return</span> None }
+    <span class="kwa">let</span> tmp = std::mem::replace(r, &amp;<span class="kwa">mut</span> []);
+    <span class="kwa">let</span> (h, t) = tmp.split_at_mut(<span class="num">1</span>);
+    *r = t;
+    Some(&amp;<span class="kwa">mut</span> h[<span class="num">0</span>])
+}

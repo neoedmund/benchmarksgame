@@ -1,0 +1,111 @@
+<span class="com">/*</span>
+<span class="com">* The Computer Language Benchmarks Game</span>
+<span class="com">* http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">* contributed by Premysl Hruby</span>
+<span class="com">*/</span>
+
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned int</span> uint;
+
+<span class="kwb">const</span> uint NUM_THREADS   = <span class="num">503</span>;
+<span class="kwb">const</span> uint STACK_SIZE   = <span class="num">16</span>*<span class="num">1024</span>;
+
+<span class="kwb">int</span> token = -<span class="num">1</span>;
+
+<span class="kwc">class</span> RingThread;
+RingThread* rt_arr[NUM_THREADS] = {<span class="num">0</span>};
+
+<span class="kwc">class</span> RingThread
+{
+<span class="kwc">private</span>:
+   pthread_mutex_t   m_mutex;
+   uint   node_id;
+   uint   next_id;
+
+<span class="kwc">public</span>:
+
+   <span class="kwd">RingThread</span>( <span class="kwb">int</span> id )
+   {
+      <span class="slc">//mutex type is PTHREAD_MUTEX_NORMAL</span>
+      <span class="slc">// we want self lock behaviour</span>
+      <span class="kwd">pthread_mutex_init</span>( &amp;m_mutex, <span class="num">0</span> );
+
+      node_id = id;
+      next_id = id +<span class="num">1</span>;
+
+      <span class="kwa">if</span> (next_id == NUM_THREADS)
+         next_id = <span class="num">0</span>;
+   }
+
+   <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">AcquireLock</span>()
+   {
+      <span class="slc">// type is PTHREAD_MUTEX_NORMAL, therefore, try to lock to a locked </span>
+      <span class="slc">// mutex will result deadlock. However, other thread will unlock for this</span>
+      <span class="slc">// mutex</span>
+      <span class="kwd">pthread_mutex_lock</span>( &amp;m_mutex );
+   }
+   <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">ReleaseLock</span>()
+   {
+      <span class="kwd">pthread_mutex_unlock</span>( &amp;m_mutex );
+   }
+
+   <span class="kwb">static void</span>* <span class="kwd">Run</span>( <span class="kwb">void</span>* param )
+   {
+      RingThread* prt = (RingThread*)param;
+
+      <span class="kwa">while</span> (<span class="kwa">true</span>)
+      {
+         <span class="slc">// is my turn???</span>
+         prt-&gt;<span class="kwd">AcquireLock</span>();
+
+         <span class="kwa">if</span> (token != <span class="num">0</span>)
+            token--;
+         <span class="kwa">else</span> <span class="slc">// this turn is the end of token passing</span>
+         {
+            std::cout &lt;&lt; (prt-&gt;node_id +<span class="num">1</span>) &lt;&lt; std::endl;
+            <span class="kwd">exit</span>( <span class="num">0</span> ); <span class="slc">// a fast way to terminate :D</span>
+         }
+
+         rt_arr[ prt-&gt;next_id ]-&gt;<span class="kwd">ReleaseLock</span>(); <span class="slc">// release lock for next thread</span>
+         <span class="kwd">sched_yield</span>(); <span class="slc">// my turn is finished. Yield cpu for next thread</span>
+      }
+   }
+};
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>** argv)
+{
+   token = (argc == <span class="num">2</span>) ? <span class="kwd">atoi</span>( argv[<span class="num">1</span>] ) : <span class="num">1000</span>;
+   <span class="slc">//std::cout &lt;&lt; token;</span>
+
+   <span class="slc">// must set stack size for each thread. Otherwise, can't spawn 503 threads :)</span>
+   pthread_attr_t stack_att;
+   <span class="kwd">pthread_attr_init</span>( &amp;stack_att );
+   <span class="kwd">pthread_attr_setstacksize</span>( &amp;stack_att, STACK_SIZE );
+   pthread_t ht;
+
+   <span class="kwa">for</span> (uint i = <span class="num">0</span>; i &lt; NUM_THREADS; i++)
+   {
+      RingThread* r =  <span class="kwa">new</span> <span class="kwd">RingThread</span>( i );
+
+      rt_arr[i] = r;
+      r-&gt;<span class="kwd">AcquireLock</span>();
+
+      <span class="kwd">pthread_create</span>( &amp;ht, &amp;stack_att, &amp;RingThread::Run, (<span class="kwb">void</span>*)r );
+   }
+
+   <span class="slc">// let's roll</span>
+   rt_arr[<span class="num">0</span>]-&gt;<span class="kwd">ReleaseLock</span>();
+
+   <span class="slc">// wait for result</span>
+   <span class="kwd">pthread_join</span>( ht, <span class="num">0</span> );
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+

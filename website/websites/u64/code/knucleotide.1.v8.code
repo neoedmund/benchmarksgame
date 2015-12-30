@@ -1,0 +1,52 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Contributed by Jesse Millikan    </span>
+<span class="com">*/</span>
+
+<span class="slc">// Return hash t with frequency in &quot;n&quot;</span>
+<span class="kwa">function</span> <span class="kwd">frequency</span>(seq, length){
+ <span class="kwa">var</span> m, i, t = {}, n = seq.length - length + <span class="num">1</span>
+
+ <span class="kwa">for</span>(i = <span class="num">0</span>; i &lt; n; i++){
+  m = seq.<span class="kwd">substr</span>(i, length)
+  t[m] = (t[m] || <span class="num">0</span>) + <span class="num">1</span>
+ }
+
+ t.n = n
+ <span class="kwa">return</span> t
+}
+
+<span class="kwa">function</span> <span class="kwd">sort</span>(seq, length){
+ <span class="kwa">var</span> f = <span class="kwd">frequency</span>(seq, length), keys = [], k, i
+ 
+ <span class="slc">// Put all keys in key array in reverse</span>
+ <span class="kwa">for</span>(k <span class="kwa">in</span> f)
+  <span class="kwa">if</span>(k != <span class="str">'n'</span>) keys.<span class="kwd">unshift</span>(k)
+
+ keys.<span class="kwd">sort</span>(<span class="kwa">function</span>(a, b){ <span class="kwa">return</span> f[b] - f[a] })
+
+ <span class="kwa">for</span>(i <span class="kwa">in</span> keys)
+  <span class="kwd">print</span>(keys[i].<span class="kwd">toUpperCase</span>(), (f[keys[i]] * <span class="num">100</span> / f.n).<span class="kwd">toFixed</span>(<span class="num">3</span>))
+
+ <span class="kwd">print</span>()
+}
+
+<span class="kwa">function</span> <span class="kwd">find</span>(seq, s){
+ <span class="kwa">var</span> f = <span class="kwd">frequency</span>(seq, s.length)
+ <span class="kwd">print</span>((f[s] || <span class="num">0</span>) + <span class="str">&quot;</span><span class="esc">\t</span><span class="str">&quot;</span> + s.<span class="kwd">toUpperCase</span>())
+}
+
+<span class="kwa">var</span> seq=<span class="str">&quot;&quot;</span>, l, others = [<span class="str">&quot;ggt&quot;</span>, <span class="str">&quot;ggta&quot;</span>, <span class="str">&quot;ggtatt&quot;</span>, <span class="str">&quot;ggtattttaatt&quot;</span>, <span class="str">&quot;ggtattttaatttatagt&quot;</span>]
+
+<span class="kwa">while</span>(!<span class="kwd">readline</span>().<span class="kwd">match</span>(<span class="kwc">/^&gt;THREE/</span>)); <span class="slc">// no body</span>
+
+<span class="kwa">while</span>((l = <span class="kwd">readline</span>()) &amp;&amp; !l.<span class="kwd">match</span>(<span class="kwc">/^&gt;/</span>))
+ seq += l
+
+<span class="kwd">sort</span>(seq, <span class="num">1</span>)
+<span class="kwd">sort</span>(seq, <span class="num">2</span>)
+
+<span class="kwa">for</span>(i <span class="kwa">in</span> others)
+ <span class="kwd">find</span>(seq, others[i])
+

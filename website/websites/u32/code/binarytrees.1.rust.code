@@ -1,0 +1,82 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by TeXitoi</span>
+
+<span class="kwa">extern crate</span> typed_arena;
+
+<span class="kwa">use</span> std::thread;
+<span class="kwa">use</span> typed_arena::Arena;
+
+<span class="kwa">struct</span> Tree&lt;'a&gt; {
+    l: Option&lt;&amp;'a Tree&lt;'a&gt;&gt;,
+    r: Option&lt;&amp;'a Tree&lt;'a&gt;&gt;,
+    i: i32
+}
+
+<span class="kwa">fn</span> item_check(t: &amp;Option&lt;&amp;Tree&gt;) -&gt; i32 {
+    <span class="kwa">match</span> *t {
+        None =&gt; <span class="num">0</span>,
+        Some(&amp;Tree { <span class="kwa">ref</span> l, <span class="kwa">ref</span> r, i }) =&gt; i + item_check(l) - item_check(r)
+    }
+}
+
+<span class="kwa">fn</span> bottom_up_tree&lt;'r&gt;(arena: &amp;'r Arena&lt;Tree&lt;'r&gt;&gt;, item: i32, depth: i32)
+                  -&gt; Option&lt;&amp;'r Tree&lt;'r&gt;&gt; {
+    <span class="kwa">if</span> depth &gt; <span class="num">0</span> {
+        <span class="kwa">let</span> t: &amp;Tree&lt;'r&gt; = arena.alloc(Tree {
+            l: bottom_up_tree(arena, <span class="num">2</span> * item - <span class="num">1</span>, depth - <span class="num">1</span>),
+            r: bottom_up_tree(arena, <span class="num">2</span> * item, depth - <span class="num">1</span>),
+            i: item
+        });
+        Some(t)
+    } <span class="kwa">else</span> {
+        None
+    }
+}
+
+<span class="kwa">fn</span> inner(depth: i32, iterations: i32) -&gt; String {
+    <span class="kwa">let mut</span> chk = <span class="num">0</span>;
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">1</span> .. iterations + <span class="num">1</span> {
+        <span class="kwa">let</span> arena = Arena::new();
+        <span class="kwa">let</span> a = bottom_up_tree(&amp;arena, i, depth);
+        <span class="kwa">let</span> b = bottom_up_tree(&amp;arena, -i, depth);
+        chk += item_check(&amp;a) + item_check(&amp;b);
+    }
+    format!(<span class="str">&quot;{}</span><span class="esc">\t</span> <span class="str">trees of depth {}</span><span class="esc">\t</span> <span class="str">check: {}&quot;</span>,
+            iterations * <span class="num">2</span>, depth, chk)
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> n = std::env::args_os().nth(<span class="num">1</span>)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">10</span>);
+    <span class="kwa">let</span> min_depth = <span class="num">4</span>;
+    <span class="kwa">let</span> max_depth = <span class="kwa">if</span> min_depth + <span class="num">2</span> &gt; n {min_depth + <span class="num">2</span>} <span class="kwa">else</span> {n};
+
+    {
+        <span class="kwa">let</span> arena = Arena::new();
+        <span class="kwa">let</span> depth = max_depth + <span class="num">1</span>;
+        <span class="kwa">let</span> tree = bottom_up_tree(&amp;arena, <span class="num">0</span>, depth);
+
+        println!(<span class="str">&quot;stretch tree of depth {}</span><span class="esc">\t</span> <span class="str">check: {}&quot;</span>,
+                 depth, item_check(&amp;tree));
+    }
+
+    <span class="kwa">let</span> long_lived_arena = Arena::new();
+    <span class="kwa">let</span> long_lived_tree = bottom_up_tree(&amp;long_lived_arena, <span class="num">0</span>, max_depth);
+
+    <span class="kwa">let</span> messages = (min_depth..max_depth + <span class="num">1</span>).filter(|&amp;d| d % <span class="num">2</span> == <span class="num">0</span>).map(|depth| {
+        <span class="kwa">let</span> iterations = <span class="num">1</span> &lt;&lt; ((max_depth - depth + min_depth) <span class="kwa">as</span> u32);
+        thread::spawn(<span class="kwa">move</span> || inner(depth, iterations))
+    }).collect::&lt;Vec&lt;_&gt;&gt;();
+
+    <span class="kwa">for</span> message <span class="kwa">in</span> messages.into_iter() {
+        println!(<span class="str">&quot;{}&quot;</span>, message.join().unwrap());
+    }
+
+    println!(<span class="str">&quot;long lived tree of depth {}</span><span class="esc">\t</span> <span class="str">check: {}&quot;</span>,
+             max_depth, item_check(&amp;long_lived_tree));
+}

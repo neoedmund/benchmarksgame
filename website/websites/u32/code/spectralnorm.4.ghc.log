@@ -1,0 +1,25 @@
+
+Tue, 22 Sep 2015 04:55:12 GMT
+
+MAKE:
+mv spectralnorm.ghc-4.ghc spectralnorm.ghc-4.hs
+/usr/local/src/ghc-7.10.2/bin/ghc --make -fllvm -O2 -XBangPatterns -rtsopts -XMagicHash -fexcess-precision spectralnorm.ghc-4.hs -o spectralnorm.ghc-4.ghc_run
+[1 of 1] Compiling Main             ( spectralnorm.ghc-4.hs, spectralnorm.ghc-4.o )
+
+spectralnorm.ghc-4.hs:73:28:
+    Ambiguous occurrence ‘foldr’
+    It could refer to either ‘Prelude.foldr’,
+                             imported from ‘Prelude’ at spectralnorm.ghc-4.hs:1:1
+                             (and originally defined in ‘Data.Foldable’)
+                          or ‘GHC.Base.foldr’,
+                             imported from ‘GHC.Base’ at spectralnorm.ghc-4.hs:23:1-15
+/home/dunham/benchmarksgame/nanobench/makefiles/u32.programs.Makefile:300: recipe for target 'spectralnorm.ghc-4.ghc_run' failed
+make: [spectralnorm.ghc-4.ghc_run] Error 1 (ignored)
+rm spectralnorm.ghc-4.hs
+0.31s to complete and log all make actions
+
+COMMAND LINE:
+./spectralnorm.ghc-4.ghc_run  500
+
+MAKE ERROR 
+

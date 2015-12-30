@@ -1,0 +1,93 @@
+<span class="com">{- The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   Written by Tom Pledger, 13 Nov 2006. modified by Don Stewart</span>
+<span class="com">   Updated for chameneos-redux by Spencer Janssen, 27 Nov 2007</span>
+<span class="com">   Modified by Péter Diviánszky, 19 May 2010</span>
+<span class="com">   Modified by Louis Wasserman, 14 June 2010</span>
+<span class="com"></span>
+<span class="com">   Should be compiled with -O2 -threaded -fvia-c -optc-O3 and run with +RTS -N&lt;number of cores&gt;.</span>
+<span class="com">   -}</span>
+
+<span class="kwd">import</span> Control.Concurrent
+<span class="kwd">import</span> Control.Monad
+<span class="kwd">import</span> Data.<span class="kwb">Char</span>
+<span class="kwd">import</span> Data.IORef
+<span class="kwd">import</span> System.Environment
+<span class="kwd">import</span> System.<span class="kwb">IO</span>
+<span class="kwd">import</span> GHC.Conc
+<span class="kwd">import</span> Foreign <span class="kwd">hiding</span> (complement)
+
+<span class="kwd">newtype</span> Color = C <span class="kwb">Int</span> <span class="kwd">deriving</span> (Storable,Enum)
+
+#define Y (C <span class="num">2</span>)
+#define R (C <span class="num">1</span>)
+#define B (C <span class="num">0</span>)
+
+<span class="kwd">instance</span> <span class="kwb">Show</span> Color <span class="kwd">where</span>
+	<span class="kwc">show</span> Y = <span class="str">&quot;yellow&quot;</span>
+	<span class="kwc">show</span> R = <span class="str">&quot;red&quot;</span>
+	<span class="kwc">show</span> B = <span class="str">&quot;blue&quot;</span>
+
+complement :: Color -&gt; Color -&gt; Color
+complement !a !b = <span class="kwd">case</span> a <span class="kwd">of</span>
+    B -&gt; <span class="kwd">case</span> b <span class="kwd">of</span> R -&gt; Y; B -&gt; B; _ -&gt; R
+    R -&gt; <span class="kwd">case</span> b <span class="kwd">of</span> B -&gt; Y; R -&gt; R; _ -&gt; B
+    Y -&gt; <span class="kwd">case</span> b <span class="kwd">of</span> B -&gt; R; Y -&gt; Y; _ -&gt; B
+
+<span class="kwd">type</span> Chameneous = Ptr Color
+<span class="kwd">data</span> MP = Nobody !<span class="kwb">Int</span> | Somebody !<span class="kwb">Int</span> !Chameneous !(MVar Chameneous)
+
+arrive :: MVar MP -&gt; MVar (<span class="kwb">Int</span>, <span class="kwb">Int</span>) -&gt; Chameneous -&gt; <span class="kwb">IO</span> ()
+arrive !mpv !finish !ch = <span class="kwd">do</span>
+    waker &lt;- newEmptyMVar
+    <span class="kwd">let</span> inc x = (<span class="kwc">fromEnum</span> (ch == x) +)
+        go !t !b = <span class="kwd">do</span>
+            w &lt;- takeMVar mpv
+            <span class="kwd">case</span> w <span class="kwd">of</span>
+                Nobody <span class="num">0</span>
+                 -&gt; <span class="kwd">do</span>
+                    putMVar mpv w
+                    putMVar finish (t, b)
+  		Nobody q -&gt; <span class="kwd">do</span>
+                    putMVar mpv $ Somebody q ch waker
+                    ch' &lt;- takeMVar waker
+                    go (t+<span class="num">1</span>) $ inc ch' b
+
+                Somebody q ch' waker' -&gt; <span class="kwd">do</span>
+                    c  &lt;- peek ch
+                    c' &lt;- peek ch'
+                    <span class="kwd">let</span> !c'' = complement c c'
+                    poke ch  c''
+                    poke ch' c''
+                    putMVar waker' ch
+                    <span class="kwd">let</span> !q' = q-<span class="num">1</span>
+                    putMVar mpv $ Nobody q'
+                    go (t+<span class="num">1</span>) $ inc ch' b
+    go <span class="num">0 0</span>
+
+showN = <span class="kwc">unwords</span> . <span class="kwc">map</span> ((digits !!) . <span class="kwc">digitToInt</span>) . <span class="kwc">show</span>
+
+digits = <span class="kwc">words</span> <span class="str">&quot;zero one two three four five six seven eight nine&quot;</span>
+
+run :: <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; [Color] -&gt; <span class="kwb">IO</span> (<span class="kwb">IO</span> ())
+run n cpu cs = <span class="kwd">do</span>
+    fs    &lt;- replicateM (<span class="kwa">length</span> cs) newEmptyMVar
+    mpv   &lt;- newMVar (Nobody n)
+    withArrayLen cs $ \ n cols -&gt; <span class="kwd">do</span>
+    	<span class="kwc">zipWithM_</span> ((forkOn cpu .) . arrive mpv) fs (<span class="kwc">take</span> n (<span class="kwc">iterate</span> (`advancePtr` <span class="num">1</span>) cols))
+
+    	<span class="kwc">return</span> $ <span class="kwd">do</span>
+	  <span class="kwc">putStrLn</span> . <span class="kwc">map toLower</span> . <span class="kwc">unwords</span> . ([]:) . <span class="kwc">map show</span> $ cs
+	  ns    &lt;- <span class="kwc">mapM</span> takeMVar fs
+	  <span class="kwc">putStr</span> . <span class="kwc">map toLower</span> . <span class="kwc">unlines</span> $ [<span class="kwc">unwords</span> [<span class="kwc">show</span> n, showN b] | (n, b) &lt;- ns]
+	  <span class="kwc">putStrLn</span> . (<span class="str">&quot; &quot;</span>++) . showN . <span class="kwa">sum</span> . <span class="kwc">map fst</span> $ ns
+	  <span class="kwc">putStrLn</span> <span class="str">&quot;&quot;</span>
+
+main = <span class="kwd">do</span>
+    <span class="kwc">putStrLn</span> . <span class="kwc">map toLower</span> . <span class="kwc">unlines</span> $
+        [<span class="kwc">unwords</span> [<span class="kwc">show</span> a, <span class="str">&quot;+&quot;</span>, <span class="kwc">show</span> b, <span class="str">&quot;-&gt;&quot;</span>, <span class="kwc">show</span> $ complement a b]
+            | a &lt;- [B..Y], b &lt;- [B..Y]]
+
+    n &lt;- <span class="kwc">readIO</span> . <span class="kwc">head</span> =&lt;&lt; <span class="kwc">getArgs</span>
+    actions &lt;- <span class="kwc">zipWithM</span> (run n) [<span class="num">0</span>..] [[B..Y],[B,R,Y,R,Y,B,R,Y,R,B]]
+    <span class="kwc">sequence_</span> actions

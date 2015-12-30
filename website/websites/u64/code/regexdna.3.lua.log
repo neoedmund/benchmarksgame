@@ -1,0 +1,26 @@
+
+Mon, 12 Jan 2015 21:48:37 GMT
+
+COMMAND LINE:
+/usr/local/src/lua-5.3.0/bin/lua  regexdna.lua-3.lua 0 < regexdna-input50000.txt
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+/usr/local/src/lua-5.3.0/bin/lua: regexdna.lua-3.lua:9: module 're' not found:
+	no field package.preload['re']
+	no file '/usr/local/share/lua/5.3/re.lua'
+	no file '/usr/local/share/lua/5.3/re/init.lua'
+	no file '/usr/local/lib/lua/5.3/re.lua'
+	no file '/usr/local/lib/lua/5.3/re/init.lua'
+	no file './re.lua'
+	no file './re/init.lua'
+	no file '/usr/local/lib/lua/5.3/re.so'
+	no file '/usr/local/lib/lua/5.3/loadall.so'
+	no file './re.so'
+stack traceback:
+	[C]: in function 'require'
+	regexdna.lua-3.lua:9: in main chunk
+	[C]: in ?

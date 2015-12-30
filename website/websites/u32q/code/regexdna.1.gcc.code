@@ -1,0 +1,667 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Paul Serice</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;sys/types.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;errno.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+<span class="ppc">#include &lt;glib.h&gt;</span>
+<span class="ppc">#include &lt;tcl.h&gt;</span>
+
+<span class="com">/*************************************************************************</span>
+<span class="com"> * Data Structures and Typedefs</span>
+<span class="com"> *************************************************************************/</span>
+
+<span class="com">/* Mapping of a nucleic acid code to its meaning.  This is used with</span>
+<span class="com"> * regsub() to substitute each occurrence of &quot;code&quot; in the main input</span>
+<span class="com"> * string with its &quot;meaning.&quot; */</span>
+<span class="kwb">static struct</span> nucleic_acid_code {
+    <span class="kwb">char</span>* code;
+    <span class="kwb">char</span>* meaning;
+} nacodes[] = {{<span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>},
+               {<span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>},
+               {<span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>},
+               {<span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>},
+               {<span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>},
+               {<span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>},
+               {<span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>},
+               {<span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>},
+               {<span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>},
+               {<span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>},
+               {<span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>},
+               {NULL, NULL}
+};
+
+<span class="com">/* The variants are used with regcount() to count the number of times</span>
+<span class="com"> * each variant appears in the main input string. */</span>
+<span class="kwb">static const char</span>* variants[] = {
+  <span class="str">&quot;agggtaaa|tttaccct&quot;</span>,
+  <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+  <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+  <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+  <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+  <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+  <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+  <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+  <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>,
+  NULL
+};
+
+
+<span class="com">/* To process the variants, a small thread pool is created.  Each</span>
+<span class="com"> * thread is passed an array of these tasks.  The threads combine to</span>
+<span class="com"> * perform the tasks.  When there are no more tasks, the threads exit</span>
+<span class="com"> * and the parent joins with them before continuing. */</span>
+<span class="kwc">typedef</span> <span class="kwb">struct</span> variant_worker_task {
+
+    <span class="com">/* input: which variant to process */</span>
+    <span class="kwb">const char</span>* variant;
+
+    <span class="com">/* input: string against which &quot;variant&quot; will be matched */</span>
+    Tcl_Obj* s;
+
+    <span class="com">/* output: number of times &quot;variant&quot; matched against &quot;s&quot; */</span>
+    <span class="kwb">unsigned long int</span> count;
+
+} *variant_worker_task_t;
+
+
+<span class="com">/* Data passed into each thread that process the variants.  All the</span>
+<span class="com"> * threads in the pool share one copy of this data structure and must</span>
+<span class="com"> * use &quot;lock&quot; to synchronize access to it. */</span>
+<span class="kwc">typedef</span> <span class="kwb">struct</span> variant_worker_data {
+
+    <span class="com">/* shared: lock that protects this structure */</span>
+    pthread_mutex_t lock;
+
+    <span class="com">/* shared: array of tasks that the threads are trying to complete */</span>
+    variant_worker_task_t tasks;
+
+    <span class="com">/* shared: pointer to shared index into &quot;tasks&quot; */</span>
+    <span class="kwc">volatile</span> <span class="kwb">int</span> next_task;
+
+    <span class="com">/* shared: total number of tasks in the &quot;tasks&quot; array */</span>
+    <span class="kwb">int</span> total_tasks;
+
+} *variant_worker_data_t;
+
+
+<span class="com">/* Data passed into each thread that substitutes nucleic acid codes. */</span>
+<span class="kwc">typedef</span> <span class="kwb">struct</span> nacodes_worker_data {
+
+    <span class="com">/* input/output: String object that is input to the thread as a</span>
+<span class="com">     * copy of the range of characters from the main input string over</span>
+<span class="com">     * which the thread should work.  The thread should call</span>
+<span class="com">     * Tcl_SetStringObj() to set &quot;range&quot; to hold the result of the</span>
+<span class="com">     * substitutions. */</span>
+    Tcl_Obj* range;
+
+} *nacodes_worker_data_t;
+
+
+<span class="com">/* Create an explicit typedef for the pthread start functions. */</span>
+<span class="kwc">typedef</span> <span class="kwb">void</span>* (*thread_start_t)(<span class="kwb">void</span>*);
+
+<span class="com">/*************************************************************************</span>
+<span class="com"> * regcount()</span>
+<span class="com"> *************************************************************************/</span>
+
+<span class="com">/* Return the number of times the regular expression &quot;regexp_cstr&quot;</span>
+<span class="com"> * uniquely matches against the input string &quot;s&quot;. */</span>
+<span class="kwb">static unsigned long</span>
+<span class="kwd">regcount</span>(<span class="kwb">const char</span>* regexp_cstr,
+         Tcl_Obj* s)
+{
+    <span class="kwb">int</span> regexec_rv = <span class="num">0</span>;
+    <span class="kwb">int</span> index = <span class="num">0</span>;
+    <span class="kwb">int</span> index_max = <span class="num">0</span>;
+    <span class="kwb">unsigned long</span> rv = <span class="num">0</span>;
+    Tcl_Obj* regexp_cstr_obj = NULL;
+    Tcl_RegExp regexp = NULL;
+    <span class="kwb">struct</span> Tcl_RegExpInfo info = {<span class="num">0</span>};
+
+    <span class="com">/* Get &quot;regexp_cstr&quot; as a Tcl string object. */</span>
+    regexp_cstr_obj = <span class="kwd">Tcl_NewStringObj</span>(regexp_cstr, <span class="kwd">strlen</span>(regexp_cstr));
+    <span class="kwd">Tcl_IncrRefCount</span>(regexp_cstr_obj);
+
+    <span class="com">/* Compile the regular expression. */</span>
+    regexp = <span class="kwd">Tcl_GetRegExpFromObj</span>(NULL, regexp_cstr_obj,
+                 TCL_REG_ADVANCED | TCL_REG_NOCASE | TCL_REG_NEWLINE);
+    <span class="kwa">if</span> (!regexp) {
+        <span class="kwd">fprintf</span>(stderr, <span class="str">&quot;*** Error: Tcl_GetRegExpFromObj: failed&quot;</span>);
+        <span class="kwd">exit</span>(<span class="num">1</span>);
+    }
+
+    <span class="com">/* Iterate over each match. */</span>
+    index = <span class="num">0</span>;
+    index_max = <span class="kwd">Tcl_GetCharLength</span>(s);
+    <span class="kwa">while</span> (index &lt; index_max) {
+
+        <span class="com">/* Test for a match. */</span>
+        regexec_rv = <span class="kwd">Tcl_RegExpExecObj</span>(NULL, regexp, s, index, <span class="num">1</span>, <span class="num">0</span>);
+        <span class="kwa">if</span> (regexec_rv == -<span class="num">1</span>) {
+            <span class="kwd">fprintf</span>(stderr, <span class="str">&quot;*** Error: Tcl_RegExpExecObj: failed&quot;</span>);
+            <span class="kwd">exit</span>(<span class="num">1</span>);
+        }
+        <span class="kwa">if</span> (regexec_rv == <span class="num">0</span>) {
+            <span class="com">/* No matches. */</span>
+            <span class="kwa">break</span>;
+        }
+
+        <span class="com">/* Get the match information. */</span>
+        <span class="kwd">Tcl_RegExpGetInfo</span>(regexp, &amp;info);
+
+        <span class="com">/* Advance curr. */</span>
+        index += info.matches[<span class="num">0</span>].end;
+
+        <span class="com">/* Increment the match count. */</span>
+        ++rv;
+    }
+
+    <span class="com">/* Clean up.  Note that &quot;regexp&quot; is owned by &quot;regexp_cstr_obj&quot; so</span>
+<span class="com">     * it does not need explicit clean up. */</span>
+    <span class="kwd">Tcl_DecrRefCount</span>(regexp_cstr_obj);
+
+    <span class="kwa">return</span> rv;
+}
+
+<span class="com">/*************************************************************************</span>
+<span class="com"> * regsub()</span>
+<span class="com"> *************************************************************************/</span>
+
+<span class="com">/* Substitute each occurrence of the regular expression &quot;regex&quot; in &quot;s&quot;</span>
+<span class="com"> * with &quot;subst&quot;.  The result is returned in a newly allocate string</span>
+<span class="com"> * that must be freed with g_free(). */</span>
+<span class="kwb">static char</span>*
+<span class="kwd">regsub</span>(<span class="kwb">const char</span>* regex,
+       <span class="kwb">const char</span>* s,
+       <span class="kwb">const char</span>* subst,
+       GError** err)
+{
+    <span class="kwb">char</span>* rv = NULL;
+    GRegex* prog = NULL;
+
+    <span class="com">/* How glib propagates exceptions. */</span>
+    <span class="kwa">if</span> (err &amp;&amp; *err) {
+        <span class="kwa">goto</span> out;
+    }
+
+    <span class="com">/* Compile regex. */</span>
+    prog = <span class="kwd">g_regex_new</span>(regex,
+                       G_REGEX_CASELESS |
+                       G_REGEX_RAW |
+                       G_REGEX_NO_AUTO_CAPTURE |
+                       G_REGEX_OPTIMIZE,
+                       <span class="num">0</span>,
+                       err);
+    <span class="kwa">if</span> (err &amp;&amp; *err) {
+        <span class="kwa">goto</span> out;
+    }
+
+    <span class="com">/* Substitute. */</span>
+    rv = <span class="kwd">g_regex_replace_literal</span>(prog, s, -<span class="num">1</span>, <span class="num">0</span>, subst, <span class="num">0</span>, err);
+    <span class="kwa">if</span> (err &amp;&amp; *err) {
+        <span class="kwa">goto</span> out;
+    }
+
+ out:
+
+    <span class="com">/* Clean up. */</span>
+    <span class="kwa">if</span> (prog) {
+        <span class="kwd">g_regex_unref</span>(prog);
+    }
+
+    <span class="kwa">return</span> rv;
+}
+
+<span class="com">/*************************************************************************</span>
+<span class="com"> * load_file()</span>
+<span class="com"> *************************************************************************/</span>
+
+<span class="com">/* Load the file f into the string s. */</span>
+<span class="kwb">static void</span>
+<span class="kwd">load_file</span>(<span class="kwb">FILE</span>* f,
+          Tcl_Obj* s)
+{
+    <span class="kwb">char</span>* block = NULL;
+    <span class="kwb">size_t</span> block_size = <span class="num">16384</span>;
+    <span class="kwb">size_t</span> rcount = <span class="num">0</span>;
+
+    <span class="com">/* Allocate a block for I/O. */</span>
+    block = <span class="kwd">malloc</span>(block_size);
+    <span class="kwa">if</span> (!block) {
+        <span class="kwd">perror</span>(<span class="str">&quot;malloc&quot;</span>);
+        <span class="kwd">exit</span>(<span class="num">1</span>);
+    }
+
+    <span class="com">/* Iterate over each block of input. */</span>
+    <span class="kwa">for</span> (;;) {
+
+        <span class="com">/* Read a block. */</span>
+        rcount = <span class="kwd">fread</span>(block, <span class="num">1</span>, block_size, f);
+        <span class="kwa">if</span> (rcount == <span class="num">0</span>) {
+            <span class="com">/* Check for errors. */</span>
+            <span class="kwa">if</span> (<span class="kwd">ferror</span>(f)) {
+                <span class="kwd">perror</span>(<span class="str">&quot;fread&quot;</span>);
+                <span class="kwd">exit</span>(<span class="num">1</span>);
+            }
+            <span class="com">/* EOF */</span>
+            <span class="kwa">break</span>;
+        }
+
+        <span class="com">/* Append a block. */</span>
+        <span class="kwd">Tcl_AppendToObj</span>(s, block, rcount);
+    }
+
+    <span class="com">/* Free block. */</span>
+    <span class="kwd">free</span>(block);
+}
+
+<span class="com">/*************************************************************************</span>
+<span class="com"> * process_variant_worker() and process_variants()</span>
+<span class="com"> *************************************************************************/</span>
+
+<span class="com">/* This is a helper function for process_variant_worker() which is the</span>
+<span class="com"> * start routine for the threads that count how many times a variant</span>
+<span class="com"> * matches the main input string.  This routing locks &quot;data&quot; and</span>
+<span class="com"> * attempts to get the index of the next task.  If successful, it</span>
+<span class="com"> * takes ownership of that index by incrementing &quot;data-&gt;next_task&quot; so</span>
+<span class="com"> * that the next thread that comes along will get the next task.</span>
+<span class="com"> * Before returning, this routine releases the lock.  This routine</span>
+<span class="com"> * returns true if successful and false otherwise. */</span>
+<span class="kwb">static int</span>
+<span class="kwd">get_variant_index</span>(variant_worker_data_t data,
+                  <span class="kwb">int</span>* index)
+{
+    <span class="kwb">int</span> rv = <span class="num">0</span>;
+
+    <span class="com">/* Lock &quot;data&quot;. */</span>
+    <span class="kwd">pthread_mutex_lock</span>(&amp;data-&gt;lock);
+
+    <span class="com">/* Get the index for the next task if any remain. */</span>
+    <span class="kwa">if</span> (data-&gt;next_task &lt; data-&gt;total_tasks) {
+        *index = data-&gt;next_task++;
+        rv = <span class="num">1</span>;
+    }
+
+    <span class="com">/* Unlock &quot;data&quot;. */</span>
+    <span class="kwd">pthread_mutex_unlock</span>(&amp;data-&gt;lock);
+
+    <span class="kwa">return</span> rv;
+}
+
+<span class="com">/* This is the worker routine for the thread pool that processes the</span>
+<span class="com"> * variants.  This routine atomically gets the next task which holds</span>
+<span class="com"> * all the information needed to count the number of times the task's</span>
+<span class="com"> * &quot;variant&quot; value matches the main input string and stores the result</span>
+<span class="com"> * in the task's &quot;count&quot; value.  The main input string is passed in as</span>
+<span class="com"> * the task's read-only &quot;s&quot; value. */</span>
+<span class="kwb">static void</span>*
+<span class="kwd">process_variant_worker</span>(variant_worker_data_t data)
+{
+    <span class="kwb">int</span> index = <span class="num">0</span>;
+
+    <span class="com">/* Carefully get the index for the next task. */</span>
+    <span class="kwa">while</span> (<span class="kwd">get_variant_index</span>(data, &amp;index)) {
+        <span class="com">/* Perform the task of counting regex matches. */</span>
+        data-&gt;tasks[index].count
+            = <span class="kwd">regcount</span>(data-&gt;tasks[index].variant,
+                       data-&gt;tasks[index].s);
+    }
+
+    <span class="kwa">return</span> NULL;
+}
+
+<span class="com">/* Process the list of variants by counting the frequency of each</span>
+<span class="com"> * regexp in the main input string &quot;s&quot; and printing the results. */</span>
+<span class="kwb">static void</span>
+<span class="kwd">process_variants</span>(<span class="kwb">int</span> cpu_count,
+                 Tcl_Obj* s)
+{
+    <span class="kwb">int</span> i = <span class="num">0</span>;
+    <span class="kwb">int</span> s_length = <span class="num">0</span>;
+    <span class="kwb">int</span> thread_rv = <span class="num">0</span>;
+    <span class="kwb">int</span> thread_count = <span class="num">0</span>;
+    <span class="kwb">int</span> task_count = <span class="num">0</span>;
+    pthread_t* threads = NULL;
+    variant_worker_task_t tasks = NULL;
+    <span class="kwb">struct</span> variant_worker_data data = {PTHREAD_MUTEX_INITIALIZER,};
+
+    <span class="com">/* WARNING: Tcl_RegExpExecObj() always does an internal conversion</span>
+<span class="com">     * of &quot;s&quot; to a UCS-2 Unicode string if &quot;s&quot; is in UTF-8 format.</span>
+<span class="com">     * Normally, this is a nice feature, but as of tcl-8.5, it doesn't</span>
+<span class="com">     * appear to be thread-safe.  As a work-around, force the</span>
+<span class="com">     * conversion now before starting the threads. */</span>
+    <span class="kwd">Tcl_GetUnicodeFromObj</span>(s, &amp;s_length);
+
+    <span class="com">/* Determine the total number of variants (minus the NULL sentinel). */</span>
+    task_count = (<span class="kwb">int</span>)(<span class="kwa">sizeof</span>(variants) / <span class="kwa">sizeof</span>(variants[<span class="num">0</span>]) - <span class="num">1</span>);
+
+    <span class="com">/* Determine the number of threads to start. */</span>
+    thread_count = cpu_count * <span class="num">2</span>;
+    <span class="kwa">if</span> (thread_count &gt; task_count) {
+        thread_count = task_count;
+    }
+
+    <span class="com">/* Allocate the &quot;threads&quot; array which holds the thread IDs. */</span>
+    threads = <span class="kwd">calloc</span>(thread_count, <span class="kwa">sizeof</span>(*threads));
+    <span class="kwa">if</span> (!threads) {
+        <span class="kwd">perror</span>(<span class="str">&quot;calloc&quot;</span>);
+        <span class="kwd">exit</span>(<span class="num">1</span>);
+    }
+
+    <span class="com">/* Allocate the &quot;tasks&quot; array which holds one unit of work per</span>
+<span class="com">     * element in the array. */</span>
+    tasks = <span class="kwd">calloc</span>(task_count, <span class="kwa">sizeof</span>(*tasks));
+    <span class="kwa">if</span> (!tasks) {
+        <span class="kwd">perror</span>(<span class="str">&quot;calloc&quot;</span>);
+        <span class="kwd">exit</span>(<span class="num">1</span>);
+    }
+
+    <span class="com">/* Initialize the task array. */</span>
+    <span class="kwa">for</span> (i = <span class="num">0</span> ; i &lt; task_count ; ++i) {
+        tasks[i].variant = variants[i];
+        tasks[i].s = s;
+        tasks[i].count = <span class="num">0</span>;
+    }
+
+    <span class="com">/* Initialize the data shared by the threads. */</span>
+    data.tasks = tasks;
+    data.next_task = <span class="num">0</span>;
+    data.total_tasks = task_count;
+
+    <span class="com">/* Start the threads. */</span>
+    <span class="kwa">for</span> (i = <span class="num">0</span> ; i &lt; thread_count ; ++i) {
+        thread_rv = <span class="kwd">pthread_create</span>(&amp;threads[i],
+                                   NULL,
+                                   (thread_start_t)process_variant_worker,
+                                   &amp;data);
+        <span class="kwa">if</span> (thread_rv) {
+            <span class="kwd">fprintf</span>(stderr, <span class="str">&quot;*** Error: pthread_create: failed&quot;</span>);
+            <span class="kwd">exit</span>(<span class="num">1</span>);
+        }
+    }
+
+    <span class="com">/* Wait for each thread to finish. */</span>
+    <span class="kwa">for</span> (i = <span class="num">0</span> ; i &lt; thread_count ; ++i) {
+        thread_rv = <span class="kwd">pthread_join</span>(threads[i], NULL);
+        <span class="kwa">if</span> (thread_rv) {
+            <span class="kwd">fprintf</span>(stderr, <span class="str">&quot;*** Error: pthread_join: failed&quot;</span>);
+            <span class="kwd">exit</span>(<span class="num">1</span>);
+        }
+    }
+
+    <span class="com">/* Print results. */</span>
+    <span class="kwa">for</span> (i = <span class="num">0</span> ; i &lt; task_count ; ++i) {
+        <span class="kwd">printf</span>(<span class="str">&quot;%s %lu</span><span class="esc">\n</span><span class="str">&quot;</span>, variants[i], tasks[i].count);
+    }
+
+    <span class="com">/* Clean up. */</span>
+    <span class="kwd">free</span>(tasks);
+    <span class="kwd">free</span>(threads);
+}
+
+<span class="com">/*************************************************************************</span>
+<span class="com"> * process_nacodes_worker() and process_nacodes()</span>
+<span class="com"> *************************************************************************/</span>
+
+<span class="com">/* This is the worker routing for the threads that process the</span>
+<span class="com"> * substitution of the nucleic acid codes with their meanings.  These</span>
+<span class="com"> * threads are not in a thread pool because the work can be divided</span>
+<span class="com"> * exactly into one thread per cpu.  So the parent just starts each</span>
+<span class="com"> * thread and waits for them all to finish.</span>
+<span class="com"> *</span>
+<span class="com"> * Each worker gets a range of characters from the main input string</span>
+<span class="com"> * and is responsible for calling regsub() once for each nucleic acid</span>
+<span class="com"> * code.  Thus, if there are 11 nucleic acid codes, each thread calls</span>
+<span class="com"> * regsub() 11 times but the scope of the regsub() call is limited to</span>
+<span class="com"> * just the range of characters it has been assigned. */</span>
+<span class="kwb">static void</span>*
+<span class="kwd">process_nacodes_worker</span>(nacodes_worker_data_t data)
+{
+    <span class="kwb">char</span>* s_in = NULL;
+    <span class="kwb">char</span>* s_out = NULL;
+    <span class="kwb">struct</span> nucleic_acid_code* nacode = NULL;
+
+    <span class="com">/* Get the character range as a C-style string. */</span>
+    s_in = <span class="kwd">Tcl_GetString</span>(data-&gt;range);
+
+    <span class="com">/* Iterate over the nucleic acid codes. */</span>
+    <span class="kwa">for</span> (nacode = nacodes ; nacode-&gt;code ; ++nacode) {
+
+        <span class="com">/* Perform the substitution. */</span>
+        s_out = <span class="kwd">regsub</span>(nacode-&gt;code, s_in, nacode-&gt;meaning, NULL);
+
+        <span class="com">/* Free s_in on all but the first pass because s_in</span>
+<span class="com">         * belongs to Tcl on the first pass. */</span>
+        <span class="kwa">if</span> (nacode != nacodes) {
+            <span class="kwd">g_free</span>(s_in);
+            s_in = NULL;
+        }
+        <span class="com">/* If this is the last pass, save the result and clean up. */</span>
+        <span class="kwa">if</span> ((nacode + <span class="num">1</span>)-&gt;code == NULL) {
+            <span class="kwd">Tcl_SetStringObj</span>(data-&gt;range, s_out, <span class="kwd">strlen</span>(s_out));
+            <span class="kwd">g_free</span>(s_out);
+            s_out = NULL;
+        } <span class="kwa">else</span> {
+            <span class="com">/* Otherwise, prepare for the next iteration. */</span>
+            s_in = s_out;
+            s_out = NULL;
+        }
+    }
+
+    <span class="kwa">return</span> NULL;
+}
+
+<span class="com">/* Process the nucleic acid codes by substituting each nucleic acid</span>
+<span class="com"> * code in &quot;s&quot; with its meaning as defined in the static &quot;nacodes&quot;</span>
+<span class="com"> * structure (see top of file).  On return, &quot;s&quot; will hold the</span>
+<span class="com"> * substituted string. */</span>
+<span class="kwb">static void</span>
+<span class="kwd">process_nacodes</span>(<span class="kwb">int</span> cpu_count,
+                Tcl_Obj* s)
+{
+    <span class="kwb">int</span> i = <span class="num">0</span>;
+    <span class="kwb">int</span> first = <span class="num">0</span>;
+    <span class="kwb">int</span> last = <span class="num">0</span>;
+    <span class="kwb">int</span> s_length = <span class="num">0</span>;
+    <span class="kwb">int</span> range_length = <span class="num">0</span>;
+    <span class="kwb">int</span> thread_rv = <span class="num">0</span>;
+    nacodes_worker_data_t data = NULL;
+    pthread_t* threads = NULL;
+
+    <span class="com">/* Sanity check to make sure we don't divide by zero. */</span>
+    <span class="kwa">if</span> (cpu_count == <span class="num">0</span>) {
+        <span class="kwa">return</span>;
+    }
+
+    <span class="com">/* Get the total length of s. */</span>
+    s_length = <span class="kwd">Tcl_GetCharLength</span>(s);
+    <span class="kwa">if</span> (s_length == <span class="num">0</span>) {
+        <span class="kwa">return</span>;
+    }
+
+    <span class="com">/* Allocate the &quot;data&quot; array which is used to pass data to and</span>
+<span class="com">     * from the threads. */</span>
+    data = <span class="kwd">calloc</span>(cpu_count, <span class="kwa">sizeof</span>(*data));
+
+    <span class="com">/* Allocate the &quot;threads&quot; array which holds the thread IDs. */</span>
+    threads = <span class="kwd">calloc</span>(cpu_count, <span class="kwa">sizeof</span>(*threads));
+
+    <span class="com">/* Calculate the number of characters to feed each thread.  Note</span>
+<span class="com">     * that we checked above to make sure cpu_count is not zero. */</span>
+    range_length = s_length / cpu_count;
+
+    <span class="com">/* Start one thread for each cpu. */</span>
+    <span class="kwa">for</span> (i = <span class="num">0</span> ; i &lt; cpu_count ; ++i) {
+
+        <span class="com">/* First, initialize the thread's client data. */</span>
+
+        <span class="com">/* Calculate the first and last index for the range.  Both</span>
+<span class="com">         * &quot;first&quot; and &quot;last&quot; indexes are inclusive because that is</span>
+<span class="com">         * what Tcl_GetRange() requires.  We also need to make sure</span>
+<span class="com">         * the very last range has all the characters in case</span>
+<span class="com">         * range_length does not divide s_length evenly. */</span>
+        first = range_length * i;
+        last = range_length * (i + <span class="num">1</span>) - <span class="num">1</span>;
+        <span class="kwa">if</span> (i + <span class="num">1</span> == cpu_count) {
+            last = s_length - <span class="num">1</span>;
+        }
+
+        <span class="com">/* Pack the data for the worker thread. */</span>
+        data[i].range = <span class="kwd">Tcl_GetRange</span>(s, first, last);
+        <span class="kwd">Tcl_IncrRefCount</span>(data[i].range);
+
+        <span class="com">/* Second, start the thread. */</span>
+        thread_rv = <span class="kwd">pthread_create</span>(&amp;threads[i],
+                                   NULL,
+                                   (thread_start_t)process_nacodes_worker,
+                                   &amp;data[i]);
+        <span class="kwa">if</span> (thread_rv) {
+            <span class="kwd">fprintf</span>(stderr, <span class="str">&quot;*** Error: pthread_create: failed&quot;</span>);
+            <span class="kwd">exit</span>(<span class="num">1</span>);
+        }
+    }
+
+    <span class="com">/* Wait for each thread to finish. */</span>
+    <span class="kwa">for</span> (i = <span class="num">0</span> ; i &lt; cpu_count ; ++i) {
+        thread_rv = <span class="kwd">pthread_join</span>(threads[i], NULL);
+        <span class="kwa">if</span> (thread_rv) {
+            <span class="kwd">fprintf</span>(stderr, <span class="str">&quot;*** Error: pthread_join: failed&quot;</span>);
+            <span class="kwd">exit</span>(<span class="num">1</span>);
+        }
+    }
+
+    <span class="com">/* Merge results. */</span>
+    <span class="kwd">Tcl_SetObjLength</span>(s, <span class="num">0</span>);
+    <span class="kwa">for</span> (i = <span class="num">0</span> ; i &lt; cpu_count ; ++i) {
+        <span class="kwd">Tcl_AppendObjToObj</span>(s, data[i].range);
+    }
+
+    <span class="com">/* Clean up. */</span>
+    <span class="kwa">for</span> (i = <span class="num">0</span> ; i &lt; cpu_count ; ++i) {
+        <span class="kwd">Tcl_DecrRefCount</span>(data[i].range);
+    }
+    <span class="kwd">free</span>(threads);
+    <span class="kwd">free</span>(data);
+}
+
+<span class="com">/*************************************************************************</span>
+<span class="com"> * get_cpu_count()</span>
+<span class="com"> *************************************************************************/</span>
+
+<span class="com">/* Return the number of cpus.  If an error occurs, 0 cpus will be</span>
+<span class="com"> * reported.  There are other ways to do this, but this is a program</span>
+<span class="com"> * to test regexp processing so ... */</span>
+<span class="kwb">static int</span>
+<span class="kwd">get_cpu_count</span>(<span class="kwb">void</span>)
+{
+    <span class="kwb">int</span> rv = <span class="num">0</span>;
+    <span class="kwb">FILE</span>* f = NULL;
+    Tcl_Obj* s = NULL;
+
+    <span class="com">/* Allocate a string. */</span>
+    s = <span class="kwd">Tcl_NewStringObj</span>(<span class="str">&quot;&quot;</span>, <span class="num">0</span>);
+    <span class="kwd">Tcl_IncrRefCount</span>(s);
+
+    <span class="com">/* Open /proc/cpuinfo. */</span>
+    f = <span class="kwd">fopen</span>(<span class="str">&quot;/proc/cpuinfo&quot;</span>, <span class="str">&quot;r&quot;</span>);
+    <span class="kwa">if</span> (!f) {
+        <span class="kwa">goto</span> out;
+    }
+
+    <span class="com">/* Load file into s. */</span>
+    <span class="kwd">load_file</span>(f, s);
+
+    <span class="com">/* Count the number of cpus.  &quot;\M&quot; matches at the end of a word. */</span>
+    rv = <span class="kwd">regcount</span>(<span class="str">&quot;^processor</span><span class="esc">\\</span><span class="str">M&quot;</span>, s);
+
+ out:
+
+    <span class="com">/* Clean up. */</span>
+    <span class="kwa">if</span> (f) {
+        <span class="kwd">fclose</span>(f);
+    }
+    <span class="kwa">if</span> (s) {
+        <span class="kwd">Tcl_DecrRefCount</span>(s);
+    }
+
+    <span class="kwa">return</span> rv;
+}
+
+<span class="com">/*************************************************************************</span>
+<span class="com"> * main()</span>
+<span class="com"> *************************************************************************/</span>
+
+<span class="kwb">int</span>
+<span class="kwd">main</span>(<span class="kwb">int</span> argc,
+     <span class="kwb">char</span>* argv[])
+{
+    <span class="kwb">int</span> rv = <span class="num">0</span>;
+    <span class="kwb">int</span> cpu_count = <span class="num">0</span>;
+    <span class="kwb">int</span> init_length = <span class="num">0</span>;
+    <span class="kwb">int</span> code_length = <span class="num">0</span>;
+    <span class="kwb">int</span> seq_length = <span class="num">0</span>;
+    <span class="kwb">char</span>* s_cstr = NULL;
+    Tcl_Interp *tcl = NULL;
+    Tcl_Obj* s = NULL;
+
+    <span class="com">/* Initialize Tcl. */</span>
+    <span class="kwd">Tcl_FindExecutable</span>(argv[<span class="num">0</span>]);
+    tcl = <span class="kwd">Tcl_CreateInterp</span>();
+    <span class="kwd">Tcl_Preserve</span>((ClientData)tcl);
+
+    <span class="com">/* Count the number of cpus.  If the cpu count could not be</span>
+<span class="com">     * determined, assume 4 cpus. */</span>
+    cpu_count = <span class="kwd">get_cpu_count</span>();
+    <span class="kwa">if</span> (!cpu_count) {
+        cpu_count = <span class="num">4</span>;
+    }
+
+    <span class="com">/* Allocate s. */</span>
+    s = <span class="kwd">Tcl_NewStringObj</span>(<span class="str">&quot;&quot;</span>, <span class="num">0</span>);
+    <span class="kwd">Tcl_IncrRefCount</span>(s);
+
+    <span class="com">/* Load stdin into s. */</span>
+    <span class="kwd">load_file</span>(stdin, s);
+
+    <span class="com">/* Get the length of s. */</span>
+    init_length = <span class="kwd">Tcl_GetCharLength</span>(s);
+
+    <span class="com">/* Strip off section headers and EOLs from s.  This is a little</span>
+<span class="com">     * messy because we have to go from Tcl-string to C-string and</span>
+<span class="com">     * back to Tcl-string. */</span>
+    s_cstr = <span class="kwd">regsub</span>(<span class="str">&quot;(&gt;.*)|</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">Tcl_GetString</span>(s), <span class="str">&quot;&quot;</span>, NULL);
+    <span class="kwd">Tcl_SetStringObj</span>(s, s_cstr, <span class="kwd">strlen</span>(s_cstr));
+    <span class="kwd">g_free</span>(s_cstr);
+    s_cstr = NULL;
+
+    <span class="com">/* Get the length of s. */</span>
+    code_length = <span class="kwd">Tcl_GetCharLength</span>(s);
+
+    <span class="com">/* Process the variants by counting them and printing the results. */</span>
+    <span class="kwd">process_variants</span>(cpu_count, s);
+
+    <span class="com">/* Substitute nucleic acid codes in s with their meanings. */</span>
+    <span class="kwd">process_nacodes</span>(cpu_count, s);
+
+    <span class="com">/* Get the length of s. */</span>
+    seq_length = <span class="kwd">Tcl_GetCharLength</span>(s);
+
+    <span class="com">/* Print the lengths. */</span>
+    <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">&quot;</span>, init_length, code_length, seq_length);
+
+    <span class="com">/* Clean up. */</span>
+    <span class="kwd">Tcl_DecrRefCount</span>(s);
+
+    <span class="com">/* Finalize Tcl. */</span>
+    <span class="kwd">Tcl_Release</span>((ClientData)tcl);
+    <span class="kwd">Tcl_Exit</span>(rv);
+
+    <span class="com">/* Not reached. */</span>
+    <span class="kwa">return</span> rv;
+}

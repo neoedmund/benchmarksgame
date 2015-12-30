@@ -1,0 +1,54 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Original C contributed by Sebastien Loisel</span>
+<span class="slc">// Conversion to C++ by Jon Harrop</span>
+<span class="slc">// Compile: g++ -O3 -o spectralnorm spectralnorm.cpp</span>
+
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;cmath&gt;</span>
+<span class="ppc">#include &lt;vector&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;iomanip&gt;</span>
+
+<span class="kwa">using namespace</span> std;
+
+<span class="kwb">double</span> <span class="kwd">eval_A</span>(<span class="kwb">int</span> i, <span class="kwb">int</span> j) { <span class="kwa">return</span> <span class="num">1.0</span> / ((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span> + i + <span class="num">1</span>); }
+
+<span class="kwb">void</span> <span class="kwd">eval_A_times_u</span>(<span class="kwb">const</span> vector&lt;<span class="kwb">double</span>&gt; &amp;u, vector&lt;<span class="kwb">double</span>&gt; &amp;Au)
+{
+  <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;u.<span class="kwd">size</span>(); i++)
+    <span class="kwa">for</span>(<span class="kwb">int</span> j=<span class="num">0</span>; j&lt;u.<span class="kwd">size</span>(); j++) Au[i] += <span class="kwd">eval_A</span>(i,j) * u[j];
+}
+
+<span class="kwb">void</span> <span class="kwd">eval_At_times_u</span>(<span class="kwb">const</span> vector&lt;<span class="kwb">double</span>&gt; &amp;u, vector&lt;<span class="kwb">double</span>&gt; &amp;Au)
+{
+  <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;u.<span class="kwd">size</span>(); i++)
+    <span class="kwa">for</span>(<span class="kwb">int</span> j=<span class="num">0</span>; j&lt;u.<span class="kwd">size</span>(); j++) Au[i] += <span class="kwd">eval_A</span>(j,i) * u[j];
+}
+
+<span class="kwb">void</span> <span class="kwd">eval_AtA_times_u</span>(<span class="kwb">const</span> vector&lt;<span class="kwb">double</span>&gt; &amp;u, vector&lt;<span class="kwb">double</span>&gt; &amp;AtAu)
+{ vector&lt;<span class="kwb">double</span>&gt; <span class="kwd">v</span>(u.<span class="kwd">size</span>()); <span class="kwd">eval_A_times_u</span>(u, v); <span class="kwd">eval_At_times_u</span>(v, AtAu); }
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[])
+{
+  <span class="kwb">int</span> N = ((argc == <span class="num">2</span>) ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">2000</span>);
+  vector&lt;<span class="kwb">double</span>&gt; <span class="kwd">u</span>(N), <span class="kwd">v</span>(N);
+
+  <span class="kwd">fill</span>(u.<span class="kwd">begin</span>(), u.<span class="kwd">end</span>(), <span class="num">1</span>);
+
+  <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;<span class="num">10</span>; i++) {
+    <span class="kwd">eval_AtA_times_u</span>(u, v);
+    <span class="kwd">fill</span>(u.<span class="kwd">begin</span>(), u.<span class="kwd">end</span>(), <span class="num">0</span>);
+    <span class="kwd">eval_AtA_times_u</span>(v, u);
+  }
+
+  <span class="kwb">double</span> vBv=<span class="num">0</span>, vv=<span class="num">0</span>;
+  <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;N; i++) { vBv += u[i]*v[i]; vv += v[i]*v[i]; }
+
+  cout &lt;&lt; <span class="kwd">setprecision</span>(<span class="num">10</span>) &lt;&lt; <span class="kwd">sqrt</span>(vBv/vv) &lt;&lt; endl;
+
+  <span class="kwa">return</span> <span class="num">0</span>;
+}

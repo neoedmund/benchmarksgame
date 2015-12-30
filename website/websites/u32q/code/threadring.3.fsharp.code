@@ -1,0 +1,35 @@
+﻿<span class="com">(*  The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">    Contributed by Jomo Fisher</span>
+<span class="com"></span>
+<span class="com">    Uses F# asyncs. Asyncs are triggered by tailcall in sequence as progress is </span>
+<span class="com">    made around the ring. </span>
+<span class="com">*)</span>
+<span class="kwa">let</span> ringLength = <span class="num">503</span>
+
+<span class="kwa">let</span> cells = <span class="kwd">Array</span>.zeroCreate ringLength
+<span class="kwa">let</span> threads = <span class="kwd">Array</span>.zeroCreate ringLength
+<span class="kwa">let</span> answer = <span class="kwb">ref</span> -<span class="num">1</span>
+
+<span class="kwa">let</span> createWorker i = 
+    <span class="kwa">let</span> next = (i+<span class="num">1</span>)%ringLength
+    async { <span class="kwa">let</span> value = cells.[i]
+            <span class="kwa">if false then</span> () 
+            <span class="kwa">match</span> value <span class="kwa">with</span>
+            | <span class="num">0</span> -&gt; answer := i+<span class="num">1</span>
+            | _ -&gt; 
+                cells.[next] &lt;- value - <span class="num">1</span> 
+                return! threads.[next] }
+    
+[&lt;<span class="kwd">EntryPoint</span>&gt;]
+<span class="kwa">let</span> main args = 
+    cells.[<span class="num">0</span>] &lt;- <span class="kwa">if</span> args.<span class="kwd">Length</span>&gt;<span class="num">0</span> <span class="kwa">then</span> <span class="kwb">int</span> args.[<span class="num">0</span>] <span class="kwa">else</span> <span class="num">50000000</span>
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..ringLength-<span class="num">1</span> <span class="kwa">do</span> 
+        threads.[i]&lt;-createWorker i
+
+    <span class="kwa">let</span> result = <span class="kwd">Async</span>.<span class="kwd">StartImmediate</span>(threads.[<span class="num">0</span>])
+    printfn <span class="str">&quot;</span><span class="ipl">%d</span><span class="str">&quot;</span> !answer
+    <span class="num">0</span>
+
+

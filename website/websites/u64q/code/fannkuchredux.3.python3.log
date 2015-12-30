@@ -1,0 +1,13 @@
+
+Mon, 14 Sep 2015 23:23:51 GMT
+
+MAKE:
+mv fannkuchredux.python3-3.python3 fannkuchredux.python3-3.py
+0.03s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/Python-3.5.0/bin/python3.5 fannkuchredux.python3-3.py 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

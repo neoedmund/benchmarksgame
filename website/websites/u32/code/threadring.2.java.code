@@ -1,0 +1,94 @@
+<span class="com">/**</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Klaus Friedel</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.util.*;
+
+<span class="kwa">public class</span> threadring {
+
+  <span class="kwa">public static</span> <span class="kwb">long</span> startTime;
+  <span class="kwa">public static final</span> <span class="kwb">int</span> THREAD_COUNT = <span class="num">503</span>;
+
+  <span class="slc">// The scheduler for cooperative Multithreading</span>
+  <span class="kwa">static class</span> Scheduler <span class="kwa">extends</span> Thread{
+    <span class="kwa">private final</span> List&lt;CooperativeThread&gt; threads = Collections.<span class="kwd">synchronizedList</span>(<span class="kwa">new</span> ArrayList&lt;CooperativeThread&gt;());
+    <span class="kwa">private</span> <span class="kwb">int</span> rrIndex = -<span class="num">1</span>;
+
+    <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">start</span>(CooperativeThread t){
+      threads.<span class="kwd">add</span>(t);
+    }
+
+    <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+      <span class="kwa">for</span>(;;){ <span class="slc">// Scheduler will run foerever</span>
+        CooperativeThread nextThread;
+        <span class="kwa">synchronized</span> (threads){
+          rrIndex++;
+          <span class="kwa">if</span>(rrIndex &gt;= threads.<span class="kwd">size</span>()) rrIndex = <span class="num">0</span>;
+          nextThread = threads.<span class="kwd">get</span>(rrIndex);
+        }
+        nextThread.<span class="kwd">handleMessage</span>();
+      }
+    }
+  }
+
+  <span class="kwa">static abstract class</span> CooperativeThread{
+    <span class="kwa">public abstract</span> <span class="kwb">void</span> <span class="kwd">handleMessage</span>();
+  }
+
+  <span class="kwa">static class</span> MessageThread <span class="kwa">extends</span> CooperativeThread{
+      MessageThread nextThread;
+      String name;
+      Integer msg;
+
+      <span class="kwa">public</span> <span class="kwd">MessageThread</span>(MessageThread nextThread, <span class="kwb">int</span> name) {
+        <span class="kwa">this</span>.name = <span class="str">&quot;&quot;</span> + name;
+        <span class="kwa">this</span>.nextThread = nextThread;
+      }
+
+      <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">handleMessage</span>(){
+        <span class="kwa">if</span>(msg == null) <span class="kwa">return</span>;
+        <span class="kwa">if</span>(msg == <span class="num">0</span>){
+          System.out.<span class="kwd">println</span>(<span class="kwd">getName</span>());
+          System.<span class="kwd">exit</span>(<span class="num">0</span>);
+        }
+        nextThread.<span class="kwd">put</span>(msg - <span class="num">1</span>);
+        msg = null;
+      }
+
+      <span class="kwb">void</span> <span class="kwd">put</span>(Integer message){
+        msg = message;
+      }
+
+      String <span class="kwd">getName</span>() {
+        <span class="kwa">return</span> name;
+      }
+    }
+
+
+  <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String args[]) <span class="kwa">throws</span> Exception{
+    <span class="kwb">int</span> hopCount = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+
+    MessageThread thread = null;
+    MessageThread last = null;
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = THREAD_COUNT; i &gt;= <span class="num">1</span> ; i--) {
+      thread = <span class="kwa">new</span> <span class="kwd">MessageThread</span>(thread, i);
+      <span class="kwa">if</span>(i == THREAD_COUNT) last = thread;
+    }
+    <span class="slc">// close the ring:</span>
+    last.nextThread = thread;
+
+    Scheduler scheduler = <span class="kwa">new</span> <span class="kwd">Scheduler</span>();
+    <span class="slc">// start all Threads</span>
+    MessageThread t = thread;
+    <span class="kwa">do</span>{
+      scheduler.<span class="kwd">start</span>(t);
+      t = t.nextThread;
+    }<span class="kwa">while</span>(t != thread);
+    scheduler.<span class="kwd">start</span>();
+
+    <span class="slc">// inject message</span>
+    thread.<span class="kwd">put</span>(hopCount);
+  }
+}

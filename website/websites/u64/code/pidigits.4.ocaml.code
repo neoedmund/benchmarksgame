@@ -1,0 +1,197 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Christophe TROESTLER</span>
+<span class="com"> * modified by Matías Giovannini</span>
+<span class="com"> * modified by Ethan Burns</span>
+<span class="com"> *)</span>
+
+<span class="kwa">module</span> <span class="kwd">Z</span> = <span class="kwa">struct</span>
+  <span class="kwa">let</span> lg n =
+    <span class="kwa">let open</span> <span class="kwd">Int64</span> <span class="kwa">in</span>
+    <span class="kwa">let</span> x = <span class="kwb">ref</span> (of_int n)
+    <span class="kwa">and</span> r = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+    <span class="kwa">if</span> logand !x <span class="num">0xffffffff00000000</span>L &lt;&gt; <span class="num">0L</span> <span class="kwa">then</span> (x := shift_right_logical !x <span class="num">32</span>; r := !r + <span class="num">32</span>);
+    <span class="kwa">if</span> logand !x <span class="num">0x00000000ffff0000</span>L &lt;&gt; <span class="num">0L</span> <span class="kwa">then</span> (x := shift_right_logical !x <span class="num">16</span>; r := !r + <span class="num">16</span>);
+    <span class="kwa">if</span> logand !x <span class="num">0x000000000000ff00</span>L &lt;&gt; <span class="num">0L</span> <span class="kwa">then</span> (x := shift_right_logical !x  <span class="num">8</span>; r := !r +  <span class="num">8</span>);
+    <span class="kwa">if</span> logand !x <span class="num">0x00000000000000f0</span>L &lt;&gt; <span class="num">0L</span> <span class="kwa">then</span> (x := shift_right_logical !x  <span class="num">4</span>; r := !r +  <span class="num">4</span>);
+    <span class="kwa">if</span> logand !x <span class="num">0x000000000000000c</span>L &lt;&gt; <span class="num">0L</span> <span class="kwa">then</span> (x := shift_right_logical !x  <span class="num">2</span>; r := !r +  <span class="num">2</span>);
+    <span class="kwa">if</span> logand !x <span class="num">0x0000000000000002</span>L &lt;&gt; <span class="num">0L</span> <span class="kwa">then</span>                                  r := !r +  <span class="num">1</span> ;
+    !r
+
+  <span class="kwa">let</span> next_pow2_int n =
+    <span class="num">1</span> <span class="kwa">lsl</span> (lg (n + pred (<span class="num">1</span> <span class="kwa">lsl</span> (lg n))))
+
+  <span class="kwa">let</span> len_int = <span class="kwc">Sys</span>.word_size - <span class="num">2</span>
+
+  <span class="kwa">let</span> sgn_int n = (n <span class="kwa">asr</span> len_int) - ((-n) <span class="kwa">asr</span> len_int)
+
+  <span class="kwa">open</span> <span class="kwd">Nat</span>
+
+  <span class="kwa">let</span> set_abs_digit_nat r o n =
+    set_digit_nat r o (n <span class="kwa">lxor</span> (n <span class="kwa">asr</span> len_int));
+    ignore (incr_nat r o <span class="num">1</span> (n <span class="kwa">lsr</span> len_int))
+
+  <span class="kwa">type</span> z = {
+    <span class="com">(* inv: sign == 0 === is_zero_nat repr 0 (length_nat repr) *)</span>
+    <span class="kwa">mutable</span> sign : <span class="kwb">int</span>;
+    <span class="com">(* inv: size == num_digits_nat repr 0 (length_nat repr) *)</span>
+    <span class="kwa">mutable</span> size : <span class="kwb">int</span>;
+    <span class="kwa">mutable</span> repr : nat;
+  }
+
+  <span class="kwa">let</span> make len =
+    { sign = <span class="num">0</span>; size = <span class="num">1</span>; repr = make_nat len; }
+
+  <span class="kwa">let</span> of_int n =
+    <span class="kwa">let</span> i = make <span class="num">1</span> <span class="kwa">in</span>
+    set_abs_digit_nat i.repr <span class="num">0</span> n;
+    i.sign &lt;- sgn_int n;
+    i
+
+  <span class="kwa">let</span> neg i = i.sign &lt;- -i.sign
+
+  <span class="kwa">let</span> clear i =
+    set_to_zero_nat i.repr <span class="num">0</span> (length_nat i.repr);
+    i.sign &lt;- <span class="num">0</span>;
+    i.size &lt;- <span class="num">1</span>
+
+  <span class="kwa">let</span> set i j =
+    <span class="kwa">let</span> capa = length_nat i.repr <span class="kwa">in</span>
+    <span class="kwa">if</span> j.size &gt; capa <span class="kwa">then</span>
+      i.repr &lt;- create_nat j.size
+    <span class="kwa">else if</span> j.size &lt; capa <span class="kwa">then</span>
+      set_to_zero_nat i.repr j.size (capa - j.size);
+    blit_nat i.repr <span class="num">0</span> j.repr <span class="num">0</span> j.size;
+    i.sign &lt;- j.sign;
+    i.size &lt;- j.size
+
+  <span class="kwa">let</span> ensure_capacity i size =
+    <span class="kwa">let</span> capa = length_nat i.repr <span class="kwa">in</span>
+    <span class="kwa">if</span> size &gt; capa <span class="kwa">then begin</span>
+      <span class="kwa">let</span> capa = next_pow2_int size <span class="kwa">in</span>
+      <span class="kwa">let</span> repr = create_nat capa <span class="kwa">in</span>
+      blit_nat repr <span class="num">0</span> i.repr <span class="num">0</span> i.size;
+      set_to_zero_nat repr i.size (capa - i.size);
+      i.repr &lt;- repr
+    <span class="kwa">end</span>
+
+  <span class="kwa">let</span> carryin c i =
+    <span class="com">(* [i] might not be normal, since this function is internal *)</span>
+    <span class="kwa">let</span> size = i.size + <span class="num">1</span> <span class="kwa">in</span>
+    ensure_capacity i size;
+    set_digit_nat i.repr i.size c;
+    i.size &lt;- size
+
+  <span class="kwa">let</span> addsub ~doadd i j =
+    <span class="kwa">let</span> cmp = compare_nat i.repr <span class="num">0</span> i.size j.repr <span class="num">0</span> j.size <span class="kwa">in</span>
+    <span class="kwa">if</span> cmp &lt; <span class="num">0</span> <span class="kwa">then begin</span>
+      <span class="com">(* Denormalize i to j's length *)</span>
+      ensure_capacity i j.size;
+      i.size &lt;- j.size
+    <span class="kwa">end</span>;
+    <span class="kwa">if</span> doadd <span class="kwa">then begin</span>
+      <span class="kwa">let</span> c = add_nat i.repr <span class="num">0</span> i.size j.repr <span class="num">0</span> j.size <span class="num">0</span> <span class="kwa">in</span>
+      <span class="kwa">if</span> c != <span class="num">0</span> <span class="kwa">then</span> carryin c i
+    <span class="kwa">end else begin</span>
+      <span class="kwa">let</span> c = sub_nat i.repr <span class="num">0</span> i.size j.repr <span class="num">0</span> j.size <span class="num">1</span> <span class="kwa">in</span>
+      <span class="kwa">if</span> c == <span class="num">0</span> <span class="kwa">then begin</span>
+        complement_nat i.repr <span class="num">0</span> i.size;
+        ignore (incr_nat i.repr <span class="num">0</span> i.size <span class="num">1</span>);
+        i.sign &lt;- -i.sign
+      <span class="kwa">end</span>;
+      <span class="com">(* Normalize *)</span>
+      i.size &lt;- num_digits_nat i.repr <span class="num">0</span> i.size;
+      <span class="kwa">if</span> is_zero_nat i.repr <span class="num">0</span> i.size <span class="kwa">then</span> i.sign &lt;- <span class="num">0</span>
+    <span class="kwa">end</span>
+
+  <span class="kwa">let</span> add i j =
+    <span class="kwa">if</span> j.sign == <span class="num">0</span> <span class="kwa">then</span> () <span class="kwa">else</span>
+    <span class="kwa">if</span> i.sign == <span class="num">0</span> <span class="kwa">then</span> set i j <span class="kwa">else</span>
+    addsub ~doadd:(i.sign == j.sign) i j
+  <span class="kwa">and</span> sub i j =
+    <span class="kwa">if</span> j.sign == <span class="num">0</span> <span class="kwa">then</span> () <span class="kwa">else</span>
+    <span class="kwa">if</span> i.sign == <span class="num">0</span> <span class="kwa">then</span> (set i j; neg i) <span class="kwa">else</span>
+    addsub ~doadd:(i.sign != j.sign) i j
+
+  <span class="kwa">let</span> temp = create_nat <span class="num">1</span>
+
+  <span class="kwa">let</span> imul i n =
+    <span class="kwa">if</span> n &lt;= <span class="num">0</span> <span class="kwa">then</span> failwith <span class="str">&quot;imul&quot;</span>;
+    set_abs_digit_nat temp <span class="num">0</span> (n - <span class="num">1</span>);
+    <span class="kwa">let</span> c = mult_digit_nat i.repr <span class="num">0</span> i.size i.repr <span class="num">0</span> i.size temp <span class="num">0</span> <span class="kwa">in</span>
+    <span class="kwa">if</span> c != <span class="num">0</span> <span class="kwa">then</span> carryin c i
+
+  <span class="kwa">let</span> idiv i j =
+    <span class="kwa">if</span> compare_nat i.repr <span class="num">0</span> i.size j.repr <span class="num">0</span> j.size &lt; <span class="num">0</span> <span class="kwa">then</span> <span class="num">0</span> <span class="kwa">else begin</span>
+      <span class="kwa">if</span> compare_digits_nat i.repr (i.size-<span class="num">1</span>) j.repr (j.size-<span class="num">1</span>) &gt;= <span class="num">0</span> <span class="kwa">then</span>
+        carryin <span class="num">0</span> i;
+      <span class="kwa">if</span> i.size != j.size + <span class="num">1</span> <span class="kwa">then</span> failwith <span class="str">&quot;idiv&quot;</span>; <span class="com">(* multidigit *)</span>
+      div_nat i.repr <span class="num">0</span> i.size j.repr <span class="num">0</span> j.size;
+      i.sign * j.sign * nth_digit_nat i.repr j.size
+    <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">let</span> u, v = <span class="kwc">Z</span>.(make <span class="num">1</span>, make <span class="num">1</span>)
+
+<span class="kwa">let</span> extract i n a d =
+  <span class="kwa">let open</span> <span class="kwd">Z</span> <span class="kwa">in</span>
+  set  u n;
+  imul u i;
+  add  u a;
+  idiv u d
+
+<span class="kwa">let</span> produce i n a d =
+  <span class="kwa">let open</span> <span class="kwd">Z</span> <span class="kwa">in</span>
+  <span class="kwa">if</span> i != <span class="num">0</span> <span class="kwa">then begin</span>
+    set  u d;
+    imul u i;
+    sub  a u
+  <span class="kwa">end</span>;
+  imul n <span class="num">10</span>;
+  imul a <span class="num">10</span>
+
+<span class="kwa">and</span> consume i n a d =
+  <span class="kwa">let open</span> <span class="kwd">Z</span> <span class="kwa">in</span>
+  <span class="kwa">let</span> j = <span class="num">2</span>*i + <span class="num">1</span> <span class="kwa">in</span>
+  set  u n;
+  add  u n;
+  add  a u;
+  imul n i;
+  imul a j;
+  imul d j
+
+<span class="kwa">let</span> pi num =
+  <span class="kwa">let</span> cnt = <span class="kwb">ref</span> <span class="num">0</span>
+  <span class="kwa">and</span> pos = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+  <span class="kwa">let</span> end_row () =
+    print_string  <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>;
+    print_int     !cnt;
+    print_newline ();
+    pos := <span class="num">0</span>
+  <span class="kwa">in</span>
+  <span class="kwa">let</span> show d =
+    print_char (char_of_int (d + <span class="num">48</span>));
+    incr cnt;
+    incr pos;
+    <span class="kwa">if</span> !pos == <span class="num">10</span> <span class="kwa">then</span> end_row ();
+    <span class="kwa">if</span> !cnt == num <span class="kwa">then begin</span>
+      <span class="kwa">if</span> !pos != <span class="num">0</span> <span class="kwa">then begin</span>
+        print_string (<span class="kwc">String</span>.make (<span class="num">10</span> - !pos) ' ');
+        end_row ()
+      <span class="kwa">end</span>;
+      raise <span class="kwd">Exit</span>
+    <span class="kwa">end</span>
+  <span class="kwa">in</span>
+  <span class="kwa">let</span> numer = <span class="kwc">Z</span>.of_int <span class="num">1</span>
+  <span class="kwa">and</span> accum = <span class="kwc">Z</span>.of_int <span class="num">0</span>
+  <span class="kwa">and</span> denom = <span class="kwc">Z</span>.of_int <span class="num">1</span>
+  <span class="kwa">and</span> i     = <span class="kwb">ref</span> <span class="num">1</span> <span class="kwa">in</span>
+  <span class="kwa">try while true do</span>
+    <span class="kwa">let</span> d = extract <span class="num">3</span> numer accum denom <span class="kwa">in</span>
+    <span class="kwa">if</span> d == extract <span class="num">4</span> numer accum denom
+    <span class="kwa">then</span> (show d;  produce d numer accum denom)
+    <span class="kwa">else</span> (consume !i numer accum denom; incr i)
+  <span class="kwa">done with</span> <span class="kwd">Exit</span> -&gt; ()
+
+<span class="kwa">let</span> () = pi (<span class="kwa">try</span> int_of_string (<span class="kwc">Array</span>.get <span class="kwc">Sys</span>.argv <span class="num">1</span>) <span class="kwa">with</span> _ -&gt; <span class="num">27</span>)

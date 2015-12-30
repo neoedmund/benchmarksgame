@@ -1,0 +1,108 @@
+<span class="com">/* </span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Rex Kerr</span>
+<span class="com"> * based on version by John Nilsson as modified by Geoff Reedy</span>
+<span class="com"> * GMP wrapping based on Java version by Pall, Kraus, &amp; Sassa</span>
+<span class="com">*/</span>
+
+<span class="kwa">object</span> pidigits {
+  <span class="kwa">import</span> Gmp._
+    
+  <span class="kwa">class</span> <span class="kwd">LFT</span>(q:I, r:I, <span class="kwa">val</span> t:I) {
+    <span class="kwa">def</span> <span class="kwd">use</span>(z: LFT) = { ~q; ~r; <span class="kwa">if</span> (t ne z.t) ~t; z }
+    <span class="kwa">def</span> <span class="kwd">compose</span>(k: Int) = <span class="kwd">use</span>(<span class="kwa">new</span> <span class="kwd">LFT</span>(q*k!, (q*(<span class="num">4</span>*k+<span class="num">2</span>))+*=(r,(<span class="num">2</span>*k+<span class="num">1</span>))!, t*(<span class="num">2</span>*k+<span class="num">1</span>)!))
+    <span class="kwa">def</span> extract = {
+      <span class="kwa">val</span> (y,rem) = (r + q*<span class="num">3</span>) /% t !!
+      <span class="kwa">val</span> x = <span class="kwa">if</span>((rem + q) &lt; t) <span class="kwd">Some</span>(y.toInt) <span class="kwa">else</span> None
+      ~y; ~rem
+      x
+    }
+    <span class="kwa">def</span> <span class="kwd">next</span>(y: Int) = <span class="kwd">use</span>(<span class="kwa">new</span> <span class="kwd">LFT</span>(q*<span class="num">10</span>!, (r*<span class="num">10</span> -*= (t,<span class="num">10</span>*y))!, t))
+  }
+
+  <span class="kwa">def</span> pi_digits = {
+    <span class="kwa">def</span> <span class="kwd">digits</span>(z: LFT, k: Int): Stream[Int] = z extract match {
+      <span class="kwa">case</span> <span class="kwd">Some</span>(y) =&gt; Stream.<span class="kwd">cons</span>(y,<span class="kwd">digits</span>(z next y,k))
+      <span class="kwa">case</span> None    =&gt; <span class="kwd">digits</span>(z compose k,k+<span class="num">1</span>)
+    }
+    <span class="kwd">digits</span>(<span class="kwa">new</span> <span class="kwd">LFT</span>(<span class="kwd">I</span>(<span class="num">1</span>),<span class="kwd">I</span>(<span class="num">0</span>),<span class="kwd">I</span>(<span class="num">1</span>)),<span class="num">1</span>)
+  }
+
+  <span class="kwa">def</span> by[T](s: Stream[T], n: Int): Stream[Stream[T]] =
+    <span class="kwa">if</span> (s.isEmpty) Stream.empty
+    <span class="kwa">else</span> Stream.<span class="kwd">cons</span>(s take n, <span class="kwd">by</span>(s drop n, n))
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]): Unit =
+    <span class="kwa">for</span> ((d,n) &lt;- <span class="kwd">by</span>(pi_digits take <span class="kwd">args</span>(<span class="num">0</span>).toInt, <span class="num">10</span>).zipWithIndex)
+      <span class="kwd">printf</span>(<span class="str">&quot;%-10s</span><span class="esc">\t</span><span class="str">:%d</span><span class="esc">\n</span><span class="str">&quot;</span>,d.mkString,<span class="num">10</span>*n+d.length)
+}
+
+<span class="com">/*</span>
+<span class="com"> * Partial GMP wrapper for Scala.</span>
+<span class="com"> * Write math like normal.</span>
+<span class="com"> * Use ! to pull the result off the temporary stack</span>
+<span class="com"> * Use ~ to return a value to the temporary stack</span>
+<span class="com"> * Be careful with weird +*= GMP functions that destroy argument</span>
+<span class="com">*/</span>
+<span class="kwa">class</span> GmpUtil {
+  System.<span class="kwd">loadLibrary</span>(<span class="str">&quot;jpargmp&quot;</span>)
+  <span class="kwc">&#64;native</span> <span class="kwa">def</span> <span class="kwd">mpz_init</span>(): Long
+  <span class="kwc">&#64;native</span> <span class="kwa">def</span> <span class="kwd">mpz_clear</span>(src: Long)
+  <span class="kwc">&#64;native</span> <span class="kwa">def</span> <span class="kwd">mpz_set_si</span>(lhs: Long, a: Int)
+  <span class="kwc">&#64;native</span> <span class="kwa">def</span> <span class="kwd">mpz_get_si</span>(a: Long): Int
+  <span class="kwc">&#64;native</span> <span class="kwa">def</span> <span class="kwd">mpz_cmp</span>(a: Long, b: Long): Int
+  <span class="kwc">&#64;native</span> <span class="kwa">def</span> <span class="kwd">mpz_add</span>(sum: Long, a: Long, b: Long)
+  <span class="kwc">&#64;native</span> <span class="kwa">def</span> <span class="kwd">mpz_sub</span>(sum: Long, a: Long, b: Long)
+  <span class="kwc">&#64;native</span> <span class="kwa">def</span> <span class="kwd">mpz_mul_si</span>(prod: Long, a: Long, b: Int)
+  <span class="kwc">&#64;native</span> <span class="kwa">def</span> <span class="kwd">mpz_addmul_ui</span>(lhs: Long, a: Long, b: Int)
+  <span class="kwc">&#64;native</span> <span class="kwa">def</span> <span class="kwd">mpz_submul_ui</span>(lhs: Long, a: Long, b: Int)
+  <span class="kwc">&#64;native</span> <span class="kwa">def</span> <span class="kwd">mpz_tdiv_qr</span>(quot: Long, rem: Long, n: Long, d: Long)
+}
+<span class="kwa">object</span> Gmp {
+  <span class="kwa">val</span> gmp = <span class="kwa">new</span> GmpUtil
+  <span class="kwa">private var</span> stack = Nil:List[I]
+  <span class="kwa">private var</span> defunct = Nil:List[I]
+  <span class="kwa">class</span> I {
+    <span class="kwa">private val</span> z = gmp.<span class="kwd">mpz_init</span>()
+    <span class="kwa">def</span> !() = stack match {
+      <span class="kwa">case</span> i :: rest <span class="kwa">if</span> (i eq <span class="kwa">this</span>) =&gt;
+        stack = Nil
+        defunct = rest ::: defunct
+        i
+      <span class="kwa">case</span> _ =&gt; I.die
+    }
+    <span class="kwa">def</span> !!() = stack match {
+      <span class="kwa">case</span> i :: j :: rest <span class="kwa">if</span> (i eq <span class="kwa">this</span>) =&gt;
+        stack = Nil
+        defunct = rest ::: defunct
+        (i,j)
+      <span class="kwa">case</span> _ =&gt; I.die
+    }
+    <span class="kwa">def</span> toInt = gmp.<span class="kwd">mpz_get_si</span>(z)
+    <span class="kwa">def</span> &lt;(i: I) = gmp.<span class="kwd">mpz_cmp</span>(z, i.z) &lt; <span class="num">0</span>
+    <span class="kwa">def</span> +(i: I) = { gmp.<span class="kwd">mpz_add</span>(I.ans.z, z, i.z); I.get }
+    <span class="kwa">def</span> -(i: I) = { gmp.<span class="kwd">mpz_sub</span>(I.ans.z, z, i.z); I.get }
+    <span class="kwa">def</span> *(n: Int) = { gmp.<span class="kwd">mpz_mul_si</span>(I.ans.z, z, n); I.get }
+    <span class="kwa">def</span> +*=(i: I, n: Int) = { gmp.<span class="kwd">mpz_addmul_ui</span>(z, i.z, n); <span class="kwa">this</span> }
+    <span class="kwa">def</span> -*=(i: I, n: Int) = { gmp.<span class="kwd">mpz_submul_ui</span>(z, i.z, n); <span class="kwa">this</span> }
+    <span class="kwa">def</span> /%(i: I) = { <span class="kwa">val</span> r = I.ans.z; gmp.<span class="kwd">mpz_tdiv_qr</span>(I.ans.z, r, z, i.z); I.get }
+    <span class="kwa">def</span> unary_~() = { defunct ::= <span class="kwa">this</span> }
+    <span class="kwa">override def</span> <span class="kwd">finalize</span>() { gmp.<span class="kwd">mpz_clear</span>(z); <span class="kwa">super</span>.finalize }
+  }
+  <span class="kwa">object</span> I {
+    <span class="kwa">def</span> <span class="kwd">apply</span>(n:Int) = defunct match {
+      <span class="kwa">case</span> i :: rest =&gt;
+        defunct = rest
+        gmp.<span class="kwd">mpz_set_si</span>(i.z,n)
+        i
+      <span class="kwa">case</span> _ =&gt;
+        <span class="kwa">val</span> i = <span class="kwa">new</span> I
+        <span class="kwa">if</span> (n != <span class="num">0</span>) gmp.<span class="kwd">mpz_set_si</span>(i.z,n)
+        i
+    }
+    <span class="kwa">def</span> <span class="kwd">ans</span>() = { <span class="kwa">val</span> i = <span class="kwd">I</span>(<span class="num">0</span>); stack ::= i; i }
+    <span class="kwa">def</span> die: Nothing = <span class="kwa">throw new</span> IndexOutOfBoundsException
+    <span class="kwa">def</span> <span class="kwd">get</span>() = stack match { <span class="kwa">case</span> i :: rest =&gt; i ; <span class="kwa">case</span> _ =&gt; die }
+  }  
+}

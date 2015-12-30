@@ -1,0 +1,152 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Jos Hirth,</span>
+<span class="com">   transliterated from Isaac Gouy and Robert F. Tobler's C# program</span>
+<span class="com">*/</span>
+
+<span class="kwc">import</span> <span class="str">'dart:math'</span> <span class="kwc">as</span> Math;
+
+<span class="kwa">void</span> main(args) {
+  <span class="kwb">int</span> n = args.length &gt; <span class="num">0</span> ? <span class="kwb">int</span>.parse(args[<span class="num">0</span>]) : <span class="num">0</span>;
+
+  NBodySystem system = <span class="kwa">new</span> NBodySystem();
+  print(system.energy().toStringAsFixed(<span class="num">9</span>));
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; n; i++) {
+    system.advance(<span class="num">0.01</span>);
+  }
+  print(system.energy().toStringAsFixed(<span class="num">9</span>));
+}
+
+<span class="kwa">class</span> Body {
+  <span class="kwb">double</span> x, y, z, vx, vy, vz, mass;
+  Body({<span class="kwa">this</span>.x, <span class="kwa">this</span>.y, <span class="kwa">this</span>.z, <span class="kwa">this</span>.vx, <span class="kwa">this</span>.vy, <span class="kwa">this</span>.vz, <span class="kwa">this</span>.mass});
+}
+
+<span class="kwa">class</span> NBodySystem {
+  <span class="kwa">var</span> bodies;
+
+  <span class="kwa">static const</span> <span class="kwb">double</span> solarmass = <span class="num">4</span> * Math.PI * Math.PI;
+  <span class="kwa">static const</span> <span class="kwb">double</span> daysPeryear = <span class="num">365.24</span>;
+
+  NBodySystem() {
+    bodies = <span class="kwa">new</span> List&lt;Body&gt;();
+    bodies.addAll([
+      <span class="slc">// Sun</span>
+
+      <span class="kwa">new</span> Body(
+        x: <span class="num">0.0</span>,
+        y: <span class="num">0.0</span>,
+        z: <span class="num">0.0</span>,
+        vx: <span class="num">0.0</span>,
+        vy: <span class="num">0.0</span>,
+        vz: <span class="num">0.0</span>,
+        mass: solarmass
+      ),
+      <span class="slc">// Jupiter</span>
+
+      <span class="kwa">new</span> Body(
+        x: <span class="num">4.84143144246472090e+00</span>,
+        y: -<span class="num">1.16032004402742839e+00</span>,
+        z: -<span class="num">1.03622044471123109e-01</span>,
+        vx: <span class="num">1.66007664274403694e-03</span> * daysPeryear,
+        vy: <span class="num">7.69901118419740425e-03</span> * daysPeryear,
+        vz: -<span class="num">6.90460016972063023e-05</span> * daysPeryear,
+        mass: <span class="num">9.54791938424326609e-04</span> * solarmass
+      ),
+      <span class="slc">// Saturn</span>
+
+      <span class="kwa">new</span> Body(
+        x: <span class="num">8.34336671824457987e+00</span>,
+        y: <span class="num">4.12479856412430479e+00</span>,
+        z: -<span class="num">4.03523417114321381e-01</span>,
+        vx: -<span class="num">2.76742510726862411e-03</span> * daysPeryear,
+        vy: <span class="num">4.99852801234917238e-03</span> * daysPeryear,
+        vz: <span class="num">2.30417297573763929e-05</span> * daysPeryear,
+        mass: <span class="num">2.85885980666130812e-04</span> * solarmass
+      ),
+      <span class="slc">// Uranus</span>
+
+      <span class="kwa">new</span> Body(
+        x: <span class="num">1.28943695621391310e+01</span>,
+        y: -<span class="num">1.51111514016986312e+01</span>,
+        z: -<span class="num">2.23307578892655734e-01</span>,
+        vx: <span class="num">2.96460137564761618e-03</span> * daysPeryear,
+        vy: <span class="num">2.37847173959480950e-03</span> * daysPeryear,
+        vz: -<span class="num">2.96589568540237556e-05</span> * daysPeryear,
+        mass: <span class="num">4.36624404335156298e-05</span> * solarmass
+      ),
+      <span class="slc">// Neptune</span>
+
+      <span class="kwa">new</span> Body(
+        x: <span class="num">1.53796971148509165e+01</span>,
+        y: -<span class="num">2.59193146099879641e+01</span>,
+        z: <span class="num">1.79258772950371181e-01</span>,
+        vx: <span class="num">2.68067772490389322e-03</span> * daysPeryear,
+        vy: <span class="num">1.62824170038242295e-03</span> * daysPeryear,
+        vz: -<span class="num">9.51592254519715870e-05</span> * daysPeryear,
+        mass: <span class="num">5.15138902046611451e-05</span> * solarmass
+      )
+    ]);
+
+    <span class="kwb">double</span> px = <span class="num">0.0</span>, py = <span class="num">0.0</span>, pz = <span class="num">0.0</span>;
+    <span class="kwa">for</span> (<span class="kwa">var</span> b <span class="kwa">in</span> bodies) {
+      px += b.vx * b.mass;
+      py += b.vy * b.mass;
+      pz += b.vz * b.mass;
+    };
+
+    <span class="kwa">var</span> sol = bodies[<span class="num">0</span>];
+    sol.vx = -px / solarmass;
+    sol.vy = -py / solarmass;
+    sol.vz = -pz / solarmass;
+  }
+
+  <span class="kwa">void</span> advance(<span class="kwb">double</span> dt) {
+    <span class="kwa">for</span>(<span class="kwb">int</span> na = <span class="num">0</span>; na &lt; bodies.length; na++){
+      Body a = bodies[na];
+      <span class="kwa">for</span>(<span class="kwb">int</span> nb = na + <span class="num">1</span>; nb &lt; bodies.length; nb++){
+        Body b = bodies[nb];
+
+        <span class="kwb">double</span> dx = a.x - b.x,
+            dy = a.y - b.y,
+            dz = a.z - b.z;
+        <span class="kwb">double</span> d2 = dx * dx + dy * dy + dz * dz;
+        <span class="kwb">double</span> mag = dt / (d2 * Math.sqrt(d2));
+
+        a.vx -= dx * b.mass * mag;
+        b.vx += dx * a.mass * mag;
+
+        a.vy -= dy * b.mass * mag;
+        b.vy += dy * a.mass * mag;
+
+        a.vz -= dz * b.mass * mag;
+        b.vz += dz * a.mass * mag;
+      }
+    }
+    <span class="kwa">for</span> (<span class="kwa">var</span> b <span class="kwa">in</span> bodies) {
+      b.x += dt * b.vx;
+      b.y += dt * b.vy;
+      b.z += dt * b.vz;
+    }
+  }
+
+  <span class="kwb">double</span> energy() {
+    <span class="kwb">double</span> e = <span class="num">0.0</span>;
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; bodies.length; i++) {
+      <span class="kwa">var</span> bi = bodies[i];
+      e += <span class="num">0.5</span> * bi.mass * (
+          bi.vx * bi.vx +
+          bi.vy * bi.vy +
+          bi.vz * bi.vz);
+      <span class="kwa">for</span> (<span class="kwb">int</span> j = i + <span class="num">1</span>; j &lt; bodies.length; j++) {
+        <span class="kwa">var</span> bj = bodies[j];
+        <span class="kwb">double</span> dx = bi.x - bj.x,
+            dy = bi.y - bj.y,
+            dz = bi.z - bj.z;
+        e -= (bi.mass * bj.mass) / Math.sqrt(dx * dx + dy * dy + dz * dz);
+      }
+    }
+    <span class="kwa">return</span> e;
+  }
+}

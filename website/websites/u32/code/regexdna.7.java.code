@@ -1,0 +1,173 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Jason Nordwick</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> java.io.FileDescriptor;
+<span class="kwa">import</span> java.io.FileInputStream;
+<span class="kwa">import</span> java.nio.ByteBuffer;
+<span class="kwa">import</span> java.nio.channels.FileChannel;
+<span class="kwa">import</span> java.util.regex.Matcher;
+<span class="kwa">import</span> java.util.regex.Pattern;
+
+<span class="kwa">final class</span> ByteWrapper <span class="kwa">implements</span> CharSequence {
+
+   <span class="kwa">public</span> <span class="kwb">byte</span>[] backing;
+   <span class="kwa">public</span> <span class="kwb">int</span> length;
+
+   <span class="kwa">public</span> <span class="kwd">ByteWrapper</span>( <span class="kwb">byte</span>[] backing ) {
+      <span class="kwa">this</span>( backing, backing.length );
+   }
+   
+   <span class="kwa">public</span> <span class="kwd">ByteWrapper</span>( <span class="kwb">byte</span>[] backing, <span class="kwb">int</span> length ) {
+      <span class="kwa">this</span>.backing = backing;
+      <span class="kwa">this</span>.length = length;
+   }
+
+   <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">length</span>() {
+      <span class="kwa">return</span> length;
+   }
+
+   <span class="kwa">public</span> <span class="kwb">char</span> <span class="kwd">charAt</span>(<span class="kwb">int</span> index) {
+      <span class="kwa">return</span> (<span class="kwb">char</span>) backing[index];
+   }
+   
+   <span class="kwa">public</span> CharSequence <span class="kwd">subSequence</span>(<span class="kwb">int</span> start, <span class="kwb">int</span> end) {
+      <span class="kwa">throw new</span> <span class="kwd">UnsupportedOperationException</span>();
+   }
+}
+
+
+<span class="kwa">public final class</span> regexdna {
+   
+   <span class="kwa">private static</span> Pattern comments = Pattern.<span class="kwd">compile</span>(<span class="str">&quot;&gt;.*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;</span>);
+   
+   <span class="kwa">private static</span> String[][] codes =
+      {{<span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>},
+      {<span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>},
+      {<span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>},
+      {<span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>},
+      {<span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>},
+      {<span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>},
+      {<span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>},
+      {<span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>},
+      {<span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>},
+      {<span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>},
+      {<span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>} };
+   
+   <span class="kwa">private static</span> Pattern codesPat = Pattern.<span class="kwd">compile</span>(<span class="str">&quot;[BDHKMNRSVWY]&quot;</span>);
+   
+   <span class="kwa">private static final</span> <span class="kwb">int</span> longest;
+   <span class="kwa">private static</span> <span class="kwb">byte</span>[] repl;
+ 
+   <span class="kwa">private static</span> String[] strs = {
+      <span class="str">&quot;agggtaaa|tttaccct&quot;</span>,
+      <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+      <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+      <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+      <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+      <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+      <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+      <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+      <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>
+   };
+
+   <span class="kwa">private static</span> Pattern[] pats = <span class="kwa">new</span> Pattern[strs.length];
+   
+   <span class="kwa">static</span> {
+      <span class="kwa">for</span>( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; pats.length; ++i )
+         pats[i] = Pattern.<span class="kwd">compile</span>( strs[i] );
+      
+      <span class="kwb">int</span> l = <span class="num">0</span>;
+      <span class="kwa">for</span>( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; codes.length; ++i )
+         l = Math.<span class="kwd">max</span>( l, codes[i][<span class="num">1</span>].<span class="kwd">length</span>() );
+      longest = l;
+      
+      repl = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">26</span> * longest + <span class="num">1</span>];
+      <span class="kwa">for</span>( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; codes.length; ++i ) {
+         <span class="kwb">int</span> off = longest * (codes[i][<span class="num">0</span>].<span class="kwd">charAt</span>( <span class="num">0</span> ) - <span class="str">'A'</span>);
+         String code = codes[i][<span class="num">1</span>];
+         <span class="kwa">for</span>( <span class="kwb">int</span> j = <span class="num">0</span>; j &lt; code.<span class="kwd">length</span>(); ++j )
+            repl[off + j] = (<span class="kwb">byte</span>) code.<span class="kwd">charAt</span>( j );
+      }
+   }
+   
+   <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">rmComments</span>( ByteWrapper t ) {
+
+      <span class="kwb">byte</span>[] backing = t.backing;
+      Matcher m = comments.<span class="kwd">matcher</span>( t );
+      
+      <span class="kwa">if</span>( !m.<span class="kwd">find</span>() )
+         <span class="kwa">return</span>;
+      
+      <span class="kwb">int</span> tail = m.<span class="kwd">start</span>();
+      <span class="kwb">int</span> restart = m.<span class="kwd">end</span>();
+            
+      <span class="kwa">while</span>( m.<span class="kwd">find</span>() ) {
+         <span class="kwa">while</span>( restart != m.<span class="kwd">start</span>() )
+            backing[tail++] = backing[restart++];
+         restart = m.<span class="kwd">end</span>();
+      }
+      
+      <span class="kwa">while</span>( restart &lt; backing.length )
+         backing[tail++] = backing[restart++];
+      
+      t.length = tail;
+   }
+   
+   <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">countPatterns</span>( ByteWrapper t ) {
+            
+      <span class="kwa">for</span>( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; pats.length; ++i ) {
+         <span class="kwb">int</span> c = <span class="num">0</span>;
+         Matcher m = pats[i].<span class="kwd">matcher</span>( t );
+         <span class="kwa">while</span>( m.<span class="kwd">find</span>() )
+            ++c;
+         System.out.<span class="kwd">println</span>( strs[i] + <span class="str">' '</span> + c );
+      }
+   }
+   
+   <span class="kwa">private static</span> ByteWrapper <span class="kwd">replace</span>( ByteWrapper t ) {
+      
+      <span class="kwb">byte</span>[] backing = t.backing;
+      <span class="kwb">byte</span>[] buf = <span class="kwa">new</span> <span class="kwb">byte</span>[t.length * longest];
+      <span class="kwb">int</span> pos = <span class="num">0</span>;
+      
+      Matcher m = codesPat.<span class="kwd">matcher</span>( t );
+      <span class="kwb">int</span> last = <span class="num">0</span>;
+      
+      <span class="kwa">while</span>( m.<span class="kwd">find</span>() ) {
+         <span class="kwa">for</span>( ; last &lt; m.<span class="kwd">start</span>(); ++last )
+            buf[pos++] = backing[last];
+         <span class="kwa">for</span>( <span class="kwb">int</span> i = longest * (backing[last] - <span class="str">'A'</span>); repl[i] != <span class="num">0</span>; ++i )
+            buf[pos++] = repl[i];
+         ++last;
+      }
+      
+      <span class="kwa">for</span>( ; last &lt; t.length; ++last )
+         buf[pos++] = backing[last];
+      
+      <span class="kwa">return new</span> <span class="kwd">ByteWrapper</span>( buf, pos );
+   }
+
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>( String[] args ) <span class="kwa">throws</span> Exception {
+
+      FileInputStream fis = <span class="kwa">new</span> <span class="kwd">FileInputStream</span>( FileDescriptor.<span class="kwa">in</span> );
+      FileChannel cin = fis.<span class="kwd">getChannel</span>();
+      ByteBuffer bb = ByteBuffer.<span class="kwd">allocate</span>( (<span class="kwb">int</span>) cin.<span class="kwd">size</span>() );
+      cin.<span class="kwd">read</span>( bb );
+      
+      ByteWrapper t = <span class="kwa">new</span> <span class="kwd">ByteWrapper</span>( bb.<span class="kwd">array</span>() );
+      <span class="kwd">rmComments</span>( t );
+
+      <span class="kwd">countPatterns</span>( t );
+      
+      ByteWrapper w = <span class="kwd">replace</span>( t );
+      
+      System.out.<span class="kwd">println</span>();
+      System.out.<span class="kwd">println</span>( t.backing.length );
+      System.out.<span class="kwd">println</span>( t.<span class="kwd">length</span>() );
+      System.out.<span class="kwd">println</span>( w.<span class="kwd">length</span>() );
+   }
+
+}

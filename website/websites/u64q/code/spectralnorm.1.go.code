@@ -1,0 +1,70 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by chaishushan</span>
+<span class="com"> * Based on spectral-norm.go by The Go Authors.</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;flag&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;math&quot;</span>
+   <span class="str">&quot;strconv&quot;</span>
+)
+
+<span class="slc">// var n = flag.Int(&quot;n&quot;, 2000, &quot;count&quot;)</span>
+<span class="kwa">var</span> n = <span class="num">0</span>
+
+<span class="kwa">func</span> <span class="kwd">evalA</span>(i, j <span class="kwb">int</span>) <span class="kwb">int</span> { <span class="kwa">return</span> ((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span> + i + <span class="num">1</span>) }
+
+<span class="kwa">type</span> Vec []<span class="kwb">float64</span>
+
+<span class="kwa">func</span> (v Vec) <span class="kwd">Times</span>(u Vec) {
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; <span class="kwb">len</span>(v); i++ {
+      v[i] = <span class="num">0</span>
+      <span class="kwa">for</span> j := <span class="num">0</span>; j &lt; <span class="kwb">len</span>(u); j++ {
+         v[i] += u[j] / <span class="kwb">float64</span>(<span class="kwd">evalA</span>(i, j))
+      }
+   }
+}
+
+<span class="kwa">func</span> (v Vec) <span class="kwd">TimesTransp</span>(u Vec) {
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; <span class="kwb">len</span>(v); i++ {
+      v[i] = <span class="num">0</span>
+      <span class="kwa">for</span> j := <span class="num">0</span>; j &lt; <span class="kwb">len</span>(u); j++ {
+         v[i] += u[j] / <span class="kwb">float64</span>(<span class="kwd">evalA</span>(j, i))
+      }
+   }
+}
+
+<span class="kwa">func</span> (v Vec) <span class="kwd">ATimesTransp</span>(u Vec) {
+   x := <span class="kwb">make</span>(Vec, <span class="kwb">len</span>(u))
+   x.<span class="kwd">Times</span>(u)
+   v.<span class="kwd">TimesTransp</span>(x)
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   flag.<span class="kwd">Parse</span>()
+   <span class="kwa">if</span> flag.<span class="kwd">NArg</span>() &gt; <span class="num">0</span> {
+      n, _ = strconv.<span class="kwd">Atoi</span>(flag.<span class="kwd">Arg</span>(<span class="num">0</span>))
+   }
+
+   N := n
+   u := <span class="kwb">make</span>(Vec, N)
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; N; i++ {
+      u[i] = <span class="num">1</span>
+   }
+   v := <span class="kwb">make</span>(Vec, N)
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; <span class="num">10</span>; i++ {
+      v.<span class="kwd">ATimesTransp</span>(u)
+      u.<span class="kwd">ATimesTransp</span>(v)
+   }
+   <span class="kwa">var</span> vBv, vv <span class="kwb">float64</span>
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; N; i++ {
+      vBv += u[i] * v[i]
+      vv += v[i] * v[i]
+   }
+   fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%0</span><span class="str">.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, math.<span class="kwd">Sqrt</span>(vBv/vv))
+}

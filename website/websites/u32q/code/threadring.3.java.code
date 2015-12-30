@@ -1,0 +1,68 @@
+<span class="com">/**</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Klaus Friedel</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.util.concurrent.locks.LockSupport;
+
+<span class="kwa">public class</span> threadring {
+  <span class="kwa">static final</span> <span class="kwb">int</span> THREAD_COUNT = <span class="num">503</span>;
+
+  <span class="kwa">public static class</span> MessageThread <span class="kwa">extends</span> Thread {
+    MessageThread nextThread;
+    <span class="kwa">volatile</span> Integer message;
+
+    <span class="kwa">public</span> <span class="kwd">MessageThread</span>(MessageThread nextThread, <span class="kwb">int</span> name) {
+      <span class="kwa">super</span>(<span class="str">&quot;&quot;</span>+name);
+      <span class="kwa">this</span>.nextThread = nextThread;
+    }
+
+    <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+      <span class="kwa">while</span>(true) nextThread.<span class="kwd">enqueue</span>(<span class="kwd">dequeue</span>());
+    }
+
+    <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">enqueue</span>(Integer hopsRemaining) {
+      <span class="kwa">if</span>(hopsRemaining == <span class="num">0</span>){
+        System.out.<span class="kwd">println</span>(<span class="kwd">getName</span>());
+        System.<span class="kwd">exit</span>(<span class="num">0</span>);
+      }
+      <span class="slc">// as only one message populates the ring, it's impossible</span>
+      <span class="slc">// that queue is not empty</span>
+      message = hopsRemaining - <span class="num">1</span>;
+      LockSupport.<span class="kwd">unpark</span>(<span class="kwa">this</span>); <span class="slc">// work waiting...</span>
+    }
+
+    <span class="kwa">private</span> Integer <span class="kwd">dequeue</span>(){
+      <span class="kwa">while</span>(message == null){
+        LockSupport.<span class="kwd">park</span>();
+      }
+      Integer msg = message;
+      message = null;
+      <span class="kwa">return</span> msg;
+    }
+  }
+
+  <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String args[]) <span class="kwa">throws</span> Exception{
+    <span class="kwb">int</span> hopCount = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+
+    MessageThread first = null;
+    MessageThread last = null;
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = THREAD_COUNT; i &gt;= <span class="num">1</span> ; i--) {
+      first = <span class="kwa">new</span> <span class="kwd">MessageThread</span>(first, i);
+      <span class="kwa">if</span>(i == THREAD_COUNT) last = first;
+    }
+    <span class="slc">// close the ring:</span>
+    last.nextThread = first;
+
+    <span class="slc">// start all Threads</span>
+    MessageThread t = first;
+    <span class="kwa">do</span>{
+      t.<span class="kwd">start</span>();
+      t = t.nextThread;
+    }<span class="kwa">while</span>(t != first);
+    <span class="slc">// inject message</span>
+    first.<span class="kwd">enqueue</span>(hopCount);
+    first.<span class="kwd">join</span>(); <span class="slc">// wait for System.exit</span>
+  }
+}

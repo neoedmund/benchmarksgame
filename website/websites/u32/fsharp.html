@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="index,follow,archive" />
+<meta name="description" content="F# Mono programs vs OCaml programs (performance on 32-bit Ubuntu one core)." />
+<title>F# Mono&nbsp;vs&nbsp;OCaml (32-bit Ubuntu one core) | Computer Language Benchmarks Game </title>
+<style><!--
+a{color:black;text-decoration:none}article{padding: 0 0 2.9em}article,div,header{margin:auto;width:92%}body{font:100% Droid Sans,Ubuntu,Verdana,sans-serif;margin:0;-webkit-text-size-adjust:100%}h1,h2,h3,nav li a{font-family:Ubuntu Mono,Consolas,Menlo,monospace}div,header{max-width:31em}h1{font-size:1.4em;font-weight:bold;margin:0;padding:.4em}h1,h1 a{color:white}h2,h3{margin:1.5em 0 0}h2{font-size:1.4em;font-weight:normal}h3{font-size:1.2em}li{display:inline-block}nav li{list-style-type:none}nav li a{display:block;font-size:1.2em;margin:.5em .5em 0;padding:.5em .5em .3em}nav ul{clear:left;margin:-0.3em 0 1.5em;text-align:center}p{color:#333;line-height:1.4;margin:.3em 0 0}p a{border-bottom:.15em dotted #aaa}
+#u64,#u64q{background-color:#c90016}#u32{background-color:#ffb515}#u32q{background-color:#ff6309}.best{font-weight:bold}.message{font-size:.8em}table{color:#333;margin:1.3em auto 0;text-align:right}tbody:after{content:"-";display:block;line-height:2.6em;visibility:hidden}tbody:last-child{text-align:left}td{border-bottom:.15em dotted #eee;padding:.7em 0 0 1em}td a,th a{display:block}td:first-child,th:first-child{text-align:left;padding-left:0}td:nth-child(6),th:nth-child(6){display:table-cell}th{font-weight:normal;padding:0 0 0 1em}
+@media only screen{th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5),th:nth-child(6),td:nth-child(6){display:none}}@media only screen and (min-width:28em){th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){display:table-cell}}@media only screen and (min-width:41em){th:nth-child(6),td:nth-child(6){display:table-cell}}@media only screen and (min-width:60em){article,footer,header{font-size:1.25em}}
+--></style>
+<link rel="shortcut icon" href="./favicon.ico">
+<header id="top">
+  <h1 id="u32"><a href="http://benchmarksgame.alioth.debian.org/">The&nbsp;Computer&nbsp;Language<br>Benchmarks&nbsp;Game</a></h1>
+</header>
+<article>
+  <div>
+    <h2>F# Mono programs versus OCaml</h2>
+    <aside>
+      <p><a href="./measurements.php?lang=fsharp">all the F# Mono program measurements</a>
+    </aside>
+  </div>
+  <section>
+    <div>
+      <h3>by benchmark task performance</h3>
+    </div>
+    <table>
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=nbody">n-body</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=nbody&amp;lang=fsharp&amp;id=1">F#&nbsp;Mono</a>
+        <td class="best">26.20
+        <td>46,256
+        <td>1259
+        <td>26.19
+        <td class="message">0%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=nbody&amp;lang=ocaml&amp;id=1">OCaml</a>
+        <td>75.23
+        <td>600
+        <td>1239
+        <td>75.21
+        <td class="message">1%&nbsp;0%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=mandelbrot">mandelbrot</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=mandelbrot&amp;lang=fsharp&amp;id=4">F#&nbsp;Mono</a>
+        <td class="best">36.61
+        <td>80,376
+        <td>869
+        <td>36.60
+        <td class="message">1%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=mandelbrot&amp;lang=ocaml&amp;id=1">OCaml</a>
+        <td>85.07
+        <td>1,740
+        <td>710
+        <td>84.92
+        <td class="message">0%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=binarytrees">binary-trees</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=binarytrees&amp;lang=fsharp&amp;id=1">F#&nbsp;Mono</a>
+        <td class="best">26.06
+        <td>126,652
+        <td>537
+        <td>26.02
+        <td class="message">0%&nbsp;0%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=binarytrees&amp;lang=ocaml&amp;id=2">OCaml</a>
+        <td>33.65
+        <td>102,376
+        <td>784
+        <td>33.59
+        <td class="message">1%&nbsp;1%&nbsp;0%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fannkuchredux">fannkuch-redux</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fannkuchredux&amp;lang=fsharp&amp;id=4">F#&nbsp;Mono</a>
+        <td class="best">70.13
+        <td>39,084
+        <td>612
+        <td>70.10
+        <td class="message">1%&nbsp;1%&nbsp;0%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=fannkuchredux&amp;lang=ocaml&amp;id=2">OCaml</a>
+        <td>83.36
+        <td>604
+        <td>473
+        <td>83.34
+        <td class="message">0%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fasta">fasta</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fasta&amp;lang=fsharp&amp;id=1">F#&nbsp;Mono</a>
+        <td class="best">10.45
+        <td>40,624
+        <td>978
+        <td>10.44
+        <td class="message">0%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=fasta&amp;lang=ocaml&amp;id=3">OCaml</a>
+        <td>12.06
+        <td>600
+        <td>1042
+        <td>12.05
+        <td class="message">0%&nbsp;0%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=spectralnorm">spectral-norm</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=spectralnorm&amp;lang=fsharp&amp;id=3">F#&nbsp;Mono</a>
+        <td class="best">18.45
+        <td>42,768
+        <td>720
+        <td>18.44
+        <td class="message">0%&nbsp;1%&nbsp;0%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=spectralnorm&amp;lang=ocaml&amp;id=2">OCaml</a>
+        <td>18.86
+        <td>1,656
+        <td>377
+        <td>18.85
+        <td class="message">0%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=pidigits">pidigits</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=pidigits&amp;lang=fsharp&amp;id=3">F#&nbsp;Mono</a>
+        <td>4.06
+        <td>40,608
+        <td>903
+        <td>4.05
+        <td class="message">0%&nbsp;2%&nbsp;2%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=pidigits&amp;lang=ocaml&amp;id=1">OCaml</a>
+        <td>3.84
+        <td>7,020
+        <td>560
+        <td>3.84
+        <td class="message">1%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=knucleotide">k-nucleotide</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=knucleotide&amp;lang=fsharp&amp;id=4">F#&nbsp;Mono</a>
+        <td>7.98
+        <td>153,932
+        <td>1505
+        <td>7.97
+        <td class="message">0%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=knucleotide&amp;lang=ocaml&amp;id=1">OCaml</a>
+        <td>5.69
+        <td>58,884
+        <td>870
+        <td>5.68
+        <td class="message">0%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=regexdna">regex-dna</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=regexdna&amp;lang=fsharp&amp;id=1">F#&nbsp;Mono</a>
+        <td>12.34
+        <td>128,492
+        <td>639
+        <td>12.24
+        <td class="message">0%&nbsp;1%&nbsp;0%&nbsp;99%
+      <tr>
+        <td><a href="./program.php?test=regexdna&amp;lang=ocaml&amp;id=2">OCaml</a>
+        <td>1.64
+        <td>53,000
+        <td>615
+        <td>1.63
+        <td class="message">0%&nbsp;1%&nbsp;2%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fastaredux">fasta-redux</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fastaredux&amp;lang=fsharp&amp;id=2">F#&nbsp;Mono</a>
+        <td>0.90
+        <td>43,916
+        <td>1074
+        <td>0.90
+        <td class="message">0%&nbsp;3%&nbsp;9%&nbsp;100%
+      <tr>
+        <td>&nbsp;
+        <td class="message">No&nbsp;program
+        <td class="message" colspan="4"><a href="./play.html">contribute your program</a>
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=revcomp">reverse-complement</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td>&nbsp;
+        <td class="message">No&nbsp;program
+        <td class="message" colspan="4"><a href="./play.html">contribute your program</a>
+      <tr>
+        <td><a href="./program.php?test=revcomp&amp;lang=ocaml&amp;id=4">OCaml</a>
+        <td>0.27
+        <td>356
+        <td>2064
+        <td>0.26
+        <td class="message">0%&nbsp;0%&nbsp;4%&nbsp;100%
+      <tbody>
+      <tr>
+        <td>F#&nbsp;Mono
+        <td colspan="5" class="message"><p>F# Compiler for F# 4.0 (Open Source Edition)
+<p>Mono JIT compiler version 4.3.0 (master/42456cd Mon Aug 10 20:27:36 PDT 2015)<br/>
+	LLVM:          yes(3.6.0svn-mono-master/a92ada2)<br/>
+	GC:            sgen
+
+      <tr>
+        <td>OCaml
+        <td colspan="5" class="message"><p>The OCaml native-code compiler, version 4.02.1
+
+      </table>
+      <nav>
+        <ul>
+          <li><a href="./compare.php?lang=fsharp&amp;lang2=csharp">vs C#</a>
+          <li><a href="./compare.php?lang=fsharp&amp;lang2=java">vs Java</a>
+          <li class="best">vs OCaml
+        </ul>
+      </nav>
+  </section>
+</article>
+<script>
+window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+ga('create', 'UA-37137205-1', 'auto');
+ga('send', 'pageview');
+</script>
+<script async src='//www.google-analytics.com/analytics.js'></script>
+

@@ -1,0 +1,123 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Scala version contributed by Rex Kerr</span>
+<span class="com"> * translated from Java version by Oleg Mazurov, June 2010</span>
+<span class="com"> * </span>
+<span class="com"> */</span>
+
+<span class="kwa">object</span> fannkuchredux {
+  <span class="kwa">def</span> <span class="kwd">fac</span>(x: Int): Long = <span class="kwa">if</span> (x &lt; <span class="num">2</span>) <span class="num">1L</span> <span class="kwa">else</span> x*<span class="kwd">fac</span>(x-<span class="num">1</span>)
+  <span class="kwa">val</span> F = (<span class="num">0</span> to <span class="num">20</span>).<span class="kwd">map</span>(fac).toArray
+  <span class="kwa">var</span> chunk = <span class="num">0L</span>
+  <span class="kwa">var</span> ntasks = <span class="num">0</span>
+  <span class="kwa">val</span> taskId = <span class="kwa">new</span> java.util.concurrent.atomic.<span class="kwd">AtomicInteger</span>(<span class="num">0</span>)
+    
+  <span class="kwa">class</span> <span class="kwd">Fannkuch</span>(n: Int) <span class="kwa">extends</span> Thread {
+    <span class="kwa">val</span> p, pp, count = <span class="kwa">new</span> Array[Int](n)
+    <span class="kwa">var</span> flips, cksum = <span class="num">0</span>
+
+    <span class="kwa">def</span> <span class="kwd">direct</span>(idx: Long, i: Int) {
+       <span class="kwa">if</span> (i &gt; <span class="num">0</span>) {
+        <span class="kwa">val</span> d = (idx / <span class="kwd">F</span>(i)).toInt
+        <span class="kwd">count</span>(i) = d
+        <span class="kwa">var</span> j = <span class="num">0</span>
+        <span class="kwa">while</span> (j &lt; d) { <span class="kwd">pp</span>(j) = <span class="kwd">p</span>(j); j += <span class="num">1</span> }
+        j = <span class="num">0</span>
+        <span class="kwa">while</span> (j+d &lt;= i) { <span class="kwd">p</span>(j) = <span class="kwd">p</span>(j+d); j += <span class="num">1</span> }
+        <span class="kwa">while</span> (j &lt;= i) { <span class="kwd">p</span>(j) = <span class="kwd">pp</span>(j+d-i-<span class="num">1</span>); j += <span class="num">1</span> }
+        <span class="kwd">direct</span>(idx%<span class="kwd">F</span>(i), i-<span class="num">1</span>)
+      }
+    }
+      
+    <span class="kwa">def</span> <span class="kwd">permute</span>() {
+      <span class="kwa">var</span> first = <span class="kwd">p</span>(<span class="num">1</span>)
+      <span class="kwd">p</span>(<span class="num">1</span>) = <span class="kwd">p</span>(<span class="num">0</span>)
+      <span class="kwd">p</span>(<span class="num">0</span>) = first
+      <span class="kwa">var</span> i = <span class="num">1</span>
+      <span class="kwd">count</span>(i) += <span class="num">1</span>
+      <span class="kwa">while</span> (<span class="kwd">count</span>(i) &gt; i ) {
+        <span class="kwd">count</span>(i) = <span class="num">0</span>
+        i += <span class="num">1</span>
+        <span class="kwd">p</span>(<span class="num">0</span>) = <span class="kwd">p</span>(<span class="num">1</span>)
+        <span class="kwa">val</span> next = <span class="kwd">p</span>(<span class="num">1</span>)
+        <span class="kwa">var</span> j = <span class="num">1</span>
+        <span class="kwa">while</span> (j &lt; i) { <span class="kwd">p</span>(j) = <span class="kwd">p</span>(j+<span class="num">1</span>); j += <span class="num">1</span> }
+        <span class="kwd">p</span>(i) = first
+        first = next
+        <span class="kwd">count</span>(i) += <span class="num">1</span>
+      }
+    }
+
+    <span class="kwa">def</span> <span class="kwd">fcount</span>() = {
+      <span class="kwa">var</span> flips = <span class="num">1</span>
+      <span class="kwa">var</span> first = <span class="kwd">p</span>(<span class="num">0</span>)
+      <span class="kwa">if</span> (<span class="kwd">p</span>(first) != <span class="num">0</span>) {
+        <span class="kwa">var</span> i = <span class="num">0</span>
+        <span class="kwa">while</span> (i &lt; n) { <span class="kwd">pp</span>(i) = <span class="kwd">p</span>(i); i += <span class="num">1</span> }
+        <span class="kwa">do</span> {
+          flips += <span class="num">1</span>
+          <span class="kwa">var</span> lo = <span class="num">1</span>
+          <span class="kwa">var</span> hi = first -<span class="num">1</span>
+          <span class="kwa">while</span> (lo &lt; hi) {
+            <span class="kwa">val</span> t = <span class="kwd">pp</span>(lo)
+            <span class="kwd">pp</span>(lo) = <span class="kwd">pp</span>(hi)
+            <span class="kwd">pp</span>(hi) = t
+            lo += <span class="num">1</span>
+            hi -= <span class="num">1</span>
+          }
+          <span class="kwa">val</span> t = <span class="kwd">pp</span>(first)
+          <span class="kwd">pp</span>(first) = first
+          first = t
+        } <span class="kwa">while</span> (<span class="kwd">pp</span>(first) != <span class="num">0</span>);
+      }
+      flips
+    }
+    
+    <span class="kwa">def</span> <span class="kwd">runTask</span>(task: Int) {
+      <span class="kwa">val</span> lo = task*chunk
+      <span class="kwa">val</span> hi = <span class="kwd">F</span>(n) <span class="kwd">min</span> (lo+chunk)
+      <span class="kwa">var</span> j = <span class="num">0</span>
+      <span class="kwa">while</span> (j &lt; p.length) { <span class="kwd">p</span>(j) = j; j += <span class="num">1</span> }
+      <span class="kwd">direct</span>(lo,p.length-<span class="num">1</span>)
+      <span class="kwa">var</span> i = lo
+      <span class="kwa">while</span> (true) {
+        <span class="kwa">if</span> (<span class="kwd">p</span>(<span class="num">0</span>) != <span class="num">0</span>) {
+          <span class="kwa">val</span> f = fcount
+          flips = Math.<span class="kwd">max</span>(flips,f)
+          cksum += (<span class="kwa">if</span> ((i%<span class="num">2</span>)==<span class="num">0</span>) f <span class="kwa">else</span> -f)
+        }
+        i += <span class="num">1</span>
+        <span class="kwa">if</span> (i == hi) <span class="kwa">return</span>
+        permute
+      }
+    }
+    
+    <span class="kwa">override def</span> <span class="kwd">run</span>() { <span class="kwa">while</span> (true) {
+      <span class="kwa">val</span> task = taskId.<span class="kwd">getAndIncrement</span>()
+      <span class="kwa">if</span> (task &gt;= ntasks) <span class="kwa">return</span>
+      <span class="kwd">runTask</span>(task)
+    }}
+  }
+    
+  <span class="kwa">def</span> <span class="kwd">announce</span>(n: Int, f: Int, ck: Int) {
+    <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\n</span><span class="str">Pfannkuchen(%d) = %d</span><span class="esc">\n</span><span class="str">&quot;</span>,ck,n,f)
+  }
+  
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) {
+    <span class="kwa">val</span> n = (<span class="kwa">if</span> (args.length &gt; <span class="num">0</span>) <span class="kwd">args</span>(<span class="num">0</span>).toInt <span class="kwa">else</span> <span class="num">7</span>)
+    <span class="kwa">if</span> (n &lt; <span class="num">0</span> || n &gt; <span class="num">20</span>) <span class="kwd">announce</span>(n,-<span class="num">1</span>,-<span class="num">1</span>)
+    <span class="kwa">else if</span> (n &lt;= <span class="num">1</span>) <span class="kwd">announce</span>(n,<span class="num">0</span>,<span class="num">0</span>)
+    <span class="kwa">else</span> {
+      <span class="kwa">val</span> nthreads = Runtime.getRuntime.availableProcessors
+      <span class="kwa">def</span> <span class="kwd">split</span>(i: Long) = (<span class="kwd">F</span>(n)+i-<span class="num">1</span>)/i
+      chunk = <span class="kwd">split</span>(nthreads*<span class="num">50</span>)
+      ntasks = <span class="kwd">split</span>(chunk).toInt
+      <span class="kwa">val</span> threads = Array.<span class="kwd">range</span>(<span class="num">0</span>,nthreads).<span class="kwd">map</span>(_ =&gt; <span class="kwa">new</span> <span class="kwd">Fannkuch</span>(n))
+      threads.<span class="kwd">foreach</span>(_.start)
+      threads.<span class="kwd">foreach</span>(_.join)
+      <span class="kwd">announce</span>(n, (<span class="num">0</span>/:threads)(_ max _.flips), (<span class="num">0</span>/:threads)(_ + _.cksum))
+    }
+  }
+}
+

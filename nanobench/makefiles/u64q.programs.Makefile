@@ -1,5 +1,5 @@
 # The Computer Language Benchmarks Game
-# $Id: u64q.programs.Makefile,v 1.5 2014/03/19 16:05:50 igouy-guest Exp $
+# $Id: u64q.programs.Makefile,v 1.18 2015/12/21 22:14:06 igouy-guest Exp $
 
 # ASSUME each program will build in a clean empty tmpdir
 # ASSUME there's a symlink to the program source in tmpdir
@@ -604,7 +604,7 @@ SBCL_TRACE :=
 
 %.scala_run: %.scala $(SCALAC)
 	-mv $< $(TEST).scala
-	-$(SCALAC) -optimise -target:jvm-1.7 $(TEST).scala
+	-$(SCALAC) -optimise -target:jvm-1.8 $(TEST).scala
 
 
 ########################################
@@ -621,8 +621,38 @@ SBCL_TRACE :=
 ########################################
 
 %.rs: %.rust $(RUST)
-	-@mv $< $@
+	-@mv $< $(TEST).rs
 
 %.rust_run: %.rs $(RUST)
-	-$(RUST) --opt-level=3 $< -o $@
+	-$(RUST) -C opt-level=3 -C target-cpu=core2 $(RUSTLOPTS) $(TEST).rs -o $@
+
+
+########################################
+# Hack
+########################################
+
+%.hack_run: %.hack $(HHVM)
+	-/usr/bin/hh_client
+
+
+
+########################################
+# TypeScript
+########################################
+
+%.typescript_run: %.typescript $(TYPSCRIPT)
+	-mv $< $*.ts
+	-$(TYPSCRIPT) $(TSOPTS) $*.ts
+
+
+
+########################################
+# Swift
+########################################
+
+%.swift_run: %.swift $(SWIFTC) 
+	-$(SWIFTC) $< -Ounchecked -whole-module-optimization $(SWIFTOPTS) -o $@
+
+
+
 

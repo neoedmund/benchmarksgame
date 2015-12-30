@@ -1,0 +1,12 @@
+
+Tue, 18 Mar 2014 05:52:00 GMT
+
+MAKE:
+mv spectralnorm.python3-8.python3 spectralnorm.python3-8.py
+0.03s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/Python-3.4.0/bin/python3.4 spectralnorm.python3-8.py 5500
+
+PROGRAM OUTPUT:
+1.274224153

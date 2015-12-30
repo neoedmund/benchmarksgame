@@ -1,0 +1,23 @@
+  <h2>(Not included since May 2009)</h2>
+  <section>
+    <h3>Background</h3>
+    <p>A simplistic adaptation of <a href="http://www.sics.se/~joe/ericsson/du98024.html">Performance Measurements of Threads in Java and Processes in Erlang</a> and <a href="http://www.cl.cam.ac.uk/users/mr/Cobench.html">A Benchmark Test for BCPL Style Coroutines</a>.
+  </section>
+  <section>
+    <h3>Variance</h3>
+    <p>As a practical matter, continuations & coroutines & cooperative threading will be ignored. <b>Please don't implement your own</b> custom scheduler. 
+    <p>Some language implementations use OS threads; some provide pre-emptive lightweight threads. 
+  </section>
+  <section>
+    <h3>How to implement</h3>
+    <p>We ask that contributed programs not only give the correct result, but also <b>use the same algorithm</b> to calculate that result.
+    <p>Each program should:
+      <ul>
+         <li><p>create 503 linked pre-emptive threads (named 1 to 503)
+         <li><p>thread 503 should be linked to thread 1, forming an unbroken ring          
+         <li><p>pass a token to thread 1    
+         <li><p>pass the token from thread to thread N times  
+         <li><p>print the name of the last thread (1 to 503) to take the token
+      </ul>
+    <p><b>diff</b> program output N = 1000 with this <a href="../download/threadring-output.txt">output file</a> to check your program is correct, before you <a href="./play.html">contribute your program</a>.
+  </section>

@@ -1,0 +1,83 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; contributed by Andy Fingerhut</span>
+
+(ns regexdna
+  (:gen-class)
+  (:require [clojure.string :as str])
+  (:import (java.util.regex Pattern)))
+
+
+<span class="slc">;; Slightly modified from standard library slurp so that it can read</span>
+<span class="slc">;; from standard input.</span>
+
+(<span class="kwa">defn</span> slurp-std-input
+  <span class="slc">;; Reads the standard input using the encoding enc into a string and</span>
+  <span class="slc">;; returns it.</span>
+  ([] (slurp-std-input (.name (java.nio.charset.Charset/defaultCharset))))
+  ([#^String enc]
+     (with-open [r (new java.io.BufferedReader *in*)]
+       (<span class="kwc">let</span> [sb (new StringBuilder)]
+	 (<span class="kwb">loop</span> [c (.read r)]
+	   (<span class="kwc">if</span> (neg? c)
+	     (str sb)
+	     (do
+	       (.append sb (char c))
+	       (<span class="kwb">recur</span> (.read r)))))))))
+
+
+(<span class="kwa">def</span> dna-seq-regexes '(    <span class="str">&quot;agggtaaa|tttaccct&quot;</span>
+		       <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>
+		       <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>
+		       <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>
+		       <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>
+		       <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>
+		       <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>
+		       <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>
+		       <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span> ))
+
+
+(<span class="kwa">def</span> iub-codes '( [ <span class="str">&quot;B&quot;</span>  <span class="str">&quot;(c|g|t)&quot;</span>   ]
+		  [ <span class="str">&quot;D&quot;</span>  <span class="str">&quot;(a|g|t)&quot;</span>   ]
+		  [ <span class="str">&quot;H&quot;</span>  <span class="str">&quot;(a|c|t)&quot;</span>   ]
+		  [ <span class="str">&quot;K&quot;</span>  <span class="str">&quot;(g|t)&quot;</span>     ]
+		  [ <span class="str">&quot;M&quot;</span>  <span class="str">&quot;(a|c)&quot;</span>     ]
+		  [ <span class="str">&quot;N&quot;</span>  <span class="str">&quot;(a|c|g|t)&quot;</span> ]
+		  [ <span class="str">&quot;R&quot;</span>  <span class="str">&quot;(a|g)&quot;</span>     ]
+		  [ <span class="str">&quot;S&quot;</span>  <span class="str">&quot;(c|g)&quot;</span>     ]
+		  [ <span class="str">&quot;V&quot;</span>  <span class="str">&quot;(a|c|g)&quot;</span>   ]
+		  [ <span class="str">&quot;W&quot;</span>  <span class="str">&quot;(a|t)&quot;</span>     ]
+		  [ <span class="str">&quot;Y&quot;</span>  <span class="str">&quot;(c|t)&quot;</span>     ] ))
+
+
+(<span class="kwa">defn</span> one-replacement [str [iub-str iub-replacement]]
+  (str/replace str (. Pattern (compile iub-str)) iub-replacement))
+
+
+(<span class="kwa">defn</span> count-regex-occurrences [re s]
+  <span class="slc">;; Prepending (?i) to the regexp in Java makes it</span>
+  <span class="slc">;; case-insensitive.</span>
+  [re (count (re-seq (. Pattern (compile (str <span class="str">&quot;(?i)&quot;</span> re)))
+                     s))])
+
+
+(<span class="kwa">defn</span> -main
+  [&amp; args]
+  (<span class="kwc">let</span> [content (slurp-std-input)
+        original-len (count content)
+        <span class="slc">;; I'd prefer if I could use the regexp #&quot;(^&gt;.*)?\n&quot; like the</span>
+        <span class="slc">;; Perl benchmark does, but that only matches ^ at the beginning</span>
+        <span class="slc">;; of the string, not at the beginning of a line in the middle</span>
+        <span class="slc">;; of the string.</span>
+        content (str/replace content #<span class="str">&quot;(^&gt;.*|</span><span class="esc">\n</span><span class="str">&gt;.*)?</span><span class="esc">\n</span><span class="str">&quot;</span> <span class="str">&quot;&quot;</span>)
+        dna-seq-only-len (count content)]
+    
+    (<span class="kwb">doseq</span> [[re num-matches] (pmap #(count-regex-occurrences % content)
+                                   dna-seq-regexes)]
+      (printf <span class="str">&quot;%s %d</span><span class="esc">\n</span><span class="str">&quot;</span> re num-matches))
+    
+    (<span class="kwc">let</span> [content (reduce one-replacement content iub-codes)]
+      (printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">&quot;</span> original-len dna-seq-only-len (count content))))
+  (flush)
+  (shutdown-agents))

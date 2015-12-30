@@ -1,0 +1,159 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by TeXitoi</span>
+
+<span class="kwa">const</span> PI: f64 = <span class="num">3.141592653589793</span>;
+<span class="kwa">const</span> SOLAR_MASS: f64 = <span class="num">4.0</span> * PI * PI;
+<span class="kwa">const</span> YEAR: f64 = <span class="num">365.24</span>;
+<span class="kwa">const</span> N_BODIES: usize = <span class="num">5</span>;
+
+<span class="kwa">static</span> BODIES: [Planet;N_BODIES] = [
+    <span class="slc">// Sun</span>
+    Planet {
+        x: <span class="num">0.0</span>, y: <span class="num">0.0</span>, z: <span class="num">0.0</span>,
+        vx: <span class="num">0.0</span>, vy: <span class="num">0.0</span>, vz: <span class="num">0.0</span>,
+        mass: SOLAR_MASS,
+    },
+    <span class="slc">// Jupiter</span>
+    Planet {
+        x: <span class="num">4.84143144246472090e+00</span>,
+        y: -<span class="num">1.16032004402742839e+00</span>,
+        z: -<span class="num">1.03622044471123109e-01</span>,
+        vx: <span class="num">1.66007664274403694e-03</span> * YEAR,
+        vy: <span class="num">7.69901118419740425e-03</span> * YEAR,
+        vz: -<span class="num">6.90460016972063023e-05</span> * YEAR,
+        mass: <span class="num">9.54791938424326609e-04</span> * SOLAR_MASS,
+    },
+    <span class="slc">// Saturn</span>
+    Planet {
+        x: <span class="num">8.34336671824457987e+00</span>,
+        y: <span class="num">4.12479856412430479e+00</span>,
+        z: -<span class="num">4.03523417114321381e-01</span>,
+        vx: -<span class="num">2.76742510726862411e-03</span> * YEAR,
+        vy: <span class="num">4.99852801234917238e-03</span> * YEAR,
+        vz: <span class="num">2.30417297573763929e-05</span> * YEAR,
+        mass: <span class="num">2.85885980666130812e-04</span> * SOLAR_MASS,
+    },
+    <span class="slc">// Uranus</span>
+    Planet {
+        x: <span class="num">1.28943695621391310e+01</span>,
+        y: -<span class="num">1.51111514016986312e+01</span>,
+        z: -<span class="num">2.23307578892655734e-01</span>,
+        vx: <span class="num">2.96460137564761618e-03</span> * YEAR,
+        vy: <span class="num">2.37847173959480950e-03</span> * YEAR,
+        vz: -<span class="num">2.96589568540237556e-05</span> * YEAR,
+        mass: <span class="num">4.36624404335156298e-05</span> * SOLAR_MASS,
+    },
+    <span class="slc">// Neptune</span>
+    Planet {
+        x: <span class="num">1.53796971148509165e+01</span>,
+        y: -<span class="num">2.59193146099879641e+01</span>,
+        z: <span class="num">1.79258772950371181e-01</span>,
+        vx: <span class="num">2.68067772490389322e-03</span> * YEAR,
+        vy: <span class="num">1.62824170038242295e-03</span> * YEAR,
+        vz: -<span class="num">9.51592254519715870e-05</span> * YEAR,
+        mass: <span class="num">5.15138902046611451e-05</span> * SOLAR_MASS,
+    },
+];
+
+#[derive(Clone, Copy)]
+<span class="kwa">struct</span> Planet {
+    x: f64, y: f64, z: f64,
+    vx: f64, vy: f64, vz: f64,
+    mass: f64,
+}
+
+<span class="kwa">fn</span> advance(bodies: &amp;<span class="kwa">mut</span> [Planet;N_BODIES], dt: f64, steps: i32) {
+    <span class="kwa">for</span> _ <span class="kwa">in</span> (<span class="num">0</span>..steps) {
+        <span class="kwa">let mut</span> b_slice: &amp;<span class="kwa">mut</span> [_] = bodies;
+        <span class="kwa">loop</span> {
+            <span class="kwa">let</span> bi = <span class="kwa">match</span> shift_mut_ref(&amp;<span class="kwa">mut</span> b_slice) {
+                Some(bi) =&gt; bi,
+                None =&gt; <span class="kwa">break</span>
+            };
+            <span class="kwa">for</span> bj <span class="kwa">in</span> b_slice.iter_mut() {
+                <span class="kwa">let</span> dx = bi.x - bj.x;
+                <span class="kwa">let</span> dy = bi.y - bj.y;
+                <span class="kwa">let</span> dz = bi.z - bj.z;
+
+                <span class="kwa">let</span> d2 = dx * dx + dy * dy + dz * dz;
+                <span class="kwa">let</span> mag = dt / (d2 * d2.sqrt());
+
+                <span class="kwa">let</span> massj_mag = bj.mass * mag;
+                bi.vx -= dx * massj_mag;
+                bi.vy -= dy * massj_mag;
+                bi.vz -= dz * massj_mag;
+
+                <span class="kwa">let</span> massi_mag = bi.mass * mag;
+                bj.vx += dx * massi_mag;
+                bj.vy += dy * massi_mag;
+                bj.vz += dz * massi_mag;
+            }
+            bi.x += dt * bi.vx;
+            bi.y += dt * bi.vy;
+            bi.z += dt * bi.vz;
+        }
+    }
+}
+
+<span class="kwa">fn</span> energy(bodies: &amp;[Planet;N_BODIES]) -&gt; f64 {
+    <span class="kwa">let mut</span> e = <span class="num">0.0</span>;
+    <span class="kwa">let mut</span> bodies = bodies.iter();
+    <span class="kwa">loop</span> {
+        <span class="kwa">let</span> bi = <span class="kwa">match</span> bodies.next() {
+            Some(bi) =&gt; bi,
+            None =&gt; <span class="kwa">break</span>
+        };
+        e += (bi.vx * bi.vx + bi.vy * bi.vy + bi.vz * bi.vz) * bi.mass / <span class="num">2.0</span>;
+        <span class="kwa">for</span> bj <span class="kwa">in</span> bodies.clone() {
+            <span class="kwa">let</span> dx = bi.x - bj.x;
+            <span class="kwa">let</span> dy = bi.y - bj.y;
+            <span class="kwa">let</span> dz = bi.z - bj.z;
+            <span class="kwa">let</span> dist = (dx * dx + dy * dy + dz * dz).sqrt();
+            e -= bi.mass * bj.mass / dist;
+        }
+    }
+    e
+}
+
+<span class="kwa">fn</span> offset_momentum(bodies: &amp;<span class="kwa">mut</span> [Planet;N_BODIES]) {
+    <span class="kwa">let mut</span> px = <span class="num">0.0</span>;
+    <span class="kwa">let mut</span> py = <span class="num">0.0</span>;
+    <span class="kwa">let mut</span> pz = <span class="num">0.0</span>;
+    <span class="kwa">for</span> bi <span class="kwa">in</span> bodies.iter() {
+        px += bi.vx * bi.mass;
+        py += bi.vy * bi.mass;
+        pz += bi.vz * bi.mass;
+    }
+    <span class="kwa">let</span> sun = &amp;<span class="kwa">mut</span> bodies[<span class="num">0</span>];
+    sun.vx = - px / SOLAR_MASS;
+    sun.vy = - py / SOLAR_MASS;
+    sun.vz = - pz / SOLAR_MASS;
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> n = std::env::args_os().nth(<span class="num">1</span>)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">1000</span>);
+    <span class="kwa">let mut</span> bodies = BODIES;
+
+    offset_momentum(&amp;<span class="kwa">mut</span> bodies);
+    println!(<span class="str">&quot;{:.9}&quot;</span>, energy(&amp;bodies));
+
+    advance(&amp;<span class="kwa">mut</span> bodies, <span class="num">0.01</span>, n);
+
+    println!(<span class="str">&quot;{:.9}&quot;</span>, energy(&amp;bodies));
+}
+
+<span class="slc">/// Pop a mutable reference off the head of a slice, mutating the slice to no</span>
+<span class="slc">/// longer contain the mutable reference.</span>
+<span class="kwa">fn</span> shift_mut_ref&lt;'a, T&gt;(r: &amp;<span class="kwa">mut</span> &amp;'a <span class="kwa">mut</span> [T]) -&gt; Option&lt;&amp;'a <span class="kwa">mut</span> T&gt; {
+    <span class="kwa">if</span> r.len() == <span class="num">0</span> { <span class="kwa">return</span> None }
+    <span class="kwa">let</span> tmp = std::mem::replace(r, &amp;<span class="kwa">mut</span> []);
+    <span class="kwa">let</span> (h, t) = tmp.split_at_mut(<span class="num">1</span>);
+    *r = t;
+    Some(&amp;<span class="kwa">mut</span> h[<span class="num">0</span>])
+}

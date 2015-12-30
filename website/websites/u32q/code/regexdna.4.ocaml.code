@@ -1,0 +1,116 @@
+<span class="com">(*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Paolo Ribeca, August 2011</span>
+<span class="com"> *</span>
+<span class="com"> * The regexp machinery comes from a previous OCaml version by</span>
+<span class="com"> *  Christophe TROESTLER and Mauricio Fernandez</span>
+<span class="com"> *)</span>
+
+<span class="kwa">let</span> workers = <span class="num">16</span>
+
+<span class="kwa">let</span> variants, variants_to_string =
+  <span class="kwa">let</span> variants = [|
+    <span class="str">&quot;agggtaaa</span><span class="esc">\\</span><span class="str">|tttaccct&quot;</span>;
+    <span class="str">&quot;[cgt]gggtaaa</span><span class="esc">\\</span><span class="str">|tttaccc[acg]&quot;</span>;
+    <span class="str">&quot;a[act]ggtaaa</span><span class="esc">\\</span><span class="str">|tttacc[agt]t&quot;</span>;
+    <span class="str">&quot;ag[act]gtaaa</span><span class="esc">\\</span><span class="str">|tttac[agt]ct&quot;</span>;
+    <span class="str">&quot;agg[act]taaa</span><span class="esc">\\</span><span class="str">|ttta[agt]cct&quot;</span>;
+    <span class="str">&quot;aggg[acg]aaa</span><span class="esc">\\</span><span class="str">|ttt[cgt]ccct&quot;</span>;
+    <span class="str">&quot;agggt[cgt]aa</span><span class="esc">\\</span><span class="str">|tt[acg]accct&quot;</span>;
+    <span class="str">&quot;agggta[cgt]a</span><span class="esc">\\</span><span class="str">|t[acg]taccct&quot;</span>;
+    <span class="str">&quot;agggtaa[cgt]</span><span class="esc">\\</span><span class="str">|[acg]ttaccct&quot;</span>
+  |]
+  <span class="com">(* Remove the &quot;\\&quot; which is mandatory in OCaml regex *)</span>
+  <span class="kwa">and</span> re_bs = <span class="kwc">Str</span>.regexp_string <span class="str">&quot;</span><span class="esc">\\</span><span class="str">&quot;</span> <span class="kwa">in</span>
+  <span class="kwc">Array</span>.map <span class="kwc">Str</span>.regexp_case_fold variants,
+  <span class="kwc">Array</span>.map (<span class="kwc">Str</span>.global_replace re_bs <span class="str">&quot;&quot;</span>) variants
+
+<span class="kwa">let</span> iupacs =
+  <span class="kwc">Array</span>.map (<span class="kwa">fun</span> (re, s) -&gt; <span class="kwc">Str</span>.regexp_case_fold re, s) [|
+    <span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>;
+    <span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>;
+    <span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>;
+    <span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>;
+    <span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>;
+    <span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>;
+    <span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>;
+    <span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>;
+    <span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>;
+    <span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>;
+    <span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>
+  |]
+
+<span class="com">(* Read all of a redirected FASTA format file from stdin *)</span>
+<span class="kwa">let</span> file_data, file_length =
+  <span class="kwa">let</span> b = <span class="kwc">Buffer</span>.create <span class="num">0xffffff</span> <span class="kwa">and</span> s = <span class="kwc">String</span>.create <span class="num">0xfff</span> <span class="kwa">and</span> r = <span class="kwb">ref</span> <span class="num">1</span> <span class="kwa">in</span>
+  <span class="kwa">while</span> !r &gt; <span class="num">0</span> <span class="kwa">do</span>
+    r := input stdin s <span class="num">0 0xfff</span>; <span class="kwc">Buffer</span>.add_substring b s <span class="num">0</span> !r
+  <span class="kwa">done</span>;
+  <span class="kwc">Buffer</span>.contents b, <span class="kwc">Buffer</span>.length b
+
+<span class="com">(* Remove FASTA sequence descriptions and all linefeed characters *)</span>
+<span class="kwa">let</span> dna = <span class="kwc">Str</span>.global_replace (<span class="kwc">Str</span>.regexp <span class="str">&quot;^&gt;.*$</span><span class="esc">\\</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;</span>) <span class="str">&quot;&quot;</span> file_data
+<span class="kwa">let</span> code_length = <span class="kwc">String</span>.length dna
+
+<span class="com">(* Count matches of [re] *)</span>
+<span class="kwa">let</span> count re s =
+  <span class="kwa">let</span> i = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">and</span> n = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+  <span class="kwa">try</span>
+    <span class="kwa">while true do</span>
+      i := <span class="num">1</span> + <span class="kwc">Str</span>.search_forward re s !i;
+      incr n
+    <span class="kwa">done</span>;
+    <span class="kwa">assert false</span>
+  <span class="kwa">with</span> <span class="kwd">Not_found</span> -&gt; !n
+
+<span class="kwa">let</span> () =
+  <span class="kwa">let</span> chunk_size = code_length / workers
+  <span class="kwa">and</span> rem = code_length <span class="kwa">mod</span> workers <span class="kwa">in</span>
+  <span class="kwa">assert</span> (chunk_size &gt;= <span class="num">7</span>);
+  <span class="kwa">let</span> w = <span class="kwc">Array</span>.make workers stdin
+  <span class="kwa">and</span> red_workers = workers - <span class="num">1</span> <span class="kwa">in</span>
+  <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> red_workers <span class="kwa">do</span>
+    <span class="kwa">let</span> delta = <span class="kwa">if</span> i &gt; <span class="num">0</span> <span class="kwa">then</span> <span class="num">7</span> <span class="kwa">else</span> <span class="num">0</span> <span class="kwa">in</span>
+    <span class="kwa">let</span> lo = i * chunk_size + min i rem - delta <span class="kwa">in</span>
+    <span class="kwa">let</span> len = chunk_size + (<span class="kwa">if</span> i &lt; rem <span class="kwa">then</span> <span class="num">1</span> <span class="kwa">else</span> <span class="num">0</span>) + delta
+    <span class="kwa">and</span> input, output = <span class="kwc">Unix</span>.pipe () <span class="kwa">in</span>
+    <span class="kwa">match</span> <span class="kwc">Unix</span>.fork () <span class="kwa">with</span>
+    | <span class="num">0</span> -&gt;
+      <span class="kwc">Unix</span>.close input;
+      <span class="kwa">let</span> chunk = <span class="kwc">String</span>.sub dna lo len
+      <span class="kwa">and</span> output = <span class="kwc">Unix</span>.out_channel_of_descr output <span class="kwa">in</span>
+      <span class="com">(* First all the regexps... *)</span>
+      <span class="kwc">Array</span>.iter
+        (<span class="kwa">fun</span> re -&gt; output_binary_int output (count re chunk))
+        variants;
+      <span class="com">(* ...and then all the IUPAC replacements *)</span>
+      <span class="kwa">if</span> i &gt; <span class="num">0</span> <span class="kwa">then</span>
+        <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> <span class="num">6</span> <span class="kwa">do</span>
+          chunk.[j] &lt;- ' '
+        <span class="kwa">done</span>;
+      <span class="kwa">let</span> b = <span class="kwb">ref</span> chunk <span class="kwa">in</span>
+      <span class="kwc">Array</span>.iter
+        (<span class="kwa">fun</span> (re, s) -&gt; b := <span class="kwc">Str</span>.global_replace re s !b)
+        iupacs;
+      output_binary_int output (<span class="kwc">String</span>.length !b - delta);
+      exit <span class="num">0</span>
+    | _ -&gt;
+      <span class="kwc">Unix</span>.close output;
+      w.(i) &lt;- <span class="kwc">Unix</span>.in_channel_of_descr input
+  <span class="kwa">done</span>;
+  <span class="kwa">let</span> counts_variants = <span class="kwc">Array</span>.init (<span class="kwc">Array</span>.length variants) (<span class="kwa">fun</span> _ -&gt; <span class="kwb">ref</span> <span class="num">0</span>)
+  <span class="kwa">and</span> count_iupac = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+  <span class="kwc">Array</span>.iter
+    (<span class="kwa">fun</span> input -&gt;
+      <span class="kwc">Array</span>.iter
+        (<span class="kwa">fun</span> count -&gt; count := !count + input_binary_int input)
+        counts_variants;
+      count_iupac := !count_iupac + input_binary_int input)
+    w;
+  <span class="kwc">Array</span>.iteri
+    (<span class="kwa">fun</span> i re -&gt; <span class="kwc">Printf</span>.printf <span class="str">&quot;</span><span class="ipl">%s %i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> re !(counts_variants.(i)))
+    variants_to_string;
+  <span class="kwc">Printf</span>.printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">%!&quot;</span> file_length code_length !count_iupac
+

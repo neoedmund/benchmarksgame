@@ -1,0 +1,33 @@
+  <section>
+    <h3>Background</h3>
+    <p>A simplistic adaptation of <a href="http://hboehm.info/gc/gc_bench/">Hans Boehm's GCBench</a>, which in turn was adapted from a benchmark by John Ellis and Pete Kovac.
+    <p>Thanks to Christophe Troestler and Einar Karttunen for help with this benchmark.
+  </section>
+  <section>
+    <h3>Variance</h3>
+    <p>As a practical matter, the myriad ways to tune GC will be ignored.
+    <p>As a practical matter, the myriad ways to custom allocate memory will be ignored - use per node allocation or a library memory pool.
+    <p><b>Please don't implement your own</b> custom <a href="http://www.stroustrup.com/bs_faq2.html#placement-delete">"arena"</a> or "memory pool" or "free list".
+  </section>
+  <section>
+    <h3>The work</h3>
+    <p>The work is to create binary trees - composed only of tree nodes all the way down-to depth 0, before any of those nodes are GC'd - using at-minimum the number of allocations of <a href="./program.php?test=binarytrees&lang=gcc&id=3">Jeremy Zerfas's C program</a>. Don't optimize away the work.
+  </section>
+  <section>
+    <h3>How to implement</h3>
+    <p>We ask that contributed programs not only give the correct result, but also <b>use the same algorithm</b> to calculate that result.
+    <p>Each program should:
+    <ul>
+       <li><p>define a tree node class and methods, a tree node record and procedures, or an algebraic data type and functions, or&#8230;
+       <li><p>allocate a binary tree to 'stretch' memory, check it exists, and deallocate it
+       <li><p>allocate a long-lived binary tree which will live-on while other trees are allocated and deallocated   
+       <li><p>allocate, walk, and deallocate many bottom-up binary trees
+         <ul>
+           <li><p>allocate a tree
+           <li><p>walk the tree nodes, checksum the node items (and maybe deallocate the node)
+           <li><p>deallocate the tree
+         </ul>      
+       <li><p>check that the long-lived binary tree still exists
+    </ul>
+    <p><b>diff</b> program output N = 10 with this 1KB <a href="../download/binarytrees-output.txt">output file</a> to check your program is correct, before you <a href="./play.html">contribute your program</a>.
+  </section>

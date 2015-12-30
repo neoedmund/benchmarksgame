@@ -1,0 +1,203 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by llogiq</span>
+<span class="slc">// contributed by TeXitoi</span>
+
+<span class="kwa">use</span> std::cmp::min;
+<span class="kwa">use</span> std::env;
+<span class="kwa">use</span> std::io;
+<span class="kwa">use</span> std::io::prelude::*;
+
+<span class="kwa">const</span> LINE_LEN: usize = <span class="num">60</span>;
+<span class="kwa">const</span> LOOKUP_SIZE: usize = <span class="num">4</span> * <span class="num">1024</span>;
+<span class="kwa">const</span> LOOKUP_SCALE: f32 = (LOOKUP_SIZE - <span class="num">1</span>) <span class="kwa">as</span> f32;
+
+<span class="slc">// Random number generator constants</span>
+<span class="kwa">const</span> IM: u32 = <span class="num">139968</span>;
+<span class="kwa">const</span> IA: u32 = <span class="num">3877</span>;
+<span class="kwa">const</span> IC: u32 = <span class="num">29573</span>;
+
+<span class="kwa">const</span> ALU: &amp;'<span class="kwa">static</span> str = <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTG\</span>
+<span class="str">                            GGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGA\</span>
+<span class="str">                            GACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAA\</span>
+<span class="str">                            AATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAAT\</span>
+<span class="str">                            CCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAAC\</span>
+<span class="str">                            CCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTG\</span>
+<span class="str">                            CACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+<span class="kwa">const</span> NULL_AMINO_ACID: AminoAcid = AminoAcid { c: ' ' <span class="kwa">as</span> u8, p: <span class="num">0.0</span> };
+
+<span class="kwa">static</span> IUB: [AminoAcid;<span class="num">15</span>] = [
+    AminoAcid { c: 'a' <span class="kwa">as</span> u8, p: <span class="num">0.27</span> },
+    AminoAcid { c: 'c' <span class="kwa">as</span> u8, p: <span class="num">0.12</span> },
+    AminoAcid { c: 'g' <span class="kwa">as</span> u8, p: <span class="num">0.12</span> },
+    AminoAcid { c: 't' <span class="kwa">as</span> u8, p: <span class="num">0.27</span> },
+    AminoAcid { c: 'B' <span class="kwa">as</span> u8, p: <span class="num">0.02</span> },
+    AminoAcid { c: 'D' <span class="kwa">as</span> u8, p: <span class="num">0.02</span> },
+    AminoAcid { c: 'H' <span class="kwa">as</span> u8, p: <span class="num">0.02</span> },
+    AminoAcid { c: 'K' <span class="kwa">as</span> u8, p: <span class="num">0.02</span> },
+    AminoAcid { c: 'M' <span class="kwa">as</span> u8, p: <span class="num">0.02</span> },
+    AminoAcid { c: 'N' <span class="kwa">as</span> u8, p: <span class="num">0.02</span> },
+    AminoAcid { c: 'R' <span class="kwa">as</span> u8, p: <span class="num">0.02</span> },
+    AminoAcid { c: 'S' <span class="kwa">as</span> u8, p: <span class="num">0.02</span> },
+    AminoAcid { c: 'V' <span class="kwa">as</span> u8, p: <span class="num">0.02</span> },
+    AminoAcid { c: 'W' <span class="kwa">as</span> u8, p: <span class="num">0.02</span> },
+    AminoAcid { c: 'Y' <span class="kwa">as</span> u8, p: <span class="num">0.02</span> },
+];
+
+<span class="kwa">static</span> HOMO_SAPIENS: [AminoAcid;<span class="num">4</span>] = [
+    AminoAcid { c: 'a' <span class="kwa">as</span> u8, p: <span class="num">0.3029549426680</span> },
+    AminoAcid { c: 'c' <span class="kwa">as</span> u8, p: <span class="num">0.1979883004921</span> },
+    AminoAcid { c: 'g' <span class="kwa">as</span> u8, p: <span class="num">0.1975473066391</span> },
+    AminoAcid { c: 't' <span class="kwa">as</span> u8, p: <span class="num">0.3015094502008</span> },
+];
+
+<span class="kwa">fn</span> sum_and_scale(a: &amp;'<span class="kwa">static</span> [AminoAcid]) -&gt; Vec&lt;AminoAcid&gt; {
+    <span class="kwa">let mut</span> p = <span class="num">0</span>f32;
+    <span class="kwa">let mut</span> result: Vec&lt;AminoAcid&gt; = a.iter().map(|a_i| {
+        p += a_i.p; 
+        AminoAcid { c: a_i.c, p: p * LOOKUP_SCALE }
+    }).collect();
+    <span class="kwa">let</span> result_len = result.len();
+    result[result_len - <span class="num">1</span>].p = LOOKUP_SCALE;
+    result
+}
+
+#[derive(Copy, Clone)]
+<span class="kwa">struct</span> AminoAcid {
+    c: u8,
+    p: f32,
+}
+
+<span class="kwa">struct</span> RepeatFasta&lt;'a, W:'a&gt; {
+    alu: &amp;'<span class="kwa">static</span> str,
+    out: &amp;'a <span class="kwa">mut</span> W
+}
+
+<span class="kwa">impl</span>&lt;'a, W: Write&gt; RepeatFasta&lt;'a, W&gt; {
+    <span class="kwa">fn</span> new(alu: &amp;'<span class="kwa">static</span> str, w: &amp;'a <span class="kwa">mut</span> W) -&gt; RepeatFasta&lt;'a, W&gt; {
+        RepeatFasta { alu: alu, out: w }
+    }
+
+    <span class="kwa">fn</span> make(&amp;<span class="kwa">mut self</span>, n: usize) -&gt; io::Result&lt;()&gt; {
+        <span class="kwa">let</span> alu_len = <span class="kwa">self</span>.alu.len();
+        <span class="kwa">let mut</span> buf = vec![<span class="num">0</span>; alu_len + LINE_LEN];
+        <span class="kwa">let</span> alu: &amp;[u8] = <span class="kwa">self</span>.alu.as_bytes();
+
+        <span class="kwa">for</span> (slot, val) <span class="kwa">in</span> buf.iter_mut().zip(alu) {
+            *slot = *val;
+        }
+        <span class="kwa">let</span> buf_len = buf.len();
+        <span class="kwa">for</span> (slot, val) <span class="kwa">in</span> buf[alu_len..buf_len].iter_mut().zip(&amp;alu[..LINE_LEN]) {
+            *slot = *val;
+        }
+
+        <span class="kwa">let mut</span> pos = <span class="num">0</span>;
+        <span class="kwa">let mut</span> bytes;
+        <span class="kwa">let mut</span> n = n;
+        <span class="kwa">while</span> n &gt; <span class="num">0</span> {
+            bytes = min(LINE_LEN, n);
+            try!(<span class="kwa">self</span>.out.write_all(&amp;buf[pos..pos + bytes]));
+            try!(<span class="kwa">self</span>.out.write_all(&amp;[b'<span class="esc">\n</span>']));
+            pos += bytes;
+            <span class="kwa">if</span> pos &gt; alu_len {
+                pos -= alu_len;
+            }
+            n -= bytes;
+        }
+        Ok(())
+    }
+}
+
+<span class="kwa">fn</span> make_lookup(a: &amp;[AminoAcid]) -&gt; [AminoAcid;LOOKUP_SIZE] {
+    <span class="kwa">let mut</span> lookup = [ NULL_AMINO_ACID;LOOKUP_SIZE ];
+    <span class="kwa">let mut</span> j = <span class="num">0</span>;
+    <span class="kwa">for</span> (i, slot) <span class="kwa">in</span> lookup.iter_mut().enumerate() {
+        <span class="kwa">while</span> a[j].p &lt; (i <span class="kwa">as</span> f32) {
+            j += <span class="num">1</span>;
+        }
+        *slot = a[j];
+    }
+    lookup
+}
+
+<span class="kwa">struct</span> RandomFasta&lt;'a, W:'a&gt; {
+    seed: u32,
+    lookup: [AminoAcid;LOOKUP_SIZE],
+    out: &amp;'a <span class="kwa">mut</span> W,
+}
+
+<span class="kwa">impl</span>&lt;'a, W: Write&gt; RandomFasta&lt;'a, W&gt; {
+    <span class="kwa">fn</span> new(w: &amp;'a <span class="kwa">mut</span> W, a: &amp;[AminoAcid]) -&gt; RandomFasta&lt;'a, W&gt; {
+        RandomFasta {
+            seed: <span class="num">42</span>,
+            out: w,
+            lookup: make_lookup(a),
+        }
+    }
+
+    <span class="kwa">fn</span> rng(&amp;<span class="kwa">mut self</span>, max: f32) -&gt; f32 {
+        <span class="kwa">self</span>.seed = (<span class="kwa">self</span>.seed * IA + IC) % IM;
+        (max * <span class="kwa">self</span>.seed <span class="kwa">as</span> f32) / (IM <span class="kwa">as</span> f32)
+    }
+
+    <span class="kwa">fn</span> nextc(&amp;<span class="kwa">mut self</span>) -&gt; u8 {
+        <span class="kwa">let</span> r = <span class="kwa">self</span>.rng(LOOKUP_SCALE);
+        <span class="kwa">for</span> i <span class="kwa">in</span> (r <span class="kwa">as</span> usize..LOOKUP_SIZE) {
+            <span class="kwa">if self</span>.lookup[i].p &gt;= r { 
+                <span class="kwa">return self</span>.lookup[i].c;
+            }
+        }
+        unreachable!();
+    }
+
+    <span class="kwa">fn</span> make(&amp;<span class="kwa">mut self</span>, n: usize) -&gt; io::Result&lt;()&gt; {
+        <span class="kwa">let</span> lines = n / LINE_LEN;
+        <span class="kwa">let</span> chars_left = n % LINE_LEN;
+        <span class="kwa">let mut</span> buf = [<span class="num">0</span>;LINE_LEN + <span class="num">1</span>];
+
+        <span class="kwa">for</span> _ <span class="kwa">in</span> <span class="num">0</span>..lines {
+            <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..LINE_LEN {
+                buf[i] = <span class="kwa">self</span>.nextc();
+            }
+            buf[LINE_LEN] = '<span class="esc">\n</span>' <span class="kwa">as</span> u8;
+            try!(<span class="kwa">self</span>.out.write(&amp;buf));
+        }
+        <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..chars_left {
+            buf[i] = <span class="kwa">self</span>.nextc();
+        }
+        <span class="kwa">self</span>.out.write_all(&amp;buf[..chars_left])
+    }
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let mut</span> args = env::args();
+    <span class="kwa">let</span> n = <span class="kwa">if</span> args.len() &gt; <span class="num">1</span> {
+        args.nth(<span class="num">1</span>).unwrap().parse::&lt;usize&gt;().unwrap()
+    } <span class="kwa">else</span> {
+        <span class="num">1000</span>
+    };
+    
+    <span class="kwa">let</span> stdout = io::stdout();
+    <span class="kwa">let mut</span> out = stdout.lock();
+
+    out.write_all(b<span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>).unwrap();
+    {
+        <span class="kwa">let mut</span> repeat = RepeatFasta::new(ALU, &amp;<span class="kwa">mut</span> out);
+        repeat.make(n * <span class="num">2</span>).unwrap();
+    }
+
+    out.write_all(b<span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>).unwrap();
+    <span class="kwa">let</span> iub = sum_and_scale(&amp;IUB);
+    <span class="kwa">let mut</span> random = RandomFasta::new(&amp;<span class="kwa">mut</span> out, &amp;iub);
+    random.make(n * <span class="num">3</span>).unwrap();
+
+    random.out.write_all(b<span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>).unwrap();
+    <span class="kwa">let</span> homo_sapiens = sum_and_scale(&amp;HOMO_SAPIENS);
+    random.lookup = make_lookup(&amp;homo_sapiens);
+    random.make(n * <span class="num">5</span>).unwrap();
+
+    random.out.write_all(b<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>).unwrap();
+}

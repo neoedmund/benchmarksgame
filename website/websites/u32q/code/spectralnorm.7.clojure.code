@@ -1,0 +1,65 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; contributed by Jim Kannampuzha</span>
+<span class="slc">;; inspired by Jesse Rosenstock</span>
+
+(ns spectralnorm
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+
+(<span class="kwa">defmacro</span> eval-a [i j]
+  `(<span class="kwc">let</span> [n# (unchecked-add ~i ~j)
+         nn+<span class="num">1</span># (unchecked-multiply n# (unchecked-inc n#))]
+     (/ (double <span class="num">1.0</span>) (unchecked-add (bit-shift-right nn+<span class="num">1</span># <span class="num">1</span>)
+				    (unchecked-inc ~i)))))
+
+(<span class="kwa">defn</span> multiply-a-v [agent ^doubles v ^doubles av <span class="kwd">range</span>]
+  (<span class="kwc">let</span> [end (int (<span class="kwd">second range</span>))]
+    (<span class="kwb">loop</span> [i (int (<span class="kwd">first range</span>))]
+      (<span class="kwc">if</span> (= i end)
+        nil
+        (do
+	  (aset av i (double (areduce v j sum (double <span class="num">0</span>)
+				      (+ sum (* (eval-a i j) (aget v j))))))
+	  (<span class="kwb">recur</span> (unchecked-inc i)))))))
+
+(<span class="kwa">defn</span> multiply-at-v [agent ^doubles v ^doubles atv <span class="kwd">range</span>]
+  (<span class="kwc">let</span> [end (int (<span class="kwd">second range</span>))]
+    (<span class="kwb">loop</span> [i (int (<span class="kwd">first range</span>))]
+      (<span class="kwc">if</span> (= i end) 
+        nil
+        (do
+	  (aset atv i (double (areduce v j sum (double <span class="num">0</span>)
+				       (+ sum (* (eval-a j i) (aget v j))))))
+	  (<span class="kwb">recur</span> (unchecked-inc i)))))))
+
+(<span class="kwa">defn</span> multiply-at-a-v [^doubles v ^doubles tmp ^doubles at-av workers ranges]
+  (apply await (<span class="kwd">map</span> #(send %<span class="num">1</span> multiply-a-v v tmp %<span class="num">2</span>) workers ranges))
+  (apply await (<span class="kwd">map</span> #(send %<span class="num">1</span> multiply-at-v tmp at-av %<span class="num">2</span>) workers ranges)))
+
+(<span class="kwa">defmacro</span> dot-product [^doubles u ^doubles v]
+  `(areduce ~u i# sum# (double <span class="num">0</span>) (+ sum# (* (aget ~u i#) (aget ~v i#)))))
+
+(<span class="kwa">defn</span> run-game [size]
+  (<span class="kwc">let</span> [num-threads (.availableProcessors (Runtime/getRuntime))
+        workers (vec (repeatedly num-threads #(agent ())))
+        chunk-size (int (Math/ceil (/ size num-threads)))
+        ranges  (vec (partition <span class="num">2 1</span> (<span class="kwd">take</span> (inc num-threads)
+                                          (<span class="kwd">iterate</span> #(+ chunk-size %) <span class="num">0</span>))))
+        u (double-array size <span class="num">1.0</span>)
+        tmp (double-array size <span class="num">0.0</span>)
+        v (double-array size <span class="num">0.0</span>)]
+    (<span class="kwb">dotimes</span> [_ <span class="num">10</span>]
+      (multiply-at-a-v u tmp v workers ranges)
+      (multiply-at-a-v v tmp u workers ranges))
+    (Math/sqrt (/ (dot-product u v) (dot-product v v)))))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [n (<span class="kwc">if</span> (empty? args)
+            <span class="num">2500</span>
+            (Integer/valueOf ^String (<span class="kwd">first</span> args)))]
+    (println (format <span class="str">&quot;%.9f&quot;</span> (run-game n)))
+    (shutdown-agents)))
+

@@ -1,0 +1,567 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Isaac Gouy</span>
+<span class="com">   updated for 2.8 by Rex Kerr</span>
+<span class="com">*/</span>
+
+<span class="slc">// Most for-comprehension replaced by while loops</span>
+<span class="slc">// BoardCells occupied by each Piece orientation are cached</span>
+<span class="slc">// Piece orientations are cached</span>
+
+<span class="kwa">import</span> scala.collection.mutable._
+
+<span class="kwa">object</span> meteor {
+   <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) = {
+      <span class="kwa">val</span> solver = <span class="kwa">new</span> <span class="kwd">Solver</span>( <span class="kwd">args</span>(<span class="num">0</span>).toInt )
+      solver.findSolutions
+      solver.printSolutions
+   }
+}
+
+
+<span class="kwa">final class</span> <span class="kwd">Solver</span> (n: Int) {
+   <span class="kwa">private var</span> countdown = n
+   <span class="kwa">private var</span> first: String = _
+   <span class="kwa">private var</span> last: String = _
+
+   <span class="kwa">private val</span> board = <span class="kwa">new</span> <span class="kwd">Board</span>()
+
+   <span class="kwa">val</span> pieces = Array.<span class="kwd">tabulate</span>(<span class="num">10</span>)(i =&gt; <span class="kwa">new</span> <span class="kwd">Piece</span>(i))
+
+   <span class="kwa">val</span> unplaced = <span class="kwa">new</span> <span class="kwd">BitSet</span>(pieces.length)
+
+   { unplaced ++= (<span class="num">0</span> until pieces.length) }
+
+
+   <span class="kwa">def</span> <span class="kwd">findSolutions</span>(): Unit = {
+      <span class="kwa">if</span> (countdown == <span class="num">0</span>) <span class="kwa">return</span>
+
+      <span class="kwa">if</span> (unplaced.size &gt; <span class="num">0</span>){
+         <span class="kwa">val</span> emptyCellIndex = board.firstEmptyCellIndex
+
+         <span class="kwa">var</span> k = <span class="num">0</span>
+         <span class="kwa">while</span> (k &lt; pieces.length){
+            <span class="kwa">if</span> (unplaced.<span class="kwd">contains</span>(k)){
+               unplaced -= k
+
+               <span class="kwa">var</span> i = <span class="num">0</span>
+               <span class="kwa">while</span> (i &lt; Piece.orientations){
+                  <span class="kwa">val</span> piece = <span class="kwd">pieces</span>(k).nextOrientation
+
+                  <span class="kwa">var</span> j = <span class="num">0</span>
+                  <span class="kwa">while</span> (j &lt; Piece.size){
+                     <span class="kwa">if</span> (board.<span class="kwd">add</span>(j,emptyCellIndex,piece)) {
+
+                        <span class="kwa">if</span> (!shouldPrune) findSolutions
+
+                        board.<span class="kwd">remove</span>(piece)
+                     }
+                     j = j + <span class="num">1</span>
+                  }
+                  i = i + <span class="num">1</span>
+               }
+               unplaced += k
+            }
+            k = k + <span class="num">1</span>
+         }
+      }
+      <span class="kwa">else</span> {
+         puzzleSolved
+      }
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">puzzleSolved</span>() = {
+      <span class="kwa">val</span> b = board.asString
+      <span class="kwa">if</span> (first == null){
+         first = b; last = b
+      } <span class="kwa">else</span> {
+         <span class="kwa">if</span> (b &lt; first){ first = b } <span class="kwa">else</span> { <span class="kwa">if</span> (b &gt; last){ last = b } }
+      }
+      countdown = countdown - <span class="num">1</span>
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">shouldPrune</span>(): Boolean = {
+      board.unmark
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt; board.cells.length){
+         <span class="kwa">if</span> (board.<span class="kwd">cells</span>(i).contiguousEmptyCells % Piece.size != <span class="num">0</span>) <span class="kwa">return</span> true
+         i = i + <span class="num">1</span>
+      }
+      false
+   }
+
+
+   <span class="kwa">def</span> <span class="kwd">printSolutions</span>() = {
+
+      <span class="kwa">def</span> <span class="kwd">printBoard</span>(s: String) = {
+         <span class="kwa">var</span> indent = false
+         <span class="kwa">var</span> i = <span class="num">0</span>
+         <span class="kwa">while</span> (i &lt; s.length){
+            <span class="kwa">if</span> (indent) <span class="kwd">print</span>(<span class="str">' '</span>)
+            <span class="kwa">var</span> j = <span class="num">0</span>
+            <span class="kwa">while</span> (j &lt; Board.cols){
+               <span class="kwd">print</span>(s.<span class="kwd">charAt</span>(i)); <span class="kwd">print</span>(<span class="str">' '</span>)
+               j = j + <span class="num">1</span>
+               i = i + <span class="num">1</span>
+            }
+            <span class="kwd">print</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+            indent = !indent
+         }
+         <span class="kwd">print</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+      }
+
+      <span class="kwd">print</span>(n + <span class="str">&quot; solutions found</span><span class="esc">\n\n</span><span class="str">&quot;</span>)
+      <span class="kwd">printBoard</span>(first)
+      <span class="kwd">printBoard</span>(last)
+   }
+
+<span class="com">/*</span>
+<span class="com">   def printPieces() =</span>
+<span class="com">      for (i &lt;- Iterator.range(0,Board.pieces)) pieces(i).print</span>
+<span class="com">*/</span>
+
+}
+
+
+
+<span class="slc">// Board.scala</span>
+<span class="slc">// import scala.collection.mutable._</span>
+
+<span class="kwa">object</span> Board {
+   <span class="kwa">val</span> cols = <span class="num">5</span>
+   <span class="kwa">val</span> rows = <span class="num">10</span>
+   <span class="kwa">val</span> size = rows * cols
+   <span class="kwa">val</span> pieces = <span class="num">10</span>
+   <span class="kwa">val</span> noFit = <span class="kwa">new</span> Array[BoardCell](<span class="num">0</span>)
+}
+
+<span class="kwa">final class</span> Board {
+   <span class="kwa">val</span> cells = <span class="kwd">boardCells</span>()
+
+   <span class="kwa">val</span> cellsPieceWillFill = <span class="kwa">new</span> Array[BoardCell](Piece.size)
+   <span class="kwa">var</span> cellCount = <span class="num">0</span>
+
+   <span class="kwa">def</span> <span class="kwd">unmark</span>() = {
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt; cells.length){
+         <span class="kwd">cells</span>(i).unmark
+         i = i + <span class="num">1</span>
+      }
+   }
+
+   <span class="kwa">def</span> <span class="kwd">asString</span>() =
+      <span class="kwa">new</span> <span class="kwd">String</span>( cells <span class="kwd">map</span>(
+         c =&gt; <span class="kwa">if</span> (c.piece == null) <span class="str">'-'</span>.toByte
+              <span class="kwa">else</span> (c.piece.number + <span class="num">48</span>).toByte ))
+
+   <span class="kwa">def</span> <span class="kwd">firstEmptyCellIndex</span>() = cells.<span class="kwd">findIndexOf</span>(c =&gt; c.isEmpty)
+
+
+   <span class="kwa">private val</span> cache = Array.<span class="kwd">fill</span>(
+     Board.pieces,Piece.orientations,Piece.size,Board.size
+   )(null: Array[BoardCell])
+
+   <span class="kwa">def</span> <span class="kwd">add</span>(pieceIndex: Int, boardIndex: Int, p: Piece): Boolean = {
+      <span class="kwa">var</span> a = <span class="kwd">cache</span>(p.number)(p.orientation)(pieceIndex)(boardIndex)
+
+      cellCount = <span class="num">0</span>
+      p.unmark
+
+      <span class="kwa">if</span> (a == null){
+         <span class="kwd">find</span>(p.<span class="kwd">cells</span>(pieceIndex), <span class="kwd">cells</span>(boardIndex))
+
+         <span class="kwa">if</span> (cellCount != Piece.size){
+            <span class="kwd">cache</span>(p.number)(p.orientation)(pieceIndex)(boardIndex) = Board.noFit
+            <span class="kwa">return</span> false
+         }
+
+         a = cellsPieceWillFill .<span class="kwd">filter</span>(c =&gt; true)
+         <span class="kwd">cache</span>(p.number)(p.orientation)(pieceIndex)(boardIndex) = a
+      }
+      <span class="kwa">else</span> {
+         <span class="kwa">if</span> (a == Board.noFit) <span class="kwa">return</span> false
+      }
+
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt; a.length){
+         <span class="kwa">if</span> (!<span class="kwd">a</span>(i).isEmpty) <span class="kwa">return</span> false
+         i = i + <span class="num">1</span>
+      }
+
+      i = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt; a.length){
+         <span class="kwd">a</span>(i).piece = p
+         i = i + <span class="num">1</span>
+      }
+
+      true
+   }
+
+
+   <span class="kwa">def</span> <span class="kwd">remove</span>(piece: Piece) = {
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt; cells.length){
+         <span class="kwa">if</span> (<span class="kwd">cells</span>(i).piece == piece) <span class="kwd">cells</span>(i).empty
+         i = i + <span class="num">1</span>
+      }
+   }
+
+
+   <span class="kwa">private def</span> <span class="kwd">find</span>(p: PieceCell, b: BoardCell): Unit = {
+      <span class="kwa">if</span> (p != null &amp;&amp; !p.marked &amp;&amp; b != null){
+         <span class="kwd">cellsPieceWillFill</span>(cellCount) = b
+         cellCount = cellCount + <span class="num">1</span>
+         p.mark
+
+         <span class="kwa">var</span> i = <span class="num">0</span>
+         <span class="kwa">while</span> (i &lt; Cell.sides){
+            <span class="kwd">find</span>(p.<span class="kwd">next</span>(i), b.<span class="kwd">next</span>(i))
+            i = i + <span class="num">1</span>
+         }
+      }
+   }
+
+
+   <span class="kwa">private def</span> <span class="kwd">boardCells</span>() = {
+      <span class="kwa">val</span> a = Array.<span class="kwd">tabulate</span>(Board.size)(i =&gt; <span class="kwa">new</span> <span class="kwd">BoardCell</span>(i))
+      <span class="kwa">val</span> m = (Board.size / Board.cols) - <span class="num">1</span>
+
+      <span class="kwa">for</span> (i &lt;- <span class="num">0</span> until a.length) {
+         <span class="kwa">val</span> row = i / Board.cols
+         <span class="kwa">val</span> isFirst = i % Board.cols == <span class="num">0</span>
+         <span class="kwa">val</span> isLast = (i+<span class="num">1</span>) % Board.cols == <span class="num">0</span>
+         <span class="kwa">val</span> c = <span class="kwd">a</span>(i)
+
+         <span class="kwa">if</span> (row % <span class="num">2</span> == <span class="num">1</span>) {
+            <span class="kwa">if</span> (!isLast) c.<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(i-(Board.cols-<span class="num">1</span>))
+            c.<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(i-Board.cols)
+            <span class="kwa">if</span> (row != m) {
+               <span class="kwa">if</span> (!isLast) c.<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(i+(Board.cols+<span class="num">1</span>))
+               c.<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(i+Board.cols)
+            }
+         } <span class="kwa">else</span> {
+            <span class="kwa">if</span> (row != <span class="num">0</span>) {
+               <span class="kwa">if</span> (!isFirst) c.<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(i-(Board.cols+<span class="num">1</span>))
+               c.<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(i-Board.cols)
+            }
+            <span class="kwa">if</span> (row != m) {
+               <span class="kwa">if</span> (!isFirst) c.<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(i+(Board.cols-<span class="num">1</span>))
+               c.<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(i+Board.cols)
+            }
+         }
+         <span class="kwa">if</span> (!isFirst) c.<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(i-<span class="num">1</span>)
+         <span class="kwa">if</span> (!isLast) c.<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(i+<span class="num">1</span>)
+      }
+      a
+   }
+
+
+<span class="com">/*</span>
+<span class="com">// Printing all the board cells and their neighbours</span>
+<span class="com">// helps check that they are connected properly</span>
+<span class="com"></span>
+<span class="com">   def printBoardCellsAndNeighbours() = {</span>
+<span class="com">      println(&quot;cell\tNW NE W  E  SW SE&quot;)</span>
+<span class="com">      for (i &lt;- 0 until Board.size) {</span>
+<span class="com">         print(i + &quot;\t&quot;)</span>
+<span class="com">         for (j &lt;- 0 until Cell.sides) {</span>
+<span class="com">            val c = cells(i).next(j)</span>
+<span class="com">            if (c == null)</span>
+<span class="com">               print(&quot;-- &quot;)</span>
+<span class="com">            else</span>
+<span class="com">               printf(&quot;{0,number,00} &quot;)(c.number)</span>
+<span class="com">         }</span>
+<span class="com">         println(&quot;&quot;)</span>
+<span class="com">      }</span>
+<span class="com">      println(&quot;&quot;)</span>
+<span class="com">   }</span>
+<span class="com">*/</span>
+
+}
+
+
+
+
+<span class="slc">// Piece.scala</span>
+
+<span class="kwa">object</span> Piece {
+   <span class="kwa">val</span> size = <span class="num">5</span>
+   <span class="kwa">val</span> rotations = Cell.sides
+   <span class="kwa">val</span> flips = <span class="num">2</span>
+   <span class="kwa">val</span> orientations = rotations * flips
+}
+
+<span class="kwa">final class</span> <span class="kwd">Piece</span>(_number: Int) {
+   <span class="kwa">val</span> number = _number
+
+   <span class="kwa">def</span> <span class="kwd">unmark</span>() = {
+      <span class="kwa">val</span> c = <span class="kwd">cache</span>(orientation)
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt; c.length){
+         <span class="kwd">c</span>(i).unmark
+         i = i + <span class="num">1</span>
+      }
+   }
+
+   <span class="kwa">def</span> cells = <span class="kwd">cache</span>(orientation)
+
+   <span class="kwa">private val</span> cache = Array.<span class="kwd">tabulate</span>(Piece.orientations)(pieceOrientation _)
+
+   <span class="kwa">var</span> orientation = <span class="num">0</span>
+
+   <span class="kwa">def</span> <span class="kwd">nextOrientation</span>() = {
+      orientation = (orientation + <span class="num">1</span>) % Piece.orientations
+      <span class="kwa">this</span>
+   }
+
+
+   <span class="kwa">private def</span> <span class="kwd">pieceOrientation</span>(k: Int) = {
+      <span class="kwa">val</span> cells = Array.<span class="kwd">fill</span>(Piece.size)(<span class="kwa">new</span> <span class="kwd">PieceCell</span>())
+      <span class="kwd">makePiece</span>(number,cells)
+
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt; k){
+         <span class="kwa">if</span> (i % Piece.rotations == <span class="num">0</span>)
+            cells.<span class="kwd">foreach</span>(_.flip)
+         <span class="kwa">else</span>
+            cells.<span class="kwd">foreach</span>(_.rotate)
+
+         i = i + <span class="num">1</span>
+      }
+      cells
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">makePiece</span>(number: Int, cells: Array[PieceCell]) = {
+      number match {
+         <span class="kwa">case</span> <span class="num">0</span> =&gt; <span class="kwd">make0</span>(cells)
+         <span class="kwa">case</span> <span class="num">1</span> =&gt; <span class="kwd">make1</span>(cells)
+         <span class="kwa">case</span> <span class="num">2</span> =&gt; <span class="kwd">make2</span>(cells)
+         <span class="kwa">case</span> <span class="num">3</span> =&gt; <span class="kwd">make3</span>(cells)
+         <span class="kwa">case</span> <span class="num">4</span> =&gt; <span class="kwd">make4</span>(cells)
+         <span class="kwa">case</span> <span class="num">5</span> =&gt; <span class="kwd">make5</span>(cells)
+         <span class="kwa">case</span> <span class="num">6</span> =&gt; <span class="kwd">make6</span>(cells)
+         <span class="kwa">case</span> <span class="num">7</span> =&gt; <span class="kwd">make7</span>(cells)
+         <span class="kwa">case</span> <span class="num">8</span> =&gt; <span class="kwd">make8</span>(cells)
+         <span class="kwa">case</span> <span class="num">9</span> =&gt; <span class="kwd">make9</span>(cells)
+      }
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">make0</span>(a: Array[PieceCell]) = {
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">4</span>)
+      <span class="kwd">a</span>(<span class="num">4</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">3</span>)
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">make1</span>(a: Array[PieceCell]) = {
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">4</span>)
+      <span class="kwd">a</span>(<span class="num">4</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">3</span>)
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">make2</span>(a: Array[PieceCell]) = {
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">4</span>)
+      <span class="kwd">a</span>(<span class="num">4</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">3</span>)
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">make3</span>(a: Array[PieceCell]) = {
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">4</span>)
+      <span class="kwd">a</span>(<span class="num">4</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">3</span>)
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">make4</span>(a: Array[PieceCell]) = {
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">4</span>)
+      <span class="kwd">a</span>(<span class="num">4</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">3</span>)
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">make5</span>(a: Array[PieceCell]) = {
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">4</span>)
+      <span class="kwd">a</span>(<span class="num">4</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">3</span>)
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">make6</span>(a: Array[PieceCell]) = {
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">4</span>)
+      <span class="kwd">a</span>(<span class="num">4</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">3</span>)
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">make7</span>(a: Array[PieceCell]) = {
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">4</span>)
+      <span class="kwd">a</span>(<span class="num">4</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">3</span>)
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">make8</span>(a: Array[PieceCell]) = {
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">4</span>)
+      <span class="kwd">a</span>(<span class="num">4</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">3</span>)
+   }
+
+   <span class="kwa">private def</span> <span class="kwd">make9</span>(a: Array[PieceCell]) = {
+      <span class="kwd">a</span>(<span class="num">0</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">0</span>)
+      <span class="kwd">a</span>(<span class="num">1</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">1</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.NE) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.SW) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">2</span>).<span class="kwd">next</span>(Cell.E) = <span class="kwd">a</span>(<span class="num">4</span>)
+      <span class="kwd">a</span>(<span class="num">4</span>).<span class="kwd">next</span>(Cell.W) = <span class="kwd">a</span>(<span class="num">2</span>)
+      <span class="kwd">a</span>(<span class="num">4</span>).<span class="kwd">next</span>(Cell.NW) = <span class="kwd">a</span>(<span class="num">3</span>)
+      <span class="kwd">a</span>(<span class="num">3</span>).<span class="kwd">next</span>(Cell.SE) = <span class="kwd">a</span>(<span class="num">4</span>)
+   }
+
+<span class="com">/*</span>
+<span class="com">   def printMe() = {</span>
+<span class="com">      println(&quot;Piece # &quot; + number)</span>
+<span class="com">      println(&quot;cell\tNW NE W  E  SW SE&quot;)</span>
+<span class="com">      for (i &lt;- Iterator.range(0,Piece.size)){</span>
+<span class="com">         print(i + &quot;\t&quot;)</span>
+<span class="com">         for (j &lt;- Iterator.range(0,Cell.sides)){</span>
+<span class="com">            val c = cells(i).next(j)</span>
+<span class="com">            if (c == null)</span>
+<span class="com">               print(&quot;-- &quot;)</span>
+<span class="com">            else</span>
+<span class="com">               for (k &lt;- Iterator.range(0,Piece.size)){</span>
+<span class="com">                  if (cells(k) == c) printf(&quot; {0,number,0} &quot;)(k)</span>
+<span class="com">               }</span>
+<span class="com">         }</span>
+<span class="com">         println(&quot;&quot;)</span>
+<span class="com">      }</span>
+<span class="com">      println(&quot;&quot;)</span>
+<span class="com">   }</span>
+<span class="com">*/</span>
+}
+
+
+
+
+
+<span class="slc">// Cell.scala</span>
+
+<span class="kwa">object</span> Cell {
+   <span class="kwa">val</span> NW = <span class="num">0</span>; <span class="kwa">val</span> NE = <span class="num">1</span>
+   <span class="kwa">val</span> W  = <span class="num">2</span>; <span class="kwa">val</span> E  = <span class="num">3</span>
+   <span class="kwa">val</span> SW = <span class="num">4</span>; <span class="kwa">val</span> SE = <span class="num">5</span>
+
+   <span class="kwa">val</span> sides = <span class="num">6</span>
+}
+
+<span class="kwa">abstract class</span> Cell {
+   <span class="kwa">var</span> marked = false
+
+   <span class="kwa">def</span> <span class="kwd">mark</span>() = marked = true
+   <span class="kwa">def</span> <span class="kwd">unmark</span>() = marked = false
+}
+
+
+
+
+<span class="slc">// BoardCell.scala</span>
+
+<span class="kwa">final class</span> <span class="kwd">BoardCell</span>(<span class="kwa">val</span> number: Int) <span class="kwa">extends</span> Cell {
+   <span class="kwa">val</span> next = <span class="kwa">new</span> Array[BoardCell](Cell.sides)
+   <span class="kwa">var</span> piece: Piece = _
+
+   <span class="kwa">def</span> <span class="kwd">isEmpty</span>() = piece == null
+   <span class="kwa">def</span> <span class="kwd">empty</span>() = piece = null
+
+   <span class="kwa">def</span> <span class="kwd">contiguousEmptyCells</span>(): Int = {
+      <span class="kwa">if</span> (!marked &amp;&amp; isEmpty){
+         mark
+         <span class="kwa">var</span> count = <span class="num">1</span>
+
+         <span class="kwa">var</span> i = <span class="num">0</span>
+         <span class="kwa">while</span> (i &lt; next.length){
+            <span class="kwa">if</span> (<span class="kwd">next</span>(i) != null &amp;&amp; <span class="kwd">next</span>(i).isEmpty)
+               count = count + <span class="kwd">next</span>(i).contiguousEmptyCells
+            i = i + <span class="num">1</span>
+         }
+
+         count } <span class="kwa">else</span> { <span class="num">0</span> }
+   }
+}
+
+
+
+
+<span class="slc">// PieceCell.scala</span>
+
+<span class="kwa">final class</span> PieceCell <span class="kwa">extends</span> Cell {
+   <span class="kwa">val</span> next = <span class="kwa">new</span> Array[PieceCell](Cell.sides)
+
+   <span class="kwa">def</span> flip = {
+      <span class="kwa">var</span> swap = <span class="kwd">next</span>(Cell.NE)
+      <span class="kwd">next</span>(Cell.NE) = <span class="kwd">next</span>(Cell.NW)
+      <span class="kwd">next</span>(Cell.NW) = swap
+
+      swap = <span class="kwd">next</span>(Cell.E)
+      <span class="kwd">next</span>(Cell.E) = <span class="kwd">next</span>(Cell.W)
+      <span class="kwd">next</span>(Cell.W) = swap
+
+      swap = <span class="kwd">next</span>(Cell.SE)
+      <span class="kwd">next</span>(Cell.SE) = <span class="kwd">next</span>(Cell.SW)
+      <span class="kwd">next</span>(Cell.SW) = swap
+   }
+
+   <span class="kwa">def</span> rotate = {
+      <span class="kwa">var</span> swap = <span class="kwd">next</span>(Cell.E)
+      <span class="kwd">next</span>(Cell.E) = <span class="kwd">next</span>(Cell.NE)
+      <span class="kwd">next</span>(Cell.NE) = <span class="kwd">next</span>(Cell.NW)
+      <span class="kwd">next</span>(Cell.NW) = <span class="kwd">next</span>(Cell.W)
+      <span class="kwd">next</span>(Cell.W) = <span class="kwd">next</span>(Cell.SW)
+      <span class="kwd">next</span>(Cell.SW) = <span class="kwd">next</span>(Cell.SE)
+      <span class="kwd">next</span>(Cell.SE) = swap
+   }
+}

@@ -1,0 +1,114 @@
+<span class="com">{  The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Marco van de Voort</span>
+<span class="com">}</span>
+
+<span class="kwa">program</span> reverse_complement;
+
+<span class="kwa">var</span> lookupComplement : <span class="kwa">array</span>[<span class="esc">#0</span>..<span class="esc">#255</span>] <span class="kwa">of</span> <span class="kwb">char</span>;
+
+<span class="kwa">Const</span> FASTAXLAT : <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.11</span>] <span class="kwa">of array</span>[<span class="num">0</span>.<span class="num">.1</span>] <span class="kwa">of</span> <span class="kwb">char</span> = (
+		  ( <span class="str">'A'</span>, <span class="str">'T'</span> ), ( <span class="str">'C'</span>, <span class="str">'G'</span> ),
+		  ( <span class="str">'B'</span>, <span class="str">'V'</span> ), ( <span class="str">'D'</span>, <span class="str">'H'</span> ),
+	          ( <span class="str">'K'</span>, <span class="str">'M'</span> ), ( <span class="str">'R'</span>, <span class="str">'Y'</span> ),
+		  ( <span class="str">'a'</span>, <span class="str">'t'</span> ), ( <span class="str">'c'</span>, <span class="str">'g'</span> ),
+		  ( <span class="str">'b'</span>, <span class="str">'v'</span> ), ( <span class="str">'d'</span>, <span class="str">'h'</span> ),
+	          ( <span class="str">'k'</span>, <span class="str">'m'</span> ), ( <span class="str">'r'</span>, <span class="str">'y'</span> ));
+
+      BufferIncrement = <span class="num">1024</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">flushbuffer</span>(buffer:pchar;inbuf:<span class="kwb">longint</span>);
+
+<span class="kwa">var</span> p,p2 : pchar;
+    c  : <span class="kwb">char</span>;
+
+<span class="kwa">begin</span>
+  <span class="kwc">if</span> inbuf&gt;<span class="num">0</span> <span class="kwc">then</span>
+   <span class="kwa">begin</span>
+     p:=buffer;
+     p2:=&#64;buffer[inbuf-<span class="num">1</span>];
+     <span class="kwc">while</span> p&lt;p2 <span class="kwc">do</span>
+      <span class="kwa">begin</span>
+       c:=lookupcomplement[p^];
+       p^:=lookupcomplement[p2^];
+       p2^:=c;
+       <span class="kwd">inc</span>(p);
+       <span class="kwd">dec</span>(p2);
+     <span class="kwa">end</span>;
+    <span class="kwc">if</span> p2=p <span class="kwc">then</span>
+      p^:=lookupcomplement[p^];
+
+    p:=buffer;
+    p[inbuf]:=<span class="esc">#0</span>;
+
+   <span class="kwc">while</span> (inbuf &gt; <span class="num">60</span>) <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+    	c := p[<span class="num">60</span>];
+	p[<span class="num">60</span>]:=<span class="esc">#0</span>;
+        <span class="kwd">writeln</span>(p);
+        p[<span class="num">60</span>]:=c;
+	<span class="kwd">inc</span>(p,<span class="num">60</span>);
+	<span class="kwd">dec</span>(inbuf,<span class="num">60</span>);
+     <span class="kwa">end</span>;
+     p[inbuf]:=<span class="esc">#0</span>;
+     <span class="kwd">writeln</span>(p);
+  <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">const</span> initialincrement=<span class="num">1024</span>;
+
+<span class="kwa">procedure</span> run;
+
+<span class="kwa">var</span> s  : <span class="kwa">string</span>;
+    c  : <span class="kwb">char</span>;
+    buffersize,
+    bufferptr,
+    len		: <span class="kwb">longint</span>;
+    p  :pchar;
+    line : <span class="kwb">integer</span>;
+    bufin,bufout : <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.8191</span>] <span class="kwa">of</span> <span class="kwb">char</span>;
+
+<span class="kwa">begin</span>
+  <span class="kwd">settextbuf</span>(input,bufin);
+  <span class="kwd">settextbuf</span>(output,bufout);
+  <span class="kwc">for</span> c:=<span class="esc">#0</span>  <span class="kwc">to</span> <span class="esc">#255</span>  <span class="kwc">do</span>
+    lookupcomplement[c]:=c;
+  <span class="kwc">for</span> len:=<span class="num">0</span> <span class="kwc">to</span> <span class="kwd">high</span>(FASTAXLAT) <span class="kwc">do</span>
+    <span class="kwa">begin</span>
+      lookupcomplement[FASTAXLAT[len][<span class="num">0</span>]]:=<span class="kwd">upcase</span>(FASTAXLAT[len][<span class="num">1</span>]);
+      lookupcomplement[FASTAXLAT[len][<span class="num">1</span>]]:=<span class="kwd">upcase</span>(FASTAXLAT[len][<span class="num">0</span>]);
+    <span class="kwa">end</span>;
+  buffersize:=initialincrement;
+  bufferptr :=<span class="num">0</span>;
+  <span class="kwd">getmem</span>(p,buffersize);
+  line:=<span class="num">0</span>;
+  <span class="kwc">while</span> <span class="kwa">not</span> eof <span class="kwc">do</span>
+    <span class="kwa">begin</span>
+      <span class="kwd">readln</span>(s);
+      <span class="kwd">inc</span>(line);
+      len:=<span class="kwd">length</span>(s);
+      <span class="kwc">if</span> (len&gt;<span class="num">0</span>) <span class="kwa">and</span> (s[<span class="num">1</span>]=<span class="str">'&gt;'</span>) <span class="kwc">then</span>
+          <span class="kwa">begin</span>
+	    <span class="kwd">flushbuffer</span>(p,bufferptr);
+ 	    <span class="kwd">writeln</span>(s);
+	    bufferptr:=<span class="num">0</span>;
+	  <span class="kwa">end</span>
+       <span class="kwc">else</span>
+         <span class="kwa">begin</span>
+           <span class="kwc">if</span> (bufferptr+len+<span class="num">1</span>)&gt;buffersize <span class="kwc">then</span>
+	     <span class="kwa">begin</span>
+	        <span class="kwd">inc</span>(buffersize,buffersize);
+<span class="slc">//	        inc(buffersize,initialincrement);</span>
+                <span class="kwd">reallocmem</span>(p,buffersize);
+	     <span class="kwa">end</span>;
+	   <span class="kwd">move</span> (s[<span class="num">1</span>],p[bufferptr],len);
+	   <span class="kwd">inc</span>(bufferptr,len);
+	 <span class="kwa">end</span>;
+    <span class="kwa">end</span>;
+    <span class="kwd">flushbuffer</span>(p,bufferptr);
+<span class="kwa">end</span>;
+
+<span class="kwa">begin</span>
+  run;
+<span class="kwa">end</span>.

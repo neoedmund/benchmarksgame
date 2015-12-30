@@ -1,0 +1,104 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by Matt Watson</span>
+<span class="slc">// contributed by TeXitoi</span>
+
+<span class="kwa">use</span> std::io::Write;
+<span class="kwa">use</span> std::thread;
+<span class="kwa">const</span> THREADS: usize = <span class="num">20</span>;
+<span class="kwa">const</span> MAX_ITER: usize = <span class="num">50</span>;
+<span class="kwa">const</span> VLEN: usize = <span class="num">8</span>;
+<span class="kwa">const</span> ZEROS: Vecf64 = [<span class="num">0.0</span>; VLEN];
+
+<span class="kwa">pub type</span> Vecf64 = [f64; VLEN];
+
+<span class="kwa">fn</span> mul2 (x: Vecf64, y: Vecf64) -&gt; Vecf64 {
+    <span class="kwa">let mut</span> res = ZEROS;
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..VLEN { res[i] = x[i] * y[i]; }
+    res
+}
+<span class="kwa">fn</span> add2 (x: Vecf64, y: Vecf64) -&gt; Vecf64 {
+    <span class="kwa">let mut</span> res = ZEROS;
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..VLEN { res[i] = x[i] + y[i]; }
+    res
+}
+<span class="kwa">fn</span> sub2 (x: Vecf64, y: Vecf64) -&gt; Vecf64 {
+    <span class="kwa">let mut</span> res = ZEROS;
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..VLEN { res[i] = x[i] - y[i]; }
+    res
+}
+
+<span class="kwa">pub fn</span> mbrot8(cr: Vecf64, ci: Vecf64) -&gt; u8 {
+    <span class="kwa">let mut</span> zr = cr;
+    <span class="kwa">let mut</span> zi = ci;
+    <span class="kwa">let mut</span> esc_bits = <span class="num">0</span>;
+    <span class="kwa">for</span> _ <span class="kwa">in</span> <span class="num">0</span>..MAX_ITER {
+        <span class="slc">// Find Re(z)^2 and Im(z)^2</span>
+        <span class="kwa">let</span> rr  = mul2(zr,zr);
+        <span class="kwa">let</span> ii  = mul2(zi,zi);
+        <span class="slc">// Check if we escape</span>
+        <span class="slc">// May as well store this info in</span>
+        <span class="slc">// same byte as output</span>
+        <span class="kwa">let</span> mag = add2(rr, ii);
+        <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..VLEN {
+            <span class="kwa">if</span> mag[i] &gt; <span class="num">4.0</span> { esc_bits |= <span class="num">128</span> &gt;&gt; i; }
+        }
+        <span class="slc">// If no more work, break early</span>
+        <span class="kwa">if</span> esc_bits == <span class="num">0xff</span> { <span class="kwa">break</span>; }
+        <span class="slc">// Find Im(z^2)</span>
+        <span class="kwa">let</span> ir = mul2(zr, zi);
+        <span class="slc">// Set Re(z^2)</span>
+        zr = sub2(rr, ii);
+        <span class="slc">// Set Im(z^2)</span>
+        zi = add2(ir, ir);
+        <span class="slc">// Add c</span>
+        zr = add2(zr, cr);
+        zi = add2(zi, ci);
+    }
+    !esc_bits
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> size = std::env::args_os().nth(<span class="num">1</span>)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">200</span>);
+    <span class="kwa">let</span> inv = <span class="num">2.0</span> / size <span class="kwa">as</span> f64;
+    <span class="kwa">let mut</span> xvals = vec![<span class="num">0.0</span>; size];
+    <span class="kwa">let mut</span> yvals = vec![<span class="num">0.0</span>; size];
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..size {
+        xvals[i] = i <span class="kwa">as</span> f64 * inv - <span class="num">1.5</span>;
+        yvals[i] = i <span class="kwa">as</span> f64 * inv - <span class="num">1.0</span>;
+    }
+    <span class="kwa">let</span> xloc = &amp;xvals;
+    <span class="kwa">let</span> yloc = &amp;yvals;
+
+    assert!(size % THREADS == <span class="num">0</span>);<span class="slc">// FIXME</span>
+    <span class="kwa">let</span> handles: Vec&lt;_&gt; = (<span class="num">0</span>..THREADS).map(|e| {
+        <span class="kwa">let</span> xloc = xloc.to_vec();
+        <span class="kwa">let</span> yloc = yloc.to_vec();
+        thread::spawn(<span class="kwa">move</span> || {
+            <span class="kwa">let mut</span> rows = vec![vec![<span class="num">0</span> <span class="kwa">as</span> u8; size / <span class="num">8</span>]; size / THREADS];
+            <span class="kwa">for</span> y <span class="kwa">in</span> <span class="num">0</span>..size / THREADS {
+                <span class="kwa">for</span> x <span class="kwa">in</span> <span class="num">0</span>..size / <span class="num">8</span> {
+                    <span class="kwa">let mut</span> cr = ZEROS;
+                    <span class="kwa">let</span> ci = [yloc[y + e * size / THREADS]; VLEN];
+                    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..VLEN {
+                        cr[i] = xloc[<span class="num">8</span> * x + i];
+                    }
+                    rows[y][x] = mbrot8(cr, ci);
+                }
+            }
+            rows
+        })
+    }).collect();
+
+    println!(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">{} {}&quot;</span>, size, size);
+    <span class="kwa">let</span> stdout_unlocked = std::io::stdout();
+    <span class="kwa">let mut</span> stdout = stdout_unlocked.lock();
+    <span class="kwa">for</span> row <span class="kwa">in</span> handles.into_iter().flat_map(|h| h.join().unwrap().into_iter()) {
+        stdout.write_all(&amp;row).unwrap();
+    }
+    stdout.flush().unwrap();
+}

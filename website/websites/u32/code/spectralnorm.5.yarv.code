@@ -1,0 +1,142 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org</span>
+<span class="slc"># Contributed by Rick Branson</span>
+<span class="slc"># fixed by Isaac Gouy</span>
+<span class="slc">#</span>
+<span class="slc"># There is currently a bug in JRuby as of 11/16/2010 that causes</span>
+<span class="slc"># Marshal to read IOs in a blocking manner, which will cause this</span>
+<span class="slc"># script to hang.</span>
+
+IS_THREADED = <span class="kwc">RUBY_PLATFORM</span> == <span class="str">&quot;java&quot;</span>
+
+<span class="kwa">if</span> IS_THREADED
+  <span class="kwa">require</span> <span class="str">&quot;fcntl&quot;</span>
+<span class="kwa">end</span>
+
+<span class="kwa">class</span> Worker
+  
+  attr_reader <span class="kwc">:reader</span>
+  
+  <span class="kwa">def</span> <span class="kwd">initialize</span>(enum, index, total, &amp;block<span class="opt">)</span>
+    <span class="kwb">&#64;enum</span>   = enum
+    <span class="kwb">&#64;index</span>  = index
+    <span class="kwb">&#64;total</span>  = total
+    
+    <span class="kwb">&#64;reader</span>, <span class="kwb">&#64;writer</span> = IO.pipe
+      
+    <span class="kwa">if</span> IS_THREADED
+      <span class="kwb">&#64;thread</span> = Thread.new <span class="kwa">do</span>
+        <span class="kwa">self</span>.<span class="kwd">execute</span>(&amp;block<span class="opt">)</span>
+      <span class="kwa">end</span>
+    <span class="kwa">else</span>
+      <span class="kwb">&#64;p</span> = Process.fork <span class="kwa">do</span>
+        <span class="kwb">&#64;reader</span>.close
+        <span class="kwa">self</span>.<span class="kwd">execute</span>(&amp;block<span class="opt">)</span>
+        <span class="kwb">&#64;writer</span>.close
+      <span class="kwa">end</span>
+      
+      <span class="kwb">&#64;writer</span>.close
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+  
+  <span class="kwa">def</span> <span class="kwd">execute</span>(&amp;block<span class="opt">)</span>
+    chk   = <span class="kwb">&#64;enum</span>.size / <span class="kwb">&#64;total</span>
+    
+    (<span class="num">0</span> ... <span class="kwb">&#64;enum</span>.size<span class="opt">)</span>.<span class="kwd">step</span>(<span class="kwb">&#64;total</span><span class="opt">)</span> <span class="kwa">do</span> |i|
+      idx = i + <span class="kwb">&#64;index</span>
+      d = <span class="kwb">&#64;enum</span>[idx]
+      <span class="kwd">to_parent</span>([idx, <span class="kwa">yield</span>(d<span class="opt">)</span>]<span class="opt">)</span> <span class="kwa">unless</span> d == <span class="kwa">nil</span>
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> <span class="kwd">to_parent</span>(msg<span class="opt">)</span>
+    Marshal.<span class="kwd">dump</span>(msg, <span class="kwb">&#64;writer</span><span class="opt">)</span>
+  <span class="kwa">end</span>
+  
+  <span class="kwa">def self</span>.<span class="kwd">gather</span>(workers<span class="opt">)</span>
+    res = []
+    ios = workers.map { |w| w.reader }
+
+    <span class="kwa">while</span> ios.size &gt; <span class="num">0</span> <span class="kwa">do</span>
+      sr, sw, se = IO.<span class="kwd">select</span>(ios, <span class="kwa">nil</span>, <span class="kwa">nil</span><span class="opt">)</span>
+
+      <span class="kwa">if</span> sr
+        sr.each <span class="kwa">do</span> |io|
+          <span class="kwa">begin</span>
+            <span class="kwa">loop do</span>
+              msg = Marshal.<span class="kwd">load</span>(io<span class="opt">)</span>          
+              idx, content = msg
+              res[idx] = content
+            <span class="kwa">end</span>
+          <span class="kwa">rescue</span> EOFError
+            ios.<span class="kwd">delete</span>(io<span class="opt">)</span>
+          <span class="kwa">end</span>
+        <span class="kwa">end</span>
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+    
+    Process.waitall
+    res
+  <span class="kwa">end</span>
+
+  <span class="kwa">def self</span>.<span class="kwd">map</span>(enum, worker_count = <span class="num">6</span>, &amp;block<span class="opt">)</span>
+    count = [enum.size, worker_count].min
+
+    workers = (<span class="num">0</span> ... count<span class="opt">)</span>.map <span class="kwa">do</span> |idx|
+      Worker.<span class="kwd">new</span>(enum, idx, count, &amp;block<span class="opt">)</span>
+    <span class="kwa">end</span>
+
+    Worker.<span class="kwd">gather</span>(workers<span class="opt">)</span>    
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">eval_a</span>(i, j<span class="opt">)</span>
+  <span class="num">1.0</span><span class="kwc">/((i+j)*(i+j+1.0)/</span><span class="num">2.0</span>+i+<span class="num">1.0</span><span class="opt">)</span>
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">eval_A_times_u</span>(u<span class="opt">)</span>
+  usz     = u.size
+  urange  = (<span class="num">0</span> ... usz<span class="opt">)</span>
+  umap    = urange.to_a
+  
+  Worker.<span class="kwd">map</span>(umap<span class="opt">)</span> <span class="kwa">do</span> |i|
+    urange.<span class="kwd">inject</span>(<span class="num">0</span><span class="opt">)</span> <span class="kwa">do</span> |sum, j|
+      sum += <span class="kwd">eval_a</span>(j, i<span class="opt">)</span> * u[j]
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">eval_At_times_u</span>(u<span class="opt">)</span>
+  usz     = u.size
+  urange  = (<span class="num">0</span> ... usz<span class="opt">)</span>
+  umap    = urange.to_a
+  
+  Worker.<span class="kwd">map</span>(umap<span class="opt">)</span> <span class="kwa">do</span> |i|
+    urange.<span class="kwd">inject</span>(<span class="num">0</span><span class="opt">)</span> <span class="kwa">do</span> |sum, j|
+      sum += <span class="kwd">eval_a</span>(i, j<span class="opt">)</span> * u[j]      
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">eval_AtA_times_u</span>(u<span class="opt">)</span>
+  <span class="kwd">eval_At_times_u</span>(<span class="kwd">eval_A_times_u</span>(u<span class="opt">))</span>
+<span class="kwa">end</span>
+
+n = <span class="kwc">ARGV</span>[<span class="num">0</span>].to_i
+u = [<span class="num">1</span>] * n
+v = <span class="kwa">nil</span>
+
+<span class="num">10</span>.times <span class="kwa">do</span>
+  v = <span class="kwd">eval_AtA_times_u</span>(u<span class="opt">)</span>
+  u = <span class="kwd">eval_AtA_times_u</span>(v<span class="opt">)</span>
+<span class="kwa">end</span>
+
+vBv = <span class="num">0</span>
+vv  = <span class="num">0</span>
+
+(<span class="num">0</span> ... n<span class="opt">)</span>.each <span class="kwa">do</span> |i|
+  vBv += u[i] * v[i]
+  vv  += v[i] * v[i]
+<span class="kwa">end</span>
+
+print <span class="str">&quot;%0.9f&quot;</span> % (Math.<span class="kwd">sqrt</span>(vBv / vv<span class="opt">))</span>, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>

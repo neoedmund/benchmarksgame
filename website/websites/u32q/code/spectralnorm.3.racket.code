@@ -1,0 +1,61 @@
+#lang racket/base
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;; Translated from Mike Pall's Lua version.</span>
+<span class="slc">;; Parallelized by Sam Tobin-Hochstadt</span>
+
+(<span class="kwa">require</span> racket/cmdline racket/future
+         racket/require (<span class="kwa">for-syntax</span> racket/base)
+         (<span class="kwa">filtered-in</span> (λ (<span class="kwa">name</span>) (<span class="kwa">regexp-replace</span> #rx<span class="str">&quot;unsafe-&quot;</span> name <span class="str">&quot;&quot;</span>))
+                      racket/unsafe/ops)
+         (<span class="kwa">only-in</span> racket/flonum make-flvector))
+
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">for</span>/par k ([i N]) b)  
+  (<span class="kwa">let</span> ([stride (<span class="kwa">fxquotient</span> N k)])
+    (<span class="kwa">define</span> fs 
+      (<span class="kwa">for</span>/list ([n k])
+        (<span class="kwa">future</span> (λ () (<span class="kwa">for</span> ([i (<span class="kwa">in-range</span> (<span class="kwa">fx</span>* n stride) (<span class="kwa">fxmin</span> N (<span class="kwa">fx</span>* (<span class="kwa">fx</span>+ n <span class="num">1</span>) stride)))]) b)))))
+    (<span class="kwa">for-each</span> touch fs)))
+
+
+<span class="slc">;; the big let improves performance by about 20%</span>
+(<span class="kwa">let</span>* ()
+  (<span class="kwa">define</span> N (<span class="kwa">command-line</span> #:args (<span class="kwa">n</span>) (<span class="kwa">string-</span>&gt;number n)))
+  (<span class="kwa">define</span> C (<span class="kwa">processor-count</span>))
+  (<span class="kwa">define</span> (<span class="kwa">A</span> i j)
+    (<span class="kwa">let</span> ([ij (<span class="kwa">fx</span>+ i j)])
+      (<span class="kwa">fl</span>/ <span class="num">1.0</span> (<span class="kwa">fl</span>+ (<span class="kwa">fl</span>* (<span class="kwa">fl</span>* (<span class="kwa">fx-</span>&gt;fl ij)
+                              (<span class="kwa">fx-</span>&gt;fl (<span class="kwa">fx</span>+ ij <span class="num">1</span>)))
+                         <span class="num">0.5</span>) 
+                    (<span class="kwa">fx-</span>&gt;fl (<span class="kwa">fx</span>+ i <span class="num">1</span>))))))
+  (<span class="kwa">define</span> (<span class="kwa">Av</span> x y N)
+    (<span class="kwa">for</span>/par C ([i N])
+      (<span class="kwa">flvector-set</span>!
+       y i
+       (<span class="kwa">let</span> L ([a <span class="num">0.0</span>] [j <span class="num">0</span>])
+         (<span class="kwa">if</span> (<span class="kwa">fx</span>= j N) a
+             (<span class="kwa">L</span> (<span class="kwa">fl</span>+ a (<span class="kwa">fl</span>* (<span class="kwa">flvector-ref</span> x j) (<span class="kwa">A</span> i j)))
+                (<span class="kwa">fx</span>+ j <span class="num">1</span>)))))))
+  (<span class="kwa">define</span> (<span class="kwa">Atv</span> x y N)
+    (<span class="kwa">for</span>/par C ([i N])
+      (<span class="kwa">flvector-set</span>!
+       y i
+       (<span class="kwa">let</span> L ([a <span class="num">0.0</span>] [j <span class="num">0</span>])
+         (<span class="kwa">if</span> (<span class="kwa">fx</span>= j N) a
+             (<span class="kwa">L</span> (<span class="kwa">fl</span>+ a (<span class="kwa">fl</span>* (<span class="kwa">flvector-ref</span> x j) (<span class="kwa">A</span> j i)))
+                (<span class="kwa">fx</span>+ j <span class="num">1</span>)))))))
+  (<span class="kwa">define</span> (<span class="kwa">AtAv</span> x y t N) (<span class="kwa">Av</span> x t N) (<span class="kwa">Atv</span> t y N))
+  (<span class="kwa">define</span> u (<span class="kwa">make-flvector</span> N <span class="num">1.0</span>))
+  (<span class="kwa">define</span> v (<span class="kwa">make-flvector</span> N))
+  (<span class="kwa">define</span> t (<span class="kwa">make-flvector</span> N))
+  (<span class="kwa">for</span> ([i (<span class="kwa">in-range</span> <span class="num">10</span>)])
+    (<span class="kwa">AtAv</span> u v t N) (<span class="kwa">AtAv</span> v u t N))
+  (<span class="kwa">displayln</span> (<span class="kwa">real-</span>&gt;decimal-string 
+              (<span class="kwa">flsqrt</span> 
+               (<span class="kwa">let</span> L ([vBv <span class="num">0.0</span>] [vv <span class="num">0.0</span>] [i <span class="num">0</span>])
+                 (<span class="kwa">if</span> (<span class="kwa">fx</span>= i N) (<span class="kwa">fl</span>/ vBv vv)
+                     (<span class="kwa">let</span> ([ui (<span class="kwa">flvector-ref</span> u i)] [vi (<span class="kwa">flvector-ref</span> v i)])
+                       (<span class="kwa">L</span> (<span class="kwa">fl</span>+ vBv (<span class="kwa">fl</span>* ui vi))
+                          (<span class="kwa">fl</span>+ vv (<span class="kwa">fl</span>* vi vi))
+                          (<span class="kwa">fx</span>+ i <span class="num">1</span>))))))
+              <span class="num">9</span>)))

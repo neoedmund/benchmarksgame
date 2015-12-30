@@ -1,0 +1,24 @@
+
+Thu, 27 Aug 2015 01:52:56 GMT
+
+MAKE:
+mv mandelbrot.jruby-6.jruby mandelbrot.rb
+0.01s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jruby-9.0.0.0/bin/jruby -X+C --server  mandelbrot.rb 1000
+
+PROGRAM FAILED 
+
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+NotImplementedError: fork is not available on this platform
+                 fork at org/jruby/RubyKernel.java:1727
+                 fork at org/jruby/RubyProcess.java:1299
+     block in process at mandelbrot.rb:72
+                 call at org/jruby/RubyProc.java:308
+  block in initialize at mandelbrot.rb:29
+                catch at org/jruby/RubyKernel.java:1099
+  block in initialize at mandelbrot.rb:26

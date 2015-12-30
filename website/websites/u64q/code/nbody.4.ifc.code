@@ -1,0 +1,86 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">!   Translated from Mark C. Lewis nbody.java by Simon Geard</span>
+<span class="slc">!   Revised by Mike Garrahan</span>
+<span class="slc">!   minor changes for speed improvement by Gilbert Brietzke</span>
+<span class="slc">!</span>
+<span class="slc">! ifort -O2 -xHost -o nbody nbody.f90</span>
+
+<span class="kwa">program</span> nbody
+  <span class="kwa">implicit none</span>
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: dp=<span class="kwd">kind</span>(<span class="num">1</span>.d0)
+  <span class="kwa">real</span>(dp),<span class="kwa">parameter</span> :: TSTEP=<span class="num">0.01d0</span>, PI=<span class="num">3.141592653589793d0</span>
+  <span class="kwa">real</span>(dp),<span class="kwa">parameter</span> :: SOLAR_MASS=<span class="num">4</span>*PI*PI,DAYS_PER_YEAR=<span class="num">365.24d0</span>
+  <span class="kwa">integer</span> ,<span class="kwa">parameter</span> :: NB=<span class="num">5</span>,NPAIR=NB*(NB-<span class="num">1</span>)/<span class="num">2</span>
+  <span class="kwa">real</span>(dp) :: <span class="kwd">x</span>(<span class="num">3</span>,NB), <span class="kwd">v</span>(<span class="num">3</span>,NB), <span class="kwd">mass</span>(NB), e
+  <span class="kwa">integer</span> :: nstep,i
+  <span class="kwa">character</span>(len=<span class="num">8</span>) :: argv
+  <span class="kwa">call</span> <span class="kwd">get_command_argument</span>(<span class="num">1</span>, argv);<span class="kwa">read</span> (argv,*) nstep
+  <span class="kwa">call</span> <span class="kwd">init</span>(x,v,mass)
+  e = <span class="kwd">energy</span>(x,v,mass)
+  <span class="kwa">write</span> (*,<span class="str">'(f12.9)'</span>) e
+  <span class="kwa">do</span> i = <span class="num">1</span>, nstep
+     <span class="kwa">call</span> <span class="kwd">advance</span>(x,v,mass)
+  <span class="kwa">end do</span>
+  e = <span class="kwd">energy</span>(x,v,mass)
+  <span class="kwa">write</span> (*,<span class="str">'(f12.9)'</span>) e
+<span class="kwa">contains</span>
+  <span class="kwa">subroutine</span> <span class="kwd">advance</span>(x,v,mass)
+    <span class="kwa">real</span>(dp), <span class="kwd">intent</span>(inout) :: <span class="kwd">x</span>(<span class="num">3</span>,NB),<span class="kwd">v</span>(<span class="num">3</span>,NB)
+    <span class="kwa">real</span>(dp), <span class="kwd">intent</span>(in) :: <span class="kwd">mass</span>(NB)
+    <span class="kwa">real</span>(dp) :: <span class="kwd">r</span>(<span class="num">3</span>,NPAIR),<span class="kwd">rmag</span>(<span class="num">3</span>),<span class="kwd">mag</span>(NPAIR)
+    <span class="kwa">integer</span> :: i,j,k
+    k = <span class="num">1</span>
+    <span class="kwa">do</span> i = <span class="num">1</span>, NB - <span class="num">1</span>
+       <span class="kwa">do</span> j = i + <span class="num">1</span>, NB
+          <span class="kwd">r</span>(:,k) = <span class="kwd">x</span>(:,i) - <span class="kwd">x</span>(:,j)
+          k = k + <span class="num">1</span>
+       <span class="kwa">end do</span>
+    <span class="kwa">end do</span>
+    mag = TSTEP/<span class="kwd">norm2</span>(r,dim=<span class="num">1</span>)**<span class="num">3</span>
+    k = <span class="num">1</span>
+    <span class="kwa">do</span> i = <span class="num">1</span>, NB - <span class="num">1</span>
+       <span class="kwa">do</span> j = i + <span class="num">1</span>, NB
+          <span class="kwd">v</span>(:,i) = <span class="kwd">v</span>(:,i) - <span class="kwd">mass</span>(j)*<span class="kwd">mag</span>(k)*<span class="kwd">r</span>(:,k)
+          <span class="kwd">v</span>(:,j) = <span class="kwd">v</span>(:,j) + <span class="kwd">mass</span>(i)*<span class="kwd">mag</span>(k)*<span class="kwd">r</span>(:,k)
+          k = k + <span class="num">1</span>
+       <span class="kwa">end do</span>
+    <span class="kwa">end do</span>
+    x = x + TSTEP*v
+  <span class="kwa">end subroutine</span> advance
+  <span class="kwa">function</span> <span class="kwd">energy</span>(x,v,mass)
+    <span class="kwa">real</span>(dp), <span class="kwd">intent</span>(in) :: <span class="kwd">x</span>(<span class="num">3</span>,NB),<span class="kwd">v</span>(<span class="num">3</span>,NB),<span class="kwd">mass</span>(NB)
+    <span class="kwa">real</span>(dp) :: energy,pe
+    <span class="kwa">integer</span> :: i,j
+    energy = <span class="num">0.5d0</span>*<span class="kwd">dot_product</span>(mass,<span class="kwd">sum</span>(v**<span class="num">2</span>,dim=<span class="num">1</span>))
+    <span class="kwa">do</span> i = <span class="num">1</span>, NB - <span class="num">1</span>
+       <span class="kwa">do</span> j = i + <span class="num">1</span>, NB
+          pe = pe - <span class="kwd">mass</span>(i)*<span class="kwd">mass</span>(j)/<span class="kwd">norm2</span>(<span class="kwd">x</span>(:,i) - <span class="kwd">x</span>(:,j))
+       <span class="kwa">end do</span>
+    <span class="kwa">end do</span>
+    energy = energy + pe
+  <span class="kwa">end function</span> energy
+  <span class="kwa">subroutine</span> <span class="kwd">init</span>(x,v,mass)
+    <span class="kwa">real</span>(dp),<span class="kwd">intent</span>(out)::<span class="kwd">x</span>(<span class="num">3</span>,NB),<span class="kwd">v</span>(<span class="num">3</span>,NB),<span class="kwd">mass</span>(NB)
+    <span class="kwa">real</span>(dp),<span class="kwa">dimension</span>(<span class="num">3</span>,NB),<span class="kwa">parameter</span> :: xi=<span class="kwd">reshape</span>([<span class="num">0</span>.d0,<span class="num">0</span>.d0,<span class="num">0</span>.d0,&amp;              
+   &amp;<span class="num">4.84143144246472090d</span>+<span class="num">00</span>,-<span class="num">1.16032004402742839d</span>+<span class="num">00</span>,-<span class="num">1.03622044471123109d</span>-<span class="num">01</span>,&amp;
+   &amp;<span class="num">8.34336671824457987d</span>+<span class="num">00</span>, <span class="num">4.12479856412430479d</span>+<span class="num">00</span>,-<span class="num">4.03523417114321381d</span>-<span class="num">01</span>,&amp;
+   &amp;<span class="num">1.28943695621391310d</span>+<span class="num">01</span>,-<span class="num">1.51111514016986312d</span>+<span class="num">01</span>,-<span class="num">2.23307578892655734d</span>-<span class="num">01</span>,&amp;
+   &amp;<span class="num">1.53796971148509165d</span>+<span class="num">01</span>,-<span class="num">2.59193146099879641d</span>+<span class="num">01</span>, <span class="num">1.79258772950371181d</span>-<span class="num">01</span>],&amp;
+   &amp;[<span class="num">3</span>,NB])
+    <span class="kwa">real</span>(dp),<span class="kwa">dimension</span>(<span class="num">3</span>,NB),<span class="kwa">parameter</span>:: vi=<span class="kwd">reshape</span>([<span class="num">0</span>.d0,<span class="num">0</span>.d0,<span class="num">0</span>.d0,&amp;
+   &amp;<span class="num">1.66007664274403694d</span>-<span class="num">03</span>,<span class="num">7.69901118419740425d</span>-<span class="num">03</span>,-<span class="num">6.90460016972063023d</span>-<span class="num">05</span>,&amp;
+   &amp;-<span class="num">2.76742510726862411d</span>-<span class="num">03</span>,<span class="num">4.99852801234917238d</span>-<span class="num">03</span>, <span class="num">2.30417297573763929d</span>-<span class="num">05</span>,&amp;
+   &amp;<span class="num">2.96460137564761618d</span>-<span class="num">03</span>,<span class="num">2.37847173959480950d</span>-<span class="num">03</span>,-<span class="num">2.96589568540237556d</span>-<span class="num">05</span>,&amp;
+   &amp;<span class="num">2.68067772490389322d</span>-<span class="num">03</span>,<span class="num">1.62824170038242295d</span>-<span class="num">03</span>,-<span class="num">9.51592254519715870d</span>-<span class="num">05</span>],&amp;
+   &amp;[<span class="num">3</span>,NB])
+    <span class="kwa">real</span>(dp),<span class="kwa">dimension</span>(NB),<span class="kwa">parameter</span> :: massi=[<span class="num">1.0d0</span>,<span class="num">9.54791938424326609d</span>-<span class="num">04</span>,&amp;
+   &amp;<span class="num">2.85885980666130812d</span>-<span class="num">04</span>, <span class="num">4.36624404335156298d</span>-<span class="num">05</span>, <span class="num">5.15138902046611451d</span>-<span class="num">05</span>]
+
+    x = xi
+    v = vi*DAYS_PER_YEAR
+    mass = massi * SOLAR_MASS
+    <span class="kwd">v</span>(:,<span class="num">1</span>) = <span class="kwd">v</span>(:,<span class="num">1</span>) - <span class="kwd">matmul</span>(v, mass)/<span class="kwd">mass</span>(<span class="num">1</span>)
+  <span class="kwa">end subroutine</span> init
+<span class="kwa">end program</span> nbody

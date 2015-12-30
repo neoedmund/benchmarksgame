@@ -1,0 +1,12 @@
+
+Wed, 20 May 2015 04:18:01 GMT
+
+MAKE:
+/usr/bin/gcc -pipe -Wall -O3 -fomit-frame-pointer -march=native -std=c99 -D_GNU_SOURCE -mfpmath=sse -msse2 -fopenmp mandelbrot.gcc-4.c -o mandelbrot.gcc-4.gcc_run 
+rm mandelbrot.gcc-4.c
+0.13s to complete and log all make actions
+
+COMMAND LINE:
+./mandelbrot.gcc-4.gcc_run 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN

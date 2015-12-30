@@ -1,0 +1,29 @@
+  <h2>(Not included since May 2010)</h2>
+  <section>
+    <h3>Background</h3>
+    <p>An adaptation of [pdf 100KB] <a href="http://cedric.cnam.fr/PUBLIS/RC474.pdf">"Chameneos, a Concurrency Game for Java, Ada and Others"</a> (which includes example implementations in Java, Ada and C).
+  </section>
+  <section>
+    <h3>Variance</h3>
+    <p>As a practical matter, continuations & coroutines & cooperative threading will be ignored. <b>Please don't implement your own</b> custom scheduler. 
+    <p>Some language implementations use OS threads; some provide pre-emptive lightweight threads. 
+  </section>
+  <section>
+    <h3>How to implement</h3>
+    <p>We ask that contributed programs not only give the correct result, but also <b>use the same algorithm</b> to calculate that result.
+    <p>Each program should:
+    <ul>
+      <li><p>create differently coloured (blue, red, yellow), differently named, concurrent chameneos creatures
+      <li><p>each creature will repeatedly go to the meeting place and meet, or wait to meet, another chameneos "(at the request the
+caller does not know whether another chameneos is already present or not, neither if there will be one in some future)"
+      <li><p>both creatures will change colour to complement the colour of the chameneos that they met - don't use arithmetic to complement the colour, use if-else or switch/case or pattern-match
+      <li><p>write all the colour changes for blue red and yellow creatures, using the colour complement function
+      <li><p>for rendezvouses with an odd number of creatures (blue red yellow) and with an even number of creatures (blue red yellow red yellow blue red yellow red blue)
+      <ul>
+        <li><p>write the colours the creatures start with
+        <li><p>after N meetings have taken place, for each creature write the number of creatures met and spell out the number of times the creature met a creature with the same name (should be zero)
+        <li><p>spell out the sum of the number of creatures met (should be 2N)
+      </ul>
+    </ul>
+    <p><a href="http://www.math.utah.edu/~beebe/software/ndiff/">ndiff</a> -fields 2-10</b> program output N = 600 with this <a href="../download/chameneosredux-output.txt">output file</a> to check your program output has the correct format, before you <a href="./play.html">contribute your program</a>.
+  </section>

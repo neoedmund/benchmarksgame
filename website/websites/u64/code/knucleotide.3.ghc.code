@@ -1,0 +1,330 @@
+<span class="slc">--</span>
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">-- contributed by Stephen Blackheath (with some bits taken from Don Stewart's</span>
+<span class="slc">--     version), v1.2</span>
+
+<span class="kwd">import</span> Text.Printf
+<span class="kwd">import</span> Data.ByteString.Internal
+<span class="kwd">import qualified</span> Data.ByteString.Char8 <span class="kwd">as</span> S
+<span class="kwd">import</span> Control.Applicative
+<span class="kwd">import</span> Control.Monad
+<span class="kwd">import</span> Control.Concurrent
+<span class="kwd">import</span> Foreign.Storable
+<span class="kwd">import</span> Foreign.Marshal.Alloc
+<span class="kwd">import</span> Foreign.Marshal.<span class="kwb">Array</span>
+<span class="kwd">import</span> Foreign.Ptr
+<span class="kwd">import</span> Foreign.ForeignPtr
+<span class="kwd">import</span> Data.Word
+<span class="kwd">import</span> Data.Bits
+<span class="kwd">import</span> Data.<span class="kwb">Char</span>
+<span class="kwd">import</span> Data.List
+<span class="kwd">import</span> Data.<span class="kwb">Maybe</span>
+<span class="kwd">import</span> Data.IORef
+<span class="kwd">import</span> GHC.Exts
+
+
+main = <span class="kwd">do</span>
+    genome &lt;- extract (S.pack <span class="str">&quot;&gt;TH&quot;</span>)
+    <span class="kwd">let</span> actions = [
+                <span class="kwd">do</span>
+                    a &lt;- printFreqsBySize genome <span class="num">1</span>
+                    b &lt;- printFreqsBySize genome <span class="num">2</span>
+                    <span class="kwc">return</span> $ a ++ b
+            ] ++ <span class="kwc">map</span> (printFreqsSpecific genome) specificSeqs
+    output &lt;- <span class="kwc">concat</span> &lt;$&gt; parallel actions
+    forM_ output <span class="kwc">putStrLn</span>
+
+<span class="slc">-- Drop in replacement for sequence</span>
+parallel :: [<span class="kwb">IO</span> a] -&gt; <span class="kwb">IO</span> [a]
+parallel actions = <span class="kwd">do</span>
+    vars &lt;- forM actions $ <span class="esc">\a</span>ction -&gt; <span class="kwd">do</span>
+        var &lt;- newEmptyMVar
+        forkIO $ <span class="kwd">do</span>
+            answer &lt;- action
+            putMVar var answer
+        <span class="kwc">return</span> var
+    forM vars takeMVar
+
+specificSeqs = <span class="kwc">map</span> S.pack [
+    <span class="str">&quot;GGT&quot;</span>,<span class="str">&quot;GGTA&quot;</span>,<span class="str">&quot;GGTATT&quot;</span>,<span class="str">&quot;GGTATTTTAATT&quot;</span>,<span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>]
+
+extract p = <span class="kwd">do</span>
+    s &lt;- S.<span class="kwc">getContents</span>
+    <span class="kwd">let</span> (_, <span class="kwc">rem</span>)  = S.breakSubstring p s
+    <span class="kwc">return</span> $! S.<span class="kwc">map toUpper</span>             <span class="slc">-- array fusion!</span>
+            . S.<span class="kwc">filter</span>    ((/=) '<span class="esc">\n</span>')
+            . S.<span class="kwc">dropWhile</span> ((/=) '<span class="esc">\n</span>') $ <span class="kwc">rem</span>
+
+printFreqsBySize :: S.ByteString -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> [<span class="kwb">String</span>]
+printFreqsBySize genome keySize = <span class="kwd">do</span>
+        ht0 &lt;- htNew keySize
+        ht &lt;- hashGenome genome keySize ht0
+        l &lt;- htToList ht
+        htFree ht
+        <span class="kwc">return</span> $ <span class="kwc">map</span> draw (<span class="kwc">sortBy</span> sortRule l) ++ [<span class="str">&quot;&quot;</span>]
+    <span class="kwd">where</span>
+        genomeLen = S.<span class="kwa">length</span> genome
+        draw :: (S.ByteString, <span class="kwb">Int</span>) -&gt; <span class="kwb">String</span>
+        draw (key, count) = printf <span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">%.3f&quot;</span> (S.unpack key) pct
+            <span class="kwd">where</span> pct   = (<span class="num">100</span> * (<span class="kwc">fromIntegral</span> count) / total) :: <span class="kwb">Double</span>
+                  total = <span class="kwc">fromIntegral</span> (genomeLen - keySize + <span class="num">1</span>)
+
+printFreqsSpecific :: S.ByteString -&gt; S.ByteString -&gt; <span class="kwb">IO</span> [<span class="kwb">String</span>]
+printFreqsSpecific genome <span class="kwc">seq</span> = <span class="kwd">do</span>
+    <span class="kwd">let</span> keySize = S.<span class="kwa">length</span> <span class="kwc">seq</span>
+        genomeLen = S.<span class="kwa">length</span> genome
+    ht0 &lt;- htNew keySize
+    ht &lt;- hashGenome genome keySize ht0
+    <span class="kwd">let</span> (fp, offset, len) = toForeignPtr <span class="kwc">seq</span>
+    count &lt;- withForeignPtr fp $ \p_ -&gt; <span class="kwd">do</span>
+        htGet ht (p_ `plusPtr` offset)
+    htFree ht
+    <span class="kwc">return</span> [<span class="kwc">show</span> count ++ ('<span class="esc">\t</span>' : S.unpack <span class="kwc">seq</span>)]
+
+hashGenome :: S.ByteString
+           -&gt; <span class="kwb">Int</span>
+           -&gt; Hashtable
+           -&gt; <span class="kwb">IO</span> Hashtable
+<span class="com">{-# INLINE hashGenome #-}</span>
+hashGenome genome keySize ht = <span class="kwd">do</span>
+    <span class="kwd">let</span> (fp, offset, len) = toForeignPtr genome
+    withForeignPtr fp $ \p_ -&gt; <span class="kwd">do</span>
+        <span class="kwd">let</span> p = p_ `plusPtr` offset
+            loop ht idx = <span class="kwd">do</span>
+                <span class="kwd">let</span> key = p `plusPtr` idx
+                htInc ht key
+            endIdx = len - keySize + <span class="num">1</span>
+            foldMe i ht | i == endIdx = <span class="kwc">return</span> ht
+            foldMe i ht = loop ht i &gt;&gt;= foldMe (i+<span class="num">1</span>)
+        foldMe <span class="num">0</span> ht
+
+sortRule :: (S.ByteString, <span class="kwb">Int</span>) -&gt; (S.ByteString, <span class="kwb">Int</span>) -&gt; <span class="kwb">Ordering</span>
+sortRule (a1, b1) (a2, b2) =
+    <span class="kwd">case</span> <span class="kwc">compare</span> b2 b1 <span class="kwd">of</span>
+        EQ -&gt; <span class="kwc">compare</span> a1 a2
+        x  -&gt; x
+                  
+<span class="slc">------ Hash table implementation ----------------------------------------------</span>
+
+<span class="slc">-- Note: Hash tables are not generally used in functional languages, so there</span>
+<span class="slc">-- are no available library implementations for Haskell.  This benchmark</span>
+<span class="slc">-- requires a hash table.  This is why I have implemented the hash table here.</span>
+
+htNew :: <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> Hashtable
+htNew = htNew' (<span class="kwc">head</span> primes)
+
+htNew' :: <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> Hashtable
+htNew' slots ksz = <span class="kwd">do</span>
+    <span class="kwd">let</span> ssz = spineSize ksz slots
+    sp &lt;- mallocBytes ssz
+    memset sp <span class="num">0</span> (<span class="kwc">fromIntegral</span> ssz)
+    <span class="kwc">return</span> $ Hashtable {
+            keySize   = ksz,
+            noOfSlots = slots,
+            spine     = sp
+        }
+
+primes = [ <span class="num">1543</span>,     <span class="num">3079</span>,      <span class="num">6151</span>,      <span class="num">12289</span>,     <span class="num">24593</span>,
+           <span class="num">49157</span>,    <span class="num">98317</span>,     <span class="num">196613</span>,    <span class="num">93241</span>,     <span class="num">786433</span>,
+           <span class="num">1572869</span>,  <span class="num">3145739</span>,   <span class="num">6291469</span>,   <span class="num">12582917</span>,  <span class="num">25165843</span>,
+           <span class="num">50331653</span>, <span class="num">100663319</span>, <span class="num">201326611</span>, <span class="num">402653189</span>, <span class="num">805306457</span> ]
+
+htFree :: Hashtable -&gt; <span class="kwb">IO</span> ()
+htFree ht = <span class="kwd">do</span>
+    htTraverse ht $ \isSpine (Entry ePtr) -&gt; <span class="kwc">when</span> (<span class="kwc">not</span> isSpine) $ free ePtr
+    free (spine ht)
+
+htGet :: Hashtable -&gt; Ptr Word8 -&gt; <span class="kwb">IO Int</span>
+htGet ht key = <span class="kwd">do</span>
+    hash &lt;- calcHash ht key
+    htPayload ht hash key &gt;&gt;= peek
+
+htInc :: Hashtable -&gt; Ptr Word8 -&gt; <span class="kwb">IO</span> Hashtable
+<span class="com">{-# INLINE htInc #-}</span>
+htInc !ht !key = <span class="kwd">do</span>
+    hash &lt;- calcHash ht key
+    pPayload &lt;- htPayload ht hash key
+    <span class="kwa">value</span> &lt;- peek pPayload
+    poke pPayload (<span class="kwa">value</span>+<span class="num">1</span>)
+    <span class="kwd">if</span> <span class="kwa">value</span> == <span class="num">0</span> &amp;&amp; (hash .&amp;. <span class="num">0x7f</span>) == <span class="num">0</span>
+        <span class="kwd">then</span> checkGrow ht
+        <span class="kwd">else</span> <span class="kwc">return</span> ht
+
+htPut_ :: Hashtable -&gt; Ptr Word8 -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> ()
+<span class="com">{-# INLINE htPut_ #-}</span>
+htPut_ !ht !key !<span class="kwa">value</span> = <span class="kwd">do</span>
+    hash &lt;- calcHash ht key
+    pPayload &lt;- htPayload ht hash key
+    poke pPayload <span class="kwa">value</span>
+
+checkGrow :: Hashtable -&gt; <span class="kwb">IO</span> Hashtable
+checkGrow ht = <span class="kwd">do</span>
+        <span class="kwd">let</span> pTotal = totalEntriesOf ht
+            slots = noOfSlots ht
+        total &lt;- (<span class="num">0x200</span>+) &lt;$&gt; peek pTotal
+        poke pTotal total
+        <span class="kwd">if</span> total &gt;= slots
+            <span class="kwd">then do</span>
+                <span class="kwd">let</span> newSlots = <span class="kwc">head</span> $ <span class="kwc">dropWhile</span> (&lt;= slots*<span class="num">2</span>) primes
+                ht' &lt;- htNew' newSlots (keySize ht)
+                htTraverse ht $ \_ -&gt; reinsert ht' <span class="slc">-- re-insert all the elts</span>
+                htFree ht
+                poke (totalEntriesOf ht') total <span class="slc">-- copy the total entry count</span>
+                <span class="kwc">return</span> ht'
+            <span class="kwd">else</span> <span class="kwc">return</span> ht
+    <span class="kwd">where</span>
+        reinsert :: Hashtable -&gt; Entry -&gt; <span class="kwb">IO</span> ()
+        reinsert ht entry = <span class="kwd">do</span>
+            <span class="kwa">value</span> &lt;- peek (payloadOf entry)
+            htPut_ ht (keyOf entry) <span class="kwa">value</span>
+
+htToList :: Hashtable -&gt; <span class="kwb">IO</span> [(S.ByteString, <span class="kwb">Int</span>)]
+htToList ht =
+    htMap (\entry -&gt; <span class="kwd">do</span>
+        keyStr &lt;- keyString ht (keyOf entry)
+        payload &lt;- peek (payloadOf entry)
+        <span class="kwc">return</span> (keyStr, payload)) ht
+
+htMap :: (Entry -&gt; <span class="kwb">IO</span> a) -&gt; Hashtable -&gt; <span class="kwb">IO</span> [a]
+htMap f ht = <span class="kwc">mapM</span> f =&lt;&lt; htEntries ht
+
+keyString :: Hashtable -&gt; Ptr Word8 -&gt; <span class="kwb">IO</span> S.ByteString
+keyString ht key = S.pack . <span class="kwc">map</span> w2c &lt;$&gt; peekArray (keySize ht) key
+
+isEmptySlot :: Entry -&gt; <span class="kwb">IO Bool</span>
+<span class="com">{-# INLINE isEmptySlot #-}</span>
+isEmptySlot entry = <span class="kwd">do</span>
+    ch &lt;- peek $ keyOf entry
+    <span class="kwc">return</span> $ ch == <span class="num">0</span>
+
+htEntries :: Hashtable -&gt; <span class="kwb">IO</span> [Entry]
+htEntries ht = <span class="kwd">do</span>
+    es &lt;- newIORef []
+    htTraverse ht $ \_ entry -&gt; modifyIORef es $ \l -&gt; entry:l
+    readIORef es
+
+htTraverse :: Hashtable -&gt; (<span class="kwb">Bool</span> -&gt; Entry -&gt; <span class="kwb">IO</span> ()) -&gt; <span class="kwb">IO</span> ()
+htTraverse ht f = he <span class="num">0</span>
+    <span class="kwd">where</span>
+        slots = noOfSlots ht
+        he i | i == slots = <span class="kwc">return</span> ()
+        he i = <span class="kwd">do</span>
+            <span class="kwd">let</span> entry = indexEntry ht i
+            <span class="kwa">empty</span> &lt;- isEmptySlot entry
+            <span class="kwd">if</span> <span class="kwa">empty</span>
+                <span class="kwd">then</span> he (i+<span class="num">1</span>)
+                <span class="kwd">else</span> links <span class="kwa">True</span> i entry
+        links isSpine i entry = <span class="kwd">do</span>
+            <span class="kwc">next</span> &lt;- peek $ nextPtrOf entry
+            f isSpine entry
+            <span class="kwd">if</span> <span class="kwc">next</span> == nullPtr
+                <span class="kwd">then</span> he (i+<span class="num">1</span>)
+                <span class="kwd">else</span> links <span class="kwa">False</span> i (Entry <span class="kwc">next</span>)
+
+<span class="kwd">data</span> Hashtable = Hashtable {
+        keySize   :: <span class="kwb">Int</span>,
+        noOfSlots :: <span class="kwb">Int</span>,
+        spine     :: Ptr Word8
+    }
+
+wordSize :: <span class="kwb">Int</span>
+wordSize = <span class="kwc">max</span> (sizeOf (nullPtr :: Ptr Word8)) (sizeOf (<span class="num">0</span> :: <span class="kwb">Int</span>))
+
+<span class="slc">-- Round up to word size</span>
+roundUp :: <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span>
+<span class="com">{-# INLINE roundUp #-}</span>
+roundUp !i = (i + wordSize - <span class="num">1</span>) .&amp;. complement (wordSize - <span class="num">1</span>)
+
+slotSize :: <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span>
+<span class="com">{-# INLINE slotSize #-}</span>
+slotSize !ksz = roundUp ksz + wordSize * <span class="num">2</span>
+
+spineSize :: <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span>
+spineSize ksz slots = slots * slotSize ksz + wordSize
+
+calcHash :: Hashtable -&gt; Ptr Word8 -&gt; <span class="kwb">IO Int</span>
+<span class="com">{-# INLINE calcHash #-}</span>
+calcHash !ht !key = (`<span class="kwc">mod</span>` noOfSlots ht) &lt;$&gt; ch <span class="num">0 0</span>
+    <span class="kwd">where</span>
+        ksz = keySize ht
+        ch :: <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">IO Int</span>
+        ch !i !acc | i == ksz = <span class="kwc">return</span> acc
+        ch !i !acc = <span class="kwd">do</span>
+            c &lt;- peek (key `plusPtr` i)
+            ch (i+<span class="num">1</span>) (acc * <span class="num">131</span> + <span class="kwc">fromIntegral</span> (c::Word8))
+
+<span class="kwd">newtype</span> Entry = Entry (Ptr Word8)
+
+<span class="slc">-- Count of the total number of hash table entries</span>
+totalEntriesOf :: Hashtable -&gt; Ptr <span class="kwb">Int</span>
+<span class="com">{-# INLINE totalEntriesOf #-}</span>
+totalEntriesOf ht = castPtr $ spine ht
+
+indexEntry :: Hashtable -&gt; <span class="kwb">Int</span> -&gt; Entry
+<span class="com">{-# INLINE indexEntry #-}</span>
+indexEntry !ht !hash =
+    <span class="kwd">let</span> hOffset = wordSize + hash * slotSize (keySize ht)
+    <span class="kwd">in</span>  Entry $ spine ht `plusPtr` hOffset
+
+entryMatches :: Hashtable -&gt; Entry -&gt; Ptr Word8 -&gt; <span class="kwb">IO Bool</span>
+<span class="com">{-# INLINE entryMatches #-}</span>
+entryMatches !ht !entry !key = <span class="kwd">do</span>
+    <span class="kwd">let</span> eKey = keyOf entry
+    c &lt;- memcmp key eKey (<span class="kwc">fromIntegral</span> $ keySize ht)
+    <span class="kwd">if</span> c == <span class="num">0</span>
+        <span class="kwd">then</span> <span class="kwc">return</span> <span class="kwa">True</span>
+        <span class="kwd">else do</span>
+            <span class="kwa">empty</span> &lt;- isEmptySlot entry
+            <span class="kwd">if</span> <span class="kwa">empty</span>
+                <span class="kwd">then do</span>
+                    memcpy eKey key (<span class="kwc">fromIntegral</span> $ keySize ht)  <span class="slc">-- ick</span>
+                    <span class="kwc">return</span> <span class="kwa">True</span>
+                <span class="kwd">else</span>
+                    <span class="kwc">return</span> <span class="kwa">False</span>
+
+nextPtrOf :: Entry -&gt; Ptr (Ptr Word8)
+<span class="com">{-# INLINE nextPtrOf #-}</span>
+nextPtrOf !(Entry ePtr) = castPtr $ ePtr
+
+payloadOf :: Entry -&gt; Ptr <span class="kwb">Int</span>
+<span class="com">{-# INLINE payloadOf #-}</span>
+payloadOf !(Entry ePtr) = castPtr $ ePtr `plusPtr` wordSize
+
+keyOf :: Entry -&gt; Ptr Word8
+<span class="com">{-# INLINE keyOf #-}</span>
+keyOf !(Entry ePtr) = ePtr `plusPtr` (wordSize*<span class="num">2</span>)
+
+allocEntry :: Hashtable -&gt; Ptr Word8 -&gt; <span class="kwb">IO</span> Entry
+allocEntry !ht !key = <span class="kwd">do</span>
+    <span class="kwd">let</span> esz = slotSize $ keySize ht
+    ePtr &lt;- mallocBytes esz
+    memset ePtr <span class="num">0</span> (<span class="kwc">fromIntegral</span> esz)
+    <span class="kwd">let</span> entry = Entry ePtr
+    memcpy (keyOf entry) key (<span class="kwc">fromIntegral</span> $ keySize ht)
+    <span class="kwc">return</span> entry
+
+htPayload :: Hashtable -&gt; <span class="kwb">Int</span> -&gt; Ptr Word8 -&gt; <span class="kwb">IO</span> (Ptr <span class="kwb">Int</span>)
+<span class="com">{-# INLINE htPayload #-}</span>
+htPayload !ht !hash !key = <span class="kwd">do</span>
+        entry &lt;- findEntry (indexEntry ht hash)
+        <span class="kwc">return</span> $ payloadOf entry
+    <span class="kwd">where</span>
+        findEntry :: Entry -&gt; <span class="kwb">IO</span> Entry
+        findEntry !entry = <span class="kwd">do</span>
+            match &lt;- entryMatches ht entry key
+            <span class="kwd">if</span> match
+                <span class="kwd">then</span>
+                    <span class="kwc">return</span> entry
+                <span class="kwd">else do</span>
+                    <span class="kwd">let</span> pNext = nextPtrOf entry
+                    <span class="kwc">next</span> &lt;- peek pNext
+                    <span class="kwd">if</span> <span class="kwc">next</span> == nullPtr
+                        <span class="kwd">then do</span>
+                            newEntry&#64;(Entry ePtr) &lt;- allocEntry ht key
+                            poke pNext ePtr
+                            <span class="kwc">return</span> newEntry
+                        <span class="kwd">else</span>
+                            findEntry (Entry <span class="kwc">next</span>)
+

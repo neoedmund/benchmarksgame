@@ -1,0 +1,68 @@
+
+<span class="com">/**</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Loosely based on Jarkko Miettinen's implementation. Requires Java 8.</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Heikki Salokanto.</span>
+<span class="com"> * modified by Chandra Sekar</span>
+<span class="com"> * modified by Mike Krüger</span>
+<span class="com"> */</span>
+
+<span class="kwa">public class</span> binarytrees {
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) <span class="kwa">throws</span> Exception {
+        <span class="kwb">int</span> n = args.length &gt; <span class="num">0</span> ? Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]) : <span class="num">0</span>;
+        <span class="kwb">int</span> minDepth = <span class="num">4</span>;
+        <span class="kwb">int</span> maxDepth = Math.<span class="kwd">max</span>(minDepth + <span class="num">2</span>, n);
+        <span class="kwb">int</span> stretchDepth = maxDepth + <span class="num">1</span>;
+        <span class="kwb">int</span> check = (TreeNode.<span class="kwd">create</span>(<span class="num">0</span>, stretchDepth)).<span class="kwd">check</span>();
+        
+        System.out.<span class="kwd">println</span>(<span class="str">&quot;stretch tree of depth &quot;</span> + (maxDepth + <span class="num">1</span>) + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + check);
+
+        TreeNode longLivedTree = TreeNode.<span class="kwd">create</span>(<span class="num">0</span>, maxDepth);
+        <span class="kwa">for</span> (<span class="kwb">int</span> depth = minDepth; depth &lt;= maxDepth; depth += <span class="num">2</span>)
+        {
+           <span class="kwb">int</span> iterations = <span class="num">1</span> &lt;&lt; (maxDepth - depth + minDepth);
+           check = <span class="num">0</span>;
+
+           <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">1</span>; i &lt;= iterations; i++)
+           {
+                check += (TreeNode.<span class="kwd">create</span>(i, depth)).<span class="kwd">check</span>();
+                check += (TreeNode.<span class="kwd">create</span>(-i, depth)).<span class="kwd">check</span>();
+           }
+           System.out.<span class="kwd">println</span>((iterations &lt;&lt; <span class="num">1</span>) + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">trees of depth &quot;</span> + depth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + check);
+        }
+
+        System.out.<span class="kwd">println</span>(<span class="str">&quot;long lived tree of depth &quot;</span> + maxDepth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + longLivedTree.<span class="kwd">check</span>());
+    }
+
+    <span class="kwa">static class</span> TreeNode {
+        <span class="kwb">int</span> item;
+        TreeNode left, right;
+
+        <span class="kwa">static</span> TreeNode <span class="kwd">create</span>(<span class="kwb">int</span> item, <span class="kwb">int</span> depth)
+        {
+            <span class="kwa">return</span> <span class="kwd">ChildTreeNodes</span>(item, depth - <span class="num">1</span>);
+        }
+         
+        <span class="kwa">static</span> TreeNode <span class="kwd">ChildTreeNodes</span>(<span class="kwb">int</span> item, <span class="kwb">int</span> depth)
+        {
+            TreeNode node = <span class="kwa">new</span> <span class="kwd">TreeNode</span>(item);
+            <span class="kwa">if</span> (depth &gt; <span class="num">0</span>)
+            {
+                node.left = <span class="kwd">ChildTreeNodes</span>(<span class="num">2</span> * item - <span class="num">1</span>, depth - <span class="num">1</span>);
+                node.right = <span class="kwd">ChildTreeNodes</span>(<span class="num">2</span> * item, depth - <span class="num">1</span>);
+            }
+            <span class="kwa">return</span> node;
+        }
+
+        <span class="kwd">TreeNode</span>(<span class="kwb">int</span> item) {
+            <span class="kwa">this</span>.item = item;
+        }
+
+        <span class="kwb">int</span> <span class="kwd">check</span>() {
+            <span class="kwa">return</span> left == null ? item : left.<span class="kwd">check</span>() - right.<span class="kwd">check</span>() + item;
+        }
+    }
+}

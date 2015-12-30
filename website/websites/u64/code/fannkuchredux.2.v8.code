@@ -1,0 +1,51 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Isaac Gouy, transliterated from Mike Pall's Lua program </span>
+<span class="com">*/</span>
+
+<span class="kwa">function</span> <span class="kwd">fannkuch</span>(n) {
+   <span class="kwa">var</span> p = <span class="kwa">new</span> <span class="kwd">Int32Array</span>(n), q = <span class="kwa">new</span> <span class="kwd">Int32Array</span>(n), s = <span class="kwa">new</span> <span class="kwd">Int32Array</span>(n);
+   <span class="kwa">var</span> sign = <span class="num">1</span>, maxflips = <span class="num">0</span>, sum = <span class="num">0</span>, m = n-<span class="num">1</span>;
+   <span class="kwa">for</span>(<span class="kwa">var</span> i=<span class="num">0</span>; i&lt;n; i++){ p[i] = i; q[i] = i; s[i] = i; }
+   <span class="kwa">do</span> {
+      <span class="slc">// Copy and flip.</span>
+      <span class="kwa">var</span> q0 = p[<span class="num">0</span>];                                     <span class="slc">// Cache 0th element.</span>
+      <span class="kwa">if</span> (q0 != <span class="num">0</span>){
+         <span class="kwa">for</span>(<span class="kwa">var</span> i=<span class="num">1</span>; i&lt;n; i++) q[i] = p[i];             <span class="slc">// Work on a copy.</span>
+         <span class="kwa">var</span> flips = <span class="num">1</span>;
+         <span class="kwa">do</span> { 
+            <span class="kwa">var</span> qq = q[q0]; 
+            <span class="kwa">if</span> (qq == <span class="num">0</span>){                                <span class="slc">// ... until 0th element is 0.</span>
+               sum += sign*flips;
+	       <span class="kwa">if</span> (flips &gt; maxflips) maxflips = flips;   <span class="slc">// New maximum?</span>
+               <span class="kwa">break</span>; 
+            } 
+ 	    q[q0] = q0; 
+	    <span class="kwa">if</span> (q0 &gt;= <span class="num">3</span>){
+	       <span class="kwa">var</span> i = <span class="num">1</span>, j = q0 - <span class="num">1</span>, t;
+               <span class="kwa">do</span> { t = q[i]; q[i] = q[j]; q[j] = t; i++; j--; } <span class="kwa">while</span> (i &lt; j); 
+            }
+	    q0 = qq; flips++;
+         } <span class="kwa">while</span> (<span class="kwa">true</span>); 
+      }
+      <span class="slc">// Permute.</span>
+      <span class="kwa">if</span> (sign == <span class="num">1</span>){
+         <span class="kwa">var</span> t = p[<span class="num">1</span>]; p[<span class="num">1</span>] = p[<span class="num">0</span>]; p[<span class="num">0</span>] = t; sign = -<span class="num">1</span>; <span class="slc">// Rotate 0&lt;-1.</span>
+      } <span class="kwa">else</span> { 
+         <span class="kwa">var</span> t = p[<span class="num">1</span>]; p[<span class="num">1</span>] = p[<span class="num">2</span>]; p[<span class="num">2</span>] = t; sign = <span class="num">1</span>;  <span class="slc">// Rotate 0&lt;-1 and 0&lt;-1&lt;-2.</span>
+         <span class="kwa">for</span>(<span class="kwa">var</span> i=<span class="num">2</span>; i&lt;n; i++){ 
+	    <span class="kwa">var</span> sx = s[i];
+	    <span class="kwa">if</span> (sx != <span class="num">0</span>){ s[i] = sx-<span class="num">1</span>; <span class="kwa">break</span>; }
+	    <span class="kwa">if</span> (i == m) <span class="kwa">return</span> <span class="kwd">Array</span>(sum,maxflips);      <span class="slc">// Out of permutations.</span>
+	    s[i] = i;
+	    <span class="slc">// Rotate 0&lt;-...&lt;-i+1.</span>
+	    t = p[<span class="num">0</span>]; <span class="kwa">for</span>(<span class="kwa">var</span> j=<span class="num">0</span>; j&lt;=i; j++){ p[j] = p[j+<span class="num">1</span>]; } p[i+<span class="num">1</span>] = t;
+         }
+      }
+   } <span class="kwa">while</span> (<span class="kwa">true</span>);
+}
+
+<span class="kwa">var</span> n = <span class="num">1</span>*arguments[<span class="num">0</span>]*<span class="num">1</span>;
+<span class="kwa">var</span> pf = <span class="kwd">fannkuch</span>(n);
+<span class="kwd">print</span>(pf[<span class="num">0</span>] + <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span> + <span class="str">&quot;Pfannkuchen(&quot;</span> + n + <span class="str">&quot;) = &quot;</span> + pf[<span class="num">1</span>]);

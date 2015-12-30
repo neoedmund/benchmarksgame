@@ -1,0 +1,58 @@
+﻿<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Modified version of Valentin Kraevskiy</span>
+<span class="slc">// Contributed by Vassil Keremidchiev</span>
+
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Text</span>.<span class="kwd">RegularExpressions</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Threading</span>
+
+<span class="kwa">let</span> regex s = <span class="kwd">Regex</span> (s, <span class="kwd">RegexOptions</span>.<span class="kwd">Compiled</span>)
+<span class="kwa">let</span> input = stdin.<span class="kwd">ReadToEnd</span> ()
+<span class="kwa">let</span> withoutComments = (regex <span class="str">&quot;&gt;.*</span><span class="esc">\n</span><span class="str">&quot;</span>).<span class="kwd">Replace</span> (input, <span class="str">&quot;&quot;</span>)
+<span class="kwa">let</span> text = (regex <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>).<span class="kwd">Replace</span> (withoutComments, <span class="str">&quot;&quot;</span>)
+
+<span class="kwa">let rec</span> onblocks res s =
+    <span class="kwa">let</span> size = <span class="num">1024</span>*<span class="num">4096</span>
+    <span class="kwa">match</span> s <span class="kwa">with</span>
+    | <span class="str">&quot;&quot;</span> -&gt; res
+    | s <span class="kwa">when</span> (s.<span class="kwd">Length</span> &lt; size) -&gt; res &#64; [s]
+    | s -&gt; onblocks (res &#64; [s.<span class="kwd">Substring</span>(<span class="num">0</span>, size)]) (s.<span class="kwd">Substring</span>(size)) 
+
+[<span class="str">&quot;agggtaaa|tttaccct&quot;</span>
+ <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>
+ <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>
+ <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>
+ <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>
+ <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>
+ <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>
+ <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>
+ <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>]
+|&gt; <span class="kwd">List</span>.map (<span class="kwa">fun</span> s -&gt; async { 
+        return <span class="kwd">System</span>.<span class="kwd">String</span>.<span class="kwd">Format</span>( <span class="str">&quot;</span><span class="ipl">{0} {1}</span><span class="str">&quot;</span>, s, 
+                                        ((regex s).<span class="kwd">Matches</span> text).<span class="kwd">Count</span>) } ) 
+|&gt; <span class="kwd">Async</span>.<span class="kwd">Parallel</span> |&gt; <span class="kwd">Async</span>.<span class="kwd">RunSynchronously</span> 
+|&gt; <span class="kwd">Array</span>.iter (printfn <span class="str">&quot;</span><span class="ipl">%s</span><span class="str">&quot;</span>)
+
+<span class="kwa">let</span> newTextLength t =
+    [<span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>
+     <span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>
+     <span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>
+     <span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>
+     <span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>
+     <span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>
+     <span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>
+     <span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>
+     <span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>
+     <span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>
+     <span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>]
+     |&gt; <span class="kwd">List</span>.fold (<span class="kwa">fun</span> s (code, alt) -&gt; (regex code).<span class="kwd">Replace</span> (s, alt)) t 
+     |&gt; <span class="kwd">String</span>.length
+
+<span class="kwa">let</span> newText = 
+    text |&gt; onblocks [] 
+    |&gt; <span class="kwd">Seq</span>.map (<span class="kwa">fun</span> s -&gt; async { return newTextLength s } ) 
+    |&gt; <span class="kwd">Async</span>.<span class="kwd">Parallel</span> |&gt; <span class="kwd">Async</span>.<span class="kwd">RunSynchronously</span>
+    |&gt; <span class="kwd">Array</span>.sum
+
+printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> input.<span class="kwd">Length</span> text.<span class="kwd">Length</span> newText

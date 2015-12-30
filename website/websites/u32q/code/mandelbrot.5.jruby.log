@@ -1,0 +1,17 @@
+
+Thu, 27 Aug 2015 22:31:49 GMT
+
+MAKE:
+mv mandelbrot.jruby-5.jruby mandelbrot.rb
+0.01s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jruby-9.0.0.0/bin/jruby --server  mandelbrot.rb 16000
+
+UNEXPECTED OUTPUT 
+
+_out 16000_out differ: byte 3133289, line 85
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

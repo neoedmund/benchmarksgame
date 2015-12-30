@@ -1,0 +1,73 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">// Contributed by The Anh Tran</span>
+<span class="slc">// Updated for 2.8 by Rex Kerr</span>
+
+<span class="kwa">import</span> scala.actors.Futures.future
+
+<span class="kwa">object</span> regexdna {
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) {
+    <span class="kwa">var</span> input = readAll
+    <span class="kwa">val</span> init_len = input length
+
+    <span class="slc">// strip header &amp; newline</span>
+    input = <span class="str">&quot;&quot;&quot;&gt;.*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;&quot;&quot;</span>.r <span class="kwd">replaceAllIn</span>(input, <span class="str">&quot;&quot;</span>)
+    <span class="kwa">val</span> strip_len  = input length
+
+    <span class="slc">// counting patterns</span>
+    <span class="kwa">val</span> patterns  = <span class="kwd">Array</span>(
+      <span class="str">&quot;agggtaaa|tttaccct&quot;</span> ,
+      <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+      <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+      <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+      <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+      <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+      <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+      <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+      <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>)
+
+    <span class="slc">// queue tasks, each task is handled in a separate thread</span>
+    <span class="kwa">val</span> count_results = patterns <span class="kwd">map</span>( pt =&gt; <span class="kwd">future</span>(pt.r.<span class="kwd">findAllIn</span>(input).length) )
+
+    <span class="slc">// replace IUB</span>
+    <span class="kwa">val</span> replace_result = future {
+    <span class="kwa">val</span> iub = <span class="kwd">Array</span>(
+      <span class="str">&quot;&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>, <span class="str">&quot;&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>, <span class="str">&quot;&quot;</span>, <span class="str">&quot;&quot;</span>, <span class="str">&quot;&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>,
+      <span class="str">&quot;&quot;</span>, <span class="str">&quot;&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>, <span class="str">&quot;&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>, <span class="str">&quot;&quot;</span>, <span class="str">&quot;&quot;</span>,
+      <span class="str">&quot;&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>, <span class="str">&quot;&quot;</span>, <span class="str">&quot;&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>, <span class="str">&quot;&quot;</span>,
+      <span class="str">&quot;(c|t)&quot;</span>  )
+
+      <span class="kwa">val</span> buffer = <span class="kwa">new</span> <span class="kwd">StringBuffer</span>(input.length + (input.length &gt;&gt;&gt; <span class="num">1</span>)) <span class="slc">// input.len * 1.5</span>
+      <span class="kwa">val</span> matcher = java.util.regex.Pattern compile <span class="str">&quot;[BDHKMNRSVWY]&quot;</span> matcher input
+
+      <span class="kwa">while</span> ( matcher find )
+        matcher <span class="kwd">appendReplacement</span>( buffer, <span class="kwd">iub</span>(<span class="kwd">input</span>(matcher start) - <span class="str">'A'</span>)  )
+
+      matcher appendTail buffer
+      buffer length
+    }
+
+    <span class="slc">// print results</span>
+    <span class="kwa">for</span> ((pt, cres) &lt;- patterns zip count_results)
+      <span class="kwd">printf</span>( <span class="str">&quot;%s %d</span><span class="esc">\n</span><span class="str">&quot;</span>, pt, <span class="kwd">cres</span>() )
+
+    <span class="kwd">printf</span>( <span class="str">&quot;</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">&quot;</span>, init_len, strip_len, <span class="kwd">replace_result</span>() )
+  }
+
+  <span class="kwa">def</span> <span class="kwd">readAll</span>() = {
+    <span class="slc">// load data from stdin</span>
+    <span class="kwa">val</span> reader = <span class="kwa">new</span> java.io.<span class="kwd">InputStreamReader</span>(System.<span class="kwa">in</span>);
+
+    <span class="kwa">val</span> sb = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>(<span class="num">64</span>*<span class="num">1024</span>*<span class="num">1024</span>)
+    <span class="kwa">val</span> buf = <span class="kwa">new</span> Array[Char](<span class="num">4</span> *<span class="num">1024</span>*<span class="num">1024</span>)
+ 
+    Iterator.
+      <span class="kwd">continually</span>(reader read buf).
+      <span class="kwd">takeWhile</span>(_ != -<span class="num">1</span>).
+      <span class="kwd">foreach</span>(n =&gt; sb.<span class="kwd">appendAll</span>(buf, <span class="num">0</span>, n))
+
+    sb toString
+  }
+}

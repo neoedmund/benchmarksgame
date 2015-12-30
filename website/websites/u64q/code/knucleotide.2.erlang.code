@@ -1,0 +1,131 @@
+<span class="slc">% The Computer Language Benchmarks Game</span>
+<span class="slc">% http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">%%</span>
+<span class="slc">%% k-nucleotide - using binaries and process dictionaries</span>
+<span class="slc">%% Contributed by Erik Søe Sørensen</span>
+<span class="slc">%%</span>
+
+<span class="opt">-</span><span class="kwd">module</span><span class="opt">(</span>knucleotide_pdict<span class="opt">).</span>
+
+<span class="opt">-</span><span class="kwd">export</span><span class="opt">([</span>main<span class="opt">/</span><span class="num">1</span><span class="opt">,</span> body<span class="opt">/</span><span class="num">0</span><span class="opt">]).</span>
+
+<span class="opt">-</span><span class="kwd">define</span><span class="opt">(</span>WORKER_LENGTHS<span class="opt">, [</span><span class="num">1</span><span class="opt">,</span><span class="num">2</span><span class="opt">,</span><span class="num">3</span><span class="opt">,</span><span class="num">4</span><span class="opt">,</span><span class="num">6</span><span class="opt">,</span><span class="num">12</span><span class="opt">,</span><span class="num">18</span><span class="opt">]).</span>
+<span class="opt">-</span><span class="kwd">define</span><span class="opt">(</span>WORKER_QUERIES<span class="opt">,</span>
+		  <span class="opt">[</span>all_by_frequency<span class="opt">,</span>
+		   all_by_frequency<span class="opt">,</span>
+		   <span class="opt">{</span>find_frequency<span class="opt">, &lt;&lt;</span><span class="str">&quot;GGT&quot;</span><span class="opt">&gt;&gt;},</span>
+		   <span class="opt">{</span>find_frequency<span class="opt">, &lt;&lt;</span><span class="str">&quot;GGTA&quot;</span><span class="opt">&gt;&gt;},</span>
+		   <span class="opt">{</span>find_frequency<span class="opt">, &lt;&lt;</span><span class="str">&quot;GGTATT&quot;</span><span class="opt">&gt;&gt;},</span>
+		   <span class="opt">{</span>find_frequency<span class="opt">, &lt;&lt;</span><span class="str">&quot;GGTATTTTAATT&quot;</span><span class="opt">&gt;&gt;},</span>
+		   <span class="opt">{</span>find_frequency<span class="opt">, &lt;&lt;</span><span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span><span class="opt">&gt;&gt;}]).</span>
+
+<span class="kwd">find_seq</span><span class="opt">() -&gt;</span>
+    <span class="kwa">case</span> <span class="kwc">io</span><span class="opt">:</span><span class="kwd">get_line</span><span class="opt">(</span><span class="str">''</span><span class="opt">)</span> <span class="kwa">of</span>
+	<span class="opt">&lt;&lt;</span><span class="str">&quot;&gt;&quot;</span><span class="opt">,</span> _<span class="opt">/</span><span class="kwb">binary</span><span class="opt">&gt;&gt; -&gt;</span>
+	    ok<span class="opt">;</span>         <span class="slc">% Found</span>
+	eof <span class="opt">-&gt;</span>
+	    <span class="kwb">exit</span><span class="opt">(</span>eof<span class="opt">);</span>
+	_ <span class="opt">-&gt;</span>
+	    <span class="kwd">find_seq</span><span class="opt">()</span>  <span class="slc">% Keep searching</span>
+    <span class="kwa">end</span><span class="opt">.</span>
+
+<span class="kwd">process_seq</span><span class="opt">(</span>Dests<span class="opt">) -&gt;</span>
+    <span class="kwa">case</span> <span class="kwc">io</span><span class="opt">:</span><span class="kwd">get_line</span><span class="opt">(</span><span class="str">''</span><span class="opt">)</span> <span class="kwa">of</span>
+	<span class="opt">&lt;&lt;</span><span class="str">&quot;&gt;&quot;</span><span class="opt">,</span> _<span class="opt">/</span><span class="kwb">binary</span><span class="opt">&gt;&gt; -&gt;</span>
+	    done<span class="opt">;</span>
+	eof <span class="opt">-&gt;</span>
+	    <span class="kwc">lists</span><span class="opt">:</span><span class="kwd">foreach</span><span class="opt">(</span><span class="kwa">fun</span><span class="opt">(</span>Dest<span class="opt">)-&gt;</span>Dest <span class="opt">!</span> eof <span class="kwa">end</span><span class="opt">,</span> Dests<span class="opt">),</span>
+	    ok<span class="opt">;</span>
+	Line <span class="kwa">when</span> <span class="kwd">is_binary</span><span class="opt">(</span>Line<span class="opt">) -&gt;</span>
+	    Data <span class="opt">=</span> <span class="kwd">normalize_line</span><span class="opt">(</span>Line<span class="opt">),</span>
+	    <span class="kwc">lists</span><span class="opt">:</span><span class="kwd">foreach</span><span class="opt">(</span><span class="kwa">fun</span><span class="opt">(</span>Dest<span class="opt">)-&gt;</span>Dest <span class="opt">!</span> Data <span class="kwa">end</span><span class="opt">,</span> Dests<span class="opt">),</span>
+	    <span class="kwd">process_seq</span><span class="opt">(</span>Dests<span class="opt">)</span>
+    <span class="kwa">end</span><span class="opt">.</span>
+
+
+<span class="kwd">normalize_line</span><span class="opt">(</span>Bin<span class="opt">) -&gt;</span>
+    <span class="kwb">list_to_binary</span><span class="opt">([</span><span class="kwd">to_upper</span><span class="opt">(</span>C<span class="opt">) ||</span> C<span class="opt">&lt;-</span><span class="kwb">binary_to_list</span><span class="opt">(</span>Bin<span class="opt">),</span> C <span class="opt">=/=</span> $<span class="esc">\n</span><span class="opt">]).</span>
+
+<span class="kwd">to_upper</span><span class="opt">(</span>Char<span class="opt">)</span> <span class="kwa">when</span> $a <span class="opt">=&lt;</span> Char<span class="opt">,</span> Char <span class="opt">=&lt;</span> $z <span class="opt">-&gt;</span> Char <span class="opt">-</span> $a <span class="opt">+</span> $A<span class="opt">;</span>
+<span class="kwd">to_upper</span><span class="opt">(</span>Char<span class="opt">)                             -&gt;</span> Char<span class="opt">.</span>
+
+<span class="kwd">spawn_worker</span><span class="opt">(</span>Len<span class="opt">) -&gt;</span>
+    <span class="kwb">spawn</span><span class="opt">(</span><span class="kwa">fun</span><span class="opt">()-&gt;</span><span class="kwd">worker_read</span><span class="opt">(</span>Len<span class="opt">,</span> <span class="num">0</span><span class="opt">, &lt;&lt;&gt;&gt;)</span> <span class="kwa">end</span><span class="opt">).</span>
+
+<span class="kwd">worker_read</span><span class="opt">(</span>Len<span class="opt">,</span> Total<span class="opt">,</span>Buf<span class="opt">)</span> <span class="kwa">when</span> <span class="kwd">is_integer</span><span class="opt">(</span>Len<span class="opt">),</span>
+				      <span class="kwd">is_integer</span><span class="opt">(</span>Total<span class="opt">),</span>
+				<span class="kwd">is_binary</span><span class="opt">(</span>Buf<span class="opt">),</span>
+				<span class="kwd">byte_size</span><span class="opt">(</span>Buf<span class="opt">) &lt;</span> Len <span class="opt">-&gt;</span>
+    <span class="kwa">receive</span>
+	Data <span class="kwa">when</span> <span class="kwd">is_binary</span><span class="opt">(</span>Data<span class="opt">) -&gt;</span>
+	    <span class="kwd">worker_read</span><span class="opt">(</span>Len<span class="opt">,</span> Total<span class="opt">, &lt;&lt;</span>Buf<span class="opt">/</span><span class="kwb">binary</span><span class="opt">,</span> Data<span class="opt">/</span><span class="kwb">binary</span><span class="opt">&gt;&gt;);</span>
+	eof <span class="opt">-&gt;</span>
+	    <span class="kwd">worker_done</span><span class="opt">(</span>Total<span class="opt">)</span>
+    <span class="kwa">end</span><span class="opt">;</span>
+<span class="kwd">worker_read</span><span class="opt">(</span>Len<span class="opt">,</span> Total<span class="opt">,</span> Buf<span class="opt">)</span> <span class="kwa">when</span> <span class="kwd">is_integer</span><span class="opt">(</span>Len<span class="opt">),</span>
+                                <span class="kwd">is_integer</span><span class="opt">(</span>Total<span class="opt">),</span>
+				<span class="kwd">is_binary</span><span class="opt">(</span>Buf<span class="opt">),</span>
+				<span class="kwd">byte_size</span><span class="opt">(</span>Buf<span class="opt">) &gt;=</span> Len <span class="opt">-&gt;</span>
+    <span class="opt">&lt;&lt;</span><span class="kwc">Key</span><span class="opt">:</span>Len<span class="opt">/</span><span class="kwb">binary</span><span class="opt">,</span> _<span class="opt">/</span><span class="kwb">binary</span><span class="opt">&gt;&gt; =</span> Buf<span class="opt">,</span>
+    Before <span class="opt">=</span> <span class="kwa">case</span> <span class="kwb">get</span><span class="opt">(</span>Key<span class="opt">)</span> <span class="kwa">of</span>
+		 undefined <span class="opt">-&gt;</span> <span class="num">0</span><span class="opt">;</span>
+		 X <span class="kwa">when</span> <span class="kwd">is_integer</span><span class="opt">(</span>X<span class="opt">) -&gt;</span> X
+	     <span class="kwa">end</span><span class="opt">,</span>
+    <span class="kwb">put</span><span class="opt">(</span>Key<span class="opt">,</span> Before <span class="opt">+</span> <span class="num">1</span><span class="opt">),</span>
+    <span class="opt">&lt;&lt;</span>_<span class="opt">,</span> Rest<span class="opt">/</span><span class="kwb">binary</span><span class="opt">&gt;&gt; =</span> Buf<span class="opt">,</span>
+    <span class="kwd">worker_read</span><span class="opt">(</span>Len<span class="opt">,</span> Total<span class="opt">+</span><span class="num">1</span><span class="opt">,</span> Rest<span class="opt">).</span>
+
+<span class="kwd">worker_done</span><span class="opt">(</span>Total<span class="opt">) -&gt;</span>
+    <span class="kwa">receive</span>
+	<span class="opt">{</span>all_by_frequency<span class="opt">,</span> Pid<span class="opt">,</span> Ref<span class="opt">} -&gt;</span>
+	    Answer <span class="opt">=</span> <span class="kwc">lists</span><span class="opt">:</span><span class="kwd">keysort</span><span class="opt">(</span><span class="num">2</span><span class="opt">,</span> <span class="kwb">get</span><span class="opt">()),</span>
+	    TxtAnswer <span class="opt">=</span> <span class="kwc">lists</span><span class="opt">:</span><span class="kwd">foldl</span><span class="opt">(</span><span class="kwa">fun</span><span class="opt">({</span>Key<span class="opt">,</span>Freq<span class="opt">},</span>Acc<span class="opt">) -&gt;</span>
+					    <span class="opt">[</span>Key<span class="opt">,</span> $\ <span class="opt">,</span>
+					     <span class="kwc">io_lib</span><span class="opt">:</span><span class="kwd">format</span><span class="opt">(</span><span class="str">&quot;~.3f&quot;</span><span class="opt">, [</span>Freq<span class="opt">*</span><span class="num">100</span><span class="opt">/</span>Total<span class="opt">]),</span>
+					     $<span class="esc">\n</span> <span class="opt">|</span> Acc<span class="opt">]</span>
+				    <span class="kwa">end</span><span class="opt">,</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span><span class="opt">,</span> Answer<span class="opt">),</span>
+	    Pid <span class="opt">! {</span>Ref<span class="opt">,</span>TxtAnswer<span class="opt">};</span>
+	<span class="opt">{{</span>find_frequency<span class="opt">,</span> Key<span class="opt">},</span> Pid<span class="opt">,</span>Ref<span class="opt">} -&gt;</span>
+	    Freq <span class="opt">=</span> <span class="kwa">case</span> <span class="kwb">get</span><span class="opt">(</span>Key<span class="opt">)</span> <span class="kwa">of</span>
+		       undefined <span class="opt">-&gt;</span> <span class="num">0</span><span class="opt">;</span>
+		       X <span class="opt">-&gt;</span> X
+		   <span class="kwa">end</span><span class="opt">,</span>
+	    TxtAnswer <span class="opt">= [</span><span class="kwb">integer_to_list</span><span class="opt">(</span>Freq<span class="opt">),</span> $<span class="esc">\t</span><span class="opt">,</span> Key<span class="opt">,</span> $<span class="esc">\n</span><span class="opt">],</span>
+	    Pid <span class="opt">! {</span>Ref<span class="opt">,</span>TxtAnswer<span class="opt">};</span>
+	stop <span class="opt">-&gt;</span>
+	    <span class="kwb">exit</span><span class="opt">(</span>normal<span class="opt">)</span>
+    <span class="kwa">end</span><span class="opt">,</span>
+    done<span class="opt">.</span>
+
+<span class="kwd">body</span><span class="opt">() -&gt;</span>
+    <span class="slc">%% Start workers in background:</span>
+    Pids <span class="opt">=</span> <span class="kwc">lists</span><span class="opt">:</span><span class="kwd">map</span><span class="opt">(</span><span class="kwa">fun</span> spawn_worker<span class="opt">/</span><span class="num">1</span><span class="opt">,</span> ?WORKER_LENGTHS<span class="opt">),</span>
+
+    <span class="kwc">io</span><span class="opt">:</span><span class="kwd">setopts</span><span class="opt">(</span>standard_io<span class="opt">, [</span><span class="kwb">binary</span><span class="opt">]),</span>
+
+    <span class="slc">%% Skip to third sequence:</span>
+    <span class="kwd">find_seq</span><span class="opt">(),</span>
+    <span class="kwd">find_seq</span><span class="opt">(),</span>
+    <span class="kwd">find_seq</span><span class="opt">(),</span>
+    <span class="kwd">process_seq</span><span class="opt">(</span>Pids<span class="opt">),</span>
+
+    <span class="slc">%% Request answers:</span>
+    Refs <span class="opt">=</span>
+	<span class="kwc">lists</span><span class="opt">:</span><span class="kwd">zipwith</span><span class="opt">(</span><span class="kwa">fun</span> <span class="opt">(</span>Pid<span class="opt">,</span>Query<span class="opt">) -&gt;</span>
+			      Ref <span class="opt">=</span> <span class="kwb">make_ref</span><span class="opt">(),</span>
+			      Pid <span class="opt">! {</span>Query<span class="opt">,</span> <span class="kwb">self</span><span class="opt">(),</span> Ref<span class="opt">},</span>
+			      Ref
+		      <span class="kwa">end</span><span class="opt">,</span>
+		      Pids<span class="opt">,</span> ?WORKER_QUERIES<span class="opt">),</span>
+
+    <span class="slc">%% Receive and print answers:</span>
+    <span class="kwc">lists</span><span class="opt">:</span><span class="kwd">foreach</span><span class="opt">(</span><span class="kwa">fun</span><span class="opt">(</span>Ref<span class="opt">) -&gt;</span>
+			  <span class="kwa">receive</span> <span class="opt">{</span>Ref<span class="opt">,</span> Answer<span class="opt">} -&gt;</span>
+				  <span class="kwc">io</span><span class="opt">:</span><span class="kwd">put_chars</span><span class="opt">(</span>Answer<span class="opt">)</span>
+			  <span class="kwa">end</span>
+		  <span class="kwa">end</span><span class="opt">,</span> Refs<span class="opt">),</span>
+    ok<span class="opt">.</span>
+
+<span class="kwd">main</span><span class="opt">(</span>_Args<span class="opt">) -&gt;</span>
+    <span class="kwd">body</span><span class="opt">(),</span>
+    <span class="kwb">halt</span><span class="opt">(</span><span class="num">0</span><span class="opt">).</span>

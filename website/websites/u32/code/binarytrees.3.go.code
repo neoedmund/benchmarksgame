@@ -1,0 +1,100 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Contributed by Alex A Skinner</span>
+<span class="slc">// Based on the C program by Jeremy Zerfas</span>
+<span class="slc">// Based on the C++ program from Jon Harrop, Alex Mizrahi, and Bruno Coutinho.</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+    <span class="str">&quot;fmt&quot;</span>
+    <span class="str">&quot;os&quot;</span>
+    <span class="str">&quot;runtime&quot;</span>
+    <span class="str">&quot;strconv&quot;</span>
+    <span class="str">&quot;sync&quot;</span>
+)
+
+<span class="kwa">type</span> nodeArena <span class="kwa">struct</span> {
+    nodes []*node
+    index <span class="kwb">int</span>
+}
+
+<span class="kwa">func</span> (na *nodeArena) <span class="kwd">get</span>() *node {
+    <span class="kwa">if</span> na.index &gt;= <span class="kwb">len</span>(na.nodes) {
+        na.nodes = <span class="kwd">append</span>(na.nodes, &amp;node{})
+    }
+    <span class="kwa">if</span> na.nodes[na.index] == <span class="kwb">nil</span> {
+        na.nodes[na.index] = &amp;node{}
+    }
+    na.index++
+    <span class="kwa">return</span> na.nodes[na.index-<span class="num">1</span>]
+}
+
+<span class="kwa">func</span> (na *nodeArena) <span class="kwd">reset</span>() {
+    na.index = <span class="num">0</span>
+}
+
+<span class="kwa">type</span> node <span class="kwa">struct</span> {
+    value       <span class="kwb">int</span>
+    left, right *node
+}
+
+<span class="kwa">func</span> (n *node) <span class="kwd">compute</span>() <span class="kwb">int</span> {
+    <span class="kwa">if</span> n.left != <span class="kwb">nil</span> {
+        <span class="kwa">return</span> n.left.<span class="kwd">compute</span>() - n.right.<span class="kwd">compute</span>() + n.value
+    }
+    <span class="kwa">return</span> n.value
+}
+
+<span class="kwa">func</span> <span class="kwd">createTree</span>(value <span class="kwb">int</span>, depth <span class="kwb">int</span>, arena *nodeArena) *node {
+    n := arena.<span class="kwd">get</span>()
+    <span class="kwa">if</span> depth &gt; <span class="num">0</span> {
+        n.left = <span class="kwd">createTree</span>(<span class="num">2</span>*value-<span class="num">1</span>, depth-<span class="num">1</span>, arena)
+        n.right = <span class="kwd">createTree</span>(<span class="num">2</span>*value, depth-<span class="num">1</span>, arena)
+    } <span class="kwa">else</span> {
+        n.left, n.right = <span class="kwb">nil</span>, <span class="kwb">nil</span>
+    }
+    n.value = value
+    <span class="kwa">return</span> n
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+    <span class="kwa">if</span> <span class="kwb">len</span>(os.Args) &lt; <span class="num">2</span> {
+        fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">&lt;depth&gt;</span><span class="esc">\n</span><span class="str">&quot;</span>, os.Args[<span class="num">0</span>])
+        <span class="kwa">return</span>
+    }
+    runtime.<span class="kwd">GOMAXPROCS</span>(runtime.<span class="kwd">NumCPU</span>() * <span class="num">2</span>)
+    minDepth := <span class="num">4</span>
+    treeDepth, _ := strconv.<span class="kwd">Atoi</span>(os.Args[<span class="num">1</span>])
+    <span class="kwa">if</span> treeDepth &lt; minDepth+<span class="num">2</span> {
+        treeDepth = minDepth + <span class="num">2</span>
+    }
+    na := &amp;nodeArena{}
+    stretchTree := <span class="kwd">createTree</span>(<span class="num">0</span>, treeDepth+<span class="num">1</span>, na)
+    fmt.<span class="kwd">Printf</span>(<span class="str">&quot;stretch tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, treeDepth+<span class="num">1</span>, stretchTree.<span class="kwd">compute</span>())
+    longLived := <span class="kwd">createTree</span>(<span class="num">0</span>, treeDepth, na)
+    toPrint := <span class="kwb">make</span>([]<span class="kwb">string</span>, treeDepth+<span class="num">1</span>)
+    <span class="kwa">var</span> wg sync.WaitGroup
+    <span class="kwa">for</span> current := minDepth; current &lt;= treeDepth; current += <span class="num">2</span> {
+        wg.<span class="kwd">Add</span>(<span class="num">1</span>)
+        <span class="kwa">go func</span>(depth <span class="kwb">int</span>) {
+            na := &amp;nodeArena{}
+            total := <span class="num">0</span>
+            iterations := <span class="num">1</span> &lt;&lt; <span class="kwb">uint</span>(treeDepth-depth+minDepth)
+            <span class="kwa">for</span> i := <span class="num">1</span>; i &lt;= iterations; i++ {
+                tree1 := <span class="kwd">createTree</span>(i, depth, na)
+                tree2 := <span class="kwd">createTree</span>(-i, depth, na)
+                total += tree1.<span class="kwd">compute</span>() + tree2.<span class="kwd">compute</span>()
+                na.<span class="kwd">reset</span>()
+            }
+            toPrint[depth] = fmt.<span class="kwd">Sprintf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">trees of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="num">2</span>*iterations, depth, total)
+            wg.<span class="kwd">Done</span>()
+        }(current)
+    }
+    wg.<span class="kwd">Wait</span>()
+    <span class="kwa">for</span> current := minDepth; current &lt;= treeDepth; current += <span class="num">2</span> {
+        fmt.<span class="kwd">Print</span>(toPrint[current])
+    }
+    fmt.<span class="kwd">Printf</span>(<span class="str">&quot;long lived tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, treeDepth, longLived.<span class="kwd">compute</span>())
+}

@@ -1,0 +1,88 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="kwc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">//  Contributed by Ian Osgood</span>
+
+<span class="kwa">var</span> last = <span class="num">42</span>, A = <span class="num">3877</span>, C = <span class="num">29573</span>, M = <span class="num">139968</span>;
+
+<span class="kwa">function</span> <span class="kwd">rand</span>(max) {
+  last = (last * A + C) % M;
+  <span class="kwa">return</span> max * last / M;
+}
+
+<span class="kwa">var</span> ALU =
+  <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span> +
+  <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span> +
+  <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span> +
+  <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span> +
+  <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span> +
+  <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span> +
+  <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+<span class="kwa">var</span> IUB = {
+  a:<span class="num">0.27</span>, c:<span class="num">0.12</span>, g:<span class="num">0.12</span>, t:<span class="num">0.27</span>,
+  B:<span class="num">0.02</span>, D:<span class="num">0.02</span>, H:<span class="num">0.02</span>, K:<span class="num">0.02</span>,
+  M:<span class="num">0.02</span>, N:<span class="num">0.02</span>, R:<span class="num">0.02</span>, S:<span class="num">0.02</span>,
+  V:<span class="num">0.02</span>, W:<span class="num">0.02</span>, Y:<span class="num">0.02</span>
+}
+
+<span class="kwa">var</span> HomoSap = {
+  a: <span class="num">0.3029549426680</span>,
+  c: <span class="num">0.1979883004921</span>,
+  g: <span class="num">0.1975473066391</span>,
+  t: <span class="num">0.3015094502008</span>
+}
+
+<span class="kwa">function</span> <span class="kwd">makeCumulative</span>(table) {
+  <span class="kwa">var</span> last = <span class="kwa">null</span>;
+  <span class="kwa">for</span> (<span class="kwa">var</span> c <span class="kwa">in</span> table) {
+    <span class="kwa">if</span> (last) table[c] += table[last];
+    last = c;
+  }
+}
+
+<span class="kwa">function</span> <span class="kwd">fastaRepeat</span>(n, seq) {
+  <span class="kwa">var</span> seqi = <span class="num">0</span>, lenOut = <span class="num">60</span>;
+  <span class="kwa">while</span> (n&gt;<span class="num">0</span>) {
+    <span class="kwa">if</span> (n&lt;lenOut) lenOut = n;
+    <span class="kwa">if</span> (seqi + lenOut &lt; seq.length) {
+      <span class="kwd">print</span>( seq.<span class="kwd">substring</span>(seqi, seqi+lenOut) );
+      seqi += lenOut;
+    } <span class="kwa">else</span> {
+      <span class="kwa">var</span> s = seq.<span class="kwd">substring</span>(seqi);
+      seqi = lenOut - s.length;
+      <span class="kwd">print</span>( s + seq.<span class="kwd">substring</span>(<span class="num">0</span>, seqi) );
+    }
+    n -= lenOut;
+  }
+}
+
+<span class="kwa">function</span> <span class="kwd">fastaRandom</span>(n, table) {
+  <span class="kwa">var</span> line = <span class="kwa">new</span> <span class="kwd">Array</span>(<span class="num">60</span>);
+  <span class="kwd">makeCumulative</span>(table);
+  <span class="kwa">while</span> (n&gt;<span class="num">0</span>) {
+    <span class="kwa">if</span> (n&lt;line.length) line = <span class="kwa">new</span> <span class="kwd">Array</span>(n);
+    <span class="kwa">for</span> (<span class="kwa">var</span> i=<span class="num">0</span>; i&lt;line.length; i++) {
+      <span class="kwa">var</span> r = <span class="kwd">rand</span>(<span class="num">1</span>);
+      <span class="kwa">for</span> (<span class="kwa">var</span> c <span class="kwa">in</span> table) {
+        <span class="kwa">if</span> (r &lt; table[c]) {
+          line[i] = c;
+          <span class="kwa">break</span>;
+        }
+      }
+    }
+    <span class="kwd">print</span>( line.<span class="kwd">join</span>(<span class="str">''</span>) );
+    n -= line.length;
+  }
+}
+
+<span class="kwa">var</span> n = arguments[<span class="num">0</span>]
+
+<span class="kwd">print</span>(<span class="str">&quot;&gt;ONE Homo sapiens alu&quot;</span>)
+<span class="kwd">fastaRepeat</span>(<span class="num">2</span>*n, ALU)
+
+<span class="kwd">print</span>(<span class="str">&quot;&gt;TWO IUB ambiguity codes&quot;</span>)
+<span class="kwd">fastaRandom</span>(<span class="num">3</span>*n, IUB)
+
+<span class="kwd">print</span>(<span class="str">&quot;&gt;THREE Homo sapiens frequency&quot;</span>)
+<span class="kwd">fastaRandom</span>(<span class="num">5</span>*n, HomoSap)

@@ -1,0 +1,14 @@
+
+Fri, 23 Oct 2015 00:10:36 GMT
+
+MAKE:
+/usr/bin/gcc -pipe -Wall -O3 -fomit-frame-pointer -march=native -std=c99 -fopenmp fannkuchredux.c -o fannkuchredux.gcc_run 
+rm fannkuchredux.c
+0.13s to complete and log all make actions
+
+COMMAND LINE:
+./fannkuchredux.gcc_run 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

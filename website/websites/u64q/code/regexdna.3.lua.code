@@ -1,0 +1,63 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- contributed by Jim Roseborough</span>
+<span class="slc">-- modified by Victor Tang</span>
+<span class="slc">-- optimized &amp; replaced inefficient use of gsub with gmatch</span>
+<span class="slc">-- partitioned sequence to prevent extraneous redundant string copy</span>
+<span class="slc">-- modified to use Lpeg's re module for matching variants</span>
+
+re = require <span class="str">'re'</span>
+seq = io.<span class="kwb">read</span>(<span class="str">&quot;*a&quot;</span>)
+ilen, seq = #seq, re.<span class="kwb">gsub</span>(seq, <span class="str">'&quot;&gt;&quot;[^%c]*%c*'</span>, <span class="str">''</span>):<span class="kwb">gsub</span>(<span class="str">'%c+'</span>, <span class="str">''</span>)
+clen = #seq
+
+<span class="kwa">local</span> variants = { <span class="str">'agggtaaa|tttaccct'</span>,
+                   <span class="str">'[cgt]gggtaaa|tttaccc[acg]'</span>,
+                   <span class="str">'a[act]ggtaaa|tttacc[agt]t'</span>,
+                   <span class="str">'ag[act]gtaaa|tttac[agt]ct'</span>,
+                   <span class="str">'agg[act]taaa|ttta[agt]cct'</span>,
+                   <span class="str">'aggg[acg]aaa|ttt[cgt]ccct'</span>,
+                   <span class="str">'agggt[cgt]aa|tt[acg]accct'</span>,
+                   <span class="str">'agggta[cgt]a|t[acg]taccct'</span>,
+                   <span class="str">'agggtaa[cgt]|[acg]ttaccct'</span>, }
+
+<span class="kwa">local</span> subst = { B=<span class="str">'(c|g|t)'</span>, D=<span class="str">'(a|g|t)'</span>,   H=<span class="str">'(a|c|t)'</span>, K=<span class="str">'(g|t)'</span>,
+                M=<span class="str">'(a|c)'</span>,   N=<span class="str">'(a|c|g|t)'</span>, R=<span class="str">'(a|g)'</span>,   S=<span class="str">'(c|g)'</span>,
+                V=<span class="str">'(a|c|g)'</span>, W=<span class="str">'(a|t)'</span>,     Y=<span class="str">'(c|t)'</span> }
+
+<span class="kwa">function</span> <span class="kwd">retolpeg</span>(pat)
+  pat = re.<span class="kwb">gsub</span>(pat, <span class="str">&quot;!'['{%w+}!']'&quot;</span>, <span class="str">&quot;'%1'&quot;</span>)
+  pat = re.<span class="kwb">gsub</span>(pat, <span class="str">&quot;'|'&quot;</span>, <span class="str">&quot;/&quot;</span>)
+  <span class="kwa">return</span> <span class="str">&quot;({&quot;</span>..pat..<span class="str">&quot;}/.)*&quot;</span>
+<span class="kwa">end</span>
+
+<span class="kwa">function</span> <span class="kwd">countmatches</span>(variant)
+   <span class="kwa">local</span> t = { re.<span class="kwd">match</span>(seq, <span class="kwd">retolpeg</span>(variant)) }
+   <span class="kwa">return</span> <span class="kwb">type</span>(t[<span class="num">1</span>]) == <span class="str">'number'</span> <span class="kwa">and</span> <span class="num">0</span> <span class="kwa">or</span> #t
+<span class="kwa">end</span>
+
+<span class="kwa">for</span> _, p <span class="kwa">in</span> <span class="kwd">ipairs</span>(variants) <span class="kwa">do</span>
+   io.<span class="kwb">write</span>( <span class="kwb">string</span>.<span class="kwb">format</span>(<span class="str">'%s %d</span><span class="esc">\n</span><span class="str">'</span>, p, <span class="kwd">countmatches</span>(p)) )
+<span class="kwa">end</span>
+
+<span class="kwa">function</span> <span class="kwd">partitionstring</span>(seq)
+  <span class="kwa">local</span> seg = math.<span class="kwb">floor</span>( math.<span class="kwb">sqrt</span>(#seq) )
+  <span class="kwa">local</span> seqtable = {}
+  <span class="kwa">for</span> nextstart = <span class="num">1</span>, #seq, seg <span class="kwa">do</span>
+    <span class="kwb">table</span>.<span class="kwd">insert</span>(seqtable, seq:<span class="kwd">sub</span>(nextstart, nextstart + seg - <span class="num">1</span>))
+  <span class="kwa">end</span>
+  <span class="kwa">return</span> seqtable
+<span class="kwa">end</span>
+<span class="kwa">function</span> <span class="kwd">chunk_gsub</span>(t, k, v)
+  <span class="kwa">for</span> i, p <span class="kwa">in</span> <span class="kwd">ipairs</span>(t) <span class="kwa">do</span>
+    t[i] = p:<span class="kwd">find</span>(k) <span class="kwa">and</span> p:<span class="kwb">gsub</span>(k, v) <span class="kwa">or</span> t[i]
+  <span class="kwa">end</span>
+  <span class="kwa">return</span> t
+<span class="kwa">end</span>
+
+seq = <span class="kwd">partitionstring</span>(seq)
+<span class="kwa">for</span> k, v <span class="kwa">in</span> <span class="kwd">pairs</span>(subst) <span class="kwa">do</span>
+  <span class="kwd">chunk_gsub</span>(seq, k, v)
+<span class="kwa">end</span>
+seq = <span class="kwb">table</span>.<span class="kwd">concat</span>(seq)
+io.<span class="kwb">write</span>(<span class="kwb">string</span>.<span class="kwb">format</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">'</span>, ilen, clen, #seq))

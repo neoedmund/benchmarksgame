@@ -1,0 +1,12 @@
+
+Wed, 16 Sep 2015 05:35:01 GMT
+
+MAKE:
+mv mandelbrot.python3-5.python3 mandelbrot.python3-5.py
+/usr/local/src/Python-3.5.0/bin/python3.5 -OO -c "from py_compile import compile; compile('mandelbrot.python3-5.py')"
+0.06s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/Python-3.5.0/bin/python3.5 mandelbrot.python3-5.py 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN

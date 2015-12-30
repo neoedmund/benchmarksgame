@@ -1,0 +1,9 @@
+
+Wed, 11 Nov 2015 17:58:50 GMT
+
+COMMAND LINE:
+/usr/local/src/dart-sdk/bin/dart  fannkuchredux.dart-2.dart 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

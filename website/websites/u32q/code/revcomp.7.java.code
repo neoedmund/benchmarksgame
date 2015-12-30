@@ -1,0 +1,219 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com"> * contributed by Sassa NF</span>
+<span class="com"> * fork-join + NIO</span>
+<span class="com"> *</span>
+<span class="com"> * very little left from original contribution by</span>
+<span class="com"> * Jon Edvardsson which in turn is based on</span>
+<span class="com"> * the original program by Anthony Donnefort and Enotus.</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.io.*;
+<span class="kwa">import</span> java.nio.*;
+<span class="kwa">import</span> java.nio.channels.*;
+<span class="kwa">import</span> java.util.ArrayList;
+<span class="kwa">import</span> java.util.concurrent.*;
+
+<span class="kwa">public class</span> revcomp <span class="kwa">extends</span> RecursiveTask&lt;ArrayList&lt;revcomp&gt;&gt; {
+  <span class="kwa">private static final</span> <span class="kwb">byte</span>[] map = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">128</span>];
+  <span class="kwa">private static final</span> ByteBuffer bytes;
+  <span class="kwa">private static final</span> Semaphore processed = <span class="kwa">new</span> <span class="kwd">Semaphore</span>(<span class="num">0</span>);
+  <span class="kwa">private static final</span> <span class="kwb">int</span> THRESHOLD = <span class="num">1024</span>*<span class="num">1024</span>;
+  <span class="kwa">private static final</span> ForkJoinPool jobs = <span class="kwa">new</span> <span class="kwd">ForkJoinPool</span>();
+
+  <span class="kwa">private static</span> <span class="kwb">int</span> tails = <span class="num">0</span>;
+
+  <span class="kwa">static</span> {
+    ByteBuffer b = null;
+    <span class="kwa">try</span> {
+      b = ByteBuffer.<span class="kwd">allocateDirect</span>(System.<span class="kwa">in</span>.<span class="kwd">available</span>());
+    } <span class="kwa">catch</span>(Exception ioe) {
+    }
+    bytes = b;
+    String[] mm = { <span class="str">&quot;ACBDGHK</span><span class="esc">\n</span><span class="str">MNSRUTWVYacbdghkmnsrutwvy&quot;</span>,
+                    <span class="str">&quot;TGVHCDM</span><span class="esc">\n</span><span class="str">KNSYAAWBRTGVHCDMKNSYAAWBR&quot;</span> };
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; mm[<span class="num">0</span>].<span class="kwd">length</span>(); i++)
+      map[mm[<span class="num">0</span>].<span class="kwd">charAt</span>(i)] = (<span class="kwb">byte</span>) mm[<span class="num">1</span>].<span class="kwd">charAt</span>(i);
+  }
+
+  <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">reverse</span>(ByteBuffer bytes, <span class="kwb">int</span> f, <span class="kwb">int</span> t) {
+    <span class="kwa">if</span> ( f &gt;= t ) <span class="kwa">return</span>;
+    <span class="kwa">for</span>(;;) {
+      <span class="kwb">int</span> b = bytes.<span class="kwd">get</span>(f);
+      <span class="kwa">if</span> (b == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) b = bytes.<span class="kwd">get</span>(++f);
+      <span class="kwb">int</span> e = bytes.<span class="kwd">get</span>(--t);
+      <span class="kwa">if</span> (e == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) e = bytes.<span class="kwd">get</span>(--t);
+
+      <span class="kwa">if</span> (f &gt; t) <span class="kwa">break</span>;
+      bytes.<span class="kwd">put</span>(f++, map[e]);
+      bytes.<span class="kwd">put</span>(t, map[b]);
+    }
+  }
+
+  <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">reverse</span>(ByteBuffer[] bbs) {
+    <span class="kwb">int</span> head = <span class="num">0</span>;
+    <span class="kwb">int</span> tail = bbs.length;
+    <span class="kwa">if</span> ( tail == <span class="num">0</span> ) <span class="kwa">return</span>;
+    ByteBuffer bh = bbs[head++];
+    ByteBuffer bt = bbs[--tail];
+    <span class="kwb">int</span> f = bh.<span class="kwd">position</span>();
+    <span class="kwb">int</span> t = bt.<span class="kwd">limit</span>()-<span class="num">1</span>;
+    <span class="kwa">while</span>( bh != bt ) {
+      <span class="kwa">if</span> ( f == bh.<span class="kwd">limit</span>() ) {
+        bh = bbs[head++];
+        f = bh.<span class="kwd">position</span>();
+        <span class="kwa">continue</span>;
+      }
+
+      <span class="kwa">if</span> ( t &lt; bt.<span class="kwd">position</span>() ) {
+        bt = bbs[--tail];
+        t = bt.<span class="kwd">limit</span>()-<span class="num">1</span>;
+        <span class="kwa">continue</span>;
+      }
+
+      <span class="kwb">int</span> b = bh.<span class="kwd">get</span>(f);
+      <span class="kwa">if</span> (b == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> ) {
+        f++;
+        <span class="kwa">continue</span>;
+      }
+
+      <span class="kwb">int</span> e = bt.<span class="kwd">get</span>(t);
+      <span class="kwa">if</span> (e == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> ) {
+        t--;
+        <span class="kwa">continue</span>;
+      }
+
+       bh.<span class="kwd">put</span>(f++, map[e]);
+       bt.<span class="kwd">put</span>(t--, map[b]);
+    }
+
+    <span class="kwd">reverse</span>(bh, f, t+<span class="num">1</span>);
+  }
+
+  <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String [] args) <span class="kwa">throws</span> Exception {
+    <span class="kwb">long</span> t0 = System.<span class="kwd">nanoTime</span>();
+    FileChannel <span class="kwa">in</span> = <span class="kwa">new</span> <span class="kwd">FileInputStream</span>(FileDescriptor.<span class="kwa">in</span>).<span class="kwd">getChannel</span>();
+    <span class="kwa">while</span>(bytes.<span class="kwd">hasRemaining</span>()) {
+      <span class="kwa">in</span>.<span class="kwd">read</span>(bytes);
+    }
+    bytes.<span class="kwd">flip</span>();
+
+    revcomp t = <span class="kwa">new</span> <span class="kwd">revcomp</span>(bytes);
+    jobs.<span class="kwd">execute</span>(t);
+
+    ArrayList&lt;revcomp&gt; bs = t.<span class="kwd">flatten</span>();
+    ArrayList&lt;ByteBuffer&gt; head = <span class="kwa">new</span> ArrayList&lt;ByteBuffer&gt;(bs.<span class="kwd">size</span>()*<span class="num">2</span>);
+    ArrayList&lt;ByteBuffer&gt; tail = <span class="kwa">new</span> ArrayList&lt;ByteBuffer&gt;(bs.<span class="kwd">size</span>()*<span class="num">2</span>);
+    <span class="kwa">for</span>( revcomp b: bs ) b.<span class="kwd">foldl</span>( head, tail );
+
+    <span class="kwd">reverse</span>(tail.<span class="kwd">toArray</span>(<span class="kwa">new</span> ByteBuffer[<span class="num">0</span>]));
+
+    head.<span class="kwd">addAll</span>(tail);
+    ByteBuffer[] toWrite = head.<span class="kwd">toArray</span>(<span class="kwa">new</span> ByteBuffer[<span class="num">0</span>]);
+
+    processed.<span class="kwd">acquire</span>(tails);
+
+    FileChannel out = <span class="kwa">new</span> <span class="kwd">FileOutputStream</span>(FileDescriptor.out).<span class="kwd">getChannel</span>();
+
+    <span class="kwb">long</span> sz=<span class="num">0</span>;
+    <span class="kwa">while</span>(( sz += out.<span class="kwd">write</span>(toWrite) ) &lt; bytes.<span class="kwd">capacity</span>());
+    out.<span class="kwd">force</span>(true);
+
+    System.err.<span class="kwd">println</span>( ( System.<span class="kwd">nanoTime</span>() - t0 ) / <span class="num">1</span>e9 );
+  }
+
+  ByteBuffer[] bufs;
+  ByteBuffer buf;
+  <span class="kwb">int</span> firstt;
+  <span class="kwb">int</span> lastf;
+
+  <span class="kwa">public</span> <span class="kwd">revcomp</span>(ByteBuffer b) {
+    buf = b;
+  }
+
+  <span class="kwa">public</span> <span class="kwd">revcomp</span>(ByteBuffer[] bs) {
+    bufs = bs;
+  }
+
+  <span class="kwa">protected</span> ArrayList&lt;revcomp&gt; <span class="kwd">compute</span>() {
+    <span class="kwa">if</span> (bufs != null) {
+      <span class="kwd">reverse</span>(bufs);
+      processed.<span class="kwd">release</span>(<span class="num">1</span>);
+      <span class="kwa">return</span> null;
+    }
+
+    ArrayList&lt;revcomp&gt; al = <span class="kwa">new</span> ArrayList&lt;revcomp&gt;();
+
+    <span class="kwa">while</span>( buf.<span class="kwd">remaining</span>() &gt; THRESHOLD ) {
+      <span class="kwb">int</span> next = (buf.<span class="kwd">position</span>() + buf.<span class="kwd">limit</span>()) / <span class="num">2</span>;
+         <span class="slc">// assuming well-formed input, the buffer must contain</span>
+         <span class="slc">// at least one CRLF in THRESHOLD bytes</span>
+      <span class="kwa">while</span>( buf.<span class="kwd">get</span>(next) != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> ) next--; 
+      ByteBuffer b = buf.<span class="kwd">slice</span>();
+      b.<span class="kwd">limit</span>(next+<span class="num">1</span>-buf.<span class="kwd">position</span>());
+      buf.<span class="kwd">position</span>(next+<span class="num">1</span>);
+      revcomp t = <span class="kwa">new</span> <span class="kwd">revcomp</span>(b);
+      jobs.<span class="kwd">execute</span>(t);
+      al.<span class="kwd">add</span>(t);
+    }
+
+    <span class="kwb">int</span> f = buf.<span class="kwd">position</span>();
+    <span class="kwb">int</span> t = f;
+    <span class="kwa">while</span>(t &lt; buf.<span class="kwd">limit</span>() &amp;&amp; buf.<span class="kwd">get</span>(t) != <span class="str">'&gt;'</span>) t++;
+    lastf = f;
+    firstt = t; 
+       <span class="slc">// this is where the first entry ends; </span>
+       <span class="slc">// it must go before the last entry of the previous job</span>
+    <span class="kwa">for</span>(;;) {
+         <span class="slc">// we don't reverse the first entry, </span>
+         <span class="slc">// and we don't reverse the last entry</span>
+      <span class="kwa">while</span>(t &lt; buf.<span class="kwd">limit</span>() &amp;&amp; buf.<span class="kwd">get</span>(t) != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) t++;
+      <span class="kwa">if</span> ( t == buf.<span class="kwd">limit</span>() ) <span class="kwa">break</span>;
+      f = t+<span class="num">1</span>;
+      lastf = f;
+
+      <span class="kwa">while</span>(t &lt; buf.<span class="kwd">limit</span>() &amp;&amp; buf.<span class="kwd">get</span>(t) != <span class="str">'&gt;'</span>) t++;
+      <span class="kwa">if</span> ( t == buf.<span class="kwd">limit</span>() ) <span class="kwa">break</span>;
+
+      <span class="kwd">reverse</span>( buf, f, t );
+    }
+
+    <span class="kwa">return</span> al;
+  }
+
+  <span class="kwa">public</span> ArrayList&lt;revcomp&gt; <span class="kwd">flatten</span>() <span class="kwa">throws</span> InterruptedException, ExecutionException {
+    ArrayList&lt;revcomp&gt; pre = <span class="kwd">get</span>();
+    ArrayList&lt;revcomp&gt; r = pre.<span class="kwd">isEmpty</span>() ? pre: <span class="kwa">new</span> ArrayList&lt;revcomp&gt;();
+    <span class="kwa">for</span>( revcomp p: pre ) r.<span class="kwd">addAll</span>( p.<span class="kwd">flatten</span>() );
+    r.<span class="kwd">add</span>(<span class="kwa">this</span>);
+    <span class="kwa">return</span> r;
+  }
+
+  <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">foldl</span>(ArrayList&lt;ByteBuffer&gt; head, ArrayList&lt;ByteBuffer&gt; tail) {
+    <span class="kwa">if</span> ( lastf &lt;= firstt ) { 
+         <span class="slc">// all in one chunk - add all to head</span>
+      tail.<span class="kwd">add</span>(buf);
+      <span class="kwa">return</span>;
+    }
+    <span class="kwa">if</span> (firstt &gt; buf.<span class="kwd">position</span>()) {
+      ByteBuffer first = buf.<span class="kwd">slice</span>();
+      first.<span class="kwd">limit</span>(firstt - buf.<span class="kwd">position</span>());
+
+      tail.<span class="kwd">add</span>(first);
+    }
+    jobs.<span class="kwd">execute</span>(<span class="kwa">new</span> <span class="kwd">revcomp</span>(tail.<span class="kwd">toArray</span>(<span class="kwa">new</span> ByteBuffer[<span class="num">0</span>])));
+    tails++;
+    head.<span class="kwd">addAll</span>(tail);
+    head.<span class="kwd">add</span>(buf);
+
+    tail.<span class="kwd">clear</span>();
+
+    ByteBuffer last = buf.<span class="kwd">slice</span>();
+    last.<span class="kwd">position</span>(lastf - buf.<span class="kwd">position</span>());
+    buf.<span class="kwd">limit</span>(lastf);
+    tail.<span class="kwd">add</span>(last);
+
+    buf.<span class="kwd">position</span>(firstt);
+  }
+}

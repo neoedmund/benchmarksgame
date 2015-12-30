@@ -1,0 +1,13 @@
+
+Thu, 16 Jul 2015 23:11:31 GMT
+
+MAKE:
+mv mandelbrot.erlang mandelbrot.erl
+/usr/local/src/otp_src_18.0_nohipe/bin/erlc mandelbrot.erl
+rm mandelbrot.erl
+0.29s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/otp_src_18.0_nohipe/bin/erl  -smp enable -noshell -run  mandelbrot main 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN

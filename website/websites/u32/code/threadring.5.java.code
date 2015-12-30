@@ -1,0 +1,56 @@
+<span class="com">/**</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Birju Prajapati</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.util.concurrent.ExecutorService;
+<span class="kwa">import</span> java.util.concurrent.Executors;
+
+<span class="kwa">public class</span> threadring {
+
+    <span class="kwa">private static final</span> <span class="kwb">int</span> TOTAL_NODES = <span class="num">503</span>;
+    <span class="kwa">private static final</span> ExecutorService EXECUTOR = Executors.<span class="kwd">newFixedThreadPool</span>(TOTAL_NODES);
+    
+    <span class="kwa">private static</span> Node firstNode;
+    <span class="kwa">private static</span> Node lastNode;
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) {
+        firstNode = <span class="kwa">new</span> <span class="kwd">Node</span>(<span class="num">1</span>);
+        lastNode.next = firstNode;
+        firstNode.<span class="kwd">push</span>(Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]));
+    }
+
+    <span class="kwa">private static class</span> Node <span class="kwa">implements</span> Runnable {
+
+        <span class="kwa">private final</span> <span class="kwb">int</span> id;
+        <span class="kwa">private</span> Node next;
+        <span class="kwa">private</span> <span class="kwb">int</span> token;
+
+        <span class="kwa">public</span> <span class="kwd">Node</span>(<span class="kwb">int</span> id) {
+            <span class="kwa">this</span>.id = id;
+            <span class="kwa">if</span> (id++ == TOTAL_NODES) {
+                lastNode = <span class="kwa">this</span>;
+            } <span class="kwa">else</span> {
+                next = <span class="kwa">new</span> <span class="kwd">Node</span>(id);
+            }
+        }
+
+        <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">push</span>(<span class="kwb">int</span> token) {
+            <span class="kwa">this</span>.token = token;
+            EXECUTOR.<span class="kwd">execute</span>(<span class="kwa">this</span>);
+        }
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+            <span class="kwa">if</span> (token-- != <span class="num">0</span>) {
+                next.<span class="kwd">push</span>(token);
+            } <span class="kwa">else</span> {
+                System.out.<span class="kwd">println</span>(id);
+                System.<span class="kwd">exit</span>(<span class="num">0</span>);
+            }
+            
+        }
+    }
+}
+
+

@@ -1,0 +1,44 @@
+
+Tue, 11 Aug 2015 22:42:45 GMT
+
+MAKE:
+mv knucleotide.csharp-2.csharp knucleotide.csharp-2.cs
+/usr/local/bin/mcs -unsafe+ -optimize+ -platform:x86 -out:knucleotide.csharp-2.csharp_run knucleotide.csharp-2.cs
+rm knucleotide.csharp-2.cs
+0.26s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/mono --llvm --gc=sgen knucleotide.csharp-2.csharp_run 0 < knucleotide-input250000.txt
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+Stacktrace:
+
+
+Native stacktrace:
+
+	/usr/local/bin/mono() [0x8263a30]
+	/usr/local/bin/mono() [0x82bcd2e]
+	/usr/local/bin/mono() [0x81df739]
+	[0xb77dcbc8]
+	/usr/local/bin/mono() [0x8273ffb]
+	/usr/local/bin/mono() [0x82bc74c]
+	/usr/local/bin/mono() [0x8260fa1]
+	/usr/local/bin/mono() [0x8262864]
+	/usr/local/bin/mono() [0x82bb514]
+	[0xb77c7c57]
+	/usr/local/lib/mono/4.5/mscorlib.dll.so(+0x2b561) [0xb50cb561]
+	[0xb71f44c4]
+
+Debug info from gdb:
+
+
+=================================================================
+Got a SIGSEGV while executing native code. This usually indicates
+a fatal error in the mono runtime or one of the native libraries 
+used by your application.
+=================================================================
+

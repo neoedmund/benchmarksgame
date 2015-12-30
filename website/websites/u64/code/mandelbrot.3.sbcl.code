@@ -1,0 +1,120 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; resubmitted by Wade Humeniuk (Fix Stream Problem)</span>
+<span class="slc">;;; resubmitted by Jon Smith (Remove silly assertion causing it to break on 16000 size)</span>
+<span class="slc">;;; re-resubmitted by Jon Smith (with a silly hack to make it parallel).</span>
+<span class="slc">;;; Original contributed by Yannick Gingras</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; To compile</span>
+<span class="slc">;;; sbcl --load mandelbrot.lisp --eval &quot;(save-lisp-and-die \&quot;mandelbrot.core\&quot; :purify t :toplevel (lambda () (main) (quit)))&quot;</span>
+<span class="slc">;;; To run</span>
+<span class="slc">;;; sbcl --noinform --core mandelbrot.core %A</span>
+
+(<span class="kwa">defun</span> render (<span class="kwa">size</span> stream)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum size) (<span class="kwa">stream</span> stream)
+	   (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)))
+  (<span class="kwa">let</span>* ((<span class="kwa">code</span> <span class="num">0</span>) 
+	 (<span class="kwa">bit</span> <span class="num">0</span>)
+         (<span class="kwa">zr</span> <span class="num">0.0</span>d0)
+	 (<span class="kwa">zi</span> <span class="num">0.0</span>d0)
+	 (<span class="kwa">tr</span> <span class="num">0.0</span>d0)
+	 (<span class="kwa">delta</span> (/ <span class="num">2</span>d0 size))
+         (<span class="kwa">base-real</span> -<span class="num">1.5</span>d0) 
+	 (<span class="kwa">base-imag</span> -<span class="num">1.0</span>d0)
+         (<span class="kwa">buffer</span> (<span class="kwa">make-array</span> (* size (<span class="kwa">ceiling</span> size <span class="num">8</span>)) :element-type '(<span class="kwa">unsigned-byte</span> <span class="num">8</span>)))
+         (<span class="kwa">index</span> <span class="num">0</span>))
+
+    (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">unsigned-byte</span> <span class="num">8</span>) code )
+             (<span class="kwa">type</span> double-float zr zi tr base-real base-imag delta)
+             (<span class="kwa">type</span> fixnum index bit))
+
+    (<span class="kwa">dotimes</span> (<span class="kwa">y</span> size)
+      (<span class="kwa">setf</span> base-imag (<span class="kwa">-</span> <span class="num">1.0</span>d0 (* delta y)))
+      (<span class="kwa">dotimes</span> (<span class="kwa">x</span> size)
+	(<span class="kwa">setf</span> base-real (+ -<span class="num">1.5</span>d0 (* delta x))
+	      zr base-real
+	      zi base-imag)
+        (<span class="kwa">setf</span> code  
+	      (<span class="kwa">if</span> (<span class="kwa">dotimes</span> (<span class="kwa">n</span> <span class="num">50</span>)
+		    (<span class="kwa">when</span> (&lt; <span class="num">4.0</span>d0 (+ (* zr zr) (* zi zi)))
+		      (<span class="kwa">return</span> t))
+		    (<span class="kwa">setf</span> tr (+ (* zr zr) (<span class="kwa">-</span> (* zi zi)) base-real)
+			  zi (+ (* <span class="num">2.0</span>d0 zr zi) base-imag)
+			  zr tr))
+		  (<span class="kwa">ash</span> code <span class="num">1</span>)
+		  (<span class="kwa">logior</span> (<span class="kwa">ash</span> code <span class="num">1</span>) #x01)))
+	(<span class="kwa">when</span> (= (<span class="kwa">incf</span> bit) <span class="num">8</span>)
+	  (<span class="kwa">setf</span> (<span class="kwa">aref</span> buffer index) code
+		bit <span class="num">0</span> code <span class="num">0</span>)
+	  (<span class="kwa">incf</span> index))))
+
+    (<span class="kwa">write-sequence</span> buffer stream)))
+
+(<span class="kwa">defun</span> par-render (<span class="kwa">size</span> stream)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum size)		(<span class="kwa">stream</span> stream)
+	   (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)))
+
+  (<span class="kwa">let</span>* ((<span class="kwa">buffer</span> (<span class="kwa">make-array</span> (* size (<span class="kwa">ceiling</span> size <span class="num">8</span>)) :element-type '(<span class="kwa">unsigned-byte</span> <span class="num">8</span>)))
+	 (<span class="kwa">quarter-size</span> (<span class="kwa">ceiling</span> size <span class="num">4</span>))
+	 (<span class="kwa">quarter-array</span> (<span class="kwa">ceiling</span> (<span class="kwa">the</span> (<span class="kwa">unsigned-byte</span> <span class="num">32</span>) (* size size)) <span class="num">32</span>)))
+    
+
+    (<span class="kwa">labels</span> ((<span class="kwa">render-sub</span> (<span class="kwa">y-start</span> y-end index)
+	       (<span class="kwa">let</span> ((<span class="kwa">code</span> <span class="num">0</span>) 
+		     (<span class="kwa">bit</span> <span class="num">0</span>)
+		     (<span class="kwa">zr</span> <span class="num">0.0</span>d0) (<span class="kwa">zi</span> <span class="num">0.0</span>d0) (<span class="kwa">tr</span> <span class="num">0.0</span>d0)
+		     (<span class="kwa">delta</span> (/ <span class="num">2</span>d0 size))
+		     (<span class="kwa">base-real</span> -<span class="num">1.5</span>d0)  (<span class="kwa">base-imag</span> -<span class="num">1.0</span>d0))
+		 (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">unsigned-byte</span> <span class="num">8</span>) code)
+			  (<span class="kwa">type</span> double-float zr zi tr base-real base-imag delta)
+			  (<span class="kwa">type</span> fixnum index bit))
+
+
+		 (<span class="kwa">do</span> ((<span class="kwa">y</span> y-start (<span class="kwa">1</span>+ y)))
+		     ((= y y-end))
+		   (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">unsigned-byte</span> <span class="num">32</span>) y))
+
+		   (<span class="kwa">setf</span> base-imag (<span class="kwa">-</span> <span class="num">1.0</span>d0 (* delta y)))
+		   (<span class="kwa">dotimes</span> (<span class="kwa">x</span> size)
+		     (<span class="kwa">setf</span> base-real (+ -<span class="num">1.5</span>d0 (* delta x))
+			   zr base-real
+			   zi base-imag)
+		     (<span class="kwa">setf</span> code  
+			   (<span class="kwa">if</span> (<span class="kwa">dotimes</span> (<span class="kwa">n</span> <span class="num">50</span>)
+				 (<span class="kwa">when</span> (&lt; <span class="num">4.0</span>d0 (+ (* zr zr) (* zi zi)))
+				   (<span class="kwa">return</span> t))
+				 (<span class="kwa">setf</span> tr (+ (* zr zr) (<span class="kwa">-</span> (* zi zi)) base-real)
+				       zi (+ (* <span class="num">2.0</span>d0 zr zi) base-imag)
+				       zr tr))
+			       (<span class="kwa">ash</span> code <span class="num">1</span>)
+			       (<span class="kwa">logior</span> (<span class="kwa">ash</span> code <span class="num">1</span>) #x01)))
+		     (<span class="kwa">when</span> (= (<span class="kwa">incf</span> bit) <span class="num">8</span>)
+		       (<span class="kwa">setf</span> (<span class="kwa">aref</span> buffer index) code
+			     bit <span class="num">0</span> 
+			     code <span class="num">0</span>)
+		       (<span class="kwa">incf</span> index))
+		     )))))
+      (<span class="kwa">let</span> (<span class="kwa">threads</span>)
+	(<span class="kwa">dotimes</span> (<span class="kwa">i</span> <span class="num">4</span>)
+	  (<span class="kwa">let</span> ((<span class="kwa">start</span> (* i quarter-size))
+		(<span class="kwa">end</span> (* (+ i <span class="num">1</span>) quarter-size))
+		(<span class="kwa">idx</span> (* i quarter-array)))
+	    (<span class="kwa">push</span> (<span class="kwa">sb-thread</span>:make-thread (<span class="kwa">lambda</span> () (<span class="kwa">render-sub</span> start end idx))) threads)))
+	(<span class="kwa">dolist</span> (<span class="kwa">thread</span> threads)
+	  (<span class="kwa">sb-thread</span>:join-thread thread)))
+      (<span class="kwa">write-sequence</span> buffer stream))))
+
+(<span class="kwa">defun</span> main ()
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">0</span>) (<span class="kwa">safety</span> <span class="num">3</span>)))
+  (<span class="kwa">let</span>* ((<span class="kwa">args</span> sb-ext:*posix-argv*)
+	 (<span class="kwa">n</span> (<span class="kwa">parse-integer</span> (<span class="kwa">second</span> args))))
+    (<span class="kwa">with-open-stream</span> (<span class="kwa">stream</span> (<span class="kwa">sb-sys</span>:make-fd-stream (<span class="kwa">sb-sys</span>:fd-stream-fd sb-sys:*stdout*)
+						     :element-type :default
+						     :buffering :full
+						     :output t :input nil))
+
+      (<span class="kwa">format</span> stream <span class="str">&quot;P4~%~d ~d~%&quot;</span> n n)
+      #+sb-thread(<span class="kwa">par-render</span> n stream)
+      #-sb-thread(<span class="kwa">render</span> n stream)
+      (<span class="kwa">force-output</span> stream))))

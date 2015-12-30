@@ -1,0 +1,42 @@
+&lt;?php
+<span class="slc">#</span>
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># reverse complement in PHP</span>
+<span class="slc"># contributed by Danny Sauer</span>
+<span class="slc">#</span>
+
+<span class="slc"># We'll need some definitions</span>
+<span class="kwd">define</span>( <span class="str">'LINE_LENGTH'</span>, <span class="num">60</span> );
+<span class="kwd">define</span>( <span class="str">'SRC'</span>, <span class="str">'CGATMKRYVBHD'</span>);
+<span class="kwd">define</span>( <span class="str">'DST'</span>, <span class="str">'GCTAKMYRBVDH'</span>);
+$str = <span class="str">''</span>;
+$seq = <span class="str">''</span>;
+
+<span class="slc"># read in the file, a line at a time</span>
+<span class="kwa">while</span>( !<span class="kwd">feof</span>(STDIN) ) {
+    $str = <span class="kwd">trim</span>(<span class="kwd">fgets</span>(STDIN));
+    <span class="kwa">if</span>( $str[<span class="num">0</span>] == <span class="str">'&gt;'</span> ){
+        <span class="slc"># if we're on a comment line, print the previous seq and move on</span>
+        <span class="kwd">print_seq</span>();
+        <span class="kwa">echo</span> $str, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+    }<span class="kwa">else</span>{
+        <span class="slc"># otherwise, just append to the sequence</span>
+        $seq .= $str;
+    }
+}
+<span class="kwd">print_seq</span>();
+
+<span class="kwa">exit</span>;
+
+<span class="slc"># print the sequence out, if it exists</span>
+<span class="kwa">function</span> <span class="kwd">print_seq</span>(){
+    <span class="kwa">global</span> $seq; <span class="slc"># no time-consuming argument passing for us! :)</span>
+    <span class="kwa">if</span>($seq != <span class="str">''</span>){
+        <span class="kwa">echo</span> <span class="kwd">wordwrap</span>( <span class="kwd">strrev</span>( <span class="kwd">strtr</span>(<span class="kwd">strtoupper</span>($seq), SRC, DST) ),
+                       LINE_LENGTH, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>, true ), <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+    }
+    $seq = <span class="str">''</span>;
+}
+?&gt;

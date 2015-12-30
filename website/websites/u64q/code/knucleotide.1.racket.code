@@ -1,0 +1,52 @@
+#lang racket/base
+
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;;; contributed by Matthew Flatt</span>
+
+(<span class="kwa">define</span> (<span class="kwa">all-counts</span> len dna)
+  (<span class="kwa">let</span> ([table (<span class="kwa">make-hasheq</span>)]
+        [seq (<span class="kwa">make-string</span> len)])
+    (<span class="kwa">for</span> ([s (<span class="kwa">in-range</span> (<span class="kwa">-</span> (<span class="kwa">string-length</span> dna) len) -<span class="num">1</span> -<span class="num">1</span>)])
+      (<span class="kwa">string-copy</span>! seq <span class="num">0</span> dna s (+ s len))
+      (<span class="kwa">let</span> ([key (<span class="kwa">string-</span>&gt;symbol seq)])
+        (<span class="kwa">let</span> ([cnt (<span class="kwa">hash-ref</span> table key <span class="num">0</span>)])
+          (<span class="kwa">hash-set</span>! table key (<span class="kwa">add1</span> cnt)))))
+    table))
+
+(<span class="kwa">define</span> (<span class="kwa">write-freqs</span> table)
+  (<span class="kwa">let</span>* ([content (<span class="kwa">hash-map</span> table cons)]
+         [total (<span class="kwa">exact-</span>&gt;inexact (<span class="kwa">apply</span> + (<span class="kwa">map</span> cdr content)))])
+    (<span class="kwa">for</span> ([a (<span class="kwa">sort</span> content &gt; #:key cdr)])
+      (<span class="kwa">printf</span> <span class="str">&quot;~a ~a</span><span class="esc">\n</span><span class="str">&quot;</span> 
+              (<span class="kwa">car</span> a) 
+              (<span class="kwa">real-</span>&gt;decimal-string (* <span class="num">100</span> (/ (<span class="kwa">cdr</span> a) total)) <span class="num">3</span>)))))
+
+(<span class="kwa">define</span> (<span class="kwa">write-one-freq</span> table key)
+  (<span class="kwa">let</span> ([cnt (<span class="kwa">hash-ref</span> table key <span class="num">0</span>)])
+    (<span class="kwa">printf</span> <span class="str">&quot;~a</span><span class="esc">\t</span><span class="str">~a</span><span class="esc">\n</span><span class="str">&quot;</span> cnt key)))
+
+(<span class="kwa">define</span> dna
+  (<span class="kwa">let</span> ([in (<span class="kwa">current-input-port</span>)])
+    <span class="slc">;; Skip to &quot;&gt;THREE ...&quot;</span>
+    (<span class="kwa">regexp-match</span> #rx#<span class="str">&quot;(?m:^&gt;THREE.*$)&quot;</span> in)
+    (<span class="kwa">let</span> ([s (<span class="kwa">open-output-string</span>)])
+      <span class="slc">;; Copy everything but newlines to s:</span>
+      (<span class="kwa">for</span> ([l (<span class="kwa">in-bytes-lines</span> in)])
+        (<span class="kwa">write-bytes</span> l s))
+      <span class="slc">;; Extract the string from s:</span>
+      (<span class="kwa">string-upcase</span> (<span class="kwa">get-output-string</span> s)))))
+
+<span class="slc">;; 1-nucleotide counts:</span>
+(<span class="kwa">write-freqs</span> (<span class="kwa">all-counts</span> <span class="num">1</span> dna))
+(<span class="kwa">newline</span>)
+
+<span class="slc">;; 2-nucleotide counts:</span>
+(<span class="kwa">write-freqs</span> (<span class="kwa">all-counts</span> <span class="num">2</span> dna))
+(<span class="kwa">newline</span>)
+
+<span class="slc">;; Specific sequences:</span>
+(<span class="kwa">for</span> ([seq '(<span class="str">&quot;GGT&quot;</span> <span class="str">&quot;GGTA&quot;</span> <span class="str">&quot;GGTATT&quot;</span> <span class="str">&quot;GGTATTTTAATT&quot;</span> <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>)]) 
+  (<span class="kwa">write-one-freq</span> (<span class="kwa">all-counts</span> (<span class="kwa">string-length</span> seq) dna)
+                  (<span class="kwa">string-</span>&gt;symbol seq)))

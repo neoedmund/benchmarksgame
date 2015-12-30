@@ -1,0 +1,113 @@
+<span class="slc">--</span>
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- </span>
+<span class="slc">-- contributed by Jeff Newbern</span>
+<span class="slc">-- Modified to fastest.hs by Chris Kuklewicz, 6 Jan 2006</span>
+<span class="slc">-- Modified to fixed-fasta.hs by Chris Kuklewicz, 17 Jan 2006</span>
+<span class="slc">-- </span>
+<span class="slc">-- Uses random generation code derived from Simon Marlow and Einar</span>
+<span class="slc">-- Karttunen's &quot;random&quot; test entry.  No longer uses Double during run,</span>
+<span class="slc">-- everything has been pre-converted to Int.  And pre-converted to a</span>
+<span class="slc">-- binary tree for lookup.  Ideally this tree could be constructed</span>
+<span class="slc">-- with the probabilities in mind, but it isn't in this version.</span>
+<span class="slc">-- </span>
+<span class="slc">-- Compile with ghc --make resub-fasta.hs -o resub-fasta.ghc_run</span>
+<span class="slc">-- Run with &quot;./rsub-fasta.ghc_run %A&quot; where %A is the parameter</span>
+
+<span class="kwd">import</span> Control.Monad
+<span class="kwd">import</span> Data.<span class="kwb">Char</span>(<span class="kwc">chr</span>,<span class="kwc">ord</span>)
+<span class="kwd">import</span> Data.List(<span class="kwc">mapAccumL</span>)
+<span class="kwd">import</span> Data.Word(Word8)
+<span class="kwd">import</span> Data.IORef
+<span class="kwd">import</span> Foreign
+<span class="kwd">import</span> System.Environment
+<span class="kwd">import</span> System.<span class="kwb">IO</span>
+
+<span class="kwd">type</span> Base = Word8
+<span class="kwd">data</span> BaseFrequencyTree = Node !Base
+                       | TreeNodes !<span class="kwb">Int</span> !Base !Base
+                       | Tree !<span class="kwb">Int</span> !BaseFrequencyTree !BaseFrequencyTree
+<span class="kwd">data</span> Seed = Seed !<span class="kwb">Int</span>
+
+b2c :: Word8 -&gt; <span class="kwb">Char</span>
+b2c = <span class="kwc">chr</span> . <span class="kwc">fromEnum</span>
+c2b = <span class="kwc">toEnum</span> . <span class="kwc">ord</span>
+
+alu = <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span> ++
+      <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span> ++
+      <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span> ++
+      <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span> ++
+      <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span> ++
+      <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span> ++
+      <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>
+
+im = <span class="num">139968</span> :: <span class="kwb">Double</span>
+
+iub = mkTree $ <span class="kwc">snd</span> . <span class="kwc">mapAccumL</span> (<span class="esc">\r</span>t (c,f) -&gt; (f+rt,(c2b c,<span class="kwa">ceiling</span> $ im*(f+rt)))) <span class="num">0.0</span> $
+  [ ('a', <span class="num">0.27</span>), ('c', <span class="num">0.12</span>), ('g', <span class="num">0.12</span>), ('t', <span class="num">0.27</span>), ('B', <span class="num">0.02</span>),
+    ('D', <span class="num">0.02</span>), ('H', <span class="num">0.02</span>), ('K', <span class="num">0.02</span>), ('M', <span class="num">0.02</span>), ('N', <span class="num">0.02</span>),
+    ('R', <span class="num">0.02</span>), ('S', <span class="num">0.02</span>), ('V', <span class="num">0.02</span>), ('W', <span class="num">0.02</span>), ('Y', <span class="num">0.02</span>) ]
+
+homosapiens =  mkTree $ <span class="kwc">snd</span> . <span class="kwc">mapAccumL</span> (<span class="esc">\r</span>t (c,f) -&gt; (f+rt,(c2b c,<span class="kwa">ceiling</span> $ im*(f+rt)))) <span class="num">0.0</span> $
+  [ ('a', <span class="num">0.3029549426680</span>), ('c', <span class="num">0.1979883004921</span>), ('g', <span class="num">0.1975473066391</span>), ('t', <span class="num">0.3015094502008</span>) ]
+
+mkTree [(b,_)] = Node b
+mkTree [(b,f),(b',_)] = TreeNodes f b b'
+mkTree xs = <span class="kwd">let</span> (h,t) = <span class="kwc">splitAt</span> (<span class="kwa">length</span> xs `<span class="kwc">div</span>` <span class="num">2</span>) xs
+                (_,f) = <span class="kwc">last</span> h
+            <span class="kwd">in</span> Tree f (mkTree h) (mkTree t)
+
+chooseBase (Node b) _ = b
+chooseBase (TreeNodes f b b') p = <span class="kwd">if</span> (p&lt;f) <span class="kwd">then</span> b <span class="kwd">else</span> b'
+chooseBase (Tree f l r) p | p &lt; f     = chooseBase l p
+                          | <span class="kwc">otherwise</span> = chooseBase r p
+
+writeFastaHeader label title =  (<span class="kwc">putStrLn</span> (('&gt;':label) ++ (' ':title)))
+perLine = <span class="num">60</span>
+
+writeAluBuffer total = <span class="kwd">do</span>
+  <span class="kwd">let</span> l = <span class="kwa">length</span> alu
+      bufSize = l + perLine - <span class="num">1</span>
+  aluBuf &lt;- mallocArray bufSize
+  foldM_ (\ptr c -&gt; poke ptr (c2b c) &gt;&gt; <span class="kwc">return</span> (advancePtr ptr <span class="num">1</span>)) aluBuf (<span class="kwc">take</span> bufSize (<span class="kwc">cycle</span> alu))
+  <span class="kwd">let</span> (full,end) = total `<span class="kwc">divMod</span>` perLine
+      fullLine n = <span class="kwd">let</span> ptr = advancePtr aluBuf ((n * perLine) `<span class="kwc">mod</span>` l)
+                   <span class="kwd">in</span> hPutBuf <span class="kwc">stdout</span> ptr perLine &gt;&gt; <span class="kwc">hPutChar stdout</span> '<span class="esc">\n</span>'
+      lastLine = <span class="kwd">let</span> ptr = advancePtr aluBuf ((full*perLine) `<span class="kwc">mod</span>` l)
+                 <span class="kwd">in</span> hPutBuf <span class="kwc">stdout</span> ptr end &gt;&gt; <span class="kwc">hPutChar stdout</span> '<span class="esc">\n</span>'
+  <span class="kwc">mapM_</span> fullLine [<span class="num">0</span>..<span class="kwc">pred</span> full]
+  <span class="kwc">when</span> (end&gt;<span class="num">0</span>) lastLine
+
+writeWrapped total trans initSeed = <span class="kwd">do</span>
+  seedRef &lt;- newIORef initSeed
+  <span class="kwd">let</span> l = <span class="kwc">succ</span> perLine
+      (im,ia,ic)=(<span class="num">139968</span>,<span class="num">3877</span>,<span class="num">29573</span>)
+      nextSeed (Seed s) = Seed ( (s * ia + ic) `<span class="kwc">mod</span>` im )
+      prng = <span class="kwd">do</span> newSeed &lt;- <span class="kwc">return</span>.nextSeed =&lt;&lt; readIORef seedRef
+                writeIORef seedRef newSeed
+                <span class="kwc">return</span> newSeed
+  buf &lt;- mallocArray l
+  poke (advancePtr buf perLine) (c2b '<span class="esc">\n</span>')
+  <span class="kwd">let</span> (full,end) = total `<span class="kwc">divMod</span>` perLine
+      fill <span class="num">0</span> _   = <span class="kwc">return</span> ()
+      fill i ptr = <span class="kwd">do</span> (Seed b) &lt;- prng
+                      poke ptr (trans b)
+                      fill (<span class="kwc">pred</span> i) (advancePtr ptr <span class="num">1</span>)
+      fullLine = <span class="kwd">do</span> fill perLine buf
+                    hPutBuf <span class="kwc">stdout</span> buf l
+      lastLine = <span class="kwd">do</span> fill end buf
+                    poke (advancePtr buf end) (c2b '<span class="esc">\n</span>')
+                    hPutBuf <span class="kwc">stdout</span> buf (<span class="kwc">succ</span> end)
+  replicateM_ full fullLine
+  <span class="kwc">when</span> (end&gt;<span class="num">0</span>) lastLine
+  readIORef seedRef
+
+main = <span class="kwd">do</span> args &lt;- <span class="kwc">getArgs</span>
+          <span class="kwd">let</span> n = <span class="kwd">if</span> <span class="kwc">null</span> args <span class="kwd">then</span> <span class="num">2500000</span> <span class="kwd">else</span> <span class="kwc">read</span> (<span class="kwc">head</span> args)
+          writeFastaHeader <span class="str">&quot;ONE&quot;</span> <span class="str">&quot;Homo sapiens alu&quot;</span>
+          writeAluBuffer (<span class="num">2</span>*n)
+          writeFastaHeader <span class="str">&quot;TWO&quot;</span> <span class="str">&quot;IUB ambiguity codes&quot;</span>
+          seed' &lt;- writeWrapped (<span class="num">3</span>*n) (chooseBase iub) (Seed <span class="num">42</span>)
+          writeFastaHeader <span class="str">&quot;THREE&quot;</span> <span class="str">&quot;Homo sapiens frequency&quot;</span>
+          writeWrapped (<span class="num">5</span>*n) (chooseBase homosapiens) seed'

@@ -1,0 +1,15 @@
+
+Wed, 12 Aug 2015 16:41:55 GMT
+
+MAKE:
+mv fannkuchredux.csharp-3.csharp fannkuchredux.csharp-3.cs
+/usr/local/bin/mcs -unsafe+ -optimize+ -platform:x64 -out:fannkuchredux.csharp-3.csharp_run fannkuchredux.csharp-3.cs
+rm fannkuchredux.csharp-3.cs
+1.01s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/mono --llvm fannkuchredux.csharp-3.csharp_run 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

@@ -1,0 +1,40 @@
+
+Tue, 15 Sep 2015 18:15:06 GMT
+
+MAKE:
+mv chameneosredux.python3-2.python3 chameneosredux.python3-2.py
+0.02s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/Python-3.5.0/bin/python3.5 chameneosredux.python3-2.py 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+ blue red yellow
+4028661 zero
+4020011 zero
+3951328 zero
+ one two zero zero zero zero zero zero
+
+ blue red yellow red yellow blue red yellow red blue
+1203208 zero
+1199236 zero
+1176626 zero
+1174696 zero
+1198544 zero
+1205938 zero
+1232968 zero
+1191235 zero
+1174764 zero
+1242785 zero
+ one two zero zero zero zero zero zero
+

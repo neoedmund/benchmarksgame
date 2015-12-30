@@ -1,0 +1,153 @@
+<span class="slc">// The Computer Language Benchmarks Game </span>
+<span class="slc">// http://shootout.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Original C contributed by Sebastien Loisel</span>
+<span class="slc">// Conversion to C++ by Jon Harrop</span>
+<span class="slc">// OpenMP parallelize by The Anh Tran</span>
+<span class="slc">// Add SSE by The Anh Tran</span>
+<span class="slc">// Additional SSE optimization by Krzysztof Jakubowski</span>
+
+<span class="slc">// g++ -pipe -O3 -march=native -fopenmp -mfpmath=sse -msse2 ./spec.c++ -o ./spec.run</span>
+
+<span class="ppc">#include &lt;cmath&gt;</span>
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+<span class="ppc">#include &lt;omp.h&gt;</span>
+<span class="ppc">#include &lt;emmintrin.h&gt;</span>
+
+<span class="kwc">inline</span> <span class="kwb">int</span> <span class="kwd">Index</span>(<span class="kwb">int</span> i, <span class="kwb">int</span> j) {
+   <span class="kwa">return</span> (((i + j) * (i + j + <span class="num">1</span>)) &gt;&gt; <span class="num">1</span>) + i + <span class="num">1</span>;
+}
+
+<span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">MultiplyShorts</span>(__m128i a, __m128i b, __m128i &amp;outA, __m128i &amp;outB) {
+   __m128i lo = <span class="kwd">_mm_mullo_epi16</span>(a, b);
+   __m128i hi = <span class="kwd">_mm_mulhi_epu16</span>(a, b);
+   outA = <span class="kwd">_mm_unpacklo_epi16</span>(lo, hi);
+   outB = <span class="kwd">_mm_unpackhi_epi16</span>(lo, hi);
+}
+
+<span class="kwc">template</span> &lt;<span class="kwb">bool</span> modei&gt;
+<span class="kwb">void</span> <span class="kwd">EvalPart</span>(<span class="kwb">double</span> *__restrict__ src, <span class="kwb">double</span> *__restrict__ dst, <span class="kwb">int</span> begin, <span class="kwb">int</span> end, <span class="kwb">int</span> length) <span class="kwd">__attribute</span>((noinline));
+<span class="kwc">template</span> &lt;<span class="kwb">bool</span> modei&gt;
+<span class="kwb">void</span> <span class="kwd">EvalPart</span>(<span class="kwb">double</span> *__restrict__ src, <span class="kwb">double</span> *__restrict__ dst, <span class="kwb">int</span> begin, <span class="kwb">int</span> end, <span class="kwb">int</span> length) {
+   <span class="kwb">int</span> i = begin;
+   <span class="kwa">for</span>(; i + <span class="num">7</span> &lt; end; i += <span class="num">8</span>) {
+      __m128i i8 = <span class="kwd">_mm_set_epi16</span>(i + <span class="num">7</span>, i + <span class="num">6</span>, i + <span class="num">5</span>, i + <span class="num">4</span>, i + <span class="num">3</span>, i + <span class="num">2</span>, i + <span class="num">1</span>, i + <span class="num">0</span>);
+      __m128i ii8 = <span class="kwd">_mm_add_epi16</span>(i8, <span class="kwd">_mm_set1_epi16</span>(<span class="num">1</span>));
+      __m128i ai4 = <span class="kwd">_mm_set_epi32</span>(i + <span class="num">4</span>, i + <span class="num">3</span>, i + <span class="num">2</span>, i + <span class="num">1</span>);
+      __m128i bi4 = <span class="kwd">_mm_set_epi32</span>(i + <span class="num">8</span>, i + <span class="num">7</span>, i + <span class="num">6</span>, i + <span class="num">5</span>);
+      __m128d sum1 = <span class="kwd">_mm_set1_pd</span>(<span class="num">0.0</span>), sum2 = <span class="kwd">_mm_set1_pd</span>(<span class="num">0.0</span>);
+      __m128d sum3 = <span class="kwd">_mm_set1_pd</span>(<span class="num">0.0</span>), sum4 = <span class="kwd">_mm_set1_pd</span>(<span class="num">0.0</span>);
+
+      <span class="kwa">for</span>(<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; length; j++) {
+         __m128i j8 = <span class="kwd">_mm_set1_epi16</span>(j);
+         __m128i a4, b4;
+         <span class="kwd">MultiplyShorts</span>(<span class="kwd">_mm_add_epi16</span>(i8, j8), <span class="kwd">_mm_add_epi16</span>(ii8, j8), a4, b4);
+         <span class="kwa">if</span>(modei) {
+            a4 = <span class="kwd">_mm_add_epi32</span>(<span class="kwd">_mm_srli_epi32</span>(a4, <span class="num">1</span>), ai4);
+            b4 = <span class="kwd">_mm_add_epi32</span>(<span class="kwd">_mm_srli_epi32</span>(b4, <span class="num">1</span>), bi4);
+         }
+         <span class="kwa">else</span> {
+            a4 = <span class="kwd">_mm_add_epi32</span>(<span class="kwd">_mm_srli_epi32</span>(a4, <span class="num">1</span>), <span class="kwd">_mm_set1_epi32</span>(j + <span class="num">1</span>));
+            b4 = <span class="kwd">_mm_add_epi32</span>(<span class="kwd">_mm_srli_epi32</span>(b4, <span class="num">1</span>), <span class="kwd">_mm_set1_epi32</span>(j + <span class="num">1</span>));
+         }
+
+         __m128d a2 = <span class="kwd">_mm_cvtepi32_pd</span>(a4);
+         __m128d b2 = <span class="kwd">_mm_cvtepi32_pd</span>(<span class="kwd">_mm_shuffle_epi32</span>(a4, <span class="num">2</span> + (<span class="num">3</span> &lt;&lt; <span class="num">2</span>)));
+         __m128d c2 = <span class="kwd">_mm_cvtepi32_pd</span>(b4);
+         __m128d d2 = <span class="kwd">_mm_cvtepi32_pd</span>(<span class="kwd">_mm_shuffle_epi32</span>(b4, <span class="num">2</span> + (<span class="num">3</span> &lt;&lt; <span class="num">2</span>)));
+
+         __m128d uj2 = <span class="kwd">_mm_set1_pd</span>(src[j]);
+         sum1 = <span class="kwd">_mm_add_pd</span>(sum1, <span class="kwd">_mm_div_pd</span>(uj2, a2));
+         sum2 = <span class="kwd">_mm_add_pd</span>(sum2, <span class="kwd">_mm_div_pd</span>(uj2, b2));
+         sum3 = <span class="kwd">_mm_add_pd</span>(sum3, <span class="kwd">_mm_div_pd</span>(uj2, c2));
+         sum4 = <span class="kwd">_mm_add_pd</span>(sum4, <span class="kwd">_mm_div_pd</span>(uj2, d2));
+      }
+
+      <span class="kwd">_mm_storeu_pd</span>(dst + i + <span class="num">0</span>, sum1);
+      <span class="kwd">_mm_storeu_pd</span>(dst + i + <span class="num">2</span>, sum2);
+      <span class="kwd">_mm_storeu_pd</span>(dst + i + <span class="num">4</span>, sum3);
+      <span class="kwd">_mm_storeu_pd</span>(dst + i + <span class="num">6</span>, sum4);
+   }
+   <span class="kwa">for</span>(; i &lt; end; i++) {
+      <span class="kwb">double</span> sum = <span class="num">0</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; length; j++)
+         sum += src[j] / <span class="kwb">double</span>(modei?<span class="kwd">Index</span>(i, j) : <span class="kwd">Index</span>(j, i));
+      dst[i] = sum;
+   }
+}
+
+<span class="slc">// Search for appropriate number of threads to spawn</span>
+<span class="kwb">int</span> <span class="kwd">GetThreadCount</span>() {
+   cpu_set_t cs;
+   <span class="kwd">CPU_ZERO</span>(&amp;cs);
+   <span class="kwd">sched_getaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(cs), &amp;cs);
+
+   <span class="kwb">int</span> count = <span class="num">0</span>;
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; CPU_SETSIZE; ++i) {
+      <span class="kwa">if</span> (<span class="kwd">CPU_ISSET</span>(i, &amp;cs))
+         ++count;
+   }
+   <span class="kwa">return</span> count;
+}
+
+<span class="kwb">double</span> <span class="kwd">spectral_game</span>(<span class="kwb">int</span> N) {
+   <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">64</span>))) <span class="kwb">double</span> u[N];
+   <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">64</span>))) <span class="kwb">double</span> tmp[N];
+   <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">64</span>))) <span class="kwb">double</span> v[N];
+
+   <span class="kwb">double</span> vBv   = <span class="num">0.0</span>;
+   <span class="kwb">double</span> vv   = <span class="num">0.0</span>;
+
+   <span class="ppc">#pragma omp parallel default(shared) num_threads(GetThreadCount())</span>
+   {
+      <span class="slc">// this block will be executed by NUM_THREADS</span>
+      <span class="slc">// variable declared in this block is private for each thread</span>
+      <span class="kwb">int</span> threadid   = <span class="kwd">omp_get_thread_num</span>();
+      <span class="kwb">int</span> threadcount   = <span class="kwd">omp_get_num_threads</span>();
+      <span class="kwb">int</span> chunk      = N / threadcount;
+
+      <span class="slc">// calculate each thread's working range [r1 .. r2) =&gt; static schedule</span>
+      <span class="kwb">int</span> begin = threadid * chunk;
+      <span class="kwb">int</span> end = (threadid &lt; (threadcount -<span class="num">1</span>)) ? (begin + chunk) : N;
+
+      <span class="kwa">for</span>(<span class="kwb">int</span> i = begin; i &lt; end; i++)
+         u[i] = <span class="num">1.0</span>;
+      <span class="ppc">#pragma omp barrier</span>
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> ite = <span class="num">0</span>; ite &lt; <span class="num">10</span>; ++ite) {
+         EvalPart&lt;<span class="num">1</span>&gt;(u, tmp, begin, end, N);
+         <span class="ppc">#pragma omp barrier</span>
+         EvalPart&lt;<span class="num">0</span>&gt;(tmp, v, begin, end, N);
+         <span class="ppc">#pragma omp barrier</span>
+         EvalPart&lt;<span class="num">1</span>&gt;(v, tmp, begin, end, N);
+         <span class="ppc">#pragma omp barrier</span>
+         EvalPart&lt;<span class="num">0</span>&gt;(tmp, u, begin, end, N);
+         <span class="ppc">#pragma omp barrier</span>
+      }
+   
+      <span class="kwb">double</span> sumvb = <span class="num">0.0</span>, sumvv = <span class="num">0.0</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = begin; i &lt; end; i++) {
+         sumvv += v[i] * v[i];
+         sumvb += u[i] * v[i];
+      }
+
+      <span class="ppc">#pragma omp critical</span>
+      {
+         vBv   += sumvb;
+         vv   += sumvv;
+      }
+   } <span class="slc">// parallel region</span>
+
+   <span class="kwa">return</span> <span class="kwd">sqrt</span>(vBv / vv);
+}
+
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[]) {
+   <span class="kwb">int</span> N = ((argc &gt;= <span class="num">2</span>) ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">2000</span>);
+
+   <span class="kwd">printf</span>(<span class="str">&quot;%.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">spectral_game</span>(N));
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+

@@ -1,0 +1,129 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Scala translation contributed by Rex Kerr;</span>
+<span class="com">   based on Java original by Michael Barker.</span>
+<span class="com">*/</span>
+
+
+<span class="kwa">import</span> java.util.concurrent._;
+<span class="kwa">import</span> atomic._;
+
+<span class="kwa">object</span> chameneosredux {
+  <span class="kwa">object</span> Color <span class="kwa">extends</span> <span class="kwd">Enumeration</span>(<span class="num">0</span>,<span class="str">&quot;blue&quot;</span>,<span class="str">&quot;red&quot;</span>,<span class="str">&quot;yellow&quot;</span>) {
+    <span class="kwa">val</span> Blue,Red,Yellow = Value
+    <span class="kwa">def</span> <span class="kwd">doComplement</span>(c1: Value, c2: Value) = c1 match {
+      <span class="kwa">case</span> Blue =&gt; c2 match {
+        <span class="kwa">case</span> Blue =&gt; Blue
+        <span class="kwa">case</span> Red =&gt; Yellow
+        <span class="kwa">case</span> Yellow =&gt; Red
+      }
+      <span class="kwa">case</span> Red =&gt; c2 match {
+        <span class="kwa">case</span> Blue =&gt; Yellow
+        <span class="kwa">case</span> Red =&gt; Red
+        <span class="kwa">case</span> Yellow =&gt; Blue
+      }
+      <span class="kwa">case</span> Yellow =&gt; c2 match {
+        <span class="kwa">case</span> Blue =&gt; Red
+        <span class="kwa">case</span> Red =&gt; Blue
+        <span class="kwa">case</span> Yellow =&gt; Yellow
+      }
+    }
+    <span class="kwa">def</span> printColors {
+      Color.<span class="kwd">foreach</span>(c1 =&gt; Color.<span class="kwd">foreach</span>(c2 =&gt; {
+        <span class="kwd">println</span>(c1 + <span class="str">&quot; + &quot;</span> + c2 + <span class="str">&quot; -&gt; &quot;</span> + <span class="kwd">doComplement</span>(c1,c2))
+      }))
+    }
+  }
+
+  <span class="kwa">object</span> Verbalize {
+    <span class="kwa">val</span> digit = <span class="kwd">Map</span>(<span class="str">'0'</span>-&gt;<span class="str">&quot;zero&quot;</span>,<span class="str">'1'</span>-&gt;<span class="str">&quot;one&quot;</span>,<span class="str">'2'</span>-&gt;<span class="str">&quot;two&quot;</span>,<span class="str">'3'</span>-&gt;<span class="str">&quot;three&quot;</span>,<span class="str">'4'</span>-&gt;<span class="str">&quot;four&quot;</span>,
+                    <span class="str">'5'</span>-&gt;<span class="str">&quot;five&quot;</span>,<span class="str">'6'</span>-&gt;<span class="str">&quot;six&quot;</span>,<span class="str">'7'</span>-&gt;<span class="str">&quot;seven&quot;</span>,<span class="str">'8'</span>-&gt;<span class="str">&quot;eight&quot;</span>,<span class="str">'9'</span>-&gt;<span class="str">&quot;nine&quot;</span>)
+    <span class="kwa">def</span> <span class="kwd">apply</span>(n: Int) = n.toString.toList.<span class="kwd">map</span>(c=&gt;<span class="str">&quot; &quot;</span>+<span class="kwd">digit</span>(c)).mkString
+  }
+
+  <span class="kwa">class</span> <span class="kwd">MeetingPlace</span>(meetings: Int) {
+    <span class="kwa">private val</span> meetingsLeft = <span class="kwa">new</span> atomic.<span class="kwd">AtomicInteger</span>(meetings)
+    <span class="kwa">private val</span> creatureRef = <span class="kwa">new</span> atomic.AtomicReference[Creature]
+
+    <span class="kwa">def</span> <span class="kwd">meet</span>(incoming: Creature) {
+      <span class="kwa">val</span> existing = creatureRef.get
+      <span class="kwa">if</span> (existing == null) {
+        <span class="kwa">if</span> (!creatureRef.<span class="kwd">compareAndSet</span>(existing,incoming)) <span class="kwd">meet</span>(incoming);
+      }
+      <span class="kwa">else</span> {
+        <span class="kwa">val</span> newColor = Color.<span class="kwd">doComplement</span>(incoming.color,existing.color)      
+        <span class="kwa">if</span> (!creatureRef.<span class="kwd">compareAndSet</span>(existing,null)) <span class="kwd">meet</span>(incoming);
+        <span class="kwa">else</span> {
+          meetingsLeft.<span class="kwd">getAndDecrement</span>() match {
+            <span class="kwa">case</span> x <span class="kwa">if</span> (x&gt;<span class="num">0</span>) =&gt;
+              existing.<span class="kwd">setColor</span>(incoming.id, newColor, x==<span class="num">1</span>);
+              incoming.<span class="kwd">setColor</span>(existing.id, newColor, x==<span class="num">1</span>);
+            <span class="kwa">case</span> _ =&gt;
+              existing.<span class="kwd">finish</span>()
+              incoming.<span class="kwd">finish</span>()
+          }
+        }
+      }
+    }
+  }
+
+  <span class="kwa">class</span> <span class="kwd">Dispatcher</span>(bqc: BlockingQueue[Creature]) <span class="kwa">extends</span> Runnable {
+    <span class="kwa">def</span> <span class="kwd">run</span>() {
+      <span class="kwa">try</span> {
+        <span class="kwa">while</span>(true) bqc.<span class="kwd">take</span>().<span class="kwd">run</span>()
+      }
+      <span class="kwa">catch</span> { <span class="kwa">case</span> e: InterruptedException =&gt; }
+    }
+  }
+
+  <span class="kwa">class</span> <span class="kwd">Creature</span>(place: MeetingPlace, <span class="kwa">var</span> color: Color.Value, bqc: BlockingQueue[Creature], latch: CountDownLatch) {
+    <span class="kwa">val</span> id = System.<span class="kwd">identityHashCode</span>(<span class="kwa">this</span>)
+    <span class="kwa">var</span> count = <span class="num">0</span>
+    <span class="kwa">private var</span> sameCount = <span class="num">0</span>
+
+    <span class="kwa">def</span> <span class="kwd">finish</span>() { latch.<span class="kwd">countDown</span>() }
+    <span class="kwa">def</span> <span class="kwd">setColor</span>(id2: Int, newColor: Color.Value, complete: Boolean) {
+      color = newColor
+      count += <span class="num">1</span>
+      <span class="kwa">if</span> (id==id2) sameCount += <span class="num">1</span>
+      <span class="kwa">if</span> (!complete) bqc.<span class="kwd">add</span>(<span class="kwa">this</span>)
+      <span class="kwa">else</span> <span class="kwd">finish</span>()
+    }
+    <span class="kwa">def</span> <span class="kwd">run</span>() { place.<span class="kwd">meet</span>(<span class="kwa">this</span>) }
+    <span class="kwa">override def</span> <span class="kwd">toString</span>() = count + <span class="kwd">Verbalize</span>(sameCount)
+  }
+
+  <span class="kwa">def</span> <span class="kwd">run</span>(n: Int, colors: Color.Value*) {
+    <span class="kwa">val</span> place = <span class="kwa">new</span> <span class="kwd">MeetingPlace</span>(n)
+    <span class="kwa">val</span> bqc = <span class="kwa">new</span> ArrayBlockingQueue[Creature](colors.length)
+    <span class="kwa">val</span> latch = <span class="kwa">new</span> <span class="kwd">CountDownLatch</span>(colors.length - <span class="num">1</span>)
+
+    <span class="kwa">val</span> creatures = colors.<span class="kwd">map</span>(c =&gt; { <span class="kwd">print</span>(<span class="str">&quot; &quot;</span>+c) ; <span class="kwa">new</span> <span class="kwd">Creature</span>(place, c, bqc, latch) })
+    println
+
+    <span class="kwa">val</span> threads = colors.<span class="kwd">map</span>(_ =&gt; <span class="kwa">new</span> <span class="kwd">Thread</span>(<span class="kwa">new</span> <span class="kwd">Dispatcher</span>(bqc)))
+    threads.<span class="kwd">foreach</span>(_.<span class="kwd">start</span>())
+    creatures.<span class="kwd">foreach</span>(c =&gt; bqc.<span class="kwd">add</span>(c))
+
+    <span class="kwa">try</span> { latch.await }
+    <span class="kwa">catch</span> { <span class="kwa">case</span> ie: InterruptedException =&gt; <span class="kwd">println</span>(<span class="str">&quot;Exiting with error: &quot;</span> + ie) }
+
+    threads.<span class="kwd">foreach</span>(_.<span class="kwd">interrupt</span>())
+
+    <span class="kwd">println</span>( <span class="kwd">Verbalize</span> ( (<span class="num">0</span> /: creatures)((sum,c) =&gt; { <span class="kwd">println</span>(c) ; sum + c.count }) ) )
+    println
+  }
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) {
+    <span class="kwa">import</span> Color._
+
+    <span class="kwa">val</span> n = <span class="kwa">try</span> { <span class="kwd">args</span>(<span class="num">0</span>).toInt } <span class="kwa">catch</span> { <span class="kwa">case</span> _ =&gt; <span class="num">600</span> }
+    
+    printColors
+    println
+
+    <span class="kwd">run</span>(n,Blue,Red,Yellow)
+    <span class="kwd">run</span>(n,Blue,Red,Yellow,Red,Yellow,Blue,Red,Yellow,Red,Blue)
+  }
+}

@@ -1,0 +1,126 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Jim Rogers</span>
+
+<span class="kwa">with</span> Treenodes; <span class="kwa">use</span> Treenodes;
+<span class="kwa">with</span> Ada.Text_Io; <span class="kwa">use</span> Ada.Text_Io;
+<span class="kwa">with</span> Ada.Integer_Text_Io; <span class="kwa">use</span> Ada.Integer_Text_Io;
+<span class="kwa">with</span> Ada.Command_Line; <span class="kwa">use</span> Ada.Command_Line;
+<span class="kwa">with</span> Ada.Characters.Latin_1; <span class="kwa">use</span> Ada.Characters.Latin_1;
+
+<span class="kwa">procedure</span> Binarytrees <span class="kwa">is</span>
+   Min_Depth : <span class="kwa">constant</span> <span class="kwb">Positive</span> := <span class="num">4</span>;
+   N : <span class="kwb">Natural</span> := <span class="num">1</span>;
+   Stretch_Tree : TreeNode;
+   Long_Lived_Tree : TreeNode;
+   Short_Lived_Tree_1 : TreeNode;
+   Short_Lived_Tree_2 : TreeNode;
+   Max_Depth : <span class="kwb">Positive</span>;
+   Stretch_Depth : <span class="kwb">Positive</span>;
+   Check : <span class="kwb">Integer</span>;
+   Sum : <span class="kwb">Integer</span>;
+   Depth : <span class="kwb">Natural</span>;
+   Iterations : <span class="kwb">Positive</span>;
+<span class="kwa">begin</span>
+   <span class="kwa">if</span> Argument_Count &gt; <span class="num">0</span> <span class="kwa">then</span>
+      N := <span class="kwb">Positive</span><span class="kwd">'Value</span>(Argument(<span class="num">1</span>));
+   <span class="kwa">end if</span>;
+   Max_Depth := <span class="kwb">Positive</span><span class="kwd">'Max</span>(Min_Depth + <span class="num">2</span>, N);
+   Stretch_Depth := Max_Depth + <span class="num">1</span>;
+   Stretch_Tree := Bottom_Up_Tree(<span class="num">0</span>, Stretch_Depth);
+   Item_Check(Stretch_Tree, Check);
+   Put(<span class="str">&quot;stretch tree of depth &quot;</span>);
+   Put(Item =&gt; Stretch_Depth, Width =&gt; <span class="num">1</span>);
+   Put(Ht &amp; <span class="str">&quot; check: &quot;</span>);
+   Put(Item =&gt; Check, Width =&gt; <span class="num">1</span>);
+   New_Line;
+   
+   Long_Lived_Tree := Bottom_Up_Tree(<span class="num">0</span>, Max_Depth);
+   
+   Depth := Min_Depth;
+   <span class="kwa">while</span> Depth &lt;= Max_Depth <span class="kwa">loop</span>
+      Iterations := <span class="num">2</span>**(Max_Depth - Depth + Min_Depth);
+      Check := <span class="num">0</span>;
+      <span class="kwa">for</span> I <span class="kwa">in</span> <span class="num">1</span>..Iterations <span class="kwa">loop</span>
+         Short_Lived_Tree_1 := Bottom_Up_Tree(Item =&gt; I, Depth =&gt; Depth);
+         Short_Lived_Tree_2 := Bottom_Up_Tree(Item =&gt;-I, Depth =&gt; Depth);
+         Item_Check(Short_Lived_Tree_1, Sum);
+         Check := check + Sum;
+         Item_Check(Short_Lived_Tree_2, Sum);
+         Check := Check + Sum;
+      <span class="kwa">end loop</span>;
+      Put(Item =&gt; Iterations * <span class="num">2</span>, Width =&gt; <span class="num">0</span>);
+      Put(Ht &amp; <span class="str">&quot; trees of depth &quot;</span>);
+      Put(Item =&gt; Depth, Width =&gt; <span class="num">0</span>);
+      Put(Ht &amp; <span class="str">&quot; check: &quot;</span>);
+      Put(Item =&gt; Check, Width =&gt; <span class="num">0</span>);
+      New_Line;
+      Depth := Depth + <span class="num">2</span>;
+   <span class="kwa">end loop</span>;
+   Put(<span class="str">&quot;long lived tree of depth &quot;</span>);
+   Put(Item =&gt; Max_Depth, Width =&gt; <span class="num">0</span>);
+   Put(Ht &amp; <span class="str">&quot; check: &quot;</span>);
+   Item_Check(Long_Lived_Tree, Check);
+   Put(Item =&gt; Check, Width =&gt; <span class="num">0</span>);
+   New_Line;
+<span class="kwa">end</span> BinaryTrees;
+<span class="slc">----------------------------------------------------------------</span>
+<span class="slc">-- BinaryTrees</span>
+<span class="slc">--</span>
+<span class="slc">-- Ada 95 (GNAT)</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Jim Rogers</span>
+<span class="slc">----------------------------------------------------------------</span>
+
+<span class="kwa">package</span> Treenodes <span class="kwa">is</span>
+   <span class="kwa">type</span> Treenode <span class="kwa">is private</span>;
+   <span class="kwa">function</span> Bottom_Up_Tree(Item : <span class="kwb">Integer</span>; Depth : <span class="kwb">Integer</span>) <span class="kwa">return</span> Treenode;
+   <span class="kwa">procedure</span> Item_Check(This : <span class="kwa">in out</span> Treenode; Sum : <span class="kwa">out</span> <span class="kwb">Integer</span>);
+<span class="kwa">private</span>
+   <span class="kwa">type</span> Node;
+   <span class="kwa">type</span> Treenode <span class="kwa">is access</span> Node;
+   <span class="kwa">type</span> Node <span class="kwa">is record</span>
+      Left  : Treenode := <span class="kwa">null</span>;
+      Right : Treenode := <span class="kwa">null</span>;
+      Item  : <span class="kwb">Integer</span>  := <span class="num">0</span>; 
+   <span class="kwa">end record</span>;
+<span class="kwa">end</span> Treenodes;
+<span class="slc">----------------------------------------------------------------</span>
+<span class="slc">-- BinaryTrees</span>
+<span class="slc">--</span>
+<span class="slc">-- Ada 95 (GNAT)</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Jim Rogers</span>
+<span class="slc">----------------------------------------------------------------</span>
+
+<span class="kwa">with</span> Ada.Unchecked_Deallocation;
+
+<span class="kwa">package body</span> Treenodes <span class="kwa">is</span>
+   <span class="kwa">function</span> Bottom_Up_Tree(Item : <span class="kwb">Integer</span>; Depth : <span class="kwb">Integer</span>)
+      <span class="kwa">return</span> Treenode <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">if</span> Depth &gt; <span class="num">0</span> <span class="kwa">then</span>
+         <span class="kwa">return new</span> Node<span class="str">'(Bottom_Up_Tree((2*Item) -1, Depth -1),</span>
+<span class="str">            Bottom_Up_Tree(2 * Item, Depth -1),</span>
+<span class="str">            Item);</span>
+<span class="str">      else</span>
+<span class="str">         return new Node'</span>(<span class="kwa">null</span>, <span class="kwa">null</span>, Item);
+      <span class="kwa">end if</span>;
+   <span class="kwa">end</span> Bottom_Up_Tree;
+
+   <span class="kwa">procedure</span> Item_Check (This : <span class="kwa">in out</span> Treenode; Sum : <span class="kwa">out</span> <span class="kwb">Integer</span>) <span class="kwa">is</span>
+      <span class="kwa">procedure</span> Free <span class="kwa">is new</span> Ada.Unchecked_Deallocation(Node, Treenode);
+      Left_Sum, Right_Sum : <span class="kwb">Integer</span>;
+   <span class="kwa">begin</span>
+      <span class="kwa">if</span> This.Left = <span class="kwa">null then</span>
+         Sum := This.Item;
+      <span class="kwa">else</span>
+         Item_Check(This.Left, Left_Sum);
+         Item_Check(This.Right, Right_Sum);
+         Sum :=  This.Item + Left_Sum - Right_Sum;
+      <span class="kwa">end if</span>;
+      Free(This);      
+   <span class="kwa">end</span> Item_Check;
+
+<span class="kwa">end</span> Treenodes;

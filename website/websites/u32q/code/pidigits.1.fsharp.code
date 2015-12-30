@@ -1,0 +1,53 @@
+﻿<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by Valentin Kraevskiy</span>
+<span class="slc">// fixed by Joel Mueller</span>
+
+<span class="ppc">#light</span>
+    
+<span class="kwa">let</span> id = <span class="num">1I</span>, <span class="num">0I</span>, <span class="num">0I</span>, <span class="num">1I</span>
+
+<span class="kwa">let</span> comp (q, r, s, t) (u, v, x) =
+    (q * u, q * v + r * x, s * u, s * v + t * x)
+
+<span class="kwa">let</span> div x y = 
+    <span class="kwa">let rec</span> next w n =        
+        <span class="kwa">if</span> w &gt; x <span class="kwa">then</span> n <span class="kwa">else</span> next (w + y) (n + <span class="num">1I</span>)
+    next y <span class="num">0I</span>
+<span class="kwa">let</span> extr (q, r, s, t) x = div (q * x + r) (s * x + t)   
+    
+<span class="kwa">let</span> next z = extr z <span class="num">3I</span>
+<span class="kwa">let</span> safe z = (=) (extr z <span class="num">4I</span>)
+<span class="kwa">let</span> prod (u, v, w, x) n =
+    <span class="kwa">let</span> neg = -<span class="num">10I</span> * n
+    (<span class="num">10I</span> * u + neg * w, <span class="num">10I</span> * v + neg * x, w, x)
+
+<span class="kwa">let</span> digits = 
+    <span class="kwa">let</span> z = <span class="kwb">ref</span> id    
+    <span class="kwa">let</span> lfts = 
+        <span class="kwa">let</span> n = <span class="kwb">ref</span> <span class="num">0I</span>
+        <span class="kwa">fun</span> () -&gt; n := !n + <span class="num">1I</span>
+                  !n, <span class="num">4I</span> * !n + <span class="num">2I</span>, <span class="num">2I</span> * !n + <span class="num">1I</span>
+    <span class="kwa">let rec</span> digits () =
+            <span class="kwa">let</span> y = next !z 
+            <span class="kwa">if</span> safe !z y 
+                <span class="kwa">then</span> z := (prod !z y)
+                     y
+                <span class="kwa">else</span> z := (comp !z &lt;| lfts ())
+                     digits ()
+    digits
+
+<span class="kwa">let rec</span> loop n s total = 
+    <span class="kwa">if</span> total = <span class="num">0</span> 
+        <span class="kwa">then for</span> _ <span class="kwa">in</span> <span class="num">1</span> .. n <span class="kwa">do</span> printf <span class="str">&quot; &quot;</span>
+             printf (<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:</span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>) (s + <span class="num">10</span> - n)
+        <span class="kwa">else if</span> n = <span class="num">0</span> 
+            <span class="kwa">then</span> printf <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:</span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> &lt;| s + <span class="num">10</span>
+                 loop <span class="num">10</span> (s + <span class="num">10</span>) total
+            <span class="kwa">else</span> printf <span class="str">&quot;</span><span class="ipl">%i</span><span class="str">&quot;</span> &lt;| <span class="kwb">int</span> (digits ()) 
+                 loop (n - <span class="num">1</span>) s (total - <span class="num">1</span>)
+
+loop <span class="num">10 0</span> &lt;| <span class="kwa">try</span> <span class="kwb">int</span> (<span class="kwd">System</span>.<span class="kwd">Environment</span>.<span class="kwd">GetCommandLineArgs</span>().[<span class="num">1</span>]) <span class="kwa">with</span> _ -&gt; <span class="num">27</span>
+
+ 

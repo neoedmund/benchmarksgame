@@ -1,0 +1,188 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Milan Stanojevic, Jul 12 2009</span>
+<span class="com">*)</span>
+
+<span class="kwa">module</span> <span class="kwd">List</span> = <span class="kwd">ListLabels</span>
+<span class="kwa">module</span> <span class="kwd">String</span> = <span class="kwd">StringLabels</span>
+
+<span class="kwa">open</span> <span class="kwd">Printf</span>
+
+<span class="kwa">module</span> <span class="kwd">Color</span> = <span class="kwa">struct</span> 
+  <span class="kwa">type</span> t =
+  | <span class="kwd">Blue</span>
+  | <span class="kwd">Red</span>
+  | <span class="kwd">Yellow</span>
+
+  <span class="kwa">let</span> complement t t' =
+  <span class="kwa">match</span> t, t' <span class="kwa">with</span> 
+    | <span class="kwd">Blue</span>, <span class="kwd">Blue</span> -&gt; <span class="kwd">Blue</span>
+    | <span class="kwd">Blue</span>, <span class="kwd">Red</span> -&gt; <span class="kwd">Yellow</span>
+    | <span class="kwd">Blue</span>, <span class="kwd">Yellow</span> -&gt; <span class="kwd">Red</span>
+    | <span class="kwd">Red</span>, <span class="kwd">Blue</span> -&gt; <span class="kwd">Yellow</span>
+    | <span class="kwd">Red</span>, <span class="kwd">Red</span> -&gt; <span class="kwd">Red</span>
+    | <span class="kwd">Red</span>, <span class="kwd">Yellow</span> -&gt; <span class="kwd">Blue</span>
+    | <span class="kwd">Yellow</span>, <span class="kwd">Blue</span> -&gt; <span class="kwd">Red</span>
+    | <span class="kwd">Yellow</span>, <span class="kwd">Red</span> -&gt; <span class="kwd">Blue</span>
+    | <span class="kwd">Yellow</span>, <span class="kwd">Yellow</span> -&gt; <span class="kwd">Yellow</span>
+
+  <span class="kwa">let</span> to_string = <span class="kwa">function</span>
+    | <span class="kwd">Blue</span> -&gt; <span class="str">&quot;blue&quot;</span>
+    | <span class="kwd">Red</span> -&gt; <span class="str">&quot;red&quot;</span>
+    | <span class="kwd">Yellow</span> -&gt; <span class="str">&quot;yellow&quot;</span>
+
+  <span class="kwa">let</span> all = [ <span class="kwd">Blue</span>; <span class="kwd">Red</span>; <span class="kwd">Yellow</span> ]
+<span class="kwa">end</span>
+
+<span class="kwa">module</span> <span class="kwd">Meeting_place</span> = <span class="kwa">struct</span>
+
+  <span class="kwa">type</span> 'chameneos t = {
+    <span class="kwa">mutable</span> state : [ `<span class="kwd">Empty</span> | `<span class="kwd">First</span> <span class="kwa">of</span> 'chameneos | `<span class="kwd">Second</span> <span class="kwa">of</span> 'chameneos ];
+    <span class="kwa">mutable</span> meetings_left : <span class="kwb">int</span>;
+    mutex : <span class="kwc">Mutex</span>.t;
+    wait_for_second : <span class="kwc">Condition</span>.t;
+    wait_for_empty : <span class="kwc">Condition</span>.t;
+  }
+
+  <span class="kwa">let</span> create n = {
+    state = `<span class="kwd">Empty</span>;
+    meetings_left = n;
+    mutex = <span class="kwc">Mutex</span>.create ();
+    wait_for_second = <span class="kwc">Condition</span>.create ();
+    wait_for_empty = <span class="kwc">Condition</span>.create ();
+  }
+
+  <span class="kwa">let</span> meet t c = 
+    <span class="kwa">let rec</span> loop () = 
+      <span class="kwa">if</span> t.meetings_left = <span class="num">0</span> <span class="kwa">then begin</span>
+        <span class="kwc">Condition</span>.broadcast t.wait_for_empty;
+        <span class="kwd">None</span>
+      <span class="kwa">end</span>
+      <span class="kwa">else</span>
+	<span class="kwa">match</span> t.state <span class="kwa">with</span> 
+	| `<span class="kwd">Empty</span> -&gt; 
+	    t.state &lt;- `<span class="kwd">First</span> c;
+	    <span class="kwc">Condition</span>.wait t.wait_for_second t.mutex;
+	    <span class="kwa">begin</span>
+	      <span class="kwa">match</span> t.state <span class="kwa">with</span> 
+	      | `<span class="kwd">Empty</span>
+	      | `<span class="kwd">First</span> _ -&gt; 
+		  <span class="kwa">assert false</span>
+	      | `<span class="kwd">Second</span> c -&gt; 
+		  t.state &lt;- `<span class="kwd">Empty</span>;
+                  <span class="kwc">Condition</span>.signal t.wait_for_empty;
+                  <span class="kwc">Condition</span>.signal t.wait_for_empty;
+		  <span class="kwd">Some</span> c
+	    <span class="kwa">end</span>
+	| `<span class="kwd">First</span> c1 -&gt;
+	    t.state &lt;- `<span class="kwd">Second</span> c;
+	    t.meetings_left &lt;- t.meetings_left - <span class="num">1</span>;
+	    <span class="kwc">Condition</span>.signal t.wait_for_second;
+	    <span class="kwd">Some</span> c1
+	| `<span class="kwd">Second</span> _ -&gt;
+	    <span class="kwc">Condition</span>.wait t.wait_for_empty t.mutex;
+	    loop ()
+    <span class="kwa">in</span>
+    <span class="kwc">Mutex</span>.lock t.mutex;
+    <span class="kwa">let</span> res = loop () <span class="kwa">in</span>
+    <span class="kwc">Mutex</span>.unlock t.mutex;
+    res
+  ;;
+<span class="kwa">end</span>
+
+<span class="kwa">module</span> <span class="kwd">Chameneos</span> = <span class="kwa">struct</span> 
+  
+  <span class="kwa">type</span> t = {
+    id : <span class="kwb">int</span>;
+    <span class="kwa">mutable</span> color : <span class="kwc">Color</span>.t;
+    <span class="kwa">mutable</span> meetings : <span class="kwb">int</span>;
+    <span class="kwa">mutable</span> meetings_with_self : <span class="kwb">int</span>;
+  }
+
+  <span class="kwa">let</span> create = 
+    <span class="kwa">let</span> id = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+    <span class="kwa">let</span> new_id () = 
+      <span class="kwa">let</span> r = !id <span class="kwa">in</span>
+      id := r + <span class="num">1</span>;
+      r
+    <span class="kwa">in</span>
+    <span class="kwa">fun</span> color -&gt; 
+      { id = new_id ();
+	color = color;
+	meetings = <span class="num">0</span>;
+	meetings_with_self = <span class="num">0</span>;
+      }
+
+  <span class="kwa">let</span> run t place =
+    <span class="kwa">let rec</span> loop () =
+      <span class="kwa">match</span> <span class="kwc">Meeting_place</span>.meet place t <span class="kwa">with</span> 
+      | <span class="kwd">None</span> -&gt; ()
+      | <span class="kwd">Some</span> other -&gt; 
+	  t.meetings &lt;- t.meetings + <span class="num">1</span>;
+	  <span class="kwa">if</span> t.id = other.id <span class="kwa">then</span> t.meetings_with_self &lt;- t.meetings_with_self + <span class="num">1</span>;
+	  t.color &lt;- <span class="kwc">Color</span>.complement t.color other.color;
+	  loop () 
+    <span class="kwa">in</span>
+    <span class="kwc">Thread</span>.create loop ()
+<span class="kwa">end</span>
+
+<span class="kwa">let</span> print_complements () = 
+  <span class="kwc">List</span>.iter <span class="kwc">Color</span>.all ~f:(<span class="kwa">fun</span> c1 -&gt; 
+    <span class="kwc">List</span>.iter <span class="kwc">Color</span>.all ~f:(<span class="kwa">fun</span> c2 -&gt;
+      printf <span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">+</span> <span class="ipl">%s</span> <span class="str">-&gt;</span> <span class="ipl">%s</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> 
+	(<span class="kwc">Color</span>.to_string c1)
+	(<span class="kwc">Color</span>.to_string c2)
+	(<span class="kwc">Color</span>.to_string (<span class="kwc">Color</span>.complement c1 c2))));
+  printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+;;
+
+<span class="kwa">let</span> spell_int i = 
+  <span class="kwa">let</span> spell_char = <span class="kwa">function</span> 
+    | '<span class="num">0</span>' -&gt; <span class="str">&quot;zero&quot;</span>
+    | '<span class="num">1</span>' -&gt; <span class="str">&quot;one&quot;</span>
+    | '<span class="num">2</span>' -&gt; <span class="str">&quot;two&quot;</span>
+    | '<span class="num">3</span>' -&gt; <span class="str">&quot;three&quot;</span>
+    | '<span class="num">4</span>' -&gt; <span class="str">&quot;four&quot;</span>
+    | '<span class="num">5</span>' -&gt; <span class="str">&quot;five&quot;</span>
+    | '<span class="num">6</span>' -&gt; <span class="str">&quot;six&quot;</span>
+    | '<span class="num">7</span>' -&gt; <span class="str">&quot;seven&quot;</span>
+    | '<span class="num">8</span>' -&gt; <span class="str">&quot;eight&quot;</span>
+    | '<span class="num">9</span>' -&gt; <span class="str">&quot;nine&quot;</span>
+    | x -&gt; failwith <span class="str">&quot;unexpected char&quot;</span>
+  <span class="kwa">in</span>
+  <span class="kwa">let</span> s = string_of_int i <span class="kwa">in</span>
+  <span class="kwc">String</span>.iter s ~f:(<span class="kwa">fun</span> c -&gt; printf <span class="str">&quot;</span> <span class="ipl">%s</span><span class="str">&quot;</span> (spell_char c));
+;;
+  
+<span class="kwa">let</span> work colors n = 
+  <span class="kwa">let module</span> <span class="kwd">C</span> = <span class="kwd">Chameneos</span> <span class="kwa">in</span>
+  <span class="kwc">List</span>.iter colors ~f:(<span class="kwa">fun</span> c -&gt; printf <span class="str">&quot;</span> <span class="ipl">%s</span><span class="str">&quot;</span> (<span class="kwc">Color</span>.to_string c)); printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+  <span class="kwa">let</span> place = <span class="kwc">Meeting_place</span>.create n <span class="kwa">in</span>
+  <span class="kwa">let</span> cs = <span class="kwc">List</span>.map colors ~f:<span class="kwc">Chameneos</span>.create <span class="kwa">in</span>
+  <span class="kwa">let</span> threads = <span class="kwc">List</span>.map cs ~f:(<span class="kwa">fun</span> c -&gt; <span class="kwc">Chameneos</span>.run c place) <span class="kwa">in</span>
+  <span class="kwc">List</span>.iter threads ~f:<span class="kwc">Thread</span>.join;
+  <span class="kwa">let</span> sum_meets = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+  <span class="kwc">List</span>.iter cs ~f:(<span class="kwa">fun</span> c -&gt;
+    printf <span class="str">&quot;</span><span class="ipl">%d</span><span class="str">&quot;</span> c.<span class="kwc">C</span>.meetings; spell_int c.<span class="kwc">C</span>.meetings_with_self; printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+    sum_meets := !sum_meets + c.<span class="kwc">C</span>.meetings);
+  spell_int !sum_meets; printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+;;
+
+
+<span class="kwa">let</span> main () = 
+  <span class="kwa">let</span> n = 
+    <span class="kwa">try</span> 
+      int_of_string (<span class="kwc">Sys</span>.argv.(<span class="num">1</span>))
+    <span class="kwa">with</span>
+    | _ -&gt; <span class="num">600</span>
+  <span class="kwa">in</span>
+  print_complements ();
+  <span class="kwa">let module</span> <span class="kwd">C</span> = <span class="kwd">Color</span> <span class="kwa">in</span>
+  work [ <span class="kwc">C</span>.<span class="kwd">Blue</span>; <span class="kwc">C</span>.<span class="kwd">Red</span>; <span class="kwc">C</span>.<span class="kwd">Yellow</span> ] n;
+  printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+  work [ <span class="kwc">C</span>.<span class="kwd">Blue</span>; <span class="kwc">C</span>.<span class="kwd">Red</span>; <span class="kwc">C</span>.<span class="kwd">Yellow</span>; <span class="kwc">C</span>.<span class="kwd">Red</span>; <span class="kwc">C</span>.<span class="kwd">Yellow</span>; <span class="kwc">C</span>.<span class="kwd">Blue</span>; <span class="kwc">C</span>.<span class="kwd">Red</span>; <span class="kwc">C</span>.<span class="kwd">Yellow</span>; <span class="kwc">C</span>.<span class="kwd">Red</span>; <span class="kwc">C</span>.<span class="kwd">Blue</span> ] n;
+  printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+;;
+
+<span class="kwa">let</span> () = main ()

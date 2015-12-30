@@ -1,0 +1,50 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by Tupteq</span>
+<span class="slc"># modified by Simon Descarpentries</span>
+<span class="slc"># modified by Ivan Baldin</span>
+<span class="slc"># 2to3 plus Daniel Nanz fix</span>
+
+<span class="kwa">import</span> sys
+<span class="kwa">from</span> array <span class="kwa">import</span> array
+<span class="kwa">from</span> multiprocessing <span class="kwa">import</span> Pool
+
+<span class="kwa">def</span> <span class="kwd">do_row</span>(fy):
+    local_abs = <span class="kwb">abs</span>
+    two_over_size = <span class="num">2.0</span> / size
+    xr_offs = <span class="kwb">range</span>(<span class="num">7</span>, -<span class="num">1</span>, -<span class="num">1</span>)
+    xr_iter = <span class="kwb">range</span>(<span class="num">50</span>)
+
+    result = <span class="kwd">array</span>(<span class="str">'B'</span>)
+    <span class="kwa">for</span> x <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">7</span>, size, <span class="num">8</span>):
+        byte_acc = <span class="num">0</span>
+        <span class="kwa">for</span> offset <span class="kwa">in</span> xr_offs:
+            z = <span class="num">0</span>j
+            c = two_over_size * (x - offset) + fy
+
+            <span class="kwa">for</span> i <span class="kwa">in</span> xr_iter:
+                z = z * z + c
+                <span class="kwa">if</span> <span class="kwd">local_abs</span>(z) &gt;= <span class="num">2</span>:
+                    <span class="kwa">break</span>
+            <span class="kwa">else</span>:
+                byte_acc += <span class="num">1</span> &lt;&lt; offset
+
+        result.<span class="kwd">append</span>(byte_acc)
+
+    <span class="kwa">if</span> x != size - <span class="num">1</span>:
+        result.<span class="kwd">append</span>(byte_acc)
+
+    <span class="kwa">return</span> result.<span class="kwd">tostring</span>()
+
+<span class="kwa">def</span> <span class="kwd">main</span>(out):
+    out.<span class="kwd">write</span>((<span class="str">'P4</span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d %d</span><span class="str"></span><span class="esc">\n</span><span class="str">'</span> % (size, size)).<span class="kwd">encode</span>(<span class="str">'ASCII'</span>))
+
+    pool = <span class="kwd">Pool</span>()
+    step = <span class="num">2.0</span>j / size
+    <span class="kwa">for</span> row <span class="kwa">in</span> pool.<span class="kwd">imap</span>(do_row, (step*y-(<span class="num">1.5</span>+<span class="num">1</span>j) <span class="kwa">for</span> y <span class="kwa">in</span> <span class="kwb">range</span>(size))):
+        out.<span class="kwd">write</span>(row)
+
+<span class="kwa">if</span> __name__ == <span class="str">'__main__'</span>:
+    size = <span class="kwb">int</span>(sys.argv[<span class="num">1</span>])
+    <span class="kwd">main</span>(sys.stdout.<span class="kwb">buffer</span>)

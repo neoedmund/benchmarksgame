@@ -1,0 +1,13 @@
+
+Mon, 24 Aug 2015 17:32:24 GMT
+
+MAKE:
+/usr/bin/hh_client
+No errors!
+0.02s to complete and log all make actions
+
+COMMAND LINE:
+/usr/bin/hhvm  spectralnorm.hack-2.hack 5500
+
+PROGRAM OUTPUT:
+1.274224153

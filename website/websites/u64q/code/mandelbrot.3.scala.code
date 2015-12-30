@@ -1,0 +1,104 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * original contributed by Kenneth Jonsson</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> scala.actors.Actor
+<span class="kwa">import</span> scala.actors.Actor._
+
+<span class="kwa">class</span> <span class="kwd">Worker</span>(size: Int) <span class="kwa">extends</span> Actor {
+    <span class="kwa">private val</span> bytesPerRow = (size + <span class="num">7</span>) &gt;&gt; <span class="num">3</span>
+    <span class="kwa">private val</span> maxIterations = <span class="num">50</span>
+    <span class="kwa">private val</span> limitSquared = <span class="num">4.0</span>
+
+    <span class="slc">// Calculate all pixes for one row [-i..i], the real-part</span>
+    <span class="slc">// coordinate is constant throughout this method</span>
+    <span class="kwa">private def</span> <span class="kwd">calcRow</span>(rowNum: Int): (Actor, Int, Array[Byte]) = {
+	<span class="kwa">var</span> rowBitmap = <span class="kwa">new</span> Array[Byte](bytesPerRow)
+	<span class="kwa">var</span> column = <span class="num">0</span>
+	<span class="kwa">val</span> ci = <span class="num">2.0</span> * rowNum / size - <span class="num">1.0</span>
+
+	<span class="kwa">while</span> (column &lt; size) {
+	    <span class="kwa">val</span> cr = <span class="num">2.0</span> * column / size - <span class="num">1.5</span>
+	    <span class="kwa">var</span> zr, tr, zi, ti = <span class="num">0.0</span>
+            <span class="kwa">var</span> iterations = <span class="num">0</span>
+
+            <span class="kwa">do</span> {
+		zi = <span class="num">2</span> * zr * zi + ci
+		zr = tr - ti + cr
+		ti = zi * zi
+		tr = zr * zr
+		iterations += <span class="num">1</span>
+            } <span class="kwa">while</span> (tr + ti &lt;= limitSquared &amp;&amp; iterations &lt; maxIterations)
+
+	    <span class="kwa">if</span> (tr + ti &lt;= limitSquared)
+		<span class="kwd">rowBitmap</span>(column &gt;&gt; <span class="num">3</span>) = (<span class="kwd">rowBitmap</span>(column &gt;&gt; <span class="num">3</span>)
+					  | (<span class="num">0x80</span> &gt;&gt; (column &amp; <span class="num">7</span>))).toByte
+
+            column += <span class="num">1</span>
+	}
+	<span class="kwa">return</span> (self, rowNum, rowBitmap)
+    }
+
+    <span class="kwa">def</span> <span class="kwd">act</span>() {
+	<span class="kwa">while</span> (true) {
+	    receive {
+		<span class="kwa">case</span> rowNum: Int =&gt;
+		    <span class="kwd">reply</span>(<span class="kwd">calcRow</span>(rowNum))
+		<span class="kwa">case</span> <span class="str">&quot;EXIT&quot;</span> =&gt;
+		    <span class="kwd">exit</span>()
+	    }
+	}
+    }
+}
+
+<span class="kwa">class</span> <span class="kwd">MandelbrotCoordinator</span>(size: Int) <span class="kwa">extends</span> Actor {
+
+    <span class="kwa">private var</span> nextRowNum = <span class="num">0</span>
+    <span class="kwa">private var</span> rowsRemaining = size
+    <span class="kwa">private var</span> bitmap = <span class="kwa">new</span> Array[Array[Byte]](size)
+
+    <span class="kwa">private def</span> <span class="kwd">calcNextRow</span>(worker: Actor) {
+	<span class="kwa">if</span> (nextRowNum == size)
+	    <span class="slc">// All rows has been dispatched, tell the worker to exit</span>
+	    worker ! <span class="str">&quot;EXIT&quot;</span>
+	<span class="kwa">else</span> {
+	    worker ! nextRowNum
+	    nextRowNum += <span class="num">1</span>
+	}
+    }
+
+    <span class="kwa">def</span> <span class="kwd">act</span>() {
+	<span class="kwa">for</span> (i &lt;- <span class="num">1</span> to Runtime.<span class="kwd">getRuntime</span>().<span class="kwd">availableProcessors</span>()) {
+	    <span class="kwa">val</span> worker = <span class="kwa">new</span> <span class="kwd">Worker</span>(size)
+	    <span class="slc">// Keep two rows in flight per worker to avoid any worker</span>
+	    <span class="slc">// idle time, probably not neccessary on a quad-core</span>
+	    <span class="slc">// machine but might help at higher core count...</span>
+	    <span class="kwd">calcNextRow</span>(worker)
+	    <span class="kwd">calcNextRow</span>(worker)
+	    worker.start
+	}
+
+	<span class="kwa">while</span> (true) {
+	    receive {
+		<span class="kwa">case</span> (sender: Actor, rowNum: Int, rowBitmap: Array[Byte]) =&gt;
+		    <span class="kwd">calcNextRow</span>(sender)
+		    <span class="kwd">bitmap</span>(rowNum) = rowBitmap
+		    rowsRemaining -= <span class="num">1</span>
+		    <span class="kwa">if</span> (rowsRemaining == <span class="num">0</span>) {
+			<span class="slc">// The image is finished, write it to stdout and exit</span>
+			<span class="kwd">println</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">&quot;</span> + size + <span class="str">&quot; &quot;</span> + size)
+			bitmap.<span class="kwd">foreach</span>(row =&gt; System.out.<span class="kwd">write</span>(row, <span class="num">0</span>, row.length))
+			<span class="kwd">exit</span>()
+		    }
+	    }
+	}
+    }
+}
+
+<span class="kwa">object</span> mandelbrot {
+    <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) {
+	<span class="kwa">val</span> coordinator = <span class="kwa">new</span> <span class="kwd">MandelbrotCoordinator</span>(<span class="kwd">args</span>(<span class="num">0</span>).toInt)
+	coordinator.start
+    }
+}

@@ -1,0 +1,42 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://shootout.alioth.debian.org/</span>
+<span class="slc"># contributed by Dominique Wahli</span>
+<span class="slc"># 2to3</span>
+<span class="slc"># modified by Justin Peel</span>
+
+<span class="kwa">from</span> sys <span class="kwa">import</span> stdin,stdout
+<span class="kwa">from</span> re <span class="kwa">import</span> sub, findall
+
+<span class="kwa">def</span> <span class="kwd">main</span>():
+    seq = stdin.<span class="kwb">buffer</span>.<span class="kwd">read</span>()
+    write = stdout.<span class="kwb">buffer</span>.write
+    ilen = <span class="kwb">len</span>(seq)
+
+    seq = <span class="kwd">sub</span>(b<span class="str">'&gt;.*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">'</span>, b<span class="str">''</span>, seq)
+    clen = <span class="kwb">len</span>(seq)
+
+    variants = (
+          b<span class="str">'agggtaaa|tttaccct'</span>,
+          b<span class="str">'[cgt]gggtaaa|tttaccc[acg]'</span>,
+          b<span class="str">'a[act]ggtaaa|tttacc[agt]t'</span>,
+          b<span class="str">'ag[act]gtaaa|tttac[agt]ct'</span>,
+          b<span class="str">'agg[act]taaa|ttta[agt]cct'</span>,
+          b<span class="str">'aggg[acg]aaa|ttt[cgt]ccct'</span>,
+          b<span class="str">'agggt[cgt]aa|tt[acg]accct'</span>,
+          b<span class="str">'agggta[cgt]a|t[acg]taccct'</span>,
+          b<span class="str">'agggtaa[cgt]|[acg]ttaccct'</span>)
+    <span class="kwa">for</span> f <span class="kwa">in</span> variants:
+        <span class="kwd">write</span>(f + b<span class="str">' '</span> +<span class="kwd">bytes</span>(<span class="kwb">str</span>(<span class="kwb">len</span>(<span class="kwd">findall</span>(f, seq))),encoding=<span class="str">'latin1'</span>) + b<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+
+    subst = {
+          b<span class="str">'B'</span> : b<span class="str">'(c|g|t)'</span>, b<span class="str">'D'</span> : b<span class="str">'(a|g|t)'</span>,   b<span class="str">'H'</span> : b<span class="str">'(a|c|t)'</span>, b<span class="str">'K'</span> : b<span class="str">'(g|t)'</span>,
+          b<span class="str">'M'</span> : b<span class="str">'(a|c)'</span>,   b<span class="str">'N'</span> : b<span class="str">'(a|c|g|t)'</span>, b<span class="str">'R'</span> : b<span class="str">'(a|g)'</span>,   b<span class="str">'S'</span> : b<span class="str">'(c|g)'</span>,
+          b<span class="str">'V'</span> : b<span class="str">'(a|c|g)'</span>, b<span class="str">'W'</span> : b<span class="str">'(a|t)'</span>,     b<span class="str">'Y'</span> : b<span class="str">'(c|t)'</span>}
+    <span class="kwa">for</span> f, r <span class="kwa">in</span> subst.<span class="kwd">items</span>():
+        seq = <span class="kwd">sub</span>(f, r, seq)
+    <span class="kwd">write</span>(b<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+    <span class="kwd">write</span>(<span class="kwd">bytes</span>(<span class="kwb">str</span>(ilen),encoding=<span class="str">'latin1'</span>) + b<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+    <span class="kwd">write</span>(<span class="kwd">bytes</span>(<span class="kwb">str</span>(clen),encoding=<span class="str">'latin1'</span>) + b<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+    <span class="kwd">write</span>(<span class="kwd">bytes</span>(<span class="kwb">str</span>(<span class="kwb">len</span>(seq)),encoding=<span class="str">'latin1'</span>) + b<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+
+<span class="kwd">main</span>()

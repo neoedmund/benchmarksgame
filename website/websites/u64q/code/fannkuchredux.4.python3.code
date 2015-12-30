@@ -1,0 +1,106 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by Joerg Baumann</span>
+<span class="slc"># many thanks to Oleg Mazurov for his helpful description</span>
+
+<span class="kwa">from</span> sys <span class="kwa">import</span> argv
+<span class="kwa">from</span> math <span class="kwa">import</span> factorial
+<span class="kwa">from</span> multiprocessing <span class="kwa">import</span> cpu_count, Pool
+<span class="kwa">from</span> itertools <span class="kwa">import</span> islice, starmap
+
+<span class="kwa">def</span> <span class="kwd">permutations</span>(n, start, size):
+    p = <span class="kwd">bytearray</span>(<span class="kwb">range</span>(n))
+    count = <span class="kwd">bytearray</span>(n)
+
+    remainder = start
+    <span class="kwa">for</span> v <span class="kwa">in</span> <span class="kwb">range</span>(n - <span class="num">1</span>, <span class="num">0</span>, -<span class="num">1</span>):
+        count[v], remainder = <span class="kwb">divmod</span>(remainder, <span class="kwd">factorial</span>(v))
+        <span class="kwa">for</span> _ <span class="kwa">in</span> <span class="kwb">range</span>(count[v]):
+            p[:v], p[v] = p[<span class="num">1</span>:v + <span class="num">1</span>], p[<span class="num">0</span>]
+
+    <span class="kwa">assert</span>(count[<span class="num">1</span>] == <span class="num">0</span>)
+    <span class="kwa">assert</span>(size &lt; <span class="num">2</span> <span class="kwa">or</span> (size % <span class="num">2</span> == <span class="num">0</span>))
+
+    <span class="kwa">if</span> size &lt; <span class="num">2</span>:
+        <span class="kwa">yield</span> p[:]
+    <span class="kwa">else</span>:
+        rotation_swaps = [<span class="kwa">None</span>] * n
+        <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">1</span>, n):
+            r = <span class="kwb">list</span>(<span class="kwb">range</span>(n))
+            <span class="kwa">for</span> v <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">1</span>, i + <span class="num">1</span>):
+                r[:v], r[v] = r[<span class="num">1</span>:v + <span class="num">1</span>], r[<span class="num">0</span>]
+            swaps = []
+            <span class="kwa">for</span> dst, src <span class="kwa">in</span> <span class="kwb">enumerate</span>(r):
+                <span class="kwa">if</span> dst != src:
+                    swaps.<span class="kwd">append</span>((dst, src))
+            rotation_swaps[i] = <span class="kwb">tuple</span>(swaps)
+
+        <span class="kwa">while True</span>:
+            <span class="kwa">yield</span> p[:]
+            p[<span class="num">0</span>], p[<span class="num">1</span>] = p[<span class="num">1</span>], p[<span class="num">0</span>]
+            <span class="kwa">yield</span> p[:]
+            i = <span class="num">2</span>
+            <span class="kwa">while</span> count[i] &gt;= i:
+                count[i] = <span class="num">0</span>
+                i += <span class="num">1</span>
+            <span class="kwa">else</span>:
+                count[i] += <span class="num">1</span>
+                t = p[:]
+                <span class="kwa">for</span> dst, src <span class="kwa">in</span> rotation_swaps[i]:
+                    p[dst] = t[src]
+
+<span class="kwa">def</span> <span class="kwd">alternating_flips_generator</span>(n, start, size):
+    maximum_flips = <span class="num">0</span>
+    alternating_factor = <span class="num">1</span>
+    <span class="kwa">for</span> permutation <span class="kwa">in</span> <span class="kwd">islice</span>(<span class="kwd">permutations</span>(n, start, size), size):
+        first = permutation[<span class="num">0</span>]
+        <span class="kwa">if</span> first:
+            flips_count = <span class="num">1</span>
+            <span class="kwa">while True</span>:
+                permutation[:first + <span class="num">1</span>] = permutation[first::-<span class="num">1</span>]
+                first = permutation[<span class="num">0</span>]
+                <span class="kwa">if not</span> first: <span class="kwa">break</span>
+                flips_count += <span class="num">1</span>
+            <span class="kwa">if</span> maximum_flips &lt; flips_count:
+                maximum_flips = flips_count
+            <span class="kwa">yield</span> flips_count * alternating_factor
+        <span class="kwa">else</span>:
+            <span class="kwa">yield</span> <span class="num">0</span>
+        alternating_factor = -alternating_factor
+    <span class="kwa">yield</span> maximum_flips
+
+<span class="kwa">def</span> <span class="kwd">task</span>(n, start, size):
+    alternating_flips = <span class="kwd">alternating_flips_generator</span>(n, start, size)
+    <span class="kwa">return</span> <span class="kwb">sum</span>(<span class="kwd">islice</span>(alternating_flips, size)), <span class="kwd">next</span>(alternating_flips)
+
+<span class="kwa">def</span> <span class="kwd">fannkuch</span>(n):
+    <span class="kwa">if</span> n &lt; <span class="num">0</span>:
+        <span class="kwa">for</span> data <span class="kwa">in</span> <span class="kwd">islice</span>(<span class="kwd">permutations</span>(-n, <span class="num">0</span>, <span class="kwd">factorial</span>(-n)), <span class="kwd">factorial</span>(-n)):
+            <span class="kwa">print</span>(<span class="str">''</span>.<span class="kwd">join</span>(<span class="kwb">map</span>(<span class="kwa">lambda</span> n: <span class="kwb">str</span>(n + <span class="num">1</span>), data)))
+    <span class="kwa">else</span>:
+        <span class="kwa">assert</span>(n &gt; <span class="num">0</span>)
+
+        task_count = <span class="kwd">cpu_count</span>()
+        total = <span class="kwd">factorial</span>(n)
+        task_size = (total + task_count - <span class="num">1</span>) // task_count
+
+        <span class="kwa">if</span> task_size &lt; <span class="num">20000</span>:
+            task_size = total
+            task_count = <span class="num">1</span>
+
+        <span class="kwa">assert</span>(task_size % <span class="num">2</span> == <span class="num">0</span>)
+
+        task_args = [(n, i * task_size, task_size) <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(task_count)]
+
+        <span class="kwa">if</span> task_count &gt; <span class="num">1</span>:
+            with <span class="kwd">Pool</span>() <span class="kwa">as</span> pool:
+                checksums, maximums = <span class="kwb">zip</span>(*pool.<span class="kwd">starmap</span>(task, task_args))
+        <span class="kwa">else</span>:
+            checksums, maximums = <span class="kwb">zip</span>(*<span class="kwd">starmap</span>(task, task_args))
+
+        checksum, maximum = <span class="kwb">sum</span>(checksums), <span class="kwb">max</span>(maximums)
+        <span class="kwa">print</span>(<span class="str">&quot;{0}</span><span class="esc">\n</span><span class="str">Pfannkuchen({1}) = {2}&quot;</span>.<span class="kwd">format</span>(checksum, n, maximum))
+
+<span class="kwa">if</span> __name__ == <span class="str">&quot;__main__&quot;</span>:
+    <span class="kwd">fannkuch</span>(<span class="kwb">int</span>(argv[<span class="num">1</span>]))

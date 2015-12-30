@@ -1,0 +1,64 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Troestler Christophe</span>
+<span class="com"> * Modified by Fabrice Le Fessant for</span>
+<span class="com"> *  - tree type more compact</span>
+<span class="com"> *  - better GC parameters</span>
+<span class="com"> *  - loops replaced by recursive functions</span>
+<span class="com"> *)</span>
+
+<span class="kwa">type</span> 'a tree = <span class="kwd">Leaf</span> <span class="kwa">of</span> 'a | <span class="kwd">Node</span> <span class="kwa">of</span> 'a tree * 'a * 'a tree
+
+<span class="kwa">let rec</span> make d i =
+  <span class="kwa">if</span> d = <span class="num">0</span> <span class="kwa">then</span> <span class="kwd">Leaf</span> i
+  <span class="kwa">else</span>
+    <span class="kwa">let</span> l = make (d-<span class="num">1</span>) (<span class="num">2</span>*i - <span class="num">1</span>) <span class="kwa">in</span>
+    <span class="kwa">let</span> r = make (d-<span class="num">1</span>) (<span class="num">2</span>*i) <span class="kwa">in</span>
+      <span class="kwd">Node</span>(l, i, r)
+
+<span class="kwa">let rec</span> check = <span class="kwa">function</span> <span class="kwd">Leaf</span> i -&gt; i | <span class="kwd">Node</span>(l, i, r) -&gt;
+  <span class="kwa">let</span> i = i + check l <span class="kwa">in</span>
+    i - check r
+
+<span class="kwa">let</span> min_depth = <span class="num">4</span>
+<span class="kwa">let</span> n = <span class="kwa">if</span> <span class="kwc">Array</span>.length <span class="kwc">Sys</span>.argv &lt;&gt; <span class="num">2</span> <span class="kwa">then</span> <span class="num">0</span> <span class="kwa">else</span> int_of_string <span class="kwc">Sys</span>.argv.(<span class="num">1</span>)
+<span class="kwa">let</span> max_depth = max (min_depth + <span class="num">2</span>) n
+<span class="kwa">let</span> stretch_depth = max_depth + <span class="num">1</span>
+
+<span class="kwa">let</span> _ =
+  <span class="kwa">let</span> gc = <span class="kwc">Gc</span>.get () <span class="kwa">in</span>
+    gc.<span class="kwc">Gc</span>.max_overhead &lt;- <span class="num">1000000</span>;
+    gc.<span class="kwc">Gc</span>.space_overhead &lt;- <span class="num">500</span>;
+    gc.<span class="kwc">Gc</span>.major_heap_increment &lt;- <span class="num">10_000_000</span>;
+    gc.<span class="kwc">Gc</span>.minor_heap_size &lt;- <span class="num">10_000_000</span>;
+    <span class="kwc">Gc</span>.set gc
+
+<span class="kwa">let</span> () =
+  <span class="kwa">let</span> c = check (make stretch_depth <span class="num">0</span>) <span class="kwa">in</span>
+  <span class="kwc">Printf</span>.printf <span class="str">&quot;stretch tree of depth</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> stretch_depth c
+
+<span class="kwa">let</span> long_lived_tree = make max_depth <span class="num">0</span>
+
+
+<span class="kwa">let rec</span> iter i niter c d =
+  <span class="kwa">if</span> i &lt;= niter <span class="kwa">then</span>
+    <span class="kwa">let</span> c = c + check(make d i) <span class="kwa">in</span>
+    <span class="kwa">let</span> c = c + check(make d (-i)) <span class="kwa">in</span>
+    iter (i+<span class="num">1</span>) niter c d
+  <span class="kwa">else</span>
+    <span class="kwc">Printf</span>.printf <span class="str">&quot;</span><span class="ipl">%i</span><span class="str"></span><span class="esc">\t</span> <span class="str">trees of depth</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> (<span class="num">2</span> * niter) d c
+
+
+<span class="kwa">let rec</span> loop_depths d =
+  <span class="kwa">let</span> niter = <span class="num">1</span> <span class="kwa">lsl</span> (max_depth - d + min_depth) <span class="kwa">in</span>
+    iter <span class="num">1</span> niter <span class="num">0</span> d;
+    <span class="kwa">if</span> d &lt; max_depth <span class="kwa">then</span>
+      loop_depths (d+<span class="num">2</span>)
+
+<span class="kwa">let</span> () =
+  flush stdout;
+  loop_depths min_depth;
+  <span class="kwc">Printf</span>.printf <span class="str">&quot;long lived tree of depth</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>
+    max_depth (check long_lived_tree)
+

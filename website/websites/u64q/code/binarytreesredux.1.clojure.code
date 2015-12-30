@@ -1,0 +1,75 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;</span>
+<span class="slc">;; Adapted from the Java -server version</span>
+<span class="slc">;</span>
+<span class="slc">;; contributed by Marko Kocic</span>
+<span class="slc">;; modified by Kenneth Jonsson, restructured to allow usage of 'pmap'</span>
+<span class="slc">;; modified by Andy Fingerhut to use faster primitive math ops, and</span>
+<span class="slc">;; deftype instead of defrecord for smaller tree nodes.</span>
+<span class="slc">;; modified by Rich Hickey for Clojure 1.3</span>
+
+(ns binarytreesredux
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* true)
+
+(definterface ITreeNode
+  (^long item [])
+  (left [])
+  (right []))
+
+<span class="slc">;; These TreeNode's take up noticeably less memory than a similar one</span>
+<span class="slc">;; implemented using defrecord.</span>
+
+(deftype TreeNode [left right ^long item]
+  ITreeNode
+  (item [this] item)
+  (left [this] left)
+  (right [this] right))
+
+(<span class="kwa">defn</span> bottom-up-tree [^long item ^long depth]
+  (<span class="kwc">if</span> (zero? depth)
+    (TreeNode. nil nil item)
+    (TreeNode.
+     (bottom-up-tree (dec (* <span class="num">2</span> item))
+                     (dec depth))
+     (bottom-up-tree (* <span class="num">2</span> item)
+                     (dec depth))
+     item)))
+
+(<span class="kwa">defn</span> item-check ^long [^TreeNode node]
+  (<span class="kwc">if</span> (nil? (.left node))
+    (.item node)
+    (+ (+ (.item node)
+          (item-check (.left node)))
+       (- (item-check (.right node))))))
+
+(<span class="kwa">defn</span> iterate-trees [^long mx ^long mn ^long d]
+  (<span class="kwc">let</span> [iterations (bit-shift-left <span class="num">1</span> (- (+ mx mn) d))]
+    (format <span class="str">&quot;%d</span><span class="esc">\t</span> <span class="str">trees of depth %d</span><span class="esc">\t</span> <span class="str">check: %d&quot;</span> (* <span class="num">2</span> iterations) d
+            (reduce + (<span class="kwd">map</span> (<span class="kwa">fn</span> [i]
+                             (+ (item-check (bottom-up-tree i d))
+                                (item-check (bottom-up-tree (- i) d))))
+                           (<span class="kwd">range</span> <span class="num">1</span> (inc iterations)))))))
+
+(<span class="kwa">def</span> min-depth <span class="num">4</span>)
+
+(<span class="kwa">defn</span> main [max-depth]
+  (<span class="kwc">let</span> [stretch-depth (inc max-depth)]
+    (<span class="kwc">let</span> [tree (bottom-up-tree <span class="num">0</span> stretch-depth)
+          <span class="kwc">check</span> (item-check tree)]
+      (println (format <span class="str">&quot;stretch tree of depth %d</span><span class="esc">\t</span> <span class="str">check: %d&quot;</span> stretch-depth <span class="kwc">check</span>)))
+    (<span class="kwc">let</span> [long-lived-tree (bottom-up-tree <span class="num">0</span> max-depth) ]
+      (<span class="kwb">doseq</span> [trees-nfo (<span class="kwd">map</span> (<span class="kwa">fn</span> [d]
+                                (iterate-trees max-depth min-depth d))
+(<span class="kwd">range</span> min-depth stretch-depth <span class="num">2</span>)) ]
+        (println trees-nfo))
+      (println (format <span class="str">&quot;long lived tree of depth %d</span><span class="esc">\t</span> <span class="str">check: %d&quot;</span> max-depth (item-check long-lived-tree))))))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [n (<span class="kwc">if</span> (<span class="kwd">first</span> args) (Integer/parseInt (<span class="kwd">first</span> args)) <span class="num">0</span>)
+        max-depth (<span class="kwc">if</span> (&gt; (+ min-depth <span class="num">2</span>) n) (+ min-depth <span class="num">2</span>) n)]
+    (main max-depth)
+    (shutdown-agents)))

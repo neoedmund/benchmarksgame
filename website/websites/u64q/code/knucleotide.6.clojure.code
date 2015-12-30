@@ -1,0 +1,278 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; contributed by Andy Fingerhut</span>
+<span class="slc">;; modified by Marko Kocic</span>
+<span class="slc">;; modified by Mike Anderson to make better use of primitive operations</span>
+
+
+(ns knucleotide
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+
+
+
+<span class="slc">;; Handle slight difference in function name between Clojure 1.2.0 and</span>
+
+<span class="slc">;; 1.3.0-alpha* ability to use type hints to infer fast bit</span>
+
+<span class="slc">;; operations.</span>
+
+(<span class="kwa">defmacro</span> my-unchecked-inc-int [&amp; args]
+  (<span class="kwc">if</span> (and (== (*clojure-version* :major) <span class="num">1</span>)
+           (== (*clojure-version* :minor) <span class="num">2</span>))
+    `(unchecked-inc ~&#64;args)
+    `(unchecked-inc-int ~&#64;args)))
+
+(<span class="kwa">defmacro</span> key-type [num]
+  (<span class="kwc">if</span> (and (== (*clojure-version* :major) <span class="num">1</span>)
+           (== (*clojure-version* :minor) <span class="num">2</span>))
+    num
+    `(long ~num)))
+
+
+(definterface ITallyCounter
+  (^int get_count [])
+  (inc_BANG_ []))
+
+
+(deftype TallyCounter [^{:unsynchronized-mutable true :tag int} cnt]
+  ITallyCounter
+  (get-count [this] cnt)
+  (inc! [this]
+    (set! cnt (my-unchecked-inc-int cnt))))
+
+ 
+
+<span class="slc">;; Return true when the line l is a FASTA description line</span>
+
+
+(<span class="kwa">defn</span> fasta-description-line [l]
+  (= \&gt; (<span class="kwd">first</span> (seq l))))
+
+
+<span class="slc">;; Return true when the line l is a FASTA description line that begins</span>
+
+<span class="slc">;; with the string desc-str.</span>
+
+
+(<span class="kwa">defn</span> fasta-description-line-beginning [desc-str l]
+  (and (fasta-description-line l)
+       (= desc-str (subs l <span class="num">1</span> (min (count l) (inc (count desc-str)))))))
+
+
+<span class="slc">;; Take a sequence of lines from a FASTA format file, and a string</span>
+
+<span class="slc">;; desc-str.  Look for a FASTA record with a description that begins</span>
+
+<span class="slc">;; with desc-str, and if one is found, return its DNA sequence as a</span>
+
+<span class="slc">;; single (potentially quite long) string.  If input file is big,</span>
+
+<span class="slc">;; you'll save lots of memory if you call this function in a with-open</span>
+
+<span class="slc">;; for the file, and don't hold on to the head of the lines parameter.</span>
+
+
+(<span class="kwa">defn</span> fasta-dna-str-with-desc-beginning [desc-str lines]
+  (when-let [x (<span class="kwd">drop-while</span>
+		(<span class="kwa">fn</span> [l] (not (fasta-description-line-beginning desc-str l)))
+		lines)]
+    (when-let [x (seq x)]
+      (<span class="kwc">let</span> [y (<span class="kwd">take-while</span> (<span class="kwa">fn</span> [l] (not (fasta-description-line l)))
+                          (<span class="kwd">map</span> (<span class="kwa">fn</span> [#^java.lang.String s] (.toUpperCase s))
+                               (<span class="kwd">rest</span> x)))]
+        (apply str y)))))
+
+
+(<span class="kwa">def</span> dna-char-to-code-val-map {\A <span class="num">0</span>, \C <span class="num">1</span>, \T <span class="num">2</span>, \G <span class="num">3</span>})
+(<span class="kwa">def</span> code-val-to-dna-char {<span class="num">0</span> \A, <span class="num">1</span> \C, <span class="num">2</span> \T, <span class="num">3</span> \G})
+
+(<span class="kwa">defmacro</span> dna-char-to-code-val [ch]
+  `(<span class="kwc">case</span> ~ch
+     ~&#64;(flatten (seq dna-char-to-code-val-map))))
+
+<span class="slc">;; In the hash map 'tally' in tally-dna-subs-with-len, it is more</span>
+
+<span class="slc">;; straightforward to use a Clojure string (same as a Java string) as</span>
+
+<span class="slc">;; the key, but such a key is significantly bigger than it needs to</span>
+
+<span class="slc">;; be, increasing memory and time required to hash the value.  By</span>
+
+<span class="slc">;; converting a string of A, C, T, and G characters down to an integer</span>
+
+<span class="slc">;; that contains only 2 bits for each character, we make a value that</span>
+
+<span class="slc">;; is significantly smaller and faster to use as a key in the map.</span>
+
+
+<span class="slc">;;    most                 least</span>
+
+<span class="slc">;; significant          significant</span>
+
+<span class="slc">;; bits of int          bits of int</span>
+
+<span class="slc">;;  |                         |</span>
+
+<span class="slc">;;  V                         V</span>
+
+<span class="slc">;; code code code ....  code code</span>
+
+<span class="slc">;;  ^                         ^</span>
+
+<span class="slc">;;  |                         |</span>
+
+<span class="slc">;; code for               code for</span>
+
+<span class="slc">;; *latest*               *earliest*</span>
+
+<span class="slc">;; char in                char in</span>
+
+<span class="slc">;; sequence               sequence</span>
+
+
+<span class="slc">;; Note: Given Clojure 1.2's implementation of bit-shift-left/right</span>
+
+<span class="slc">;; operations, when the value being shifted is larger than a 32-bit</span>
+
+<span class="slc">;; int, they are faster when the shift amount is a compile time</span>
+
+<span class="slc">;; constant.</span>
+
+
+(<span class="kwa">defn</span> ^:static dna-str-to-key 
+  (^long [^String s] (dna-str-to-key s <span class="num">0</span> (count s)))
+  (^long [^String s ^long start ^long length]
+  <span class="slc">;; Accessing a local let binding is much faster than accessing a var</span>
+
+    (<span class="kwb">loop</span> [key (long <span class="num">0</span>)
+	         offset (int (+ start length -<span class="num">1</span>))]
+      (<span class="kwc">if</span> (&lt; offset start)
+				key
+				(<span class="kwc">let</span> [c (.charAt s offset)
+			        code (int (dna-char-to-code-val c))
+				      new-key (+ (bit-shift-left key <span class="num">2</span>) code)]
+				  (<span class="kwb">recur</span> new-key (dec offset)))))))
+
+
+(<span class="kwa">defn</span> key-to-dna-str [k len]
+  (apply str (<span class="kwd">map</span> code-val-to-dna-char
+		  (<span class="kwd">map</span> (<span class="kwa">fn</span> [pos] (bit-and <span class="num">3</span> (bit-shift-right k pos)))
+		       (<span class="kwd">range</span> <span class="num">0</span> (* <span class="num">2</span> len) <span class="num">2</span>)))))
+
+<span class="slc">;; required function : &quot;to update a hashtable of k-nucleotide keys and count values, for a particular reading-frame&quot;</span>
+(<span class="kwa">defn</span> tally-dna-subs-with-len [len dna-str]
+  (<span class="kwc">let</span> [len (int len)
+        dna-str ^String dna-str
+        mask-width (* <span class="num">2</span> len)
+	      mask (key-type (dec (bit-shift-left <span class="num">1</span> mask-width)))]
+     (<span class="kwb">loop</span> [offset (int (- (count dna-str) len))
+            key (key-type (dna-str-to-key dna-str offset len))
+            tally (<span class="kwc">let</span> [h (java.util.HashMap.)
+                        one (TallyCounter. (int <span class="num">1</span>))]
+                   (.put h key one)
+                   h)]
+      (<span class="kwc">if</span> (&lt;= offset <span class="num">0</span>)
+        tally
+				(<span class="kwc">let</span> [new-offset (unchecked-dec offset)
+				      new-first-char-code (dna-char-to-code-val
+			                                   (.charAt dna-str new-offset))
+				      new-key (key-type (bit-and mask (unchecked-add (bit-shift-left key <span class="num">2</span>)
+			                                                 new-first-char-code)))]
+		          (if-let [^TallyCounter cur-count (get tally new-key)]
+		            (.inc! cur-count)
+		            (<span class="kwc">let</span> [one (TallyCounter. (int <span class="num">1</span>))]
+		              (.put tally new-key one)))
+            (<span class="kwb">recur</span> new-offset new-key tally))))))
+
+
+(<span class="kwa">defn</span> ^:static getcnt ^long [^TallyCounter tc]
+  (.get-count tc))
+
+(<span class="kwa">defn</span> ^:static tally-total [tally]
+  (<span class="kwb">loop</span> [acc (long <span class="num">0</span>)
+         s (vals tally)]
+    (if-let [v (<span class="kwd">first</span> s)]
+      (<span class="kwb">recur</span> (+ acc (getcnt v)) (next s))
+      acc)))
+
+(<span class="kwa">defn</span> all-tally-to-str [tally fn-key-to-str]
+  (with-out-str
+    (<span class="kwc">let</span> [total (tally-total tally)
+          cmp-keys (<span class="kwa">fn</span> [k1 k2]
+                     <span class="slc">;; Return negative integer if k1 should come earlier</span>
+
+                     <span class="slc">;; in the sort order than k2, 0 if they are equal,</span>
+
+                     <span class="slc">;; otherwise a positive integer.</span>
+
+                     (<span class="kwc">let</span> [cnt1 (int (getcnt (get tally k1)))
+                           cnt2 (int (getcnt (get tally k2)))]
+                       (<span class="kwc">if</span> (not= cnt1 cnt2)
+                         (- cnt2 cnt1)
+                         (<span class="kwc">let</span> [^String s1 (fn-key-to-str k1)
+                               ^String s2 (fn-key-to-str k2)]
+                           (.compareTo s1 s2)))))]
+      (<span class="kwb">doseq</span> [k (<span class="kwd">sort</span> cmp-keys (keys tally))]
+        (printf <span class="str">&quot;%s %.3f</span><span class="esc">\n</span><span class="str">&quot;</span> (fn-key-to-str k)
+                (double (* <span class="num">100</span> (/ (getcnt (get tally k)) total))))))))
+
+
+(<span class="kwa">defn</span> one-tally-to-str [dna-str tally]
+  (<span class="kwc">let</span> [zerotc (TallyCounter. <span class="num">0</span>)]
+    (format <span class="str">&quot;%d</span><span class="esc">\t</span><span class="str">%s&quot;</span> (getcnt (get tally (dna-str-to-key dna-str) zerotc))
+            dna-str)))
+
+
+(<span class="kwa">defn</span> compute-one-part [dna-str part]
+  [part
+   (condp = part
+       <span class="num">0</span> (all-tally-to-str (tally-dna-subs-with-len <span class="num">1</span> dna-str)
+                           (<span class="kwa">fn</span> [k] (key-to-dna-str k <span class="num">1</span>)))
+       <span class="num">1</span> (all-tally-to-str (tally-dna-subs-with-len <span class="num">2</span> dna-str)
+                           (<span class="kwa">fn</span> [k] (key-to-dna-str k <span class="num">2</span>)))
+       <span class="num">2</span> (one-tally-to-str <span class="str">&quot;GGT&quot;</span>
+                           (tally-dna-subs-with-len <span class="num">3</span> dna-str))
+       <span class="num">3</span> (one-tally-to-str <span class="str">&quot;GGTA&quot;</span>
+                           (tally-dna-subs-with-len <span class="num">4</span> dna-str))
+       <span class="num">4</span> (one-tally-to-str <span class="str">&quot;GGTATT&quot;</span>
+                           (tally-dna-subs-with-len <span class="num">6</span> dna-str))
+       <span class="num">5</span> (one-tally-to-str <span class="str">&quot;GGTATTTTAATT&quot;</span>
+                           (tally-dna-subs-with-len <span class="num">12</span> dna-str))
+       <span class="num">6</span> (one-tally-to-str <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>
+                           (tally-dna-subs-with-len <span class="num">18</span> dna-str)))])
+
+
+(<span class="kwa">defn</span> run 
+  ([]
+    (run (clojure.java.io/reader (clojure.java.io/resource <span class="str">&quot;knucleotide-input.txt&quot;</span>))))
+  ([br]  
+    (<span class="kwc">let</span> [dna-str (fasta-dna-str-with-desc-beginning <span class="str">&quot;THREE&quot;</span> (line-seq br))
+          <span class="slc">;; Select the order of computing parts such that it is</span>
+
+          <span class="slc">;; unlikely that parts 5 and 6 will be computed concurrently.</span>
+
+          <span class="slc">;; Those are the two that take the most memory.  It would be</span>
+
+          <span class="slc">;; nice if we could specify a DAG for which jobs should finish</span>
+
+          <span class="slc">;; before others begin -- then we could prevent those two</span>
+
+          <span class="slc">;; parts from running simultaneously.</span>
+
+          results (<span class="kwd">map second</span>
+                       (<span class="kwd">sort</span> #(&lt; (<span class="kwd">first</span> %<span class="num">1</span>) (<span class="kwd">first</span> %<span class="num">2</span>))
+                             (pmap
+                              #(compute-one-part dna-str %)
+                              '(<span class="num">0 5 6 1 2 3 4</span>)
+					    )))]
+      (<span class="kwb">doseq</span> [r results]
+        (println r)
+        (flush)))))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (with-open [br (java.io.BufferedReader. *in*)]
+    (run br))  
+  (System/exit <span class="num">0</span>))

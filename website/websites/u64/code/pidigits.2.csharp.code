@@ -1,0 +1,148 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Alp Toker &lt;alp&#64;atoker.com&gt;</span>
+<span class="com"> * Modified by Antti Lankila &lt;alankila&#64;bel.fi&gt;</span>
+<span class="com"> */</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> UBigInteger = Mono.Math.BigInteger;
+
+<span class="kwa">public class</span> pidigits
+{
+    <span class="kwb">const int</span> L = <span class="num">10</span>;
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span> (<span class="kwb">string</span>[] args)
+    {
+	<span class="kwa">if</span> (args.Length != <span class="num">1</span>)
+	    <span class="kwa">return</span>;
+
+	<span class="kwb">int</span> n = Int32.<span class="kwd">Parse</span>(args[<span class="num">0</span>]);
+	<span class="kwb">int</span> j = <span class="num">0</span>;
+
+	PiDigitSpigot pds = <span class="kwa">new</span> <span class="kwd">PiDigitSpigot</span>();
+	<span class="kwa">while</span> (j &lt; n) {
+	    <span class="kwb">string</span> output = <span class="str">&quot;&quot;</span>;
+	    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i != L &amp;&amp; j != n; i++, j++)
+		output += pds.<span class="kwd">Next</span>();
+            Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;{0,-&quot;</span> + L + <span class="str">&quot;}</span><span class="esc">\t</span><span class="str">:</span><span class="ipl">{1}</span><span class="str">&quot;</span>, output, j);
+	}
+    }
+}
+
+<span class="kwa">class</span> PiDigitSpigot
+{
+    <span class="kwa">private</span> BigInteger z0 = <span class="num">1</span>, z1 = <span class="num">0</span>, z2 = <span class="num">1</span>;
+    <span class="kwa">private</span> <span class="kwb">int</span> k = <span class="num">0</span>;
+
+    <span class="kwa">private</span> <span class="kwb">int</span> <span class="kwd">ExtractDigit</span>(<span class="kwb">int</span> digit)
+    {
+	<span class="kwa">return</span> ((z0 * digit + z1) / z2).<span class="kwd">IntValue</span>();
+    }
+
+    <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">Compose_k</span>(<span class="kwb">int</span> k)
+    {
+	<span class="kwb">int</span> k2 = <span class="num">2</span> * k + <span class="num">1</span>;
+	z1 = k2 * z1 + <span class="num">2</span> * k2 * z0;
+	z0 *= k;
+	z2 *= k2;
+    }
+
+    <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">Compose_d</span>(<span class="kwb">int</span> d)
+    {
+	z1 = <span class="num">10</span> * z1 + -<span class="num">10</span> * d * z2;
+	z0 *= <span class="num">10</span>;
+    }
+
+    <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">Next</span>()
+    {
+	<span class="kwb">int</span> d;
+	<span class="kwa">while</span> (z0 == z2 || (d = <span class="kwd">ExtractDigit</span>(<span class="num">3</span>)) != <span class="kwd">ExtractDigit</span>(<span class="num">4</span>))
+	    <span class="kwd">Compose_k</span>(++k);
+	<span class="kwd">Compose_d</span>(d);
+	<span class="kwa">return</span> d;
+    }
+}
+
+<span class="kwa">class</span> BigInteger
+{
+    <span class="kwa">private</span> UBigInteger bi;
+    <span class="kwa">private</span> <span class="kwb">int</span> sign = <span class="num">1</span>;
+    <span class="kwa">private static readonly</span> BigInteger zero = <span class="num">0</span>;
+
+    <span class="kwa">private</span> <span class="kwd">BigInteger</span> () {}
+
+    <span class="kwa">public static implicit operator</span> <span class="kwd">BigInteger</span>(<span class="kwb">int</span> i)
+    {
+	<span class="kwa">return new</span> <span class="kwd">BigInteger</span>(i);
+    }
+
+    <span class="kwa">public</span> <span class="kwd">BigInteger</span>(<span class="kwb">int</span> <span class="kwa">value</span>)
+    {
+	<span class="kwa">if</span> (<span class="kwa">value</span> == <span class="num">0</span>)
+	    sign = <span class="num">0</span>;
+	<span class="kwa">else if</span> (<span class="kwa">value</span> &lt; <span class="num">0</span>) {
+	    sign = -<span class="num">1</span>;
+	    <span class="kwa">value</span> = -<span class="kwa">value</span>;
+	}
+	bi = <span class="kwa">new</span> <span class="kwd">UBigInteger</span>(<span class="kwa">value</span>);
+    }
+
+    <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">IntValue</span>()
+    {
+	<span class="kwa">return</span> sign * bi.<span class="kwd">GetBytes</span>()[<span class="num">0</span>];
+    }
+
+    <span class="kwa">public override</span> <span class="kwb">string</span> <span class="kwd">ToString</span> ()
+    {
+	<span class="kwa">return</span> (sign == -<span class="num">1</span> ? <span class="str">&quot;-&quot;</span> : <span class="str">&quot;&quot;</span>) + bi.<span class="kwd">ToString</span> ();
+    }
+
+    <span class="kwa">public static</span> BigInteger <span class="kwa">operator</span> * (BigInteger bi1, BigInteger bi2)
+    {
+	BigInteger ret = <span class="kwa">new</span> <span class="kwd">BigInteger</span>();
+	ret.bi = bi1.bi * bi2.bi;
+	ret.sign = bi1.sign * bi2.sign;
+	<span class="kwa">return</span> ret;
+    }
+
+    <span class="kwa">public static</span> BigInteger <span class="kwa">operator</span> / (BigInteger bi1, BigInteger bi2)
+    {
+	BigInteger ret = <span class="kwa">new</span> <span class="kwd">BigInteger</span>();
+	ret.bi = bi1.bi / bi2.bi;
+	ret.sign = bi1.sign * bi2.sign;
+	<span class="kwa">return</span> ret;
+    }
+
+    <span class="kwa">public static</span> BigInteger <span class="kwa">operator</span> + (BigInteger bi1, BigInteger bi2)
+    {
+	<span class="kwa">if</span> (bi1.sign == <span class="num">0</span>)
+	    <span class="kwa">return</span> bi2;
+
+	<span class="kwa">if</span> (bi2.sign == <span class="num">0</span>)
+	    <span class="kwa">return</span> bi1;
+	
+	<span class="kwa">if</span> (bi1.sign == bi2.sign) {
+	    BigInteger ret = <span class="kwa">new</span> <span class="kwd">BigInteger</span>();
+	    ret.bi = bi1.bi + bi2.bi;
+	    ret.sign = bi1.sign;
+	    <span class="kwa">return</span> ret;
+	}
+	
+	
+	<span class="kwa">if</span> (bi1.bi == bi2.bi)
+	    <span class="kwa">return</span> zero;
+
+	<span class="kwa">if</span> (bi1.bi &lt; bi2.bi) {
+	    BigInteger ret = <span class="kwa">new</span> <span class="kwd">BigInteger</span>();
+	    ret.bi = bi2.bi - bi1.bi;
+	    ret.sign = bi2.sign;
+	    <span class="kwa">return</span> ret;
+	} <span class="kwa">else</span> {
+	    BigInteger ret = <span class="kwa">new</span> <span class="kwd">BigInteger</span>();
+	    ret.bi = bi1.bi - bi2.bi;
+	    ret.sign = -<span class="num">1</span> * bi2.sign;
+	    <span class="kwa">return</span> ret;
+	}
+    }
+}

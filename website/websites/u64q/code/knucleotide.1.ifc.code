@@ -1,0 +1,353 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">! contributed by Steve Decker</span>
+<span class="slc">! using the hash function posted by Rich Townsend to comp.lang.fortran</span>
+<span class="slc">! on 5 October 2005.</span>
+<span class="slc">! compilation:</span>
+<span class="slc">!    g95 -O1 knucleotide.f90</span>
+<span class="slc">!    ifort -O3 -ip knucleotide.f90</span>
+<span class="slc">!</span>
+<span class="slc">! This implementation requires TR15581</span>
+
+<span class="kwa">module</span> knuc_mod
+  <span class="kwa">implicit none</span>
+  private
+  public :: init_table, read_frame, keys_of_given_len, cnt
+
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: MaxWordLen = <span class="num">18</span>
+
+  <span class="kwa">type</span>, public :: <span class="kwa">key</span>
+     <span class="kwa">integer</span>                   :: count = <span class="num">0</span>
+     <span class="kwa">character</span>(len=MaxWordLen) :: word = <span class="str">&quot;&quot;</span>
+  <span class="kwa">end type key</span>
+
+  <span class="kwa">type</span>, public :: table
+     private
+     <span class="kwa">integer</span> :: hashBits, maxWords, nWords
+     <span class="kwa">type</span>(<span class="kwa">key</span>), allocatable, <span class="kwa">dimension</span>(:) :: words
+  <span class="kwa">end type</span> table
+
+<span class="kwa">contains</span>
+
+  pure <span class="kwa">subroutine</span> <span class="kwd">init_table</span>(kNuc, nBits)
+    <span class="kwa">type</span>(table), <span class="kwd">intent</span>(out) :: kNuc
+    <span class="kwa">integer</span>,     <span class="kwd">intent</span>(in)  :: nBits
+
+    kNuc = <span class="kwd">table</span>(nBits, <span class="num">2</span>**nBits, <span class="num">0</span>, <span class="kwd">null</span>())
+    <span class="kwd">allocate</span>(kNuc%<span class="kwd">words</span>(kNuc%maxWords))
+  <span class="kwa">end subroutine</span> init_table
+
+  <span class="kwa">subroutine</span> <span class="kwd">read_frame</span>(buf, n, length, kNuc)
+    <span class="kwa">character</span>, <span class="kwa">dimension</span>(:), <span class="kwd">intent</span>(in)    :: buf
+    <span class="kwa">integer</span>,                 <span class="kwd">intent</span>(in)    :: n, length
+    <span class="kwa">type</span>(table),             <span class="kwd">intent</span>(inout) :: kNuc
+
+    <span class="kwa">integer</span>               :: i, j
+    <span class="kwa">character</span>(len=length) :: word
+
+    <span class="kwa">do</span> i = <span class="num">1</span>, n
+       <span class="kwa">do</span> j = <span class="num">1</span>, length
+          <span class="kwd">word</span>(j:j) = <span class="kwd">buf</span>(i+j-<span class="num">1</span>)
+       <span class="kwa">end do</span>
+       <span class="kwa">call</span> <span class="kwd">add</span>(kNuc, word)
+    <span class="kwa">end do</span>
+  <span class="kwa">end subroutine</span> read_frame
+
+  <span class="kwa">subroutine</span> <span class="kwd">add</span>(kNuc, word)
+    <span class="kwa">type</span>(table),      <span class="kwd">intent</span>(inout) :: kNuc
+    <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in)    :: word
+
+    <span class="kwa">integer</span> :: m
+
+    m = <span class="kwd">hash_value</span>(word, kNuc%maxWords)
+    <span class="kwa">do</span>
+       <span class="kwa">if</span> (kNuc%<span class="kwd">words</span>(m)%count == <span class="num">0</span>) <span class="kwa">then</span>
+          kNuc%<span class="kwd">words</span>(m) = <span class="kwa">key</span>(<span class="num">1</span>, word)
+          kNuc%nWords = kNuc%nWords + <span class="num">1</span>
+          <span class="kwa">if</span> (kNuc%nWords &gt; kNuc%maxWords/<span class="num">2</span>) <span class="kwa">call</span> <span class="kwd">resize_table</span>(kNuc)
+          exit
+       <span class="kwa">else if</span> (kNuc%<span class="kwd">words</span>(m)%word == word) <span class="kwa">then</span>
+          kNuc%<span class="kwd">words</span>(m)%count = kNuc%<span class="kwd">words</span>(m)%count + <span class="num">1</span>
+          exit
+       <span class="kwa">end if</span>
+       m = <span class="kwd">merge</span>(<span class="num">1</span>, m+<span class="num">1</span>, m == kNuc%maxWords)
+    <span class="kwa">end do</span>
+  <span class="kwa">end subroutine</span> add
+
+  <span class="kwa">subroutine</span> <span class="kwd">resize_table</span>(kNuc)
+    <span class="kwa">type</span>(table), <span class="kwd">intent</span>(inout) :: kNuc
+
+    <span class="kwa">integer</span>     :: i, m
+    <span class="kwa">type</span>(table) :: temp
+
+    temp = <span class="kwd">table</span>(kNuc%hashBits + <span class="num">1</span>, <span class="num">2</span> * kNuc%maxWords, kNuc%nWords, <span class="kwd">null</span>())
+    <span class="kwd">allocate</span>(temp%<span class="kwd">words</span>(temp%maxWords))
+
+    <span class="kwa">do</span> i = <span class="num">1</span>, kNuc%maxWords
+       <span class="kwa">if</span> (kNuc%<span class="kwd">words</span>(i)%count &gt; <span class="num">0</span>) <span class="kwa">then</span>
+          m = <span class="kwd">hash_value</span>(<span class="kwd">trim</span>(kNuc%<span class="kwd">words</span>(i)%word), temp%maxWords)
+          <span class="kwa">do</span>
+             <span class="kwa">if</span> (temp%<span class="kwd">words</span>(m)%count == <span class="num">0</span>) <span class="kwa">then</span>
+                temp%<span class="kwd">words</span>(m) = kNuc%<span class="kwd">words</span>(i)
+                exit
+             <span class="kwa">end if</span>
+             m = <span class="kwd">merge</span>(<span class="num">1</span>, m+<span class="num">1</span>, m == temp%maxWords)
+          <span class="kwa">end do</span>
+       <span class="kwa">end if</span>
+    <span class="kwa">end do</span>
+
+    kNuc = temp
+  <span class="kwa">end subroutine</span> resize_table
+
+  pure <span class="kwa">function</span> <span class="kwd">keys_of_given_len</span>(kNuc, length)
+    <span class="kwa">type</span>(table), <span class="kwd">intent</span>(in) :: kNuc
+    <span class="kwa">integer</span>,     <span class="kwd">intent</span>(in) :: length
+    <span class="kwa">type</span>(<span class="kwa">key</span>), <span class="kwa">dimension</span>(<span class="num">4</span>**length) :: keys_of_given_len
+
+    <span class="kwa">integer</span> :: i, n
+
+    n = <span class="num">1</span>
+    <span class="kwa">do</span> i = <span class="num">1</span>, kNuc%maxWords
+       <span class="kwa">if</span> (<span class="kwd">len_trim</span>(kNuc%<span class="kwd">words</span>(i)%word) == length) <span class="kwa">then</span>
+          <span class="kwd">keys_of_given_len</span>(n) = kNuc%<span class="kwd">words</span>(i)
+          n = n + <span class="num">1</span>
+          <span class="kwa">if</span> (n &gt; <span class="kwd">size</span>(keys_of_given_len)) exit
+       <span class="kwa">end if</span>
+    <span class="kwa">end do</span>
+  <span class="kwa">end function</span> keys_of_given_len
+
+  <span class="kwa">integer function</span> <span class="kwd">cnt</span>(kNuc, string)
+    <span class="kwa">type</span>(table), <span class="kwd">intent</span>(in)      :: kNuc
+    <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: string
+
+    <span class="kwa">integer</span> :: m
+
+    m = <span class="kwd">hash_value</span>(string, kNuc%maxWords)
+    <span class="kwa">do</span>
+       <span class="kwa">if</span> (kNuc%<span class="kwd">words</span>(m)%word == string .or. kNuc%<span class="kwd">words</span>(m)%count == <span class="num">0</span>) <span class="kwa">then</span>
+          cnt = kNuc%<span class="kwd">words</span>(m)%count
+          exit
+       <span class="kwa">end if</span>
+       m = <span class="kwd">merge</span>(<span class="num">1</span>, m+<span class="num">1</span>, m == kNuc%maxWords)
+    <span class="kwa">end do</span>
+  <span class="kwa">end function</span> cnt
+
+  <span class="kwa">integer function</span> <span class="kwd">hash_value</span>(<span class="kwa">key</span>, range)
+    <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: <span class="kwa">key</span>
+    <span class="kwa">integer</span>,          <span class="kwd">intent</span>(in) :: range
+
+    <span class="kwa">integer</span> :: len_key, a, b, c, k
+
+    <span class="slc">! Hash the key into a code, using the algorithm</span>
+    <span class="slc">! described by Bob Jenkins at:</span>
+    <span class="slc">!  http://burtleburtle.net/bob/hash/doobs.html</span>
+    <span class="slc">!</span>
+    <span class="slc">! Note that range should be a power of 2, and</span>
+    <span class="slc">! that the 32-bit algorithm is used</span>
+
+    len_key = <span class="kwd">len</span>(<span class="kwa">key</span>)
+
+    a = -<span class="num">1640531527</span> <span class="slc">! 0x9E3779B9</span>
+    b = a
+    c = <span class="num">305419896</span>   <span class="slc">! 0x12345678</span>
+
+    k = <span class="num">1</span>
+
+    <span class="kwa">do</span>
+       <span class="kwa">if</span> (len_key &lt; <span class="num">12</span>) exit
+
+       <span class="slc">! Pack the key into 32 bits</span>
+       a = a + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k)) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">1</span>:k+<span class="num">1</span>)), <span class="num">8</span>) +  &amp;
+            <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">2</span>:k+<span class="num">2</span>)), <span class="num">16</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">3</span>:k+<span class="num">3</span>)), <span class="num">24</span>)
+       b = b + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">4</span>:k+<span class="num">4</span>)) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">5</span>:k+<span class="num">5</span>)), <span class="num">8</span>) +  &amp;
+            <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">6</span>:k+<span class="num">6</span>)), <span class="num">16</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">7</span>:k+<span class="num">7</span>)), <span class="num">24</span>)
+       c = c + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">8</span>:k+<span class="num">8</span>)) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">9</span>:k+<span class="num">9</span>)), <span class="num">8</span>) +  &amp;
+            <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">10</span>:k+<span class="num">10</span>)), <span class="num">16</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">11</span>:k+<span class="num">11</span>)), <span class="num">24</span>)
+
+       <span class="slc">! Mix it up</span>
+       <span class="kwa">call</span> <span class="kwd">hash_mix</span>()
+       k = k + <span class="num">12</span>
+       len_key = len_key - <span class="num">12</span>
+    <span class="kwa">end do</span>
+
+    c = c + len_key
+
+    <span class="slc">! Process remaining bits</span>
+    select <span class="kwd">case</span>(len_key)
+    <span class="kwd">case</span>(<span class="num">11</span>)
+       c = c + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">10</span>:k+<span class="num">10</span>)),<span class="num">24</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">9</span>:k+<span class="num">9</span>)),<span class="num">16</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">8</span>:k+<span class="num">8</span>)),<span class="num">8</span>)
+       b = b + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">7</span>:k+<span class="num">7</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">6</span>:k+<span class="num">6</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">5</span>:k+<span class="num">5</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">4</span>:k+<span class="num">4</span>))
+       a = a + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">3</span>:k+<span class="num">3</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">2</span>:k+<span class="num">2</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">1</span>:k+<span class="num">1</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k))
+    <span class="kwd">case</span>(<span class="num">10</span>)
+       c = c + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">9</span>:k+<span class="num">9</span>)),<span class="num">16</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">8</span>:k+<span class="num">8</span>)),<span class="num">8</span>)
+       b = b + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">7</span>:k+<span class="num">7</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">6</span>:k+<span class="num">6</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">5</span>:k+<span class="num">5</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">4</span>:k+<span class="num">4</span>))
+       a = a + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">3</span>:k+<span class="num">3</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">2</span>:k+<span class="num">2</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">1</span>:k+<span class="num">1</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k))
+    <span class="kwd">case</span>(<span class="num">9</span>)
+       c = c + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">8</span>:k+<span class="num">8</span>)),<span class="num">8</span>)
+       b = b + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">7</span>:k+<span class="num">7</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">6</span>:k+<span class="num">6</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">5</span>:k+<span class="num">5</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">4</span>:k+<span class="num">4</span>))
+       a = a + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">3</span>:k+<span class="num">3</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">2</span>:k+<span class="num">2</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">1</span>:k+<span class="num">1</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k))
+    <span class="kwd">case</span>(<span class="num">8</span>)
+       b = b + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">7</span>:k+<span class="num">7</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">6</span>:k+<span class="num">6</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">5</span>:k+<span class="num">5</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">4</span>:k+<span class="num">4</span>))
+       a = a + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">3</span>:k+<span class="num">3</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">2</span>:k+<span class="num">2</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">1</span>:k+<span class="num">1</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k))
+    <span class="kwd">case</span>(<span class="num">7</span>)
+       b = b + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">6</span>:k+<span class="num">6</span>)),<span class="num">16</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">5</span>:k+<span class="num">5</span>)),<span class="num">8</span>)  &amp;
+            + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">4</span>:k+<span class="num">4</span>))
+       a = a + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">3</span>:k+<span class="num">3</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">2</span>:k+<span class="num">2</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">1</span>:k+<span class="num">1</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k))
+    <span class="kwd">case</span>(<span class="num">6</span>)
+       b = b + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">5</span>:k+<span class="num">5</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">4</span>:k+<span class="num">4</span>))
+       a = a + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">3</span>:k+<span class="num">3</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">2</span>:k+<span class="num">2</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">1</span>:k+<span class="num">1</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k))
+    <span class="kwd">case</span>(<span class="num">5</span>)
+       b = b + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">4</span>:k+<span class="num">4</span>))
+       a = a + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">3</span>:k+<span class="num">3</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">2</span>:k+<span class="num">2</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">1</span>:k+<span class="num">1</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k))
+    <span class="kwd">case</span>(<span class="num">4</span>)
+       a = a + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">3</span>:k+<span class="num">3</span>)),<span class="num">24</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">2</span>:k+<span class="num">2</span>)),<span class="num">16</span>)  &amp;
+            + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">1</span>:k+<span class="num">1</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k))
+    <span class="kwd">case</span>(<span class="num">3</span>)
+       a = a + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">2</span>:k+<span class="num">2</span>)),<span class="num">16</span>) + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">1</span>:k+<span class="num">1</span>)),<span class="num">8</span>)  &amp;
+            + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k))
+    <span class="kwd">case</span>(<span class="num">2</span>)
+       a = a + <span class="kwd">ishft</span>(<span class="kwd">ichar</span>(<span class="kwa">key</span>(k+<span class="num">1</span>:k+<span class="num">1</span>)),<span class="num">8</span>) + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k))
+    <span class="kwd">case</span>(<span class="num">1</span>)
+       a = a + <span class="kwd">ichar</span>(<span class="kwa">key</span>(k:k))
+    <span class="kwa">end</span> select
+
+    <span class="kwa">call</span> <span class="kwd">hash_mix</span>()
+
+    hash_value = <span class="kwd">iand</span>(c, range - <span class="num">1</span>) + <span class="num">1</span>
+
+  <span class="kwa">contains</span>
+
+    <span class="kwa">subroutine</span> hash_mix
+      <span class="slc">! Mix a, b and c</span>
+      a = <span class="kwd">ieor</span>(a - b - c, <span class="kwd">ishft</span>(c, -<span class="num">13</span>))
+      b = <span class="kwd">ieor</span>(b - c - a, <span class="kwd">ishft</span>(a, <span class="num">8</span>))
+      c = <span class="kwd">ieor</span>(c - a - b, <span class="kwd">ishft</span>(b, -<span class="num">13</span>))
+
+      a = <span class="kwd">ieor</span>(a - b - c, <span class="kwd">ishft</span>(c, -<span class="num">12</span>))
+      b = <span class="kwd">ieor</span>(b - c - a, <span class="kwd">ishft</span>(a, <span class="num">16</span>))
+      c = <span class="kwd">ieor</span>(c - a - b, <span class="kwd">ishft</span>(b, -<span class="num">5</span>))
+
+      a = <span class="kwd">ieor</span>(a - b - c, <span class="kwd">ishft</span>(c, -<span class="num">3</span>))
+      b = <span class="kwd">ieor</span>(b - c - a, <span class="kwd">ishft</span>(a, <span class="num">10</span>))
+      c = <span class="kwd">ieor</span>(c - a - b, <span class="kwd">ishft</span>(b, -<span class="num">15</span>))
+    <span class="kwa">end subroutine</span> hash_mix
+  <span class="kwa">end function</span> hash_value
+<span class="kwa">end module</span> knuc_mod
+
+<span class="kwa">program</span> knucleotide
+  <span class="kwa">use</span> knuc_mod
+  <span class="kwa">implicit none</span>
+
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: LineLen = <span class="num">60</span>, InitialTableSize = <span class="num">1</span>
+
+  <span class="kwa">integer</span> :: bufferSize = <span class="num">16384</span>, stat, n = <span class="num">0</span>, i
+  <span class="kwa">logical</span> :: atThirdPart = .false.
+  <span class="kwa">type</span>(table) :: kn
+  <span class="kwa">character</span>(len=LineLen) :: line
+  <span class="kwa">character</span>, <span class="kwa">dimension</span>(:), allocatable :: buffer, tempBuffer
+
+  <span class="kwa">character</span>, <span class="kwa">dimension</span>(<span class="num">65</span>:<span class="num">116</span>), <span class="kwa">parameter</span> :: Codes = (/ <span class="str">&quot;A&quot;</span>, <span class="str">&quot; &quot;</span>, <span class="str">&quot;C&quot;</span>,  &amp;
+       (<span class="str">&quot; &quot;</span>, i = <span class="num">68</span>, <span class="num">70</span>), <span class="str">&quot;G&quot;</span>, (<span class="str">&quot; &quot;</span>, i = <span class="num">72</span>, <span class="num">83</span>), <span class="str">&quot;T&quot;</span>, (<span class="str">&quot; &quot;</span>, i = <span class="num">85</span>, <span class="num">96</span>),  &amp;
+       <span class="str">&quot;A&quot;</span>, <span class="str">&quot; &quot;</span>, <span class="str">&quot;C&quot;</span>, (<span class="str">&quot; &quot;</span>, i = <span class="num">100</span>, <span class="num">102</span>), <span class="str">&quot;G&quot;</span>, (<span class="str">&quot; &quot;</span>, i = <span class="num">104</span>, <span class="num">115</span>), <span class="str">&quot;T&quot;</span> /)
+
+  <span class="kwd">allocate</span>(<span class="kwd">buffer</span>(bufferSize))
+
+  <span class="slc">! Read FASTA file line-by-line, extracting sequence three, and converting to</span>
+  <span class="slc">! uppercase.</span>
+  <span class="kwa">do</span>
+     <span class="kwa">read</span>(*, <span class="str">&quot;(a)&quot;</span>, iostat=stat) line
+     <span class="kwa">if</span> (stat /= <span class="num">0</span>) exit
+     <span class="kwa">if</span> (.not. atThirdPart) <span class="kwa">then</span>
+        atThirdPart = <span class="kwd">line</span>(<span class="num">1</span>:<span class="num">3</span>) == <span class="str">&quot;&gt;TH&quot;</span>
+     <span class="kwa">else</span>
+        <span class="kwa">if</span> (n+LineLen &gt; bufferSize) <span class="kwa">then</span>
+           <span class="kwd">allocate</span>(<span class="kwd">tempBuffer</span>(bufferSize))
+           tempBuffer = buffer
+           <span class="kwd">deallocate</span>(buffer)
+           <span class="kwd">allocate</span>(<span class="kwd">buffer</span>(<span class="num">2</span>*bufferSize))
+           <span class="kwd">buffer</span>(<span class="num">1</span>:bufferSize) = tempBuffer
+           <span class="kwd">buffer</span>(bufferSize+<span class="num">1</span>:<span class="num">2</span>*bufferSize) = <span class="str">&quot; &quot;</span>
+           <span class="kwd">deallocate</span>(tempBuffer)
+           bufferSize = <span class="num">2</span>*bufferSize
+        <span class="kwa">end if</span>
+        <span class="kwa">do</span> i = <span class="num">1</span>, LineLen
+           <span class="kwd">buffer</span>(n+i) = <span class="kwd">Codes</span>(<span class="kwd">iachar</span>(<span class="kwd">line</span>(i:i)))
+        <span class="kwa">end do</span>
+        n = n + LineLen
+     <span class="kwa">end if</span>
+  <span class="kwa">end do</span>
+
+  n = <span class="kwd">minloc</span>(<span class="kwd">iachar</span>(buffer),<span class="num">1</span>) - <span class="num">1</span>
+
+  <span class="kwa">call</span> <span class="kwd">init_table</span>(kn, InitialTableSize)
+
+  <span class="kwa">call</span> <span class="kwd">write_frequencies</span>(<span class="num">1</span>)
+  <span class="kwa">call</span> <span class="kwd">write_frequencies</span>(<span class="num">2</span>)
+
+  <span class="kwa">call</span> <span class="kwd">write_count</span>(<span class="str">&quot;GGT&quot;</span>)
+  <span class="kwa">call</span> <span class="kwd">write_count</span>(<span class="str">&quot;GGTA&quot;</span>)
+  <span class="kwa">call</span> <span class="kwd">write_count</span>(<span class="str">&quot;GGTATT&quot;</span>)
+  <span class="kwa">call</span> <span class="kwd">write_count</span>(<span class="str">&quot;GGTATTTTAATT&quot;</span>)
+  <span class="kwa">call</span> <span class="kwd">write_count</span>(<span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>)
+
+<span class="kwa">contains</span>
+
+  <span class="kwa">subroutine</span> <span class="kwd">write_frequencies</span>(length)
+    <span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: length
+
+    <span class="kwa">integer</span> :: numNuc, j
+    <span class="kwa">type</span>(<span class="kwa">key</span>), <span class="kwa">dimension</span>(<span class="num">4</span>**length) :: nucleotides
+    <span class="kwa">type</span>(<span class="kwa">key</span>) :: temp
+
+    numNuc = n - length + <span class="num">1</span>
+
+    <span class="kwa">call</span> <span class="kwd">read_frame</span>(buffer, numNuc, length, kn)
+
+    nucleotides = <span class="kwd">keys_of_given_len</span>(kn, length)
+
+    <span class="slc">! Insertion sort</span>
+    <span class="kwa">do</span> i = <span class="num">2</span>, <span class="kwd">size</span>(nucleotides)
+       temp = <span class="kwd">nucleotides</span>(i)
+       <span class="kwa">do</span> j = i, <span class="num">2</span>, -<span class="num">1</span>
+          <span class="kwa">if</span> (<span class="kwd">nucleotides</span>(j-<span class="num">1</span>)%count &gt; temp%count .or.  &amp;
+               <span class="kwd">nucleotides</span>(j-<span class="num">1</span>)%count == temp%count .and.  &amp;
+               <span class="kwd">nucleotides</span>(j-<span class="num">1</span>)%word &lt; temp%word) exit
+          <span class="kwd">nucleotides</span>(j) = <span class="kwd">nucleotides</span>(j-<span class="num">1</span>)
+       <span class="kwa">end do</span>
+       <span class="kwd">nucleotides</span>(j) = temp
+    <span class="kwa">end do</span>
+
+    <span class="kwa">do</span> i = <span class="num">1</span>, <span class="kwd">size</span>(nucleotides)
+       <span class="kwa">write</span>(*, <span class="str">&quot;(a2,f6.3)&quot;</span>) <span class="kwd">nucleotides</span>(i)%<span class="kwd">word</span>(<span class="num">1</span>:<span class="num">2</span>),  &amp;
+            <span class="num">100</span>. * <span class="kwd">nucleotides</span>(i)%count / <span class="kwa">real</span>(numNuc)
+    <span class="kwa">end do</span>
+    <span class="kwa">write</span>(*, <span class="str">&quot;(a)&quot;</span>) <span class="str">&quot;&quot;</span>
+  <span class="kwa">end subroutine</span> write_frequencies
+
+  <span class="kwa">subroutine</span> <span class="kwd">write_count</span>(string)
+    <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: string
+
+    <span class="kwa">character</span>, <span class="kwa">parameter</span> :: tab = <span class="kwd">achar</span>(<span class="num">9</span>)
+    <span class="kwa">integer</span> :: length, numNuc
+
+    length = <span class="kwd">len</span>(string)
+    numNuc = n - length + <span class="num">1</span>
+
+    <span class="kwa">call</span> <span class="kwd">read_frame</span>(buffer, numNuc, length, kn)
+
+    <span class="kwa">write</span>(*, <span class="str">&quot;(i0,a)&quot;</span>) <span class="kwd">cnt</span>(kn, string), tab//string
+  <span class="kwa">end subroutine</span> write_count
+<span class="kwa">end program</span> knucleotide

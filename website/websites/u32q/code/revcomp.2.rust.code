@@ -1,0 +1,74 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// contributed by the Rust Project Developers</span>
+<span class="hl slc">// contributed by TeXitoi</span>
+
+<span class="hl ppc">#![feature(slicing_syntax)]</span>
+
+use std<span class="hl opt">::</span>iter<span class="hl opt">::</span>range_step<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>io<span class="hl opt">::{</span>stdin<span class="hl opt">,</span> stdout<span class="hl opt">};</span>
+
+<span class="hl kwb">static</span> LINE_LEN<span class="hl opt">:</span> uint <span class="hl opt">=</span> <span class="hl num">60</span><span class="hl opt">;</span>
+
+fn <span class="hl kwd">make_complements</span><span class="hl opt">() -&gt; [</span>u8<span class="hl opt">, .</span><span class="hl num">.256</span><span class="hl opt">] {</span>
+    let transforms <span class="hl opt">= [</span>
+        <span class="hl opt">(</span><span class="hl str">'A'</span><span class="hl opt">,</span> <span class="hl str">'T'</span><span class="hl opt">), (</span><span class="hl str">'C'</span><span class="hl opt">,</span> <span class="hl str">'G'</span><span class="hl opt">), (</span><span class="hl str">'G'</span><span class="hl opt">,</span> <span class="hl str">'C'</span><span class="hl opt">), (</span><span class="hl str">'T'</span><span class="hl opt">,</span> <span class="hl str">'A'</span><span class="hl opt">),</span>
+        <span class="hl opt">(</span><span class="hl str">'U'</span><span class="hl opt">,</span> <span class="hl str">'A'</span><span class="hl opt">), (</span><span class="hl str">'M'</span><span class="hl opt">,</span> <span class="hl str">'K'</span><span class="hl opt">), (</span><span class="hl str">'R'</span><span class="hl opt">,</span> <span class="hl str">'Y'</span><span class="hl opt">), (</span><span class="hl str">'W'</span><span class="hl opt">,</span> <span class="hl str">'W'</span><span class="hl opt">),</span>
+        <span class="hl opt">(</span><span class="hl str">'S'</span><span class="hl opt">,</span> <span class="hl str">'S'</span><span class="hl opt">), (</span><span class="hl str">'Y'</span><span class="hl opt">,</span> <span class="hl str">'R'</span><span class="hl opt">), (</span><span class="hl str">'K'</span><span class="hl opt">,</span> <span class="hl str">'M'</span><span class="hl opt">), (</span><span class="hl str">'V'</span><span class="hl opt">,</span> <span class="hl str">'B'</span><span class="hl opt">),</span>
+        <span class="hl opt">(</span><span class="hl str">'H'</span><span class="hl opt">,</span> <span class="hl str">'D'</span><span class="hl opt">), (</span><span class="hl str">'D'</span><span class="hl opt">,</span> <span class="hl str">'H'</span><span class="hl opt">), (</span><span class="hl str">'B'</span><span class="hl opt">,</span> <span class="hl str">'V'</span><span class="hl opt">), (</span><span class="hl str">'N'</span><span class="hl opt">,</span> <span class="hl str">'N'</span><span class="hl opt">),</span>
+        <span class="hl opt">(</span><span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">,</span> <span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">)];</span>
+    let mut complements<span class="hl opt">: [</span>u8<span class="hl opt">, .</span><span class="hl num">.256</span><span class="hl opt">] = [</span><span class="hl num">0</span><span class="hl opt">, .</span><span class="hl num">.256</span><span class="hl opt">];</span>
+    <span class="hl kwa">for</span> <span class="hl opt">(</span>i<span class="hl opt">,</span> c<span class="hl opt">)</span> in complements<span class="hl opt">.</span><span class="hl kwd">iter_mut</span><span class="hl opt">().</span><span class="hl kwd">enumerate</span><span class="hl opt">() {</span>
+        <span class="hl opt">*</span>c <span class="hl opt">=</span> i as u8<span class="hl opt">;</span>
+    <span class="hl opt">}</span>
+    let lower <span class="hl opt">=</span> <span class="hl str">'A'</span> as u8 <span class="hl opt">-</span> <span class="hl str">'a'</span> as u8<span class="hl opt">;</span>
+    <span class="hl kwa">for</span> <span class="hl opt">&amp;(</span>from<span class="hl opt">,</span> to<span class="hl opt">)</span> in transforms<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">() {</span>
+        complements<span class="hl opt">[</span>from as uint<span class="hl opt">] =</span> to as u8<span class="hl opt">;</span>
+        complements<span class="hl opt">[(</span>from as u8 <span class="hl opt">-</span> lower<span class="hl opt">)</span> as uint<span class="hl opt">] =</span> to as u8<span class="hl opt">;</span>
+    <span class="hl opt">}</span>
+    complements
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">main</span><span class="hl opt">() {</span>
+    let complements <span class="hl opt">=</span> <span class="hl kwd">make_complements</span><span class="hl opt">();</span>
+    let mut data <span class="hl opt">=</span> <span class="hl kwd">stdin</span><span class="hl opt">().</span><span class="hl kwd">read_to_end</span><span class="hl opt">().</span><span class="hl kwd">unwrap</span><span class="hl opt">();</span>
+
+    <span class="hl kwa">for</span> seq in data<span class="hl opt">.</span><span class="hl kwd">as_mut_slice</span><span class="hl opt">().</span><span class="hl kwd">split_mut</span><span class="hl opt">(|</span>c<span class="hl opt">| *</span>c <span class="hl opt">==</span> <span class="hl str">'&gt;'</span> as u8<span class="hl opt">) {</span>
+        <span class="hl slc">// skip header and last \n</span>
+        let begin <span class="hl opt">=</span> match seq<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">().</span><span class="hl kwd">position</span><span class="hl opt">(|</span>c<span class="hl opt">| *</span>c <span class="hl opt">==</span> <span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span> as u8<span class="hl opt">) {</span>
+            None <span class="hl opt">=&gt;</span> <span class="hl kwa">continue</span><span class="hl opt">,</span>
+            <span class="hl kwd">Some</span><span class="hl opt">(</span>c<span class="hl opt">) =&gt;</span> c
+        <span class="hl opt">};</span>
+        let len <span class="hl opt">=</span> seq<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">();</span>
+        let seq <span class="hl opt">=</span> seq<span class="hl opt">[</span>mut begin<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">..</span>len<span class="hl opt">-</span><span class="hl num">1</span><span class="hl opt">];</span>
+
+        <span class="hl slc">// arrange line breaks</span>
+        let len <span class="hl opt">=</span> seq<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">();</span>
+        let off <span class="hl opt">=</span> LINE_LEN <span class="hl opt">-</span> len <span class="hl opt">% (</span>LINE_LEN <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">);</span>
+        <span class="hl kwa">for</span> i in <span class="hl kwd">range_step</span><span class="hl opt">(</span>LINE_LEN<span class="hl opt">,</span> len<span class="hl opt">,</span> LINE_LEN <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">) {</span>
+            <span class="hl kwa">for</span> j in std<span class="hl opt">::</span>iter<span class="hl opt">::</span><span class="hl kwd">count</span><span class="hl opt">(</span>i<span class="hl opt">, -</span><span class="hl num">1</span><span class="hl opt">).</span><span class="hl kwd">take</span><span class="hl opt">(</span>off<span class="hl opt">) {</span>
+                seq<span class="hl opt">[</span>j<span class="hl opt">] =</span> seq<span class="hl opt">[</span>j <span class="hl opt">-</span> <span class="hl num">1</span><span class="hl opt">];</span>
+            <span class="hl opt">}</span>
+            seq<span class="hl opt">[</span>i <span class="hl opt">-</span> off<span class="hl opt">] =</span> <span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span> as u8<span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+
+        <span class="hl slc">// reverse complement, as</span>
+        <span class="hl slc">//    seq.reverse(); for c in seq.iter_mut() {*c = complements[*c]}</span>
+        <span class="hl slc">// but faster:</span>
+        let mut it <span class="hl opt">=</span> seq<span class="hl opt">.</span><span class="hl kwd">iter_mut</span><span class="hl opt">();</span>
+        loop <span class="hl opt">{</span>
+            <span class="hl kwd">match</span> <span class="hl opt">(</span>it<span class="hl opt">.</span><span class="hl kwd">next</span><span class="hl opt">(),</span> it<span class="hl opt">.</span><span class="hl kwd">next_back</span><span class="hl opt">()) {</span>
+                <span class="hl opt">(</span><span class="hl kwd">Some</span><span class="hl opt">(</span>front<span class="hl opt">),</span> <span class="hl kwd">Some</span><span class="hl opt">(</span>back<span class="hl opt">)) =&gt; {</span>
+                    let tmp <span class="hl opt">=</span> complements<span class="hl opt">[*</span>front as uint<span class="hl opt">];</span>
+                    <span class="hl opt">*</span>front <span class="hl opt">=</span> complements<span class="hl opt">[*</span>back as uint<span class="hl opt">];</span>
+                    <span class="hl opt">*</span>back <span class="hl opt">=</span> tmp<span class="hl opt">;</span>
+                <span class="hl opt">}</span>
+                <span class="hl opt">(</span><span class="hl kwd">Some</span><span class="hl opt">(</span>last<span class="hl opt">),</span> None<span class="hl opt">) =&gt; *</span>last <span class="hl opt">=</span> complements<span class="hl opt">[*</span>last as uint<span class="hl opt">],</span> <span class="hl slc">// last element</span>
+                _ <span class="hl opt">=&gt;</span> <span class="hl kwa">break</span> <span class="hl slc">// vector exhausted.</span>
+            <span class="hl opt">}</span>
+        <span class="hl opt">}</span>
+    <span class="hl opt">}</span>
+
+    <span class="hl kwd">stdout</span><span class="hl opt">().</span><span class="hl kwd">write</span><span class="hl opt">(</span>data<span class="hl opt">.</span><span class="hl kwd">as_slice</span><span class="hl opt">()).</span><span class="hl kwd">unwrap</span><span class="hl opt">();</span>
+<span class="hl opt">}</span>

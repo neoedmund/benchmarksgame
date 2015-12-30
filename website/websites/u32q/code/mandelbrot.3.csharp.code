@@ -1,0 +1,69 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Adapted by Antti Lankila from the earlier Isaac Gouy's implementation</span>
+<span class="com">   Add multithread &amp; tweaks from C++ by The Anh Tran</span>
+<span class="com">   Simplified bit logic and cleaned code by Robert F. Tobler</span>
+<span class="com">*/</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.Threading;
+<span class="kwa">using</span> System.IO;
+
+<span class="kwa">public class</span> MandelBrot
+{
+    <span class="kwa">private static</span> <span class="kwb">int</span> n = <span class="num">200</span>;
+    <span class="kwa">private static</span> <span class="kwb">byte</span>[][] data;
+    <span class="kwa">private static</span> <span class="kwb">int</span> lineCount = -<span class="num">1</span>;
+    <span class="kwa">private static</span> <span class="kwb">double</span>[] xa;
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span> (String[] args)
+    {
+        <span class="kwa">if</span> (args.Length &gt; <span class="num">0</span>) n = Int32.<span class="kwd">Parse</span>(args[<span class="num">0</span>]);
+        Console.Out.<span class="kwd">WriteLine</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str"></span><span class="ipl">{0} {0}</span><span class="str">&quot;</span>, n);
+        
+        <span class="kwb">int</span> lineLen = (n-<span class="num">1</span>)/<span class="num">8</span> + <span class="num">1</span>;
+        data = <span class="kwa">new</span> <span class="kwb">byte</span>[n][];
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; n; i++) data[i] = <span class="kwa">new</span> <span class="kwb">byte</span>[lineLen];
+
+        xa = <span class="kwa">new</span> <span class="kwb">double</span>[n];
+        <span class="kwa">for</span> (<span class="kwb">int</span> x = <span class="num">0</span>; x &lt; n; x++) xa[x] = x * <span class="num">2.0</span>/n - <span class="num">1.5</span>;
+
+        var threads = <span class="kwa">new</span> Thread[Environment.ProcessorCount];
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; threads.Length; i++)
+            (threads[i] = <span class="kwa">new</span> <span class="kwd">Thread</span>(MandelBrot.Calculate)).<span class="kwd">Start</span>();
+
+        <span class="kwa">foreach</span> (var t <span class="kwa">in</span> threads) t.<span class="kwd">Join</span>();
+
+        var s = Console.<span class="kwd">OpenStandardOutput</span>();
+        <span class="kwa">for</span> (<span class="kwb">int</span> y = <span class="num">0</span>; y &lt; n; y++) s.<span class="kwd">Write</span>(data[y], <span class="num">0</span>, lineLen);
+    }
+
+    <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">Calculate</span>()
+    {
+        <span class="kwb">int</span> y;
+        <span class="kwa">while</span> ((y = Interlocked.<span class="kwd">Increment</span>(<span class="kwa">ref</span> lineCount)) &lt; n)
+        {
+            var line = data[y];
+            <span class="kwb">int</span> xbyte = <span class="num">0</span>, bits = <span class="num">1</span>;
+            <span class="kwb">double</span> ci = y * <span class="num">2.0</span>/n - <span class="num">1.0</span>;
+
+            <span class="kwa">for</span> (<span class="kwb">int</span> x = <span class="num">0</span>; x &lt; n; x++)
+            {
+                <span class="kwb">double</span> cr = xa[x];
+                <span class="kwa">if</span> (bits &gt; <span class="num">0xff</span>) { line[xbyte++] = (<span class="kwb">byte</span>)bits; bits = <span class="num">1</span>; }
+                <span class="kwb">double</span> zr = cr, zi = ci, tr = cr * cr, ti = ci * ci;  
+                <span class="kwb">int</span> i = <span class="num">49</span>;
+                <span class="kwa">do</span>
+                {
+                    zi = zr * zi + zr * zi + ci; zr = tr - ti + cr;
+                    tr = zr * zr; ti = zi * zi;
+                }
+                <span class="kwa">while</span> ((tr + ti &lt;= <span class="num">4.0</span>) &amp;&amp; (--i &gt; <span class="num">0</span>));
+                bits = (bits &lt;&lt; <span class="num">1</span>) | (i == <span class="num">0</span> ? <span class="num">1</span> : <span class="num">0</span>);
+            }
+            <span class="kwa">while</span> (bits &lt; <span class="num">0x100</span>) bits = (bits &lt;&lt; <span class="num">1</span>);
+            line[xbyte] = (<span class="kwb">byte</span>)bits;
+        }
+    }
+}

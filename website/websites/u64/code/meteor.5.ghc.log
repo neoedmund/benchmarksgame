@@ -1,0 +1,34 @@
+
+Mon, 21 Sep 2015 20:38:27 GMT
+
+MAKE:
+mv meteor.ghc-5.ghc meteor.ghc-5.hs
+/usr/local/src/ghc-7.10.2/bin/ghc --make -fllvm -O2 -XBangPatterns -rtsopts -XScopedTypeVariables -XTypeSynonymInstances -XFlexibleInstances meteor.ghc-5.hs -o meteor.ghc-5.ghc_run
+[1 of 1] Compiling Main             ( meteor.ghc-5.hs, meteor.ghc-5.o )
+
+meteor.ghc-5.hs:216:7:
+    Non type-variable argument in the constraint: IArray a [Mask]
+    (Use FlexibleContexts to permit this)
+    When checking that ‘copy'’ has the inferred type
+      copy' :: forall (a :: * -> * -> *).
+               IArray a [Mask] =>
+               Int -> a Int [Mask]
+    In an equation for ‘trps’:
+        trps !a
+          = array ((0, 0), (9, 4))
+            $ concatMap (uncurry (map . first . (,)))
+              $ zip [0 .. 9] [copy !! y | y <- [1, 0, ....]]
+          where
+              copy = [[... | x <- ...] | y <- [...]]
+              copy' cell
+                = array (0, 9) $ map (\ clr -> (clr, a !! clr !! cell)) colors
+/home/dunham/benchmarksgame/nanobench/makefiles/u64.programs.Makefile:297: recipe for target 'meteor.ghc-5.ghc_run' failed
+make: [meteor.ghc-5.ghc_run] Error 1 (ignored)
+rm meteor.ghc-5.hs
+0.38s to complete and log all make actions
+
+COMMAND LINE:
+./meteor.ghc-5.ghc_run  2098
+
+MAKE ERROR 
+

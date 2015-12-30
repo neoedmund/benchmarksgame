@@ -1,0 +1,56 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">#    contributed by Isaac Gouy</span>
+<span class="slc">#    converted to Java by Oleg Mazurov</span>
+<span class="slc">#    converted to Python by Buck Golemon</span>
+<span class="slc">#    modified by Justin Peel</span>
+
+<span class="kwa">def</span> <span class="kwd">fannkuch</span>(n):
+    maxFlipsCount = <span class="num">0</span>
+    permSign = <span class="kwa">True</span>
+    checksum = <span class="num">0</span>
+
+    perm1 = <span class="kwb">list</span>(<span class="kwb">range</span>(n))
+    count = perm1[:]
+    rxrange = <span class="kwb">range</span>(<span class="num">2</span>, n - <span class="num">1</span>)
+    nm = n - <span class="num">1</span>
+    <span class="kwa">while</span> <span class="num">1</span>:
+        k = perm1[<span class="num">0</span>]
+        <span class="kwa">if</span> k:
+            perm = perm1[:]
+            flipsCount = <span class="num">1</span>
+            kk = perm[k]
+            <span class="kwa">while</span> kk:
+                perm[:k+<span class="num">1</span>] = perm[k::-<span class="num">1</span>]
+                flipsCount += <span class="num">1</span>
+                k = kk
+                kk = perm[kk]
+            <span class="kwa">if</span> maxFlipsCount &lt; flipsCount:
+                maxFlipsCount = flipsCount
+            checksum += flipsCount <span class="kwa">if</span> permSign <span class="kwa">else</span> -flipsCount
+
+        <span class="slc"># Use incremental change to generate another permutation</span>
+        <span class="kwa">if</span> permSign:
+            perm1[<span class="num">0</span>],perm1[<span class="num">1</span>] = perm1[<span class="num">1</span>],perm1[<span class="num">0</span>]
+            permSign = <span class="kwa">False</span>
+        <span class="kwa">else</span>:
+            perm1[<span class="num">1</span>],perm1[<span class="num">2</span>] = perm1[<span class="num">2</span>],perm1[<span class="num">1</span>]
+            permSign = <span class="kwa">True</span>
+            <span class="kwa">for</span> r <span class="kwa">in</span> rxrange:
+                <span class="kwa">if</span> count[r]:
+                    <span class="kwa">break</span>
+                count[r] = r
+                perm0 = perm1[<span class="num">0</span>]
+                perm1[:r+<span class="num">1</span>] = perm1[<span class="num">1</span>:r+<span class="num">2</span>]
+                perm1[r+<span class="num">1</span>] = perm0
+            <span class="kwa">else</span>:
+                r = nm
+                <span class="kwa">if not</span> count[r]:
+                    <span class="kwa">print</span>( checksum )
+                    <span class="kwa">return</span> maxFlipsCount
+            count[r] -= <span class="num">1</span>
+<span class="kwa">from</span> sys <span class="kwa">import</span> argv
+n = <span class="kwb">int</span>(argv[<span class="num">1</span>])
+
+<span class="kwa">print</span>(( <span class="str">&quot;Pfannkuchen(</span><span class="ipl">%i</span><span class="str">) =</span> <span class="ipl">%i</span><span class="str">&quot;</span> % (n, <span class="kwd">fannkuch</span>(n)) ))

@@ -1,0 +1,16 @@
+
+Sat, 10 Jan 2015 06:15:25 GMT
+
+MAKE:
+/usr/local/src/rust/bin/rustc -C opt-level=3 -C target-cpu=core2 -C lto revcomp.rs -o revcomp.rust-3.rust_run
+revcomp.rs:14:29: 14:30 error: expected one of `(`, `+`, `::`, `;`, or `]`, found `,`
+revcomp.rs:14 fn make_complements() -> [u8, ..256] {
+                                          ^
+make: [revcomp.rust-3.rust_run] Error 101 (ignored)
+0.04s to complete and log all make actions
+
+COMMAND LINE:
+./revcomp.rust-3.rust_run 0 < revcomp-input250000.txt
+
+MAKE ERROR 
+

@@ -1,0 +1,123 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">! Original C contributed by Sebastien Loisel</span>
+<span class="slc">! Conversion to C++ by Jon Harrop</span>
+<span class="slc">! OpenMP parallelize by The Anh Tran</span>
+<span class="slc">! Add SSE by The Anh Tran</span>
+<span class="slc">! Reconversion into C by Dan Farina</span>
+<span class="slc">! Conversion to Fortran by Brian Taylor</span>
+
+<span class="kwa">program</span> main
+<span class="slc">!$ use omp_lib</span>
+<span class="kwa">implicit none</span>
+
+<span class="kwa">character</span>(len=<span class="num">6</span>) :: argv
+<span class="kwa">integer</span> :: n
+<span class="kwa">real</span>*<span class="num">8</span>, allocatable :: <span class="kwd">u</span>(:), <span class="kwd">v</span>(:), <span class="kwd">tmp</span>(:)
+<span class="kwa">integer</span> :: n2, r_begin, r_end
+<span class="kwa">real</span>*<span class="num">8</span> uv, vv
+<span class="kwa">integer</span> :: i, tid, tcount, chunk, ite
+
+<span class="kwa">call</span> <span class="kwd">get_command_argument</span>(<span class="num">1</span>, argv)
+<span class="kwa">read</span> (argv, *) n
+
+n2 = n / <span class="num">2</span>
+
+<span class="kwd">allocate</span>(<span class="kwd">u</span>(<span class="num">0</span>:n-<span class="num">1</span>), <span class="kwd">v</span>(<span class="num">0</span>:n-<span class="num">1</span>), <span class="kwd">tmp</span>(<span class="num">0</span>:n-<span class="num">1</span>))
+
+uv = <span class="num">0</span>.d0
+vv = <span class="num">0</span>.d0
+
+<span class="slc">!$omp parallel default(shared) private(i,tid,tcount,chunk,r_begin,r_end)</span>
+
+<span class="slc">!$omp do schedule(static)</span>
+<span class="kwa">do</span> i = <span class="num">0</span>, n - <span class="num">1</span>
+  <span class="kwd">u</span>(i) = <span class="num">1</span>.d0
+<span class="kwa">end do</span>
+
+tid = <span class="kwd">omp_get_thread_num</span>()
+tcount = <span class="kwd">omp_get_num_threads</span>()
+chunk = n / tcount
+
+r_begin = tid * chunk
+<span class="kwa">if</span> (tid &lt; tcount - <span class="num">1</span>) <span class="kwa">then</span>
+  r_end = r_begin + chunk - <span class="num">1</span>
+<span class="kwa">else</span>
+  r_end = n - <span class="num">1</span>
+<span class="kwa">end if</span>
+
+<span class="kwa">do</span> i = <span class="num">1</span>, <span class="num">10</span>
+  <span class="kwa">call</span> <span class="kwd">eval_AtA_times_u</span>(r_begin, r_end, u, v)
+  <span class="kwa">call</span> <span class="kwd">eval_AtA_times_u</span>(r_begin, r_end, v, u)
+<span class="kwa">end do</span>
+
+<span class="slc">!$omp do schedule(static) reduction(+:uv) reduction(+:vv)</span>
+<span class="kwa">do</span> i = <span class="num">0</span>, n - <span class="num">1</span>
+  uv = uv + <span class="kwd">u</span>(i) * <span class="kwd">v</span>(i)
+  vv = vv + <span class="kwd">v</span>(i) * <span class="kwd">v</span>(i)
+<span class="kwa">end do</span>
+<span class="slc">!$omp end do nowait</span>
+
+<span class="slc">!$omp end parallel</span>
+
+<span class="kwa">write</span> (*, <span class="str">&quot;(f0.9)&quot;</span>) <span class="kwd">sqrt</span>(uv / vv)
+
+<span class="kwa">contains</span>
+
+
+<span class="slc">! Return element (i,j) of matrix A</span>
+pure <span class="kwa">function</span> <span class="kwd">eval_A</span>(i, j)
+<span class="kwa">real</span>*<span class="num">8</span> :: eval_A
+<span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: i, j
+<span class="kwa">real</span>*<span class="num">8</span> :: di, dj
+<span class="kwa">integer</span> :: d
+di = <span class="kwa">real</span>(i,<span class="num">8</span>)
+dj = <span class="kwa">real</span>(j,<span class="num">8</span>)
+eval_A = <span class="num">1</span>.d0 / (<span class="num">0.5d0</span> * ((di + dj) * (di + dj + <span class="num">1</span>.d0)) + di + <span class="num">1</span>.d0)
+<span class="kwa">end function</span>
+
+
+<span class="kwa">subroutine</span> <span class="kwd">eval_A_times_u</span>(r_begin, r_end, src, dest)
+<span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: r_begin, r_end
+<span class="kwa">real</span>*<span class="num">8</span>, <span class="kwd">intent</span>(in) :: <span class="kwd">src</span>(<span class="num">0</span>:)
+<span class="kwa">real</span>*<span class="num">8</span>, <span class="kwd">intent</span>(out) :: <span class="kwd">dest</span>(<span class="num">0</span>:)
+<span class="kwa">real</span>*<span class="num">8</span> sum1
+<span class="kwa">integer</span> :: i, j
+<span class="kwa">do</span> i = r_begin, r_end
+  sum1 = <span class="num">0</span>.d0
+  <span class="kwa">do</span> j = <span class="num">0</span>, n - <span class="num">1</span>
+    sum1 = sum1 + <span class="kwd">src</span>(j) * <span class="kwd">eval_A</span>(i, j)
+  <span class="kwa">end do</span>
+  <span class="kwd">dest</span>(i) = sum1
+<span class="kwa">end do</span>
+<span class="kwa">end subroutine</span>
+
+
+<span class="kwa">subroutine</span> <span class="kwd">eval_At_times_u</span>(r_begin, r_end, src, dest)
+<span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: r_begin, r_end
+<span class="kwa">real</span>*<span class="num">8</span>, <span class="kwd">intent</span>(in) :: <span class="kwd">src</span>(<span class="num">0</span>:)
+<span class="kwa">real</span>*<span class="num">8</span>, <span class="kwd">intent</span>(out) :: <span class="kwd">dest</span>(<span class="num">0</span>:)
+<span class="kwa">real</span>*<span class="num">8</span> sum1
+<span class="kwa">integer</span> :: i, j
+<span class="kwa">do</span> i = r_begin, r_end
+  sum1 = <span class="num">0</span>.d0
+  <span class="kwa">do</span> j = <span class="num">0</span>, n - <span class="num">1</span>
+    sum1 = sum1 + <span class="kwd">src</span>(j) * <span class="kwd">eval_A</span>(j, i)
+  <span class="kwa">end do</span>
+  <span class="kwd">dest</span>(i) = sum1
+<span class="kwa">end do</span>
+<span class="kwa">end subroutine</span>
+
+
+<span class="kwa">subroutine</span> <span class="kwd">eval_AtA_times_u</span>(r_begin, r_end, src, dest)
+<span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: r_begin, r_end
+<span class="kwa">real</span>*<span class="num">8</span>, <span class="kwd">intent</span>(in) :: <span class="kwd">src</span>(<span class="num">0</span>:)
+<span class="kwa">real</span>*<span class="num">8</span>, <span class="kwd">intent</span>(out) :: <span class="kwd">dest</span>(<span class="num">0</span>:)
+<span class="kwa">call</span> <span class="kwd">eval_A_times_u</span>(r_begin, r_end, src, tmp)
+<span class="slc">!$omp barrier</span>
+<span class="kwa">call</span> <span class="kwd">eval_At_times_u</span>(r_begin, r_end, tmp, dest)
+<span class="slc">!$omp barrier</span>
+<span class="kwa">end subroutine</span>
+
+<span class="kwa">end program</span>

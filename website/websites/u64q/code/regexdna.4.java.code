@@ -1,0 +1,115 @@
+<span class="com">/*</span>
+<span class="com">   The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Razii, idea taken from Elliott Hughes and Roger Millington</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> java.io.*;
+<span class="kwa">import</span> java.util.regex.*;
+<span class="kwa">import</span> java.util.*;
+
+<span class="kwa">public final class</span> regexdna {
+
+   <span class="kwa">private static final</span> Map&lt;String, String&gt; replacements = <span class="kwa">new</span> HashMap&lt;String, String&gt;();
+
+   <span class="kwa">static</span> {
+
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>);
+      replacements.<span class="kwd">put</span>(<span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>);
+   }
+
+   <span class="kwa">static abstract class</span> Rewriter {
+      <span class="kwa">private</span> Pattern pattern;
+      <span class="kwa">private</span> Matcher matcher;
+
+      <span class="kwa">public</span> <span class="kwd">Rewriter</span>(String regularExpression) {
+
+         <span class="kwa">this</span>.pattern = Pattern.<span class="kwd">compile</span>(regularExpression);
+      }
+
+      <span class="kwa">public</span> String <span class="kwd">group</span>(<span class="kwb">int</span> i) {
+         <span class="kwa">return</span> matcher.<span class="kwd">group</span>(i);
+      }
+
+      <span class="kwa">public abstract</span> String <span class="kwd">replacement</span>();
+
+      <span class="kwa">public</span> String <span class="kwd">rewrite</span>(CharSequence original) {
+         <span class="kwa">return</span> <span class="kwd">rewrite</span>(original, <span class="kwa">new</span> <span class="kwd">StringBuffer</span>(original.<span class="kwd">length</span>())).<span class="kwd">toString</span>();
+      }
+
+      <span class="kwa">public</span> StringBuffer <span class="kwd">rewrite</span>(CharSequence original, StringBuffer destination) {
+         <span class="kwa">this</span>.matcher = pattern.<span class="kwd">matcher</span>(original);
+         <span class="kwa">while</span> (matcher.<span class="kwd">find</span>()) {
+            matcher.<span class="kwd">appendReplacement</span>(destination, <span class="str">&quot;&quot;</span>);
+            destination.<span class="kwd">append</span>(<span class="kwd">replacement</span>());
+         }
+         matcher.<span class="kwd">appendTail</span>(destination);
+         <span class="kwa">return</span> destination;
+      }
+   }
+
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args)
+   <span class="kwa">throws</span> IOException {
+
+      Reader r = <span class="kwa">new</span> <span class="kwd">InputStreamReader</span>(System.<span class="kwa">in</span>, <span class="str">&quot;ISO-8859-1&quot;</span>);
+      StringBuilder sb = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>(<span class="num">5100000</span>);
+      <span class="kwb">char</span>[] cbuf = <span class="kwa">new</span> <span class="kwb">char</span>[<span class="num">16384</span>];
+      <span class="kwb">int</span> charsRead;
+      <span class="kwa">while</span> ((charsRead = r.<span class="kwd">read</span>(cbuf)) != -<span class="num">1</span>)
+         sb.<span class="kwd">append</span>(cbuf, <span class="num">0</span>, charsRead);
+
+      <span class="kwb">int</span> initialLength = sb.<span class="kwd">length</span>();
+
+      String sequence = <span class="kwa">new</span> <span class="kwd">Rewriter</span>(<span class="str">&quot;&gt;.*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;</span>) {
+
+         <span class="kwa">public</span> String <span class="kwd">replacement</span>() {
+            <span class="kwa">return</span> <span class="str">&quot;&quot;</span>;
+         }
+      }.<span class="kwd">rewrite</span>(sb);
+
+
+      <span class="kwb">int</span> codeLength = sequence.<span class="kwd">length</span>();
+
+      String[] variants = { <span class="str">&quot;agggtaaa|tttaccct&quot;</span> ,
+                       <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+                       <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+                       <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+                       <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+                       <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+                       <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+                       <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+                       <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>
+                     };
+
+      <span class="kwa">for</span> (String variant : variants) {
+
+         <span class="kwb">int</span> count = <span class="num">0</span>;
+         Matcher m = Pattern.<span class="kwd">compile</span>(variant).<span class="kwd">matcher</span>(sequence);
+         <span class="kwa">while</span> (m.<span class="kwd">find</span>())
+            count++;
+         System.out.<span class="kwd">println</span>(variant + <span class="str">&quot; &quot;</span> + count);
+      }
+
+      sequence = <span class="kwa">new</span> <span class="kwd">Rewriter</span>(<span class="str">&quot;[WYKMSRBDVHN]&quot;</span>) {
+
+         <span class="kwa">public</span> String <span class="kwd">replacement</span>() {
+            <span class="kwa">return</span> replacements.<span class="kwd">get</span>(<span class="kwd">group</span>(<span class="num">0</span>));
+         }
+      }.<span class="kwd">rewrite</span>(sequence);
+
+      System.out.<span class="kwd">println</span>();
+      System.out.<span class="kwd">println</span>(initialLength);
+      System.out.<span class="kwd">println</span>(codeLength);
+      System.out.<span class="kwd">println</span>(sequence.<span class="kwd">length</span>());
+
+   }
+}

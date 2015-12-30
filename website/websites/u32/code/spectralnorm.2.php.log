@@ -1,0 +1,8 @@
+
+Fri, 04 Dec 2015 03:01:57 GMT
+
+COMMAND LINE:
+/usr/local/src/php-7.0.0/bin/php -n  spectralnorm.php-2.php 5500
+
+PROGRAM OUTPUT:
+1.274224153

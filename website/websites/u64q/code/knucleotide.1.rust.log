@@ -1,0 +1,45 @@
+
+Thu, 10 Dec 2015 17:32:28 GMT
+
+MAKE:
+/usr/local/src/rust-1.5.0/bin/rustc -C opt-level=3 -C target-cpu=core2  knucleotide.rs -o knucleotide.rust_run
+knucleotide.rs:48:18: 48:28 warning: unnecessary parentheses around `for` head expression, #[warn(unused_parens)] on by default
+knucleotide.rs:48         for _ in (0..frame) {
+                                   ^~~~~~~~~~
+knucleotide.rs:206:14: 206:24 warning: unnecessary parentheses around `for` head expression, #[warn(unused_parens)] on by default
+knucleotide.rs:206     for _ in (0..frame) {
+                                ^~~~~~~~~~
+rm knucleotide.rs
+3.13s to complete and log all make actions
+
+COMMAND LINE:
+./knucleotide.rust_run 0 < knucleotide-input25000000.txt
+
+PROGRAM OUTPUT:
+A 30.295
+T 30.151
+C 19.800
+G 19.754
+
+AA 9.177
+TA 9.132
+AT 9.131
+TT 9.091
+CA 6.002
+AC 6.001
+AG 5.987
+GA 5.984
+CT 5.971
+TC 5.971
+GT 5.957
+TG 5.956
+CC 3.917
+GC 3.911
+CG 3.909
+GG 3.902
+
+1471758	GGT
+446535	GGTA
+47336	GGTATT
+893	GGTATTTTAATT
+893	GGTATTTTAATTTATAGT

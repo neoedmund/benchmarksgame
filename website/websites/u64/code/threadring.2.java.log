@@ -1,0 +1,16 @@
+
+Wed, 20 May 2015 01:02:33 GMT
+
+MAKE:
+mv threadring.java-2.java threadring.java
+/usr/local/src/jdk1.8.0_45/bin/javac threadring.java
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+0.77s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java  -server -XX:+TieredCompilation -XX:+AggressiveOpts threadring 50000000
+
+PROGRAM OUTPUT:
+292
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

@@ -1,0 +1,134 @@
+<span class="com">/*   </span>
+<span class="com">   The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Paolo Bonzini</span>
+<span class="com">   further optimized by Jason Garrett-Glaser</span>
+<span class="com">   OpenMP by The Anh Tran</span>
+<span class="com">   10-11-2010, modified by The Anh Tran:</span>
+<span class="com">      _ remove builtin function</span>
+<span class="com">      _ copy bit shift idea from C entry</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;cassert&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;algorithm&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+<span class="ppc">#include &lt;memory.h&gt;</span>
+
+<span class="ppc">#include &lt;omp.h&gt;</span>
+<span class="ppc">#include &lt;sys/types.h&gt;</span>
+
+<span class="ppc">#define L2_CACHE_LINE   64</span>
+<span class="ppc">#define ALIGN         __attribute__ ((aligned(L2_CACHE_LINE)))</span>
+
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned char</span>   byte;
+<span class="kwc">typedef</span> <span class="kwb">double</span>         v2d   <span class="kwd">__attribute__</span> ((<span class="kwd">vector_size</span>(<span class="num">16</span>)));
+<span class="kwc">typedef</span> <span class="kwb">int32_t</span>       v4i   <span class="kwd">__attribute__</span> ((<span class="kwd">vector_size</span>(<span class="num">16</span>)));
+
+<span class="kwb">const</span> v2d v10      = { <span class="num">1.0</span>, <span class="num">1.0</span> };
+<span class="kwb">const</span> v2d v15      = { <span class="num">1.5</span>, <span class="num">1.5</span> };
+<span class="kwb">const</span> v2d v40      = { <span class="num">4.0</span>, <span class="num">4.0</span> };
+
+v2d inv_2n;   <span class="slc">// {2.0/N, 2.0/N}</span>
+
+
+<span class="kwb">int</span>
+<span class="kwd">GetThreadCount</span>()
+{
+   cpu_set_t cs;
+   <span class="kwd">CPU_ZERO</span>(&amp;cs);
+   <span class="kwd">sched_getaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(cs), &amp;cs);
+
+   <span class="kwb">int</span> count = <span class="num">0</span>;
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; CPU_SETSIZE; ++i)
+      count += <span class="kwd">CPU_ISSET</span>(i, &amp;cs);
+
+   <span class="kwa">return</span> count;
+}
+
+
+<span class="kwb">void</span>
+<span class="kwd">mandelbrot</span>(<span class="kwb">int</span> N, byte* data)
+{
+   ALIGN <span class="kwb">int</span> row_processed = <span class="num">0</span>;
+
+   <span class="ppc">#pragma omp parallel default(shared) num_threads(GetThreadCount())</span>
+   {
+      <span class="kwb">int</span> y = <span class="num">0</span>;
+      <span class="kwa">while</span> ((y = <span class="kwd">__sync_fetch_and_add</span>(&amp;row_processed, <span class="num">1</span>)) &lt; N)
+      {
+         byte* row_output = data + y * (N &gt;&gt; <span class="num">3</span>);
+         
+         v2d Civ = {y, y};
+         Civ = Civ * inv_2n - v10;
+
+            <span class="kwa">for</span> (<span class="kwb">int</span> x = <span class="num">0</span>; x &lt; N; x += <span class="num">2</span>)
+            {
+            v2d   Crv = {x+<span class="num">1</span>, x};
+            Crv = Crv * inv_2n - v15;
+            v2d Zrv = Crv;
+            v2d Ziv = Civ;
+            v2d Trv = Crv * Crv;
+            v2d Tiv = Civ * Civ;
+
+            <span class="kwb">int</span> result = <span class="num">3</span>; <span class="slc">// assume that 2 elements belong to MB set</span>
+            <span class="kwb">int</span> i = <span class="num">1</span>;
+
+            <span class="kwa">while</span> ( result &amp;&amp; (i++ &lt; <span class="num">50</span>) )
+            {
+               v2d ZZ = Zrv * Ziv;
+               Zrv = Trv - Tiv + Crv;
+               Ziv = ZZ + ZZ + Civ;
+               Trv = Zrv * Zrv;
+               Tiv = Ziv * Ziv;
+
+               {
+                  <span class="slc">// trv + tiv &lt;= 4.0</span>
+                  v2d delta = v40 - (Trv + Tiv);
+                  v4i db = <span class="kwa">reinterpret_cast</span>&lt;v4i&gt;(delta);
+                  
+                  <span class="kwb">const int32_t</span>* pb = <span class="kwa">reinterpret_cast</span>&lt;<span class="kwb">const int32_t</span>*&gt;(&amp;db);
+                  result = (pb[<span class="num">1</span>] &gt;= <span class="num">0</span>) | ((pb[<span class="num">3</span>] &gt;= <span class="num">0</span>) &lt;&lt; <span class="num">1</span>);
+               }            
+            }
+
+            {
+               <span class="kwb">int</span> bit_shift = <span class="num">6</span> - (x &amp; <span class="num">7</span>);
+               row_output[x &gt;&gt; <span class="num">3</span>] |= <span class="kwa">static_cast</span>&lt;byte&gt;(result &lt;&lt; bit_shift);
+            }
+         }
+      }
+   }
+}
+
+
+<span class="kwb">int</span>
+<span class="kwd">main</span> (<span class="kwb">int</span> argc, <span class="kwb">char</span> **argv)
+{
+   <span class="kwb">const int</span> N = (argc == <span class="num">2</span>) ? std::<span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">200</span>;
+   <span class="kwa">assert</span>((N % <span class="num">8</span>) == <span class="num">0</span>);
+   <span class="kwd">printf</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">%d %d</span><span class="esc">\n</span><span class="str">&quot;</span>, N, N);
+
+   {
+      <span class="kwb">double</span>* p_iv = <span class="kwa">reinterpret_cast</span>&lt;<span class="kwb">double</span>*&gt;(&amp;inv_2n);
+      p_iv[<span class="num">0</span>] = p_iv[<span class="num">1</span>] = <span class="num">2.0</span> / N;
+   }
+
+   <span class="kwb">const int</span> bytes_count = (N &gt;&gt; <span class="num">3</span>) * N;
+   byte* data = <span class="num">0</span>;
+   <span class="kwa">assert</span>(   <span class="kwd">posix_memalign</span>(<span class="kwa">reinterpret_cast</span>&lt;<span class="kwb">void</span>**&gt;(&amp;data), L2_CACHE_LINE, bytes_count)
+         == <span class="num">0</span>);
+   <span class="kwd">memset</span>(data, <span class="num">0</span>, bytes_count);
+
+   <span class="kwd">mandelbrot</span>(N, data);
+
+   <span class="kwd">fwrite</span>( data, bytes_count, <span class="num">1</span>, stdout);
+   <span class="kwd">fflush</span>(stdout);
+   <span class="kwd">free</span>(data);
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+

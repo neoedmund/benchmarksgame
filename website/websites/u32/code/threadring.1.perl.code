@@ -1,0 +1,55 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">#  contributed by Richard Cottrill</span>
+
+
+<span class="kwa">use</span> strict;
+<span class="kwa">use</span> warnings;
+<span class="kwa">use</span> threads;
+<span class="kwa">use</span> threads::shared;
+<span class="kwa">use</span> Thread::Semaphore;
+
+<span class="kwc">my</span> <span class="kwb">$numThreads</span>	:shared;
+<span class="kwc">my</span> <span class="kwb">$data</span>	:shared;
+<span class="kwc">my</span> <span class="kwb">$result</span>	:shared;
+<span class="kwc">my</span> <span class="kwb">&#64;mutex</span>	:shared;
+
+<span class="kwb">$numThreads</span> = <span class="num">503</span>;
+
+<span class="kwa">sub</span> thr_func {
+  <span class="kwc">my</span> (<span class="kwb">$nextThread</span>, <span class="kwb">$thr_name</span>);
+  <span class="kwb">$thr_name</span> = threads-&gt;<span class="kwd">tid</span>();
+  threads-&gt;<span class="kwd">detach</span>();
+  <span class="kwa">if</span> (<span class="kwb">$thr_name</span> == <span class="kwb">$numThreads</span>) {
+    <span class="kwb">$nextThread</span> = <span class="num">1</span>;
+  }
+  <span class="kwa">else</span> {
+    <span class="kwb">$nextThread</span> = <span class="kwb">$thr_name</span> + <span class="num">1</span>;
+  }
+  <span class="kwa">while</span> (<span class="num">1</span>) {
+    <span class="kwb">$mutex</span>[<span class="kwb">$thr_name</span>]-&gt;<span class="kwd">down</span>();
+    <span class="kwa">if</span> (<span class="kwb">$data</span>) {
+      <span class="kwb">$data</span> = --<span class="kwb">$data</span>;
+      <span class="kwb">$mutex</span>[<span class="kwb">$nextThread</span>]-&gt;<span class="kwd">up</span>();
+    }
+    <span class="kwa">else</span> {
+      <span class="kwb">$result</span> = <span class="kwb">$thr_name</span>;
+      <span class="kwb">$mutex</span>[<span class="num">0</span>]-&gt;<span class="kwd">up</span>();
+    }
+  } 
+}
+
+<span class="kwb">$data</span> = <span class="kwb">$ARGV</span>[<span class="num">0</span>];
+
+<span class="kwb">$mutex</span>[<span class="num">0</span>] = new Thread::Semaphore(<span class="num">0</span>);
+{
+  <span class="kwa">for</span> (<span class="num">1</span> .. <span class="kwb">$numThreads</span>) {
+    <span class="kwb">$mutex</span>[<span class="kwb">$_</span>] = new Thread::Semaphore(<span class="num">0</span>);
+    threads-&gt;<span class="kwd">create</span>(\&amp;thr_func);
+  }
+}
+<span class="kwb">$mutex</span>[<span class="num">1</span>]-&gt;<span class="kwd">up</span>();
+<span class="kwb">$mutex</span>[<span class="num">0</span>]-&gt;<span class="kwd">down</span>();
+<span class="kwc">print</span> <span class="str">&quot;</span><span class="ipl">$result</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>;
+<span class="kwa">exit</span>(<span class="num">0</span>);

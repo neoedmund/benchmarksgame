@@ -1,0 +1,7 @@
+
+Thu, 22 Oct 2015 01:07:50 GMT
+
+COMMAND LINE:
+/usr/local/src/vw8.1pul/bin/linux86/vwlinux86 /usr/local/src/vw8.1pul/image/benchmarks.im -nogui -evaluate "Tests mandelbrot2" -a 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN

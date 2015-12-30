@@ -1,0 +1,20 @@
+
+Mon, 16 Mar 2015 07:57:22 GMT
+
+MAKE:
+mv mandelbrot.ocaml mandelbrot.ml
+/usr/local/bin/ocamlopt -noassert -unsafe -fno-PIC -nodynlink -inline 100 unix.cmxa mandelbrot.ml -o mandelbrot.ocaml_run
+File "mandelbrot.ml", line 20, characters 4-17:
+Warning 3: deprecated: String.create
+Use Bytes.create instead.
+File "mandelbrot.ml", line 47, characters 1-31:
+Warning 3: deprecated: String.unsafe_set
+File "mandelbrot.ml", line 54, characters 6-52:
+Warning 3: deprecated: String.unsafe_set
+rm mandelbrot.ml
+0.46s to complete and log all make actions
+
+COMMAND LINE:
+./mandelbrot.ocaml_run 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN

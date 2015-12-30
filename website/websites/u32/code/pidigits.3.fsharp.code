@@ -1,0 +1,120 @@
+﻿<span class="com">(**</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Port to F# by Jomo Fisher of the C# port that uses native GMP:</span>
+<span class="com"> * 	contributed by Mike Pall</span>
+<span class="com"> * 	java port by Stefan Krause</span>
+<span class="com"> *  C# port by Miguel de Icaza</span>
+<span class="com">*)</span>
+<span class="kwa">module</span> <span class="kwd">PiDigits</span>
+<span class="kwa">open</span> <span class="kwd">System</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Runtime</span>.<span class="kwd">InteropServices</span>
+
+[&lt;<span class="kwd">StructLayout</span> (<span class="kwd">LayoutKind</span>.<span class="kwd">Sequential</span>)&gt;]
+[&lt;<span class="kwd">Struct</span>&gt;]
+<span class="kwa">type</span> mpz_t =
+   <span class="kwa">val</span> _mp_alloc:<span class="kwb">int</span>
+   <span class="kwa">val</span> _mp_size:<span class="kwb">int</span>
+   <span class="kwa">val</span> ptr:<span class="kwd">IntPtr</span>
+
+[&lt;<span class="kwd">DllImport</span> (<span class="str">&quot;gmp&quot;</span>, <span class="kwd">EntryPoint</span>=<span class="str">&quot;__gmpz_init&quot;</span>)&gt;]
+<span class="kwa">let</span> mpz_init(value : mpz_t byref) : <span class="kwb">unit</span> = failwith <span class="str">&quot;&quot;</span>
+
+[&lt;<span class="kwd">DllImport</span> (<span class="str">&quot;gmp&quot;</span>, <span class="kwd">EntryPoint</span>=<span class="str">&quot;__gmpz_mul_si&quot;</span>)&gt;]
+<span class="kwa">let</span> mpz_mul_si(dest : mpz_t byref, src : mpz_t byref, value : <span class="kwb">int</span>) : <span class="kwb">unit</span> = failwith <span class="str">&quot;&quot;</span>
+
+[&lt;<span class="kwd">DllImport</span> (<span class="str">&quot;gmp&quot;</span>, <span class="kwd">EntryPoint</span>=<span class="str">&quot;__gmpz_add&quot;</span>)&gt;]
+<span class="kwa">let</span> mpz_add(dest : mpz_t byref, src : mpz_t byref, src2 : mpz_t byref) : <span class="kwb">unit</span> = failwith <span class="str">&quot;&quot;</span>
+
+[&lt;<span class="kwd">DllImport</span> (<span class="str">&quot;gmp&quot;</span>, <span class="kwd">EntryPoint</span>=<span class="str">&quot;__gmpz_tdiv_q&quot;</span>)&gt;]
+<span class="kwa">let</span> mpz_tdiv_q(dest : mpz_t byref, src : mpz_t byref, src2 : mpz_t byref) : <span class="kwb">unit</span> = failwith <span class="str">&quot;&quot;</span>
+
+[&lt;<span class="kwd">DllImport</span> (<span class="str">&quot;gmp&quot;</span>, <span class="kwd">EntryPoint</span>=<span class="str">&quot;__gmpz_set_si&quot;</span>)&gt;]
+<span class="kwa">let</span> mpz_set_si(src : mpz_t byref, value : <span class="kwb">int</span>) : <span class="kwb">unit</span> = failwith <span class="str">&quot;&quot;</span>
+
+[&lt;<span class="kwd">DllImport</span> (<span class="str">&quot;gmp&quot;</span>, <span class="kwd">EntryPoint</span>=<span class="str">&quot;__gmpz_get_si&quot;</span>)&gt;] 
+<span class="kwa">let</span> mpz_get_si(src : mpz_t byref) : <span class="kwb">int</span> = <span class="num">0</span>
+
+<span class="kwa">let</span> init() = 
+    <span class="kwa">let mutable</span> result = mpz_t()
+    mpz_init(&amp;result)
+    result
+
+<span class="kwa">let mutable</span> q,r,s,t,u,v,w = init(),init(),init(),init(),init(),init(),init()
+
+<span class="kwa">let mutable</span> i = <span class="num">0</span>
+<span class="kwa">let mutable</span> c = <span class="num">0</span>
+<span class="kwa">let</span> ch = <span class="kwd">Array</span>.zeroCreate <span class="num">10</span>
+<span class="kwa">let</span> args = <span class="kwd">System</span>.<span class="kwd">Environment</span>.<span class="kwd">GetCommandLineArgs</span>()
+<span class="kwa">let</span> n = <span class="kwd">Int32</span>.<span class="kwd">Parse</span> args.[<span class="num">1</span>]
+<span class="kwa">let</span> intZero = <span class="kwb">int</span> '<span class="num">0</span>'
+
+<span class="kwa">let inline</span> compose_r(bq, br, bs, bt) = 
+    mpz_mul_si(&amp;u, &amp;r, bs)
+    mpz_mul_si(&amp;r, &amp;r, bq)
+    mpz_mul_si(&amp;v, &amp;t, br)
+    mpz_add(&amp;r, &amp;r, &amp;v)
+    mpz_mul_si(&amp;t, &amp;t, bt)
+    mpz_add(&amp;t, &amp;t, &amp;u)
+    mpz_mul_si(&amp;s, &amp;s, bt)
+    mpz_mul_si(&amp;u, &amp;q, bs)
+    mpz_add(&amp;s, &amp;s, &amp;u)
+    mpz_mul_si(&amp;q, &amp;q, bq)
+
+<span class="slc">// Compose matrix with numbers on the left.</span>
+<span class="kwa">let inline</span> compose_l(bq, br, bs, bt) =
+    mpz_mul_si(&amp;r, &amp;r, bt)
+    mpz_mul_si(&amp;u, &amp;q, br)
+    mpz_add(&amp;r, &amp;r, &amp;u)
+    mpz_mul_si(&amp;u, &amp;t, bs)
+    mpz_mul_si(&amp;t, &amp;t, bt)
+    mpz_mul_si(&amp;v, &amp;s, br)
+    mpz_add(&amp;t, &amp;t, &amp;v)
+    mpz_mul_si(&amp;s, &amp;s, bq)
+    mpz_add(&amp;s, &amp;s, &amp;u)
+    mpz_mul_si(&amp;q, &amp;q, bq)
+
+<span class="slc">// Extract one digit.</span>
+<span class="kwa">let inline</span> extract(j) = 
+    mpz_mul_si(&amp;u, &amp;q, j)
+    mpz_add(&amp;u, &amp;u, &amp;r)
+    mpz_mul_si(&amp;v, &amp;s, j)
+    mpz_add(&amp;v, &amp;v, &amp;t)
+    mpz_tdiv_q(&amp;w, &amp;u, &amp;v)
+    mpz_get_si(&amp;w)
+
+
+<span class="slc">// Print one digit. Returns 1 for the last digit. </span>
+<span class="kwa">let inline</span> prdigit(y:<span class="kwb">int</span>) = 
+    ch.[c] &lt;- char (intZero + y)
+    c &lt;- c + <span class="num">1</span>
+    i &lt;- i + <span class="num">1</span>
+    <span class="kwa">if</span> (i%10=<span class="num">0</span> || i = n) <span class="kwa">then</span>
+        <span class="kwa">while</span> c&lt;&gt;ch.<span class="kwd">Length</span> <span class="kwa">do</span>
+            ch.[c] &lt;- ' '
+            c&lt;-c+<span class="num">1</span>
+        c &lt;- <span class="num">0</span>
+        <span class="kwd">Console</span>.<span class="kwd">Write</span>(ch)
+        <span class="kwd">Console</span>.<span class="kwd">Write</span>(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>)
+        <span class="kwd">Console</span>.<span class="kwd">WriteLine</span>(i)
+    i = n
+
+<span class="slc">// Generate successive digits of PI. </span>
+<span class="kwa">let mutable</span> k = <span class="num">1</span>
+i &lt;- <span class="num">0</span>
+mpz_set_si(&amp;q, <span class="num">1</span>)
+mpz_set_si(&amp;r, <span class="num">0</span>)
+mpz_set_si(&amp;s, <span class="num">0</span>)
+mpz_set_si(&amp;t, <span class="num">1</span>)
+<span class="kwa">let mutable</span> more = <span class="kwa">true</span>
+<span class="kwa">while</span> more <span class="kwa">do</span>
+    <span class="kwa">let</span> y = extract <span class="num">3</span>
+    <span class="kwa">if</span> y = extract <span class="num">4</span> <span class="kwa">then</span>
+        <span class="kwa">if</span> prdigit y <span class="kwa">then</span> more&lt;-<span class="kwa">false</span>
+        <span class="kwa">else</span> compose_r(<span class="num">10</span>, -<span class="num">10</span>*y, <span class="num">0</span>, <span class="num">1</span>)
+    <span class="kwa">else</span>
+        compose_l(k, <span class="num">4</span>*k+<span class="num">2</span>, <span class="num">0</span>, <span class="num">2</span>*k+<span class="num">1</span>);
+        k&lt;-k+<span class="num">1</span>
+
+

@@ -1,0 +1,137 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> *  contributed by Mr Ledrug</span>
+<span class="com"> */</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;unistd.h&gt;</span>
+
+<span class="kwc">typedef</span> <span class="kwb">struct</span> {
+   <span class="kwb">float</span> p;
+   <span class="kwb">char</span> c;
+} amino;
+
+amino iub[] = {
+   { <span class="num">0.27</span>, <span class="str">'a'</span> }, { <span class="num">0.12</span>, <span class="str">'c'</span> }, { <span class="num">0.12</span>, <span class="str">'g'</span> },
+   { <span class="num">0.27</span>, <span class="str">'t'</span> }, { <span class="num">0.02</span>, <span class="str">'B'</span> }, { <span class="num">0.02</span>, <span class="str">'D'</span> },
+   { <span class="num">0.02</span>, <span class="str">'H'</span> }, { <span class="num">0.02</span>, <span class="str">'K'</span> }, { <span class="num">0.02</span>, <span class="str">'M'</span> },
+   { <span class="num">0.02</span>, <span class="str">'N'</span> }, { <span class="num">0.02</span>, <span class="str">'R'</span> }, { <span class="num">0.02</span>, <span class="str">'S'</span> },
+   { <span class="num">0.02</span>, <span class="str">'V'</span> }, { <span class="num">0.02</span>, <span class="str">'W'</span> }, { <span class="num">0.02</span>, <span class="str">'Y'</span> },
+   { <span class="num">0</span>, <span class="num">0</span> }
+};
+
+amino homosapiens[] = {
+   {<span class="num">0.3029549426680</span>, <span class="str">'a'</span>},
+   {<span class="num">0.1979883004921</span>, <span class="str">'c'</span>},
+   {<span class="num">0.1975473066391</span>, <span class="str">'g'</span>},
+   {<span class="num">0.3015094502008</span>, <span class="str">'t'</span>},
+   {<span class="num">0</span>, <span class="num">0</span>}
+};
+
+<span class="ppc">#define RMAX 139968U</span>
+<span class="ppc">#define RA 3877U</span>
+<span class="ppc">#define RC 29573U</span>
+<span class="ppc">#define WIDTH 60</span>
+<span class="ppc">#define LENGTH(a) (sizeof(a)/sizeof(a[0]))</span>
+
+<span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">str_write</span>(<span class="kwb">char</span> *s) {
+   <span class="kwd">write</span>(<span class="kwd">fileno</span>(stdout), s, <span class="kwd">strlen</span>(s));
+}
+
+<span class="kwb">void</span> <span class="kwd">str_repeat</span>(<span class="kwb">char</span> *s, <span class="kwb">int</span> outlen) {
+   <span class="kwb">int</span> len = <span class="kwd">strlen</span>(s) * (<span class="num">1</span> + WIDTH);
+   outlen += outlen / WIDTH;
+
+   <span class="kwb">char</span> *ss = s;
+   <span class="kwb">char</span> *buf = <span class="kwd">malloc</span>(len);
+   <span class="kwb">int</span> pos = <span class="num">0</span>;
+
+   <span class="kwa">while</span> (pos &lt; len) {
+      <span class="kwa">if</span> (!*ss) ss = s;
+      buf[pos++] = *ss++;
+      <span class="kwa">if</span> (pos &gt;= len) <span class="kwa">break</span>;
+      <span class="kwa">if</span> (pos % (WIDTH + <span class="num">1</span>) == WIDTH)
+         buf[pos++] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+   }
+
+   <span class="kwb">int</span> fd = <span class="kwd">fileno</span>(stdout);
+   <span class="kwb">int</span> l = <span class="num">0</span>;
+   <span class="kwa">while</span> (outlen &gt; <span class="num">0</span>) {
+      l = outlen &gt; len ? len : outlen;
+      <span class="kwd">write</span>(fd, buf, l);
+      outlen -= len;
+   }
+   <span class="kwa">if</span> (buf[l-<span class="num">1</span>] != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) <span class="kwd">str_write</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+
+   <span class="kwd">free</span>(buf);
+}
+
+<span class="kwb">static char</span> *alu =
+   <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>
+   <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>
+   <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>
+   <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>
+   <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>
+   <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>
+   <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+<span class="kwc">inline</span> <span class="kwb">unsigned int</span> <span class="kwd">rnd</span>(<span class="kwb">void</span>) {
+   <span class="kwb">static unsigned</span> rseed = <span class="num">42</span>;
+   <span class="kwa">return</span> rseed = (rseed * RA + RC) % RMAX;
+}
+
+<span class="kwb">char</span> lookup[RMAX];
+<span class="kwb">void</span> <span class="kwd">rand_fasta</span>(amino *s, <span class="kwb">size_t</span> outlen) {
+   <span class="kwb">int</span> fd = <span class="kwd">fileno</span>(stdout);
+   <span class="kwb">char</span> buf[WIDTH+<span class="num">1</span>];
+
+   <span class="kwb">int</span> i, j, k;
+   <span class="kwb">float</span> sum = <span class="num">0</span>;
+   <span class="kwa">for</span> (i = j = k = <span class="num">0</span>; s[i].p &amp;&amp; k &lt; RMAX; i++) {
+      <span class="kwa">if</span> (s[i].p) {
+         sum += s[i].p;
+         k = RMAX * sum + <span class="num">1</span>;
+      }
+      <span class="kwa">else</span>
+         k = RMAX;
+      <span class="kwa">if</span> (k &gt; RMAX) k = RMAX;
+      <span class="kwd">memset</span>(lookup + j, s[i].c, k - j);
+      j = k;
+   }
+
+   i = <span class="num">0</span>;
+   buf[WIDTH] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+   <span class="kwa">while</span> (outlen--) {
+      buf[i++] = lookup[<span class="kwd">rnd</span>()];
+      <span class="kwa">if</span> (i == WIDTH) {
+         <span class="kwd">write</span>(fd, buf, WIDTH + <span class="num">1</span>);
+         i = <span class="num">0</span>;
+      }
+   }
+   <span class="kwa">if</span> (i) {
+      buf[i] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+      <span class="kwd">write</span>(fd, buf, i + <span class="num">1</span>);
+   }
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> **argv) {
+   <span class="kwb">int</span> n;
+   <span class="kwa">if</span> (argc &lt; <span class="num">2</span> || (n = <span class="kwd">atoi</span>(argv[<span class="num">1</span>])) &lt;= <span class="num">0</span>) {
+      <span class="kwd">printf</span>(<span class="str">&quot;usage: %s length</span><span class="esc">\n</span><span class="str">&quot;</span>, argv[<span class="num">0</span>]);
+      <span class="kwa">return</span> <span class="num">0</span>;
+   }
+
+   <span class="kwd">str_write</span>(<span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>);
+   <span class="kwd">str_repeat</span>(alu, n * <span class="num">2</span>);
+
+   <span class="kwd">str_write</span>(<span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>);
+   <span class="kwd">rand_fasta</span>(iub, n * <span class="num">3</span>);
+
+   <span class="kwd">str_write</span>(<span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>);
+   <span class="kwd">rand_fasta</span>(homosapiens, n * <span class="num">5</span>);
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}

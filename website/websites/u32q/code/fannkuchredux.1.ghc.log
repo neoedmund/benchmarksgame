@@ -1,0 +1,31 @@
+
+Tue, 22 Sep 2015 03:06:32 GMT
+
+MAKE:
+mv fannkuchredux.ghc fannkuchredux.hs
+/usr/local/src/ghc-7.10.2/bin/ghc --make -fllvm -O2 -XBangPatterns -threaded -rtsopts  fannkuchredux.hs -o fannkuchredux.ghc_run
+[1 of 1] Compiling Main             ( fannkuchredux.hs, fannkuchredux.o )
+
+fannkuchredux.hs:17:1: Warning: Tab character
+
+fannkuchredux.hs:18:1: Warning: Tab character
+
+fannkuchredux.hs:19:1: Warning: Tab character
+
+fannkuchredux.hs:25:1: Warning: Tab character
+
+fannkuchredux.hs:26:1: Warning: Tab character
+
+fannkuchredux.hs:34:1: Warning: Tab character
+
+fannkuchredux.hs:35:1: Warning: Tab character
+Linking fannkuchredux.ghc_run ...
+rm fannkuchredux.hs
+1.86s to complete and log all make actions
+
+COMMAND LINE:
+./fannkuchredux.ghc_run +RTS -N4 -RTS 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

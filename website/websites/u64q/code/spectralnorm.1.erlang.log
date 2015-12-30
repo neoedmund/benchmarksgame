@@ -1,0 +1,14 @@
+
+Fri, 17 Jul 2015 00:09:15 GMT
+
+MAKE:
+mv spectralnorm.erlang spectralnorm.erl
+/usr/local/src/otp_src_18.0_nohipe/bin/erlc spectralnorm.erl
+rm spectralnorm.erl
+0.28s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/otp_src_18.0_nohipe/bin/erl  -smp enable -noshell -run  spectralnorm main 5500
+
+PROGRAM OUTPUT:
+1.274224153

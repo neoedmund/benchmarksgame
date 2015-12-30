@@ -1,0 +1,111 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; contributed by Andy Fingerhut</span>
+
+(ns revcomp
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+
+(gen-class
+ :name revcomp.ReversibleByteArray
+ :extends java.io.ByteArrayOutputStream
+ :exposes {count {:get getCount},
+           buf {:get getBuf}}
+ :prefix rba-
+ :methods [ [ <span class="kwd">reverse</span> [ <span class="str">&quot;[B&quot;</span> ] void ] ])
+
+
+(<span class="kwa">defn</span> find-first-byte-idx [#^bytes buf start search-val]
+  (<span class="kwc">let</span> [search-val (int search-val)]
+    (<span class="kwb">loop</span> [i (int start)]
+      (<span class="kwc">if</span> (== (int (aget buf i)) search-val)
+        i
+        (<span class="kwb">recur</span> (unchecked-inc i))))))
+
+
+(<span class="kwa">defn</span> reverse-and-complement! [#^bytes buf begin end #^bytes map-char-array nl]
+  (<span class="kwc">let</span> [nl (int nl)]
+    (<span class="kwb">loop</span> [begin (int begin)
+           end   (int end)]
+      (<span class="kwc">let</span> [cb (int (aget buf begin))
+            ce (int (aget buf end))
+            begin (int (<span class="kwc">if</span> (== cb nl) (unchecked-inc begin) begin))
+            end   (int (<span class="kwc">if</span> (== ce nl) (unchecked-dec end) end))
+            cb2 (int (aget buf begin))
+            ce2 (int (aget buf end))]
+        (<span class="kwc">when</span> (&lt;= begin end)
+          (aset buf begin (aget map-char-array ce2))
+          (aset buf end   (aget map-char-array cb2))
+          (<span class="kwb">recur</span> (unchecked-inc begin) (unchecked-dec end)))))))
+
+
+(<span class="kwa">defn</span> rba-reverse [#^revcomp.ReversibleByteArray this #^bytes map-char-array]
+  (<span class="kwc">let</span> [count (int (. this (getCount)))
+        #^bytes buf (. this (getBuf))
+        nl (int <span class="esc">\n</span>ewline)]
+    (<span class="kwc">when</span> (&gt; count <span class="num">0</span>)
+      (<span class="kwc">let</span> [begin (inc (find-first-byte-idx buf <span class="num">0</span> nl))
+            end (dec count)]
+        (reverse-and-complement! buf begin end map-char-array nl))
+      (. System/out write buf <span class="num">0</span> count))))
+
+
+(<span class="kwa">def</span> complement-dna-char-map
+     {\w \W, \W \W,
+      \s \S, \S \S,
+      <span class="esc">\a</span> \T, \A \T,
+      <span class="esc">\t</span> \A, \T \A,
+      \u \A, \U \A,
+      \g \C, \G \C,
+      \c \G, \C \G,
+      \y \R, \Y \R,
+      <span class="esc">\r</span> \Y, \R \Y,
+      \k \M, \K \M,
+      \m \K, \M \K,
+      <span class="esc">\b</span> \V, \B \V,
+      \d \H, \D \H,
+      \h \D, \H \D,
+      <span class="esc">\v</span> \B, \V \B,
+      <span class="esc">\n</span> \N, \N \N })
+
+
+(<span class="kwa">defn</span> ubyte [val]
+  (<span class="kwc">if</span> (&gt;= val <span class="num">128</span>)
+    (byte (- val <span class="num">256</span>))
+    (byte val)))
+
+
+(<span class="kwa">defn</span> make-array-char-mapper [cmap]
+  (byte-array <span class="num">256</span> (<span class="kwd">map</span> (<span class="kwa">fn</span> [i]
+                         (<span class="kwc">if</span> (contains? cmap (char i))
+                           (ubyte (int (cmap (char i))))
+                           (ubyte i)))
+                       (<span class="kwd">range</span> <span class="num">256</span>))))
+
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [in System/in
+	out System/out
+        line (byte-array <span class="num">82</span>)
+        buf (new revcomp.ReversibleByteArray)
+        complement-dna-char-array (make-array-char-mapper
+				   complement-dna-char-map)
+        gt (int \&gt;)]
+    (<span class="kwb">loop</span> [nread (int (. in read line))]
+      (<span class="kwc">when</span> (not= nread (int -<span class="num">1</span>))
+        (<span class="kwb">loop</span> [i (int <span class="num">0</span>)
+               last (int <span class="num">0</span>)]
+          (<span class="kwc">if</span> (== i nread)
+            (. buf write line last (unchecked-subtract nread last))
+            (<span class="kwc">if</span> (== (int (aget line i)) gt)
+              (do
+                (. buf write line last (unchecked-subtract i last))
+                (. buf <span class="kwd">reverse</span> complement-dna-char-array)
+                (. buf reset)
+                (<span class="kwb">recur</span> (unchecked-inc i) i))
+              <span class="slc">;; else</span>
+              (<span class="kwb">recur</span> (unchecked-inc i) last))))
+        (<span class="kwb">recur</span> (int (. in read line)))))
+    (. buf <span class="kwd">reverse</span> complement-dna-char-array)))

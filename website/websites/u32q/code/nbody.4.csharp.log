@@ -1,0 +1,64 @@
+
+Tue, 11 Aug 2015 20:25:33 GMT
+
+MAKE:
+mv nbody.csharp-4.csharp nbody.csharp-4.cs
+/usr/local/bin/mcs -r:/usr/local/lib/mono/4.5/Mono.Simd.dll -optimize+ -platform:x86 -out:nbody.csharp-4.csharp_run nbody.csharp-4.cs
+rm nbody.csharp-4.cs
+0.25s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/mono --llvm nbody.csharp-4.csharp_run 500000
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+mono: /usr/local/src/llvm/include/llvm/ADT/SmallVector.h:145: const T& llvm::SmallVectorTemplateCommon<T, <template-parameter-1-2> >::operator[](unsigned int) const [with T = unsigned int; <template-parameter-1-2> = void; llvm::SmallVectorTemplateCommon<T, <template-parameter-1-2> >::const_reference = const unsigned int&]: Assertion `begin() + idx < end()' failed.
+Stacktrace:
+
+  at <unknown> <0xffffffff>
+  at NBody.NBody.Main (string[]) <0x0004b>
+
+Native stacktrace:
+
+	/usr/local/bin/mono() [0x8263a30]
+	[0xb76e6bc8]
+	[0xb76e6be0]
+	/lib/i386-linux-gnu/libc.so.6(gsignal+0x47) [0xb7368057]
+	/lib/i386-linux-gnu/libc.so.6(abort+0x149) [0xb7369699]
+	/lib/i386-linux-gnu/libc.so.6(+0x250f7) [0xb73610f7]
+	/lib/i386-linux-gnu/libc.so.6(+0x2517b) [0xb736117b]
+	/usr/local/bin/mono() [0x816a5e0]
+	/usr/local/bin/mono() [0x8728978]
+	/usr/local/bin/mono() [0x84062d9]
+	/usr/local/bin/mono() [0x8407993]
+	/usr/local/bin/mono() [0x840b138]
+	/usr/local/bin/mono(_ZN4llvm19MachineFunctionPass13runOnFunctionERNS_8FunctionE+0xac) [0x87aca1c]
+	/usr/local/bin/mono(_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE+0x257) [0x8e3e137]
+	/usr/local/bin/mono(_ZN4llvm6legacy23FunctionPassManagerImpl3runERNS_8FunctionE+0x98) [0x8e3e248]
+	/usr/local/bin/mono(_ZN4llvm6legacy19FunctionPassManager3runERNS_8FunctionE+0x70) [0x8e3e440]
+	/usr/local/bin/mono(_ZN4llvm3JIT22jitTheFunctionUnlockedEPNS_8FunctionE+0x38) [0x8725068]
+	/usr/local/bin/mono(_ZN4llvm3JIT24runJITOnFunctionUnlockedEPNS_8FunctionE+0x2c) [0x872568c]
+	/usr/local/bin/mono(_ZN4llvm3JIT20getPointerToFunctionEPNS_8FunctionE+0x135) [0x8725865]
+	/usr/local/bin/mono(_ZN4llvm15ExecutionEngine18getPointerToGlobalEPKNS_11GlobalValueE+0x44) [0x8745764]
+	/usr/local/bin/mono(LLVMGetPointerToGlobal+0x4a) [0x8747aca]
+	/usr/local/bin/mono() [0x82975a1]
+	/usr/local/bin/mono() [0x82c5d93]
+	/usr/local/bin/mono() [0x82c6b93]
+	/usr/local/bin/mono() [0x81deb08]
+	/usr/local/bin/mono() [0x81df185]
+	/usr/local/bin/mono() [0x8264e89]
+	[0xb76d1188]
+	[0xad6f7e8]
+
+Debug info from gdb:
+
+
+=================================================================
+Got a SIGABRT while executing native code. This usually indicates
+a fatal error in the mono runtime or one of the native libraries 
+used by your application.
+=================================================================
+

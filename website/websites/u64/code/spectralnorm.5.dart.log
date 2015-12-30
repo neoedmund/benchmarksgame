@@ -1,0 +1,8 @@
+
+Tue, 01 Sep 2015 17:29:50 GMT
+
+COMMAND LINE:
+/usr/local/src/dart-sdk/bin/dart  spectralnorm.dart-5.dart 5500
+
+PROGRAM OUTPUT:
+1.274224153

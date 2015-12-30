@@ -1,0 +1,15 @@
+
+Thu, 27 Aug 2015 06:11:58 GMT
+
+MAKE:
+mv fannkuchredux.jruby fannkuchredux.rb
+0.02s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jruby-9.0.0.0/bin/jruby --server  fannkuchredux.rb 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

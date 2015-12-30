@@ -1,0 +1,275 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc"># contributed by Dieter Weber</span>
+
+<span class="kwa">import</span> numpy <span class="kwa">as</span> np
+<span class="kwa">import</span> sys
+<span class="kwa">import</span> os
+<span class="kwa">import</span> multiprocessing
+<span class="kwa">import</span> ctypes
+
+<span class="slc"># set HALF=True to get twice the speed</span>
+HALF = <span class="kwa">False</span>
+
+<span class="slc"># We knowingly produce overflows, therefore</span>
+<span class="slc"># ignore warning</span>
+np.<span class="kwd">seterr</span>(all=<span class="str">'ignore'</span>)
+
+size = <span class="kwb">int</span>(sys.argv[<span class="num">1</span>])
+<span class="kwa">if</span> HALF:
+    <span class="slc"># we only calculate the upper half, but calculated area is always asymmetric</span>
+    <span class="slc"># by one line, so always one more line necessary</span>
+    calcsize = size // <span class="num">2</span> + <span class="num">1</span>
+<span class="kwa">else</span>:
+    calcsize = size
+<span class="slc"># boundaries of the calculated area</span>
+remin = -<span class="num">1.5</span>
+remax = <span class="num">0.5</span>
+<span class="slc"># if we break the symmetry here, we have to fix the &quot;calculate half&quot; aspect</span>
+<span class="slc"># of the code!</span>
+imin = -<span class="num">1</span>.
+imax = -imin
+
+<span class="slc"># there are apparently a few differences in handling strings and byte arrays...</span>
+V3 = sys.version_info &gt;= (<span class="num">3</span>, )
+
+<span class="slc"># maximum number of points calculated in parallel to avoid</span>
+<span class="slc"># excessive memory use</span>
+<span class="slc"># this seems to be the optimum on my machine, fairly low value imho</span>
+maxchunk = <span class="num">1</span>&lt;&lt;<span class="num">14</span>
+
+<span class="slc"># fixed to match reference output</span>
+<span class="slc"># iterations = 49</span>
+
+<span class="slc"># List of iteration steps, supplied by hand as number of iterations is fixed</span>
+<span class="slc"># optimized for speed, ignoring overflows</span>
+<span class="slc"># this is apparently a good tradeoff between the cost of making a new array</span>
+<span class="slc"># and the cost of calculating more points</span>
+iteration_steps = [<span class="num">9</span>] + [<span class="num">10</span>]*<span class="num">4</span>
+
+<span class="slc"># distance between points in real direction</span>
+restep = (remax - remin)/size
+<span class="slc"># distance between points in imaginary direction</span>
+imstep = (imax - imin)/size
+
+<span class="slc"># number of bits</span>
+<span class="slc"># remainder of experiments with long long int for bit shifting,</span>
+<span class="slc"># but no advantage, therefore byte boundary of lines not implemented for</span>
+<span class="slc"># other types than unsigned byte</span>
+(bits, calctype) = (<span class="num">8</span>, <span class="str">'u1'</span>)
+bytesize = <span class="num">8</span>
+
+<span class="slc"># precalculate real part of one line  and reuse later</span>
+reline = np.<span class="kwd">linspace</span>(remin, remax - restep, size)
+<span class="slc"># precalculate imaginary parts and reuse later</span>
+<span class="kwa">if</span> HALF:
+    imline = <span class="num">1</span>j*np.<span class="kwd">linspace</span>(imin, <span class="num">0</span> - imstep*(size%<span class="num">2</span>)*<span class="num">0.5</span>, calcsize)
+<span class="kwa">else</span>:
+    imline = <span class="num">1</span>j*np.<span class="kwd">linspace</span>(imin, imax - imstep, calcsize)
+
+<span class="slc"># padding to start new line at byte boundary following pbm format</span>
+<span class="slc"># size in [1,8] -&gt; 1 byte per line ; size in [9,16]-&gt; 2 bytes per line etc.</span>
+linesize = (size - <span class="num">1</span>)//bytesize + <span class="num">1</span>
+
+<span class="slc"># PBM header, important to calculate buffer size</span>
+header = <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">{0} {0}</span><span class="esc">\n</span><span class="str">&quot;</span>.<span class="kwd">format</span>(size)
+<span class="kwa">if</span> V3:
+    header = <span class="kwd">bytes</span>(header, <span class="str">'ascii'</span>)
+header_offset = <span class="kwb">len</span>(header)
+
+bufferlen = <span class="kwb">len</span>(header) + linesize * size
+
+<span class="slc"># creates ctypes array in shared memory</span>
+<span class="slc"># REMARK: mmap.mmap can do almost the same here, but by the benchmark's specs</span>
+<span class="slc"># we have to write to stdout anyway.</span>
+<span class="slc"># if there are memory size issues, we can</span>
+<span class="slc"># mmap a temporary file here and also adjust maxchunk above,</span>
+<span class="slc"># but 16000x16000 only uses approx. 32 MB, no problem on todays machines</span>
+<span class="slc"># if we wanted bigger than about 50000x50000, or minimize memory usage, it could</span>
+<span class="slc"># however be a good idea to implement the mmap version.</span>
+sharedbitmap = multiprocessing.<span class="kwd">Array</span>(ctypes.c_char, bufferlen, lock=<span class="kwa">False</span>)
+sharedbitmap[<span class="num">0</span>:<span class="kwb">len</span>(header)] = header
+
+<span class="slc"># not more to avoid task switching overhead and surplus memory usage</span>
+<span class="slc"># one process already puts one core to 100%, no waiting, locking etc. :-)</span>
+<span class="slc"># may not be portable, but no worries on standard Linux</span>
+workers = multiprocessing.<span class="kwd">cpu_count</span>()
+
+<span class="slc"># calculate line package size, either divide fairly per cpu or limit</span>
+<span class="slc"># by memory use</span>
+maxlines = maxchunk // size
+<span class="slc"># make sure we calculate at least one line per package</span>
+
+<span class="slc"># we only calculate the upper half of the set and exploit it's symmetry!</span>
+lines_per_chunk = <span class="kwb">max</span>(<span class="num">1</span>, <span class="kwb">min</span>(calcsize//workers,  maxlines))
+
+<span class="slc"># number of tasks, only upper half of the set!</span>
+packages = <span class="kwb">max</span>(<span class="num">1</span>, calcsize // lines_per_chunk)
+<span class="slc"># hehe, we could have many processors...</span>
+<span class="kwa">if</span> workers &lt;= calcsize:
+<span class="slc"># make sure it's dividable by number of processors to have all working</span>
+<span class="slc"># There's a small imbalance at the very end of the program run because</span>
+<span class="slc"># different chunks have different calculation time</span>
+    packages += packages%workers
+<span class="kwa">else</span>:
+    <span class="slc"># one line per package</span>
+    packages = calcsize
+<span class="slc"># To make sure we can calculate very small sets on machines with lots of</span>
+<span class="slc"># processors: max(1, ...)</span>
+lines_per_chunk = <span class="kwb">max</span>(<span class="num">1</span>, calcsize // packages)
+    
+tasks = []
+<span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(packages):
+    tasks.<span class="kwd">append</span>((i*lines_per_chunk, lines_per_chunk))
+
+<span class="slc"># see what lines are not covered yet, distribute them among the tasks</span>
+(last_offset, last_lines) = tasks[-<span class="num">1</span>]
+missing_lines = calcsize - (last_offset+last_lines)
+<span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(missing_lines):
+    index = -(missing_lines-i)
+    (offset, lines) = tasks[index]
+    tasks[index] = (offset + i, lines + <span class="num">1</span>)
+
+<span class="slc"># modifies z! call by reference!</span>
+<span class="slc"># iterate z according to formula, set all elements</span>
+<span class="slc"># in the set to 0</span>
+<span class="kwa">def</span> <span class="kwd">mandeliterations</span>(z):
+    <span class="slc"># calculate subsequently shorter lists and keep track of indices</span>
+    indexlist = []
+    calcc = z.<span class="kwd">copy</span>()
+    calcz = z
+    <span class="slc"># filtering the list is expensive,</span>
+    <span class="slc"># calculate several iterations before filtering</span>
+    <span class="kwa">for</span> iterations <span class="kwa">in</span> iteration_steps:
+        <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(iterations):
+            calcz **= <span class="num">2</span>
+            calcz += calcc
+        indices = np.<span class="kwd">nonzero</span>(<span class="kwb">abs</span>(calcz) &lt; <span class="num">2</span>)
+        <span class="slc"># I guess that continuous arrays are better for fast iterating,</span>
+        <span class="slc"># therefore create new arrays</span>
+        calcz = calcz[indices]
+        calcc = calcc[indices]
+        indexlist.<span class="kwd">append</span>(indices)
+    <span class="slc"># &quot;collapes&quot; the index list from the bottom to get the elements</span>
+    <span class="slc"># remaining in the set</span>
+    mandelbrot = indexlist.<span class="kwd">pop</span>()
+    <span class="slc"># a bit messy because of the index format that numpy uses</span>
+    <span class="kwa">for</span> indices <span class="kwa">in</span> <span class="kwb">reversed</span>(indexlist[<span class="num">1</span>:]):
+        mandelbrot = indices[<span class="num">0</span>][mandelbrot]
+    mandelbrot = (indexlist[<span class="num">0</span>][<span class="num">0</span>][mandelbrot], indexlist[<span class="num">0</span>][<span class="num">1</span>][mandelbrot])
+    <span class="slc"># finally, set everything in the set = 0</span>
+    <span class="slc"># maybe the index list could be used to set bitmap directly?</span>
+    <span class="slc"># But this seems cleaner in terms of code structure: only floats here,</span>
+    <span class="slc"># keep bitmap business in pbmline()</span>
+    z[mandelbrot] = <span class="num">0</span>
+
+<span class="slc"># generate/allocate block of complex numbers for subsequent iteration</span>
+<span class="kwa">def</span> <span class="kwd">mandelblock</span>(line_offset, lines):
+    <span class="slc"># maybe numpy.mgrid or another method would be faster, but not tried yet...</span>
+    (re, im) = np.<span class="kwd">meshgrid</span>(reline, imline[line_offset:line_offset+lines])
+    <span class="slc"># reuse memory</span>
+    im += re
+    <span class="kwa">return</span> im
+
+<span class="slc"># convert data array into &quot;compressed&quot; bitmap to be written to binary pbm file</span>
+<span class="kwa">def</span> <span class="kwd">pbmline</span>(points, lines):
+    <span class="slc"># each point is in [0, 1] now, 8 bit unsigned int</span>
+    bitmap = np.<span class="kwd">zeros</span>((lines, linesize*bits), dtype=calctype)
+    <span class="slc"># respect  the &quot;padding&quot; bits at the end of</span>
+    <span class="slc"># the line to get byte boundaries</span>
+    bitmap[:,:size] = points==<span class="num">0</span>
+    <span class="slc"># make blocks with 8 bits</span>
+    bitmap = bitmap.<span class="kwd">reshape</span>((linesize*lines, bits))
+    <span class="slc"># shift bits, accumulate in highest bit</span>
+    <span class="kwa">for</span> bit <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">0</span>,bits-<span class="num">1</span>):
+        <span class="slc"># fix bit order here</span>
+        bitmap[:,bit] &lt;&lt;= (bits-bit-<span class="num">1</span>)
+        bitmap[:,bits-<span class="num">1</span>] += bitmap[:,bit]
+    <span class="slc"># return accumulator</span>
+    result = bitmap[:,bits-<span class="num">1</span>]
+    <span class="kwa">return</span> result
+
+<span class="kwa">if</span> V3:
+    <span class="kwa">def</span> <span class="kwd">tobytes</span>(a):
+        <span class="kwa">return</span> <span class="kwd">bytes</span>(<span class="kwb">iter</span>(a))
+<span class="kwa">else</span>:
+    <span class="kwa">def</span> <span class="kwd">tobytes</span>(a):
+        <span class="kwa">return</span> a.<span class="kwd">tostring</span>()
+
+<span class="kwa">if</span> HALF:
+    <span class="slc"># move bitmap fragments to output</span>
+    <span class="slc"># eventually modifies bitmap in the process! </span>
+    <span class="slc"># But we're done after :-)</span>
+    <span class="kwa">def</span> <span class="kwd">copybits</span>(line_offset, bitmap, lines):
+        <span class="slc"># make sure that array is &quot;flat&quot;</span>
+        bitmap.<span class="kwd">reshape</span>(-<span class="num">1</span>)
+        <span class="slc"># use this for number of bytes, reshaping influences len(bitmap)</span>
+        len_bitmap = <span class="kwb">len</span>(bitmap)
+        startbyte = header_offset + line_offset * linesize
+        <span class="slc"># program works with 8/8 now, less headache</span>
+        <span class="slc"># but keep this for explicity</span>
+        copybytes = len_bitmap*bits//bytesize
+        <span class="slc"># didn't get ctypes.memcopy to work,</span>
+        <span class="slc"># this does it although it may be a bit slower</span>
+        <span class="slc"># bitmap HAS to be flat</span>
+        sharedbitmap[startbyte:startbyte+len_bitmap] = <span class="kwd">tobytes</span>(bitmap)
+        <span class="slc"># now reshape to lines x lines in order to reverse and exploit symmetry</span>
+        bitmap = bitmap.<span class="kwd">reshape</span>((lines, linesize))
+        <span class="slc"># reverse the lines</span>
+        bitmap = bitmap[::-<span class="num">1</span>, :]
+        startbyte = bufferlen - line_offset * linesize - len_bitmap + linesize
+        stopbyte = startbyte + len_bitmap
+        <span class="slc"># the calculated area is not symmetric, we have overlap</span>
+        <span class="slc"># therefore clip overhang</span>
+        <span class="kwa">if</span> startbyte &lt; (bufferlen - header_offset) // <span class="num">2</span>:
+            bitmap = bitmap[<span class="num">1</span>:,:]
+            startbyte += linesize
+        <span class="kwa">if</span> stopbyte &gt; bufferlen:
+            bitmap = bitmap[:-<span class="num">1</span>,:]
+            stopbyte -= linesize
+        <span class="slc"># flat again for output</span>
+        bitmap = bitmap.<span class="kwd">reshape</span>(-<span class="num">1</span>)
+        sharedbitmap[startbyte:startbyte+len_bitmap] = <span class="kwd">tobytes</span>(bitmap)
+<span class="kwa">else</span>:
+    <span class="slc"># move bitmap fragments to output</span>
+    <span class="slc"># eventually modifies bitmap in the process! </span>
+    <span class="slc"># But we're done after :-)</span>
+    <span class="kwa">def</span> <span class="kwd">copybits</span>(line_offset, bitmap, lines):
+        <span class="slc"># make sure that array is &quot;flat&quot;</span>
+        bitmap.<span class="kwd">reshape</span>(-<span class="num">1</span>)
+        <span class="slc"># use this for number of bytes, reshaping influences len(bitmap)</span>
+        len_bitmap = <span class="kwb">len</span>(bitmap)
+        startbyte = header_offset + line_offset * linesize
+        <span class="slc"># program works with 8/8 now, less headache</span>
+        <span class="slc"># but keep this for explicity</span>
+        copybytes = len_bitmap*bits//bytesize
+        <span class="slc"># didn't get ctypes.memcopy to work,</span>
+        <span class="slc"># this does it although it may be a bit slower</span>
+        <span class="slc"># bitmap HAS to be flat</span>
+        sharedbitmap[startbyte:startbyte+len_bitmap] = <span class="kwd">tobytes</span>(bitmap)
+
+<span class="slc"># function to be called with element of the task array,</span>
+<span class="slc"># suitable for mapping (no output, only modifies shared buffer)</span>
+<span class="kwa">def</span> <span class="kwd">work</span>(tup):
+    (line_offset, lines) = tup
+    block = <span class="kwd">mandelblock</span>(line_offset, lines)
+    mandelbrot = <span class="kwd">mandeliterations</span>(block)
+    bitmap = <span class="kwd">pbmline</span>(block, lines)
+    <span class="kwd">copybits</span>(line_offset, bitmap, lines)
+
+pool = multiprocessing.<span class="kwd">Pool</span>(workers)
+<span class="slc"># for debugging: just use map(...) instead of pool.map(...)</span>
+<span class="slc"># to get the exceptions + trace</span>
+<span class="slc"># global variables etc. are shared between processes! :-)</span>
+pool.<span class="kwb">map</span>(work, tasks)
+<span class="slc">#for tup in tasks:</span>
+    <span class="slc">#work(tup)</span>
+
+
+
+<span class="slc"># dump it!</span>
+<span class="kwa">if</span> V3:
+    sys.stdout.<span class="kwb">buffer</span>.<span class="kwd">write</span>(sharedbitmap)
+<span class="kwa">else</span>:
+    sys.stdout.<span class="kwd">write</span>(sharedbitmap.raw)

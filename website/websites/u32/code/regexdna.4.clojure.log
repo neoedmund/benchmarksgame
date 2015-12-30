@@ -1,0 +1,53 @@
+
+Wed, 01 Jul 2015 01:43:10 GMT
+
+MAKE:
+mv regexdna.clojure-4.clojure regexdna.clj
+/usr/local/src/jdk1.8.0_45/bin/java -Dclojure.compile.path=. -cp .:/usr/local/src/clojure/clojure-1.7.0.jar: clojure.lang.Compile regexdna
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Compiling regexdna to .
+1.68s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts -Xmx512m -cp .:/usr/local/src/clojure/clojure-1.7.0.jar: regexdna 0 < regexdna-input5000000.txt
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+agggtaaa|tttaccct 356
+[cgt]gggtaaa|tttaccc[acg] 1250
+a[act]ggtaaa|tttacc[agt]t 4252
+ag[act]gtaaa|tttac[agt]ct 2894
+agg[act]taaa|ttta[agt]cct 5435
+aggg[acg]aaa|ttt[cgt]ccct 1537
+agggt[cgt]aa|tt[acg]accct 1431
+agggta[cgt]a|t[acg]taccct 1608
+agggtaa[cgt]|[acg]ttaccct 2178
+
+50833411
+50000000
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Exception in thread "main" java.util.concurrent.ExecutionException: java.lang.OutOfMemoryError: Java heap space
+	at java.util.concurrent.FutureTask.report(FutureTask.java:122)
+	at java.util.concurrent.FutureTask.get(FutureTask.java:192)
+	at clojure.core$deref_future.invoke(core.clj:2186)
+	at clojure.core$future_call$reify__6736.deref(core.clj:6683)
+	at clojure.core$deref.invoke(core.clj:2206)
+	at regexdna$_main.doInvoke(regexdna.clj:57)
+	at clojure.lang.RestFn.applyTo(RestFn.java:137)
+	at regexdna.main(Unknown Source)
+Caused by: java.lang.OutOfMemoryError: Java heap space
+	at java.util.Arrays.copyOf(Arrays.java:3332)
+	at java.lang.AbstractStringBuilder.expandCapacity(AbstractStringBuilder.java:137)
+	at java.lang.AbstractStringBuilder.ensureCapacityInternal(AbstractStringBuilder.java:121)
+	at java.lang.AbstractStringBuilder.append(AbstractStringBuilder.java:421)
+	at java.lang.StringBuffer.append(StringBuffer.java:265)
+	at regexdna$_main$fn__5.invoke(regexdna.clj:37)
+	at clojure.core$binding_conveyor_fn$fn__4444.invoke(core.clj:1916)
+	at clojure.lang.AFn.call(AFn.java:18)
+	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1142)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:617)
+	at java.lang.Thread.run(Thread.java:745)

@@ -1,0 +1,36 @@
+
+Tue, 19 May 2015 21:30:46 GMT
+
+MAKE:
+mv binarytrees.scala-2.scala binarytrees.scala
+/usr/local/src/scala-2.11.6/bin/scalac -optimise -target:jvm-1.8 binarytrees.scala
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+binarytrees.scala:17: warning: This catches all Throwables. If this is really intended, use `case _ : Throwable` to clear this warning.
+    val n = try{ args(0).toInt } catch { case _ => 1 }
+                                              ^
+warning: there was one deprecation warning; re-run with -deprecation for details
+two warnings found
+6.05s to complete and log all make actions
+
+COMMAND LINE:
+ /usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -Xbootclasspath/a:/usr/local/src/scala-2.11.6/lib/scala-library.jar:/usr/local/src/scala-2.11.6/lib/akka-actors.jar:/usr/local/src/scala-2.11.6/lib/typesafe-config.jar binarytrees 12
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+stretch tree of depth 13	 check: -1
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Exception in thread "main" java.lang.NoClassDefFoundError: scala/actors/Futures$
+	at binarytrees$$anonfun$2.apply(binarytrees.scala:28)
+	at binarytrees$$anonfun$2.apply(binarytrees.scala:28)
+	at scala.collection.immutable.List.map(List.scala:273)
+	at binarytrees$.main(binarytrees.scala:28)
+	at binarytrees.main(binarytrees.scala)
+Caused by: java.lang.ClassNotFoundException: scala.actors.Futures$
+	at java.net.URLClassLoader.findClass(URLClassLoader.java:381)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:424)
+	at sun.misc.Launcher$AppClassLoader.loadClass(Launcher.java:331)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:357)
+	... 5 more

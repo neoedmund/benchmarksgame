@@ -1,0 +1,71 @@
+#lang racket/base
+
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;; Derived from the Chicken variant by Sven Hartrumpf</span>
+<span class="slc">;;; contributed by Sam Tobin-Hochstadt</span>
+
+(<span class="kwa">require</span> racket/cmdline racket/require (<span class="kwa">for-syntax</span> racket/base) racket/place (<span class="kwa">only-in</span> racket/fixnum make-shared-fxvector)
+         (<span class="kwa">filtered-in</span> (<span class="kwa">lambda</span> (<span class="kwa">name</span>) (<span class="kwa">regexp-replace</span> #rx<span class="str">&quot;unsafe-&quot;</span> name <span class="str">&quot;&quot;</span>))
+                      racket/unsafe/ops))
+
+(<span class="kwa">define-syntax-rule</span> (**leaf? v) (<span class="kwa">fx</span>= <span class="num">1</span> (<span class="kwa">vector-length</span> v)))
+(<span class="kwa">define-syntax-rule</span> (**node? v) (<span class="kwa">fx</span>= <span class="num">3</span> (<span class="kwa">vector-length</span> v)))
+
+(<span class="kwa">define-syntax</span> leaf  (<span class="kwa">make-rename-transformer</span> #'vector))
+(<span class="kwa">define-syntax</span> leaf? (<span class="kwa">make-rename-transformer</span> #'**leaf?))
+(<span class="kwa">define-syntax</span> node  (<span class="kwa">make-rename-transformer</span> #'vector))
+(<span class="kwa">define-syntax</span> node? (<span class="kwa">make-rename-transformer</span> #'**node?))
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">leaf-val</span> l)   (<span class="kwa">vector-ref</span> l <span class="num">0</span>))
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">node-left</span> n)  (<span class="kwa">vector-ref</span> n <span class="num">1</span>))
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">node-right</span> n) (<span class="kwa">vector-ref</span> n <span class="num">2</span>))
+
+(<span class="kwa">define</span> (<span class="kwa">make</span> item d)
+  (<span class="kwa">if</span> (<span class="kwa">fx</span>= d <span class="num">0</span>)
+    (<span class="kwa">leaf</span> item)
+    (<span class="kwa">let</span> ([item2 (<span class="kwa">fx</span>* item <span class="num">2</span>)] [d2 (<span class="kwa">fx-</span> d <span class="num">1</span>)])
+      (<span class="kwa">node</span> item (<span class="kwa">make</span> (<span class="kwa">fx-</span> item2 <span class="num">1</span>) d2) (<span class="kwa">make</span> item2 d2)))))
+
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">check</span> s)
+  (<span class="kwa">let</span> loop ([t s] [acc <span class="num">0</span>])
+    (<span class="kwa">let</span> ([acc (<span class="kwa">fx</span>+ (<span class="kwa">leaf-val</span> t) acc)])
+      (<span class="kwa">if</span> (<span class="kwa">node</span>? t)
+        (<span class="kwa">loop</span> (<span class="kwa">node-left</span> t)
+              (<span class="kwa">fx-</span> acc (<span class="kwa">loop</span> (<span class="kwa">node-right</span> t) <span class="num">0</span>)))
+        acc))))
+
+(<span class="kwa">require</span> racket/match)
+(<span class="kwa">define</span> (<span class="kwa">work</span> c)
+  (<span class="kwa">define</span> args (<span class="kwa">place-channel-get</span> c))
+  (<span class="kwa">match-define</span> (<span class="kwa">vector</span> max-depth min-depth d) args)
+  (<span class="kwa">define</span> iterations (<span class="kwa">fxlshift</span> <span class="num">1</span> (<span class="kwa">fx</span>+ (<span class="kwa">fx-</span> max-depth d) min-depth)))
+  (<span class="kwa">place-channel-put</span> 
+   c (<span class="kwa">vector</span> (<span class="kwa">fx</span>* <span class="num">2</span> iterations) d
+             (<span class="kwa">for</span>/fold ([c <span class="num">0</span>]) ([i (<span class="kwa">in-range</span> iterations)])
+               (<span class="kwa">fx</span>+ c (<span class="kwa">fx</span>+ (<span class="kwa">check</span> (<span class="kwa">make</span> i d))
+                           (<span class="kwa">check</span> (<span class="kwa">make</span> (<span class="kwa">fx-</span> <span class="num">0</span> i) d))))))))
+
+(<span class="kwa">define</span> min-depth <span class="num">4</span>)
+(<span class="kwa">define</span> (<span class="kwa">main</span>* n)  
+  (<span class="kwa">define</span> max-depth (<span class="kwa">max</span> (+ min-depth <span class="num">2</span>) n))
+  (<span class="kwa">define</span> stretch-depth (+ max-depth <span class="num">1</span>))
+  (<span class="kwa">printf</span> <span class="str">&quot;stretch tree of depth ~a</span><span class="esc">\t</span> <span class="str">check: ~a</span><span class="esc">\n</span><span class="str">&quot;</span>
+          stretch-depth
+          (<span class="kwa">check</span> (<span class="kwa">make</span> <span class="num">0</span> stretch-depth)))
+  (<span class="kwa">define</span> len (<span class="kwa">fx</span>+ max-depth <span class="num">1</span>))
+  (<span class="kwa">define</span> output (<span class="kwa">make-vector</span> len #f))
+  (<span class="kwa">define</span> long-lived-tree (<span class="kwa">make</span> <span class="num">0</span> max-depth))
+  (<span class="kwa">define</span> thds
+    (<span class="kwa">for</span>/list ([d (<span class="kwa">in-range</span> <span class="num">4</span> len <span class="num">2</span>)])
+      (<span class="kwa">thread</span> (λ ()
+                (<span class="kwa">define</span> c (<span class="kwa">place</span> ch (<span class="kwa">work</span> ch)))
+                (<span class="kwa">place-channel-put</span> c (<span class="kwa">vector</span> max-depth min-depth d))
+                (<span class="kwa">vector-set</span>! output d (<span class="kwa">place-channel-get</span> c))))))
+  (<span class="kwa">map</span> sync thds)
+  (<span class="kwa">for</span> ([e (<span class="kwa">in-vector</span> output)] #:when e)
+    (<span class="kwa">printf</span> <span class="str">&quot;~a</span><span class="esc">\t</span> <span class="str">trees of depth ~a</span><span class="esc">\t</span> <span class="str">check: ~a</span><span class="esc">\n</span><span class="str">&quot;</span>
+            (<span class="kwa">vector-ref</span> e <span class="num">0</span>) (<span class="kwa">vector-ref</span> e <span class="num">1</span>) (<span class="kwa">vector-ref</span> e <span class="num">2</span>)))
+  (<span class="kwa">printf</span> <span class="str">&quot;long lived tree of depth ~a</span><span class="esc">\t</span> <span class="str">check: ~a</span><span class="esc">\n</span><span class="str">&quot;</span>
+          max-depth
+          (<span class="kwa">check</span> long-lived-tree)))
+(<span class="kwa">define</span> (<span class="kwa">main</span> a) (<span class="kwa">main</span>* (<span class="kwa">string-</span>&gt;number a))) (<span class="kwa">provide</span> main)

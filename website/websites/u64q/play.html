@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="index,follow,archive">
+<meta name="description" content="How do I contribute my programs? Contribute your programs. Contribute your expertise. Contribute your own project.">
+<title>Contribute your programs | The Computer Language Benchmarks Game</title>
+<link rel="shortcut icon" href="./favicon.ico">
+<style><!-- 
+a{color:black;text-decoration:none}article,footer,header{margin:auto;max-width:31em;width:92%}body{font:100% Droid Sans,Ubuntu,Verdana,sans-serif;margin:0;-webkit-text-size-adjust:100%}code,h1,h2,h3,nav li a{font-family:Ubuntu Mono,Consolas,Menlo,monospace}footer{padding:2.6em 0 0}h1{font-size:1.4em;font-weight:bold;margin:0;padding:.4em}h1,h1 a{color:white}h2,h3{margin:1.5em 0 0}h2{font-size:1.4em;font-weight:normal}h3{font-size:1.2em}nav li{list-style-type:none;vertical-align:top}nav li a{display:block;font-size:1.2em;margin:.5em .5em 0;padding:.5em .5em .3em}nav p{margin:0 .5em}nav ul{clear:left;margin:-0.3em 0 1.5em;text-align:center}p{color:#333;line-height:1.4;margin:.3em 0 0}p a{border-bottom:.15em dotted #aaa}q:before{content:open-quote}q:after{content:close-quote}body{quotes:'\201C' '\201D' '\2018' '\2019' '\2039' '\203A'}#u64q{background-color:#c90016}@media only screen and (min-width:60em){article,footer,header{font-size:1.25em}}
+--></style>
+<link rel="canonical" href="../play.html">
+<header id="top">
+  <h1 id="u64q"><a href="http://benchmarksgame.alioth.debian.org/">The&nbsp;Computer&nbsp;Language<br>Benchmarks&nbsp;Game</a></h1>
+</header>
+<article>
+  <h2>Contribute your programs</h2>
+  <section>
+    <h3 id="implement">How should I implement programs?</h3>
+      <p>You will probably come across people saying that the programs are not idiomatic ("enough"). So <a href="./nbody-description.html#nbody">read the description</a> and write your own idiomatic program, without programming tricks.
+      <p>Do design-iteration before you contribute your program. Write narrow programs &mdash; someone will try to read on a phone.
+      <p><code>diff</code> program output with the output file provided in <a href="./nbody-description.html#nbody">the description</a>, to check your program is correct, before you contribute your program.
+  </section>
+  <section>
+    <h3 id="contribute">How do I contribute my programs? 10&ndash;step</h3>
+      <p>0. You'll need an Alioth User Account. <a href="https://alioth.debian.org/account/register.php">Register</a> a real email address to receive status updates. 
+      <ol>
+        <li><p>Go to the <q><a href="https://alioth.debian.org/tracker/?atid=413122&amp;group_id=100815&amp;func=browse">Play the Benchmarks Game</a></q> tracker page.
+        <li><p>Login (Your chosen Login Name is suffixed with "&ndash;guest".)
+        <li><p>Click <q>Submit New</q>.
+        <li>
+          <p>Start from the bottom of the form &mdash; <q>Attach</q> the full source&ndash;code file of your tested program to the new Tracker item.
+          <p>Don't paste source code into the description field. Don't contribute patch files.
+        <li><p>Write in the <q>Detailed description</q> how this program fixes an error or is faster or was missing or&nbsp;&#8230; Give reasons to accept your program.
+        <li><p>Write a <q>Summary</q> like this &mdash; <code>Ruby n-body Glenn Parker 2005-03-28</code>
+        <li><p>Select a <q>Language Implementation</q>
+        <li><p>Select a <q>Task</q>
+        <li><p>Click <q>Submit</q>
+      </ol>
+      <p>If you registered with a real email address, you'll receive status updates and be notified of any followup comments about your program.
+  </section>
+  <h2>Contribute your expertise</h2>
+  <section>
+    <h3 id="invalid">That program shouldn't be allowed!</h3>
+      <p><a href="https://alioth.debian.org/account/register.php">Register</a> an Alioth User Account.
+      <p>Explain specifically what you think the problem is <a href="https://alioth.debian.org/forum/forum.php?forum_id=2965">in the discussion forum</a>.
+  </section>
+  <h2>Contribute your own project</h2>
+  <section>
+    <h3 id="languagex">Why don't you include language X?<br>
+    …&nbsp;my favorite language implementation?<br>
+    …&nbsp;Microsoft&#174; Windows&#174;&nbsp;?</h3>
+      <p>Because I know it will take more time than I choose. Been there; done that.
+      <p>Measurements of <q>proggit popular</q> language implementations like <a href="https://github.com/def-/nim-benchmarksgame">Nim</a> and <a href="https://github.com/JuliaLang/julia/tree/master/test/perf/shootout">Julia</a> will attract attention and be the basis of yet another successful website (unlike more Fortran or Ada or Pascal or Lisp). So make those measurements, and publish them and promote them.
+      <p>If you're interested in something not shown on the benchmarks game website then please take the program source code and the measurement scripts and <b>publish your own measurements</b>.
+    <h3 id="program-source-code">Where can I get the program source code?</h3>
+    <p><a href="../download/benchmarksgame-sourcecode.zip">zip'd program source code</a>
+    <h3 id="smeasurement-scripts">Where can I get the measurement scripts?</h3>
+    <p><a href="../download/benchmarksgame-script.zip">zip'd Python measurement scripts</a>
+    <h3 id="summary-data">Where can I get the data set?</h3>
+    <p>The <a href="./summarydata.php">summary data shown</a> only includes the fastest measurements, but additional measurements are included in a compressed data file.
+  </section>
+</article>
+<footer>
+</footer>
+<script>
+window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+ga('create', 'UA-37137205-1', 'auto');
+ga('send', 'pageview');
+</script>
+<script async src='//www.google-analytics.com/analytics.js'></script>

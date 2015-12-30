@@ -1,0 +1,32 @@
+
+Sat, 10 Jan 2015 06:15:25 GMT
+
+MAKE:
+/usr/local/src/rust/bin/rustc -C opt-level=3 -C target-cpu=core2 -C lto pidigits.rs -o pidigits.rust-2.rust_run
+pidigits.rs:16:51: 16:59 error: unresolved name `from_str`
+pidigits.rs:16     let n = std::os::args()[].get(1).and_then(|n| from_str(n[])).unwrap_or(100);
+                                                                 ^~~~~~~~
+pidigits.rs:130:35: 130:43 error: use of undeclared type name `Ordering`
+pidigits.rs:130     fn cmp(&self, other: &Mpz) -> Ordering {
+                                                  ^~~~~~~~
+pidigits.rs:133:13: 133:18 error: unresolved name `Equal`. Did you mean `self`?
+pidigits.rs:133             Equal
+                            ^~~~~
+pidigits.rs:135:13: 135:17 error: unresolved name `Less`. Did you mean `self`?
+pidigits.rs:135             Less
+                            ^~~~
+pidigits.rs:137:13: 137:20 error: unresolved name `Greater`. Did you mean `other`?
+pidigits.rs:137             Greater
+                            ^~~~~~~
+pidigits.rs:142:50: 142:58 error: use of undeclared type name `Ordering`
+pidigits.rs:142     fn partial_cmp(&self, other: &Mpz) -> Option<Ordering> {
+                                                                 ^~~~~~~~
+error: aborting due to 6 previous errors
+make: [pidigits.rust-2.rust_run] Error 101 (ignored)
+0.09s to complete and log all make actions
+
+COMMAND LINE:
+./pidigits.rust-2.rust_run 2000
+
+MAKE ERROR 
+

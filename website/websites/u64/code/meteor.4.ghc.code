@@ -1,0 +1,56 @@
+<span class="com">{-</span>
+<span class="com">   	The Computer Language Benchmarks Game</span>
+<span class="com">   	http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   	contributed by Bertram Felgenhauer</span>
+<span class="com">-}</span>
+
+<span class="kwd">import</span> Data.Word
+<span class="kwd">import</span> Data.<span class="kwb">Array</span>
+<span class="kwd">import</span> Data.Bits
+<span class="kwd">import</span> System.Environment
+
+pieces = [
+    [(<span class="num">0</span>,<span class="num">0</span>),(<span class="num">0</span>,<span class="num">1</span>),(<span class="num">0</span>,<span class="num">2</span>),(<span class="num">0</span>,<span class="num">3</span>),(<span class="num">1</span>,<span class="num">3</span>)],
+    [(<span class="num">0</span>,<span class="num">0</span>),(<span class="num">0</span>,<span class="num">2</span>),(<span class="num">0</span>,<span class="num">3</span>),(<span class="num">1</span>,<span class="num">0</span>),(<span class="num">1</span>,<span class="num">1</span>)],
+    [(<span class="num">0</span>,<span class="num">0</span>),(<span class="num">0</span>,<span class="num">1</span>),(<span class="num">0</span>,<span class="num">2</span>),(<span class="num">1</span>,<span class="num">2</span>),(<span class="num">2</span>,<span class="num">1</span>)],
+    [(<span class="num">0</span>,<span class="num">0</span>),(<span class="num">0</span>,<span class="num">1</span>),(<span class="num">0</span>,<span class="num">2</span>),(<span class="num">1</span>,<span class="num">1</span>),(<span class="num">2</span>,<span class="num">1</span>)],
+    [(<span class="num">0</span>,<span class="num">0</span>),(<span class="num">0</span>,<span class="num">2</span>),(<span class="num">1</span>,<span class="num">0</span>),(<span class="num">1</span>,<span class="num">1</span>),(<span class="num">2</span>,<span class="num">1</span>)],
+    [(<span class="num">0</span>,<span class="num">0</span>),(<span class="num">0</span>,<span class="num">1</span>),(<span class="num">0</span>,<span class="num">2</span>),(<span class="num">1</span>,<span class="num">1</span>),(<span class="num">1</span>,<span class="num">2</span>)],
+    [(<span class="num">0</span>,<span class="num">0</span>),(<span class="num">0</span>,<span class="num">1</span>),(<span class="num">1</span>,<span class="num">1</span>),(<span class="num">1</span>,<span class="num">2</span>),(<span class="num">2</span>,<span class="num">1</span>)],
+    [(<span class="num">0</span>,<span class="num">0</span>),(<span class="num">0</span>,<span class="num">1</span>),(<span class="num">0</span>,<span class="num">2</span>),(<span class="num">1</span>,<span class="num">0</span>),(<span class="num">1</span>,<span class="num">2</span>)],
+    [(<span class="num">0</span>,<span class="num">0</span>),(<span class="num">0</span>,<span class="num">1</span>),(<span class="num">0</span>,<span class="num">2</span>),(<span class="num">1</span>,<span class="num">2</span>),(<span class="num">1</span>,<span class="num">3</span>)],
+    [(<span class="num">0</span>,<span class="num">0</span>),(<span class="num">0</span>,<span class="num">1</span>),(<span class="num">0</span>,<span class="num">2</span>),(<span class="num">0</span>,<span class="num">3</span>),(<span class="num">1</span>,<span class="num">2</span>)]]
+
+transform p =
+    [ <span class="kwc">map</span> (\(y,x) -&gt; (y-dy,x-dx)) p''
+    | p' &lt;- <span class="kwc">take</span> <span class="num">6</span> (<span class="kwc">iterate</span> (<span class="kwc">map</span> (\(y,x) -&gt; (x+y,-y))) p),
+      p'' &lt;- <span class="kwc">take</span> <span class="num">2</span> (<span class="kwc">iterate</span> (<span class="kwc">map</span> (\(y,x) -&gt; (x,y))) p'),
+      <span class="kwd">let</span> (dy,dx) = <span class="kwc">minimum</span> p'']
+
+pieceMasks = <span class="kwc">listArray</span> (<span class="num">0</span>,<span class="num">9</span>) (<span class="kwc">map</span> (pieceMasks' . transform) pieces) <span class="kwd">where</span>
+    pieceMasks' ps = <span class="kwc">listArray</span> (<span class="num">0</span>,<span class="num">9</span>) [pieceMasks'' ps (y,x) | y &lt;- [<span class="num">0</span>,<span class="num">1</span>], x &lt;- [<span class="num">0</span>.<span class="num">.4</span>]]
+    pieceMasks'' ps pos = [m | p &lt;- ps, m &lt;- mask <span class="num">0</span> pos p]
+    mask m (dy,dx) [] = [m]
+    mask m (dy,dx) ((y,x):ps)
+        | x' &lt; <span class="num">0</span> || x' &gt; <span class="num">4</span> = []
+        | <span class="kwa">True</span> = mask (m .|. shiftL <span class="num">1</span> ((dy+y)*<span class="num">5</span>+x')) (dy,dx) ps
+        <span class="kwd">where</span> x' = x + dx + <span class="kwc">div</span> (y+dy) <span class="num">2</span>
+
+search m <span class="num">50</span> p ps = [ps]
+search m i p ps | (m .&amp;. shiftL <span class="num">1</span> i) &gt; <span class="num">0</span> = search m (i+<span class="num">1</span>) p ps
+search m i p ps = <span class="kwd">let</span> (q,r) = <span class="kwc">divMod</span> i <span class="num">10</span> <span class="kwd">in</span>
+    [ ps'
+    | p' &lt;- [<span class="num">0</span>.<span class="num">.9</span>], p .&amp;. shiftL <span class="num">1</span> p' == <span class="num">0</span>,
+      mask &lt;- pieceMasks ! p' ! r,
+      <span class="kwd">let</span> mask' = shiftL mask (<span class="num">10</span>*q),
+      m .&amp;. mask' == <span class="num">0</span>,
+      ps' &lt;- search (m .|. mask') (i+<span class="num">1</span>) (p .|. shiftL <span class="num">1</span> p') ((p',mask'):ps)]
+
+rows ps = [[i | x &lt;- [<span class="num">0</span>.<span class="num">.4</span>], (i,m) &lt;- ps, shiftL <span class="num">1</span> (y*<span class="num">5</span>+x) .&amp;. m /= <span class="num">0</span>] | y &lt;- [<span class="num">0</span>.<span class="num">.9</span>]]
+
+main = <span class="kwd">do</span>
+    n &lt;- <span class="kwc">readIO</span> . <span class="kwc">head</span> =&lt;&lt; <span class="kwc">getArgs</span>
+    <span class="kwd">let</span> sols = <span class="kwc">map</span> rows (<span class="kwc">take</span> n (search (-shiftL <span class="num">1 50</span> :: Word64) <span class="num">0</span> (<span class="num">0</span> :: Word) []))
+    <span class="kwc">putStrLn</span> (<span class="kwc">show</span> (<span class="kwa">length</span> sols) ++ <span class="str">&quot; solutions found</span><span class="esc">\n</span><span class="str">&quot;</span>)
+    <span class="kwc">mapM</span> (<span class="kwc">putStrLn</span> . <span class="kwc">unlines</span> . (<span class="kwc">zipWith</span> (++) (<span class="kwc">cycle</span> [<span class="str">&quot;&quot;</span>,<span class="str">&quot; &quot;</span>]))
+         . <span class="kwc">map</span> ((++ <span class="str">&quot; &quot;</span>) . <span class="kwc">unwords</span> . <span class="kwc">map show</span>)) [<span class="kwc">minimum</span> sols,<span class="kwc">maximum</span> sols]

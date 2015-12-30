@@ -1,0 +1,15 @@
+
+Tue, 19 May 2015 23:55:56 GMT
+
+MAKE:
+mv mandelbrot.java-2.java mandelbrot.java
+/usr/local/src/jdk1.8.0_45/bin/javac mandelbrot.java
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+0.84s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java  -server -XX:+TieredCompilation -XX:+AggressiveOpts mandelbrot 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

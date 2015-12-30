@@ -1,0 +1,19 @@
+
+Tue, 19 May 2015 04:15:50 GMT
+
+MAKE:
+mv spectralnorm.scala spectralnorm.scala
+mv: ‘spectralnorm.scala’ and ‘spectralnorm.scala’ are the same file
+/home/dunham/benchmarksgame/nanobench/makefiles/u32.programs.Makefile:598: recipe for target 'spectralnorm.scala_run' failed
+make: [spectralnorm.scala_run] Error 1 (ignored)
+/usr/local/src/scala-2.11.6/bin/scalac -optimise -target:jvm-1.8 spectralnorm.scala
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+4.16s to complete and log all make actions
+
+COMMAND LINE:
+ /usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -Xbootclasspath/a:/usr/local/src/scala-2.11.6/lib/scala-library.jar:/usr/local/src/scala-2.11.6/lib/akka-actors.jar:/usr/local/src/scala-2.11.6/lib/typesafe-config.jar spectralnorm 5500
+
+PROGRAM OUTPUT:
+1.274224153
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

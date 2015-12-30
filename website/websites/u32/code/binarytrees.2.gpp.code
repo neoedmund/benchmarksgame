@@ -1,0 +1,64 @@
+<span class="com">/* The Computer Language Benchmarks Game </span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Jon Harrop</span>
+<span class="com"> * Modified by Alex Mizrahi</span>
+<span class="com"> */</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+
+<span class="kwb">struct</span> Node {
+  Node *l, *r;
+  <span class="kwb">int</span> i;
+  <span class="kwd">Node</span>(<span class="kwb">int</span> i2) : <span class="kwd">l</span>(<span class="num">0</span>), <span class="kwd">r</span>(<span class="num">0</span>), <span class="kwd">i</span>(i2) {}
+  <span class="kwd">Node</span>(Node *l2, <span class="kwb">int</span> i2, Node *r2) : <span class="kwd">l</span>(l2), <span class="kwd">r</span>(r2), <span class="kwd">i</span>(i2) {}
+  ~<span class="kwd">Node</span>() { <span class="kwa">delete</span> l; <span class="kwa">delete</span> r; }
+  <span class="kwb">int</span> <span class="kwd">check</span>() <span class="kwb">const</span> {
+	  <span class="kwa">if</span> (l)
+		<span class="kwa">return</span> l-&gt;<span class="kwd">check</span>() + i - r-&gt;<span class="kwd">check</span>(); 
+	  <span class="kwa">else return</span> i;
+  }
+};
+
+Node *<span class="kwd">make</span>(<span class="kwb">int</span> i, <span class="kwb">int</span> d) {
+  <span class="kwa">if</span> (d == <span class="num">0</span>) <span class="kwa">return new</span> <span class="kwd">Node</span>(i);
+  <span class="kwa">return new</span> <span class="kwd">Node</span>(<span class="kwd">make</span>(<span class="num">2</span>*i-<span class="num">1</span>, d-<span class="num">1</span>), i, <span class="kwd">make</span>(<span class="num">2</span>*i, d-<span class="num">1</span>));
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[]) {
+  <span class="kwb">int</span> min_depth = <span class="num">4</span>,
+    max_depth = std::<span class="kwd">max</span>(min_depth+<span class="num">2</span>,
+			 (argc == <span class="num">2</span> ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">10</span>)),
+    stretch_depth = max_depth+<span class="num">1</span>;
+
+  {
+    Node *c = <span class="kwd">make</span>(<span class="num">0</span>, stretch_depth);
+    std::cout &lt;&lt; <span class="str">&quot;stretch tree of depth &quot;</span> &lt;&lt; stretch_depth &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">&quot;</span>
+      &lt;&lt; <span class="str">&quot;check: &quot;</span> &lt;&lt; c-&gt;<span class="kwd">check</span>() &lt;&lt; std::endl;
+    <span class="kwa">delete</span> c;
+  }
+
+  Node *long_lived_tree=<span class="kwd">make</span>(<span class="num">0</span>, max_depth);
+
+  <span class="kwa">for</span> (<span class="kwb">int</span> d=min_depth; d&lt;=max_depth; d+=<span class="num">2</span>) {
+    <span class="kwb">int</span> iterations = <span class="num">1</span> &lt;&lt; (max_depth - d + min_depth), c=<span class="num">0</span>;
+    <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">1</span>; i&lt;=iterations; ++i) {
+      Node *a = <span class="kwd">make</span>(i, d), *b = <span class="kwd">make</span>(-i, d);
+      c += a-&gt;<span class="kwd">check</span>() + b-&gt;<span class="kwd">check</span>();
+      <span class="kwa">delete</span> a;
+      <span class="kwa">delete</span> b;
+    }
+    std::cout &lt;&lt; (<span class="num">2</span>*iterations) &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">trees of depth &quot;</span> &lt;&lt; d &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">&quot;</span>
+	      &lt;&lt; <span class="str">&quot;check: &quot;</span> &lt;&lt; c &lt;&lt; std::endl;
+  }
+
+  std::cout &lt;&lt; <span class="str">&quot;long lived tree of depth &quot;</span> &lt;&lt; max_depth &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">&quot;</span>
+	    &lt;&lt; <span class="str">&quot;check: &quot;</span> &lt;&lt; (long_lived_tree-&gt;<span class="kwd">check</span>()) &lt;&lt; <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+
+  <span class="kwa">delete</span> long_lived_tree;
+
+  <span class="kwa">return</span> <span class="num">0</span>;
+}
+

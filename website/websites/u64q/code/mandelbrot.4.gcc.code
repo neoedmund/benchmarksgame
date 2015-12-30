@@ -1,0 +1,138 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">  contributed by Paolo Bonzini</span>
+<span class="com">  further optimized by Jason Garrett-Glaser</span>
+<span class="com">  pthreads added by Eckehard Berns</span>
+<span class="com">  further optimized by Ryan Henszey</span>
+<span class="com">  modified by Samy Al Bahra (use GCC atomic builtins)</span>
+<span class="com">  modified by Kenneth Jonsson</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;stdint.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+
+
+<span class="kwc">typedef</span> <span class="kwb">double</span> v2df <span class="kwd">__attribute__</span> ((<span class="kwd">vector_size</span>(<span class="num">16</span>))); <span class="com">/* vector of two doubles */</span>
+<span class="kwc">typedef</span> <span class="kwb">int</span> v4si <span class="kwd">__attribute__</span> ((<span class="kwd">vector_size</span>(<span class="num">16</span>))); <span class="com">/* vector of four ints */</span>
+
+
+<span class="kwb">const</span> v2df zero = { <span class="num">0.0</span>, <span class="num">0.0</span> };
+<span class="kwb">const</span> v2df four = { <span class="num">4.0</span>, <span class="num">4.0</span> };
+
+<span class="com">/*</span>
+<span class="com"> * Constant throughout the program, value depends on N</span>
+<span class="com"> */</span>
+<span class="kwb">int</span> bytes_per_row;
+<span class="kwb">double</span> inverse_w;
+<span class="kwb">double</span> inverse_h;
+
+<span class="com">/*</span>
+<span class="com"> * Program argument: height and width of the image</span>
+<span class="com"> */</span>
+<span class="kwb">int</span> N;
+
+<span class="com">/*</span>
+<span class="com"> * Lookup table for initial real-axis value</span>
+<span class="com"> */</span>
+v2df *Crvs;
+
+<span class="com">/*</span>
+<span class="com"> * Mandelbrot bitmap</span>
+<span class="com"> */</span>
+<span class="kwb">uint8_t</span> *bitmap;
+
+
+<span class="kwb">static void</span> <span class="kwd">calc_row</span>(<span class="kwb">int</span> y) {
+    <span class="kwb">uint8_t</span> *row_bitmap = bitmap + (bytes_per_row * y);
+    <span class="kwb">int</span> x;
+    <span class="kwb">const</span> v2df Civ_init = { y*inverse_h-<span class="num">1.0</span>, y*inverse_h-<span class="num">1.0</span> };
+
+    <span class="kwa">for</span> (x=<span class="num">0</span>; x&lt;N; x+=<span class="num">2</span>)
+    {
+        v2df Crv = Crvs[x &gt;&gt; <span class="num">1</span>];
+        v2df Civ = Civ_init;
+        v2df Zrv = zero;
+        v2df Ziv = zero;
+        v2df Trv = zero;
+        v2df Tiv = zero;
+        <span class="kwb">int</span> i = <span class="num">50</span>;
+        <span class="kwb">int</span> two_pixels;
+        v2df is_still_bounded;
+
+        <span class="kwa">do</span> {
+            Ziv = (Zrv*Ziv) + (Zrv*Ziv) + Civ;
+            Zrv = Trv - Tiv + Crv;
+            Trv = Zrv * Zrv;
+            Tiv = Ziv * Ziv;
+
+            <span class="com">/*</span>
+<span class="com">             * All bits will be set to 1 if 'Trv + Tiv' is less than 4</span>
+<span class="com">             * and all bits will be set to 0 otherwise. Two elements</span>
+<span class="com">             * are calculated in parallel here.</span>
+<span class="com">             */</span>
+            is_still_bounded = <span class="kwd">__builtin_ia32_cmplepd</span>(Trv + Tiv, four);
+
+            <span class="com">/*</span>
+<span class="com">             * Move the sign-bit of the low element to bit 0, move the</span>
+<span class="com">             * sign-bit of the high element to bit 1. The result is</span>
+<span class="com">             * that the pixel will be set if the calculation was</span>
+<span class="com">             * bounded.</span>
+<span class="com">             */</span>
+            two_pixels = <span class="kwd">__builtin_ia32_movmskpd</span>(is_still_bounded);
+        } <span class="kwa">while</span> (--i &gt; <span class="num">0</span> &amp;&amp; two_pixels);
+
+        <span class="com">/*</span>
+<span class="com">         * The pixel bits must be in the most and second most</span>
+<span class="com">         * significant position</span>
+<span class="com">         */</span>
+        two_pixels &lt;&lt;= <span class="num">6</span>;
+
+        <span class="com">/*</span>
+<span class="com">         * Add the two pixels to the bitmap, all bits are</span>
+<span class="com">         * initially zero since the area was allocated with</span>
+<span class="com">         * calloc()</span>
+<span class="com">         */</span>
+        row_bitmap[x &gt;&gt; <span class="num">3</span>] |= (<span class="kwb">uint8_t</span>) (two_pixels &gt;&gt; (x &amp; <span class="num">7</span>));
+    }
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span> (<span class="kwb">int</span> argc, <span class="kwb">char</span> **argv)
+{
+    <span class="kwb">int</span> i;
+
+    N = <span class="kwd">atoi</span>(argv[<span class="num">1</span>]);
+    bytes_per_row = (N + <span class="num">7</span>) &gt;&gt; <span class="num">3</span>;
+
+    inverse_w = <span class="num">2.0</span> / (bytes_per_row &lt;&lt; <span class="num">3</span>);
+    inverse_h = <span class="num">2.0</span> / N;
+
+    <span class="com">/*</span>
+<span class="com">     * Crvs must be 16-bytes aligned on some CPU:s.</span>
+<span class="com">     */</span>
+    <span class="kwa">if</span> (<span class="kwd">posix_memalign</span>((<span class="kwb">void</span>**)&amp;Crvs, <span class="kwa">sizeof</span>(v2df), <span class="kwa">sizeof</span>(v2df) * N / <span class="num">2</span>))
+        <span class="kwa">return</span> EXIT_FAILURE;
+
+<span class="ppc">#pragma omp parallel for</span>
+    <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; N; i+=<span class="num">2</span>) {
+        v2df Crv = { (i+<span class="num">1.0</span>)*inverse_w-<span class="num">1.5</span>, (i)*inverse_w-<span class="num">1.5</span> };
+        Crvs[i &gt;&gt; <span class="num">1</span>] = Crv;
+    }
+
+    bitmap = <span class="kwd">calloc</span>(bytes_per_row, N);
+    <span class="kwa">if</span> (bitmap == NULL)
+        <span class="kwa">return</span> EXIT_FAILURE;
+
+<span class="ppc">#pragma omp parallel for schedule(static,1)</span>
+    <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; N; i++)
+        <span class="kwd">calc_row</span>(i);
+
+    <span class="kwd">printf</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">%d %d</span><span class="esc">\n</span><span class="str">&quot;</span>, N, N);
+    <span class="kwd">fwrite</span>(bitmap, bytes_per_row, N, stdout);
+
+    <span class="kwd">free</span>(bitmap);
+    <span class="kwd">free</span>(Crvs);
+
+    <span class="kwa">return</span> EXIT_SUCCESS;
+}

@@ -1,0 +1,206 @@
+<span class="slc">--</span>
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Branimir Maksimovic</span>
+<span class="slc">--</span>
+<span class="kwd">import</span> Data.Bits
+<span class="kwd">import</span> Data.<span class="kwb">Char</span>
+<span class="kwd">import</span> Data.<span class="kwb">Int</span>
+<span class="kwd">import</span> Data.List
+<span class="kwd">import</span> Data.<span class="kwb">Array</span>.Base
+<span class="kwd">import</span> Data.<span class="kwb">Array</span>.Unboxed
+<span class="kwd">import</span> Data.<span class="kwb">Array</span>.<span class="kwb">IO</span>
+<span class="kwd">import qualified</span> Data.ByteString.Char8 <span class="kwd">as</span> S
+<span class="kwd">import</span> Foreign.Ptr
+<span class="kwd">import</span> Foreign.Storable
+<span class="kwd">import</span> Foreign.Marshal.Alloc
+<span class="kwd">import</span> Control.Concurrent
+<span class="kwd">import qualified</span> Control.Monad <span class="kwd">as</span> CM
+<span class="kwd">import</span> Text.Printf
+
+main = <span class="kwd">do</span>
+    <span class="kwd">let</span> skip = <span class="kwd">do</span>
+            l &lt;- S.<span class="kwc">getLine</span>
+            <span class="kwd">if</span> S.<span class="kwc">isPrefixOf</span> (S.pack <span class="str">&quot;&gt;THREE&quot;</span>) l
+                <span class="kwd">then</span> <span class="kwc">return</span> ()
+                <span class="kwd">else</span> skip
+    skip
+    s &lt;- S.<span class="kwc">getContents</span>
+    <span class="kwd">let</span> content = S.<span class="kwc">filter</span> ((/=) '<span class="esc">\n</span>') s;
+    <span class="kwc">mapM_</span> (execute content) actions
+    
+<span class="kwd">data</span> Actions = I <span class="kwb">Int</span> | S <span class="kwb">String</span>
+actions = [I <span class="num">1</span>,I <span class="num">2</span>,
+           S <span class="str">&quot;GGT&quot;</span>,S <span class="str">&quot;GGTA&quot;</span>,S <span class="str">&quot;GGTATT&quot;</span>,S <span class="str">&quot;GGTATTTTAATT&quot;</span>,S <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>]
+execute content (I i) = writeFrequencies content i
+execute content (S s) = writeCount content s
+
+writeFrequencies :: S.ByteString -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> ()
+writeFrequencies input size = <span class="kwd">do</span>
+    ht &lt;- tcalculate input size
+    lst &lt;- Main.<span class="kwc">foldM</span> (\lst (k,v)-&gt;<span class="kwd">do</span> 
+        v' &lt;- peek v
+        <span class="kwc">return</span> $ (k,v'):lst) [] ht
+    <span class="kwd">let</span> sorted = <span class="kwc">sortBy</span> (\(_,x) (_,y) -&gt; y `<span class="kwc">compare</span>` x) lst
+        <span class="kwa">sum</span> = <span class="kwc">fromIntegral</span> ((S.<span class="kwa">length</span> input) + <span class="num">1</span> - size)
+    <span class="kwc">mapM_</span> (\(k,v)-&gt; <span class="kwd">do</span>
+        printf <span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">%.3f</span><span class="esc">\n</span><span class="str">&quot;</span> 
+            (toString k) ((<span class="num">100</span> * (<span class="kwc">fromIntegral</span> v)/<span class="kwa">sum</span>)::<span class="kwb">Double</span>)) sorted
+    <span class="kwc">putChar</span> '<span class="esc">\n</span>'
+
+writeCount :: S.ByteString -&gt; <span class="kwb">String</span> -&gt; <span class="kwb">IO</span> ()
+writeCount input <span class="kwa">string</span> = <span class="kwd">do</span>
+    <span class="kwd">let</span> size = <span class="kwa">length string</span>
+        k = toNum (S.pack <span class="kwa">string</span>) <span class="num">0</span> size
+    ht &lt;- tcalculate input size
+    res &lt;- Main.<span class="kwc">lookup</span> ht k
+    <span class="kwd">case</span> res <span class="kwd">of</span> 
+        Nothing -&gt; <span class="kwc">putStrLn</span> $ <span class="kwa">string</span> ++ <span class="str">&quot; not found...&quot;</span>
+        Just (s,v) -&gt; <span class="kwd">do</span>
+            r &lt;- peek v
+            printf <span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">%s</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> r (toString s)
+
+tcalculate :: S.ByteString -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> HM
+tcalculate input size = <span class="kwd">do</span>
+    <span class="kwd">let</span> 
+        l = [<span class="num">0</span>.<span class="num">.63</span>]
+        actions = <span class="kwc">map</span> (\i -&gt; (calculate input i size (<span class="kwa">length</span> l))) l
+    vars &lt;- <span class="kwc">mapM</span> (<span class="esc">\a</span>ction -&gt; <span class="kwd">do</span>
+                    var &lt;- newEmptyMVar
+                    forkIO $ <span class="kwd">do</span>
+                        answer &lt;- action
+                        putMVar var answer
+                    <span class="kwc">return</span> var) actions
+    result &lt;- newTable :: <span class="kwb">IO</span> HM
+    results &lt;- <span class="kwc">mapM</span> takeMVar vars
+    CM.<span class="kwc">foldM</span> (\hres ht -&gt; Main.<span class="kwc">foldM</span> (\lst (k,v) -&gt; <span class="kwd">do</span> 
+                            res &lt;- Main.<span class="kwc">lookup</span> lst k
+                            <span class="kwd">case</span> res <span class="kwd">of</span>
+                                Nothing -&gt; <span class="kwd">do</span>
+                                    r1 &lt;- peek v
+                                    r2 &lt;- malloc
+                                    poke r2 r1
+                                    Main.<span class="kwc">insert</span> lst k r2
+                                Just (_,v1) -&gt; <span class="kwd">do</span>
+                                    r1 &lt;- peek v1
+                                    r2 &lt;- peek v
+                                    poke v1 (r1+r2)
+                                    <span class="kwc">return</span> lst) hres ht)
+             result results
+
+calculate :: S.ByteString -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> HM    
+calculate input beg size incr = <span class="kwd">do</span>
+    !ht &lt;- newTable :: <span class="kwb">IO</span> HM
+    <span class="kwd">let</span>
+        calculate' ht i 
+         | i &gt;= ((S.<span class="kwa">length</span> input)+<span class="num">1</span> - size) = <span class="kwc">return</span> ht
+         | <span class="kwc">otherwise</span> = <span class="kwd">do</span>
+            <span class="kwd">let</span> k =  toNum input i size
+            res &lt;- Main.<span class="kwc">lookup</span> ht k
+            ht' &lt;- <span class="kwd">case</span> res <span class="kwd">of</span>
+                    Nothing -&gt; <span class="kwd">do</span>
+                        !r &lt;- malloc
+                        poke r <span class="num">1</span>
+                        Main.<span class="kwc">insert</span> ht k r
+                    Just (_,v) -&gt; <span class="kwd">do</span> 
+                        !r &lt;- peek v
+                        poke v (r+<span class="num">1</span>)
+                        <span class="kwc">return</span> ht
+            calculate' ht' (i+incr)
+    calculate' ht beg
+
+toNum :: S.ByteString -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; T
+toNum s beg size = toNum' <span class="num">0 0</span> size
+    <span class="kwd">where</span>
+        toNum' v1 v2 i
+            | i == <span class="num">0</span> = T v1 v2 size
+            | i &gt; <span class="num">4</span> * sizeOf (<span class="kwc">undefined</span>::<span class="kwb">Int</span>) = toNum' v1 (pack v2) (i-<span class="num">1</span>)
+            | <span class="kwc">otherwise</span> = toNum' (pack v1) v2 (i-<span class="num">1</span>)
+            <span class="kwd">where</span>
+                pack v = (v `shiftL` <span class="num">2</span>) .|. 
+                    (toNumA `unsafeAt` (<span class="kwc">ord</span> (S.<span class="kwa">index</span> s (beg+i-<span class="num">1</span>))))
+
+toString :: T -&gt; <span class="kwb">String</span>
+toString (T v1 v2 s) = toString' v1 v2 <span class="num">0</span>
+    <span class="kwd">where</span>
+        toString' v1 v2 i
+            | i &gt;= s = []
+            | i &gt;= <span class="num">4</span> * sizeOf (<span class="kwc">undefined</span>::<span class="kwb">Int</span>) = 
+                unpack v2 : toString' v1 (v2 `shiftR` <span class="num">2</span>) (i+<span class="num">1</span>)
+            | <span class="kwc">otherwise</span> = unpack v1 : toString' (v1 `shiftR` <span class="num">2</span>) v2 (i+<span class="num">1</span>)
+            <span class="kwd">where</span> 
+                unpack v = <span class="kwd">case</span> v.&amp;<span class="num">.3</span> <span class="kwd">of</span>
+                        <span class="num">0</span> -&gt; 'A'
+                        <span class="num">1</span> -&gt; 'C'
+                        <span class="num">2</span> -&gt; 'T'
+                        <span class="num">3</span> -&gt; 'G'
+
+
+toNumA :: UArray <span class="kwb">Int Int</span>
+toNumA = <span class="kwa">array</span> (<span class="num">0</span>,<span class="num">255</span>) [(<span class="kwc">ord</span> 'a',<span class="num">0</span>),(<span class="kwc">ord</span> 'c',<span class="num">1</span>),(<span class="kwc">ord</span> 't',<span class="num">2</span>),(<span class="kwc">ord</span> 'g',<span class="num">3</span>),
+            (<span class="kwc">ord</span> 'A',<span class="num">0</span>),(<span class="kwc">ord</span> 'C',<span class="num">1</span>),(<span class="kwc">ord</span> 'T',<span class="num">2</span>),(<span class="kwc">ord</span> 'G',<span class="num">3</span>)]
+
+<span class="kwd">data</span> T = T !<span class="kwb">Int</span> !<span class="kwb">Int</span> !<span class="kwb">Int</span>
+<span class="kwd">instance</span> Eq T <span class="kwd">where</span>
+    (T a b _) == (T c d _) = a == c &amp;&amp; b == d
+<span class="kwd">class</span> Hash h <span class="kwd">where</span>
+    hash :: h -&gt; <span class="kwb">Int</span>
+<span class="kwd">instance</span> Hash T <span class="kwd">where</span>
+    hash (T a b _) = a `xor` b
+
+<span class="kwd">type</span> HM = HashMap T (Ptr <span class="kwb">Int</span>)
+<span class="kwd">data</span> HashMap k v = HashMap !(IOArray <span class="kwb">Int</span> [(k,v)]) !<span class="kwb">Int</span> !(Ptr <span class="kwb">Int</span>)
+dfltSz = <span class="num">32</span>
+newTable :: <span class="kwb">IO</span> (HashMap k v)
+newTable = <span class="kwd">do</span>
+    !<span class="kwa">array</span> &lt;- newArray (<span class="num">0</span>,dfltSz-<span class="num">1</span>) []
+    !pCnt &lt;- malloc
+    poke pCnt <span class="num">0</span>
+    <span class="kwc">return</span> $ HashMap <span class="kwa">array</span> dfltSz pCnt
+
+<span class="kwc">lookup</span> :: (Eq k, Hash k)=&gt;HashMap k v -&gt; k -&gt; <span class="kwb">IO</span> (<span class="kwb">Maybe</span> (k,v))
+<span class="kwc">lookup</span> (HashMap a tsz _) k = <span class="kwd">do</span>
+    <span class="kwd">let</span> h = hash k
+    !lst &lt;- readArray a (h .&amp;. (tsz-<span class="num">1</span>))
+    <span class="kwd">let</span>
+        loop [] = <span class="kwc">return</span> Nothing
+        loop ((!k',!v):xs) 
+            | k /= k' = loop xs
+            | <span class="kwc">otherwise</span> = <span class="kwc">return</span> $ Just (k',v)
+    loop lst
+
+<span class="kwc">insert</span> :: (Eq k, Hash k)=&gt;HashMap k v -&gt; k -&gt; v -&gt; <span class="kwb">IO</span> (HashMap k v)
+<span class="kwc">insert</span> hm&#64;(HashMap a tsz pcnt) k v = <span class="kwd">do</span>
+    <span class="kwd">let</span> h = hash k
+    !cnt &lt;- peek pcnt
+    poke pcnt (cnt+<span class="num">1</span>)
+    !lst &lt;- readArray a (h .&amp;. (tsz-<span class="num">1</span>))
+    writeArray a (h .&amp;. (tsz-<span class="num">1</span>)) ((k,v):lst)
+    <span class="kwd">if</span> (cnt+<span class="num">1</span>) &gt; tsz 
+        <span class="kwd">then</span> rehash hm
+        <span class="kwd">else</span> <span class="kwc">return</span> hm
+
+rehash :: (Eq k,Hash k)=&gt;HashMap k v -&gt; <span class="kwb">IO</span> (HashMap k v)
+rehash hm&#64;(HashMap _ tsz _) = <span class="kwd">do</span>
+    <span class="kwd">let</span> newtsz = tsz * <span class="num">2</span>
+    !<span class="kwa">array</span> &lt;- newArray (<span class="num">0</span>,newtsz-<span class="num">1</span>) []
+    !pCnt &lt;- malloc
+    poke pCnt <span class="num">0</span>
+    <span class="kwd">let</span> newhm = HashMap <span class="kwa">array</span> newtsz pCnt 
+    Main.<span class="kwc">foldM</span> (\hm (k,v)-&gt; Main.<span class="kwc">insert</span> hm k v) newhm hm
+
+<span class="kwc">foldM</span> :: ( a -&gt; (b,c) -&gt; <span class="kwb">IO</span> a) -&gt; a -&gt; HashMap b c -&gt; <span class="kwb">IO</span> a
+<span class="kwc">foldM</span> f s (HashMap a tsz _) = <span class="kwd">do</span>
+    <span class="kwd">let</span> 
+        loop <span class="num">0</span> s' = <span class="kwc">return</span> s'
+        loop i s' = <span class="kwd">do</span>
+            !lst &lt;- readArray a (i-<span class="num">1</span>)
+            <span class="kwd">let</span> 
+                loop' [] s' = <span class="kwc">return</span> s'
+                loop' (x:xs) s' = <span class="kwd">do</span>
+                    !s'' &lt;- f s' x
+                    loop' xs s''
+            !s'' &lt;- loop' lst s'
+            loop (i-<span class="num">1</span>) s''
+    loop tsz s

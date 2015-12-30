@@ -1,0 +1,299 @@
+<span class="slc">;;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;;</span>
+<span class="slc">;;;   by Jon Smith from GCC Mandelbrot version</span>
+<span class="slc">;;;   does computation nearly the same as the GCC #4 version of the code.  </span>
+<span class="slc">;;;</span>
+<span class="slc">;;;   to compile:</span>
+<span class="slc">;;sbcl --load mandelbrot.lisp --eval &quot;(save-lisp-and-die \&quot;mandelbrot.core\&quot; :purify t :toplevel (lambda () (vops::main) (quit)))&quot;</span>
+<span class="slc">;;to run</span>
+<span class="slc">;;sbcl --noinform --core mandelbrot.core 16000</span>
+
+
+(<span class="kwa">setf</span> sb-ext:*efficiency-note-cost-threshold* <span class="num">1</span>)
+(<span class="kwa">setf</span> sb-ext:*efficiency-note-limit* <span class="num">8</span>)
+
+(<span class="kwa">setf</span> sb-ext:*inline-expansion-limit* <span class="num">1000</span>)
+(<span class="kwa">sb-int</span>:set-floating-point-modes :traps (<span class="kwa">list</span> :divide-by-zero))
+
+(<span class="kwa">defpackage</span> :vops
+  (:use :cl))
+
+(<span class="kwa">in-package</span> :sb-vm)
+(<span class="kwa">declaim</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">space</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)))
+
+(<span class="kwa">eval-when</span> (:load-toplevel :compile-toplevel :execute)
+  #+x86-64(<span class="kwa">handler-bind</span> ((<span class="kwa">simple-error</span> (<span class="kwa">lambda</span> (<span class="kwa">condition</span>)
+					 condition
+					 (<span class="kwa">invoke-restart</span> 'continue))))
+          
+	    (<span class="kwa">sb-c</span>::defknown complex-double-float/sse-* ((<span class="kwa">complex</span> double-float) (<span class="kwa">complex</span> double-float))
+		(<span class="kwa">complex</span> double-float))
+	    (<span class="kwa">sb-c</span>::defknown cmple-movmskpd ((<span class="kwa">complex</span> double-float) (<span class="kwa">complex</span> double-float))
+		(<span class="kwa">unsigned-byte</span> <span class="num">32</span>))
+
+	    (<span class="kwa">define-vop</span> (<span class="kwa">complex-double-float</span>/sse-*)
+	      (:policy :fast-safe)
+	      (:translate complex-double-float/sse-*)
+	      (:args (<span class="kwa">x</span> :scs (<span class="kwa">complex-double-reg</span>))
+		     (<span class="kwa">y</span> :scs (<span class="kwa">complex-double-reg</span>)))
+	      (:arg-types complex-double-float complex-double-float)
+	      (:results (<span class="kwa">r</span> :scs (<span class="kwa">complex-double-reg</span>)))
+	      (:result-types complex-double-float)
+	      (:generator <span class="num">2</span>
+			  (<span class="kwa">flet</span> ((<span class="kwa">get-constant</span> (<span class="kwa">tn</span>)
+				   (<span class="kwa">register-inline-constant</span>
+				    (<span class="kwa">tn-value</span> tn))))
+			    (<span class="kwa">cond</span> ((<span class="kwa">location</span>= x r)
+				   (<span class="kwa">inst</span> mulpd x y))
+				  ((<span class="kwa">location</span>= y r)
+				   (<span class="kwa">inst</span> mulpd y x))
+				  ((<span class="kwa">not</span> (<span class="kwa">location</span>= r y))
+				   (<span class="kwa">if</span> (<span class="kwa">sc-is</span> x fp-complex-double-immediate)
+				       (<span class="kwa">inst</span> movapd r (<span class="kwa">get-constant</span> x))
+				       (<span class="kwa">move</span> r x))
+				   (<span class="kwa">inst</span> mulpd r y))))))
+
+	    (<span class="kwa">macrolet</span> ((<span class="kwa">generate</span> (<span class="kwa">opinst</span> test movmsk constant-sc load-inst)
+			 `(<span class="kwa">flet</span> ((<span class="kwa">get-constant</span> (<span class="kwa">tn</span>)
+				   (<span class="kwa">register-inline-constant</span>
+				    ,&#64;(<span class="kwa">and</span> (<span class="kwa">eq</span> constant-sc 'fp-single-immediate)
+					   '(:aligned))
+				    (<span class="kwa">tn-value</span> tn))))
+			    (<span class="kwa">declare</span> (<span class="kwa">ignorable</span> #'get-constant))
+			    (<span class="kwa">cond</span>
+			      ((<span class="kwa">location</span>= x r)
+			       (<span class="kwa">when</span> (<span class="kwa">sc-is</span> y ,constant-sc)
+				 (<span class="kwa">setf</span> y (<span class="kwa">get-constant</span> y)))
+			       (<span class="kwa">inst</span> ,opinst ,test x y)
+			       (<span class="kwa">inst</span> ,movmsk r x))
+			      ((<span class="kwa">not</span> (<span class="kwa">location</span>= r y))
+			       (<span class="kwa">if</span> (<span class="kwa">sc-is</span> x ,constant-sc)
+				   (<span class="kwa">inst</span> ,load-inst r (<span class="kwa">get-constant</span> x))
+				   (<span class="kwa">move</span> tmp x))
+			       (<span class="kwa">when</span> (<span class="kwa">sc-is</span> y ,constant-sc)
+				 (<span class="kwa">setf</span> y (<span class="kwa">get-constant</span> y)))
+			       (<span class="kwa">inst</span> ,opinst ,test tmp y)
+			       (<span class="kwa">inst</span> ,movmsk r tmp))
+			      (<span class="kwa">t</span>
+			       (<span class="kwa">if</span> (<span class="kwa">sc-is</span> x ,constant-sc)
+				   (<span class="kwa">inst</span> ,load-inst tmp (<span class="kwa">get-constant</span> x))
+				   (<span class="kwa">move</span> tmp x))
+			       (<span class="kwa">when</span> (<span class="kwa">sc-is</span> y ,constant-sc)
+				 (<span class="kwa">setf</span> y (<span class="kwa">get-constant</span> y)))
+			       (<span class="kwa">inst</span> ,opinst ,test tmp y)
+			       (<span class="kwa">inst</span> ,movmsk r tmp)
+			       ))))
+		       (<span class="kwa">frob</span> (<span class="kwa">test</span> cdinst cdname cdcost)
+			 `(<span class="kwa">progn</span>
+			    (<span class="kwa">define-vop</span> (,cdname)
+			      (:translate ,cdname)
+			      (:policy :fast-safe)
+			      (:args (<span class="kwa">x</span> :scs (<span class="kwa">complex-double-reg</span>))
+				     (<span class="kwa">y</span> :scs (<span class="kwa">complex-double-reg</span>)))
+			      (:arg-types complex-double-float complex-double-float)
+			      (:results (<span class="kwa">r</span> :scs (<span class="kwa">unsigned-reg</span>)))
+			      (:result-types unsigned-num)
+			      (:temporary (:sc complex-double-reg) tmp)
+			      (:info)
+			      (:generator ,cdcost
+					  (<span class="kwa">generate</span> ,cdinst ,test movmskpd
+						    fp-complex-double-immediate movapd))))))
+	      (<span class="kwa">frob</span> :le cmppd cmple-movmskpd <span class="num">3</span>)))
+
+  #+x86-64(<span class="kwa">declaim</span> (<span class="kwa">inline</span> complex-double-float/sse-*))
+  #+x86-64(<span class="kwa">declaim</span> (<span class="kwa">inline</span> cmple-movmskpd))
+  (<span class="kwa">declaim</span> (<span class="kwa">inline</span> vops::calc-row vops::main))
+  #+x86-64(<span class="kwa">declaim</span> (<span class="kwa">inline</span> vops::complex-double-float/sse-*))
+  #+x86-64(<span class="kwa">declaim</span> (<span class="kwa">inline</span> vops::cmple-movmskpd)))
+
+#+x86-64(<span class="kwa">defun</span> vops::complex-double-float/sse-* (<span class="kwa">numbera</span> numberb)
+	    (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">complex</span> double-float) numbera numberb)
+		     (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">space</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)))
+	    (<span class="kwa">complex-double-float</span>/sse-* numbera numberb))
+
+#+x86-64(<span class="kwa">defun</span> vops::cmple-movmskpd (<span class="kwa">numbera</span> numberb)
+	    (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">complex</span> double-float) numbera numberb)
+		     (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">space</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)))
+	    (<span class="kwa">cmple-movmskpd</span> numbera numberb))
+
+(<span class="kwa">in-package</span> :vops)
+(<span class="kwa">declaim</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">space</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)))
+(<span class="kwa">eval-when</span> (:load-toplevel :compile-toplevel :execute)
+  (<span class="kwa">defmacro</span> cbyte (<span class="kwa">form</span>)
+    (<span class="kwa">cond</span> ((<span class="kwa">stringp</span> form)
+	   (<span class="kwa">map</span> '(<span class="kwa">simple-array</span> (<span class="kwa">unsigned-byte</span> <span class="num">8</span>) (*)) #'char-code form))
+	  ((<span class="kwa">characterp</span> form)
+	   (<span class="kwa">char-code</span> form))
+	  ((<span class="kwa">listp</span> form)
+	   `(<span class="kwa">map</span> '(<span class="kwa">simple-array</span> (<span class="kwa">unsigned-byte</span> <span class="num">8</span>) (*)) #'char-code ,form))
+	  )))
+
+(<span class="kwa">defconstant</span> +zero+ (<span class="kwa">complex</span> <span class="num">0.0</span>d0 <span class="num">0.0</span>d0))
+(<span class="kwa">defconstant</span> +four+ (<span class="kwa">complex</span> <span class="num">4.0</span>d0 <span class="num">4.0</span>d0))
+(<span class="kwa">defconstant</span> +workers+ <span class="num">8</span>)
+
+#+x86-64(<span class="kwa">defmacro</span> escapes? (<span class="kwa">n</span> two-pixels  crv civ)
+	  (<span class="kwa">let</span> ((<span class="kwa">escaped</span> (<span class="kwa">gensym</span> <span class="str">&quot;escaped&quot;</span>))
+		(<span class="kwa">temp</span> (<span class="kwa">gensym</span> <span class="str">&quot;temp&quot;</span>))
+		(<span class="kwa">temp2</span> (<span class="kwa">gensym</span> <span class="str">&quot;temp2&quot;</span>))
+		(<span class="kwa">zrv</span> (<span class="kwa">gensym</span>))
+		(<span class="kwa">ziv</span> (<span class="kwa">gensym</span>))
+		(<span class="kwa">trv</span> (<span class="kwa">gensym</span>))
+		(<span class="kwa">tiv</span> (<span class="kwa">gensym</span>)))
+	    `(<span class="kwa">let</span> ((,zrv vops::+zero+) (,ziv vops::+zero+) (,trv vops::+zero+) (,tiv vops::+zero+))
+	       (<span class="kwa">block</span> ,escaped 
+		 ,&#64;(<span class="kwa">nreverse</span> (<span class="kwa">loop</span> for i from <span class="num">0</span> below n
+				collecting	   
+				`(<span class="kwa">progn</span>
+				   (<span class="kwa">let</span>* ((,temp (<span class="kwa">complex-double-float</span>/sse-* ,zrv ,ziv)))
+				     (<span class="kwa">setf</span> ,zrv (+ (<span class="kwa">-</span> ,trv ,tiv) ,crv))
+				     (<span class="kwa">setf</span> ,trv (<span class="kwa">complex-double-float</span>/sse-* ,zrv ,zrv))
+				     (<span class="kwa">setf</span> ,ziv (+ ,temp ,temp ,civ))
+				     (<span class="kwa">setf</span> ,tiv (<span class="kwa">complex-double-float</span>/sse-* ,ziv ,ziv)))
+				   (<span class="kwa">let</span> ((,temp2 (+ ,trv ,tiv)))
+				     (<span class="kwa">setf</span> ,two-pixels (<span class="kwa">cmple-movmskpd</span> ,temp2 ,vops::+four+)))
+				   (<span class="kwa">when</span> (= ,two-pixels <span class="num">0</span>)
+				     (<span class="kwa">return-from</span> ,escaped)))
+				))))))
+
+#+x86(<span class="kwa">defmacro</span> escapes? (<span class="kwa">n</span> two-pixels crv civ)
+       (<span class="kwa">let</span> ((<span class="kwa">escaped</span> (<span class="kwa">gensym</span> <span class="str">&quot;escaped&quot;</span>))
+	     (<span class="kwa">zrv1</span> (<span class="kwa">gensym</span>)) 
+	     (<span class="kwa">zrv2</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">ziv1</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">ziv2</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">trv1</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">trv2</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">tiv1</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">tiv2</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">crv1</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">crv2</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">civ1</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">civ2</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">temp</span> (<span class="kwa">gensym</span>))
+	     (<span class="kwa">temp2</span> (<span class="kwa">gensym</span>)))
+	 `(<span class="kwa">let</span> ((,zrv1 <span class="num">0.0</span>d0)
+		(,zrv2 <span class="num">0.0</span>d0)
+		(,ziv1 <span class="num">0.0</span>d0)
+		(,ziv2 <span class="num">0.0</span>d0)
+		(,trv1 <span class="num">0.0</span>d0)
+		(,trv2 <span class="num">0.0</span>d0)
+		(,tiv1 <span class="num">0.0</span>d0)
+		(,tiv2 <span class="num">0.0</span>d0)
+		(,crv1 (<span class="kwa">realpart</span> ,crv))
+		(,crv2 (<span class="kwa">imagpart</span> ,crv))
+		(,civ1 (<span class="kwa">realpart</span> ,civ))
+		(,civ2 (<span class="kwa">imagpart</span> ,civ)))
+	    (<span class="kwa">declare</span> (<span class="kwa">type</span> double-float
+			   ,zrv1 ,zrv2 ,ziv1
+			   ,ziv2 ,trv1 ,trv2
+			   ,tiv1 ,tiv2 ,crv1
+			   ,crv2 ,civ1 ,civ2))
+	    (<span class="kwa">setf</span> ,two-pixels <span class="num">3</span>)
+	    (<span class="kwa">block</span> ,escaped
+	      ,&#64;(<span class="kwa">nreverse</span> (<span class="kwa">loop</span> for i from <span class="num">0</span> below n
+			     collecting
+			     `(<span class="kwa">progn</span> 
+				(<span class="kwa">let</span> ((,temp (* ,zrv1 ,ziv1)))
+				  (<span class="kwa">setf</span> ,zrv1 (+ (<span class="kwa">-</span> ,trv1 ,tiv1) ,crv1))
+				  (<span class="kwa">setf</span> ,trv1 (* ,zrv1 ,zrv1))
+				  (<span class="kwa">setf</span> ,ziv1 (+ ,temp ,temp ,civ1))
+				  (<span class="kwa">setf</span> ,tiv1 (* ,ziv1 ,ziv1)))
+				(<span class="kwa">let</span> ((,temp2 (+ ,trv1 ,tiv1)))
+				  (<span class="kwa">when</span> (&gt; ,temp2 <span class="num">4.0</span>d0)
+				    (<span class="kwa">setf</span> ,two-pixels (<span class="kwa">logxor</span> ,two-pixels <span class="num">1</span>))
+				    (<span class="kwa">return-from</span> ,escaped)))))))
+	    (<span class="kwa">block</span> ,escaped
+	      ,&#64;(<span class="kwa">nreverse</span> (<span class="kwa">loop</span> for i from <span class="num">0</span> below n
+			     collecting
+			     `(<span class="kwa">progn</span> 
+				(<span class="kwa">let</span> ((,temp (* ,zrv2 ,ziv2)))
+				  (<span class="kwa">setf</span> ,zrv2 (+ (<span class="kwa">-</span> ,trv2 ,tiv2) ,crv2))
+				  (<span class="kwa">setf</span> ,trv2 (* ,zrv2 ,zrv2))
+				  (<span class="kwa">setf</span> ,ziv2 (+ ,temp ,temp ,civ2))
+				  (<span class="kwa">setf</span> ,tiv2 (* ,ziv2 ,ziv2)))
+				(<span class="kwa">let</span> ((,temp2 (+ ,trv2 ,tiv2)))
+				  (<span class="kwa">when</span> (&gt; ,temp2 <span class="num">4.0</span>d0)
+				    (<span class="kwa">setf</span> ,two-pixels (<span class="kwa">logxor</span> ,two-pixels <span class="num">2</span>))
+				    (<span class="kwa">return-from</span> ,escaped))))))))))
+
+
+(<span class="kwa">defun</span> vops::calc-row (<span class="kwa">y</span> n bitmap bytes-per-row crvs inverse-h)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum y N bytes-per-row)
+	   (<span class="kwa">type</span> double-float inverse-h)
+	   (<span class="kwa">type</span> (<span class="kwa">simple-array</span> (<span class="kwa">unsigned-byte</span> <span class="num">8</span>) (*)) bitmap)
+	   (<span class="kwa">type</span> (<span class="kwa">simple-array</span> (<span class="kwa">complex</span> double-float) (*)) crvs))
+  (<span class="kwa">let</span> ((<span class="kwa">index</span> (<span class="kwa">the</span> fixnum (* bytes-per-row y)))
+	(<span class="kwa">civ-init</span> (<span class="kwa">complex</span>
+		   (<span class="kwa">the</span> double-float (<span class="kwa">-</span> (* y inverse-h) <span class="num">1.0</span>d0))
+		   (<span class="kwa">the</span> double-float (<span class="kwa">-</span> (* y inverse-h) <span class="num">1.0</span>d0))))
+	(<span class="kwa">bit</span> <span class="num">0</span>)
+	(<span class="kwa">code</span> <span class="num">0</span>))
+    (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum index bit)
+	     (<span class="kwa">type</span> (<span class="kwa">unsigned-byte</span> <span class="num">8</span>) code))
+    (<span class="kwa">loop</span> for x of-type fixnum from <span class="num">0</span> below N by <span class="num">2</span>
+       do
+       (<span class="kwa">let</span> ((<span class="kwa">two-pixels</span> <span class="num">3</span>))
+	 (<span class="kwa">let</span> ((<span class="kwa">crv</span> (<span class="kwa">aref</span> crvs (<span class="kwa">ash</span> x -<span class="num">1</span>)))
+	       (<span class="kwa">civ</span> civ-init))
+	   (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">complex</span> double-float)
+			  crv civ)
+		    (<span class="kwa">type</span> fixnum two-pixels))
+	   (<span class="kwa">escapes</span>? <span class="num">50</span> two-pixels crv civ))
+	 (<span class="kwa">setf</span> code (<span class="kwa">logior</span> (<span class="kwa">ash</span> code <span class="num">2</span>) two-pixels))
+
+	 (<span class="kwa">when</span> (= (<span class="kwa">incf</span> bit) <span class="num">4</span>)
+	   (<span class="kwa">setf</span> (<span class="kwa">aref</span> bitmap index) code
+		 bit <span class="num">0</span>
+		 code <span class="num">0</span>)
+	   (<span class="kwa">incf</span> index))))
+    (<span class="kwa">values</span>)))
+
+  (<span class="kwa">defun</span> vops::main ()
+    (<span class="kwa">let</span>* ((<span class="kwa">args</span> sb-ext:*posix-argv*)
+	   (<span class="kwa">n</span> (<span class="kwa">parse-integer</span> (<span class="kwa">or</span> (<span class="kwa">second</span> args) <span class="str">&quot;1000&quot;</span>)))
+	   (<span class="kwa">bytes-per-row</span> (<span class="kwa">ash</span> (<span class="kwa">the</span> fixnum (+ N <span class="num">7</span>)) -<span class="num">3</span>))
+	   (<span class="kwa">inverse-w</span> (/ <span class="num">2.0</span>d0 (<span class="kwa">the</span> fixnum (<span class="kwa">ash</span> bytes-per-row <span class="num">3</span>))))
+	   (<span class="kwa">inverse-h</span> (/ <span class="num">2.0</span>d0 N))
+	   (<span class="kwa">crvs</span> 
+	    (<span class="kwa">make-array</span> (<span class="kwa">ash</span> N -<span class="num">1</span>) :element-type '(<span class="kwa">complex</span> double-float))))
+      (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum N bytes-per-row)
+	       (<span class="kwa">type</span> double-float inverse-h inverse-w)
+	       (<span class="kwa">type</span> (<span class="kwa">simple-array</span> (<span class="kwa">complex</span> double-float) (*)) crvs))
+      (<span class="kwa">let</span> ((<span class="kwa">bitmap</span> 
+	     (<span class="kwa">make-array</span> (* bytes-per-row N)
+			 :initial-element <span class="num">0</span>
+			 :element-type '(<span class="kwa">unsigned-byte</span> <span class="num">8</span>))))
+	(<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">simple-array</span> (<span class="kwa">unsigned-byte</span> <span class="num">8</span>) (*)) bitmap))
+	(<span class="kwa">loop</span> for i of-type fixnum from <span class="num">0</span> below N by <span class="num">2</span> 
+	   do (<span class="kwa">setf</span> (<span class="kwa">aref</span> crvs (<span class="kwa">ash</span> i -<span class="num">1</span>))
+		    (<span class="kwa">complex</span> (<span class="kwa">-</span> (* (+ i <span class="num">1.0</span>d0) inverse-w) <span class="num">1.5</span>d0)
+			     (<span class="kwa">-</span> (* i inverse-w) <span class="num">1.5</span>d0))))
+      
+	#-sb-thread
+	(<span class="kwa">loop</span> for y from <span class="num">0</span> below N
+	   do (<span class="kwa">calc-row</span> y n bitmap bytes-per-row crvs inverse-h))
+	#+sb-thread
+	(<span class="kwa">let</span> ((<span class="kwa">ndiv</span> (<span class="kwa">the</span> fixnum (<span class="kwa">truncate</span> n +workers+))))
+	  (<span class="kwa">mapcar</span> #'sb-thread:join-thread  
+		  (<span class="kwa">loop</span> for i from <span class="num">0</span> below +workers+
+		     collecting (<span class="kwa">sb-thread</span>:make-thread 
+				 (<span class="kwa">let</span> ((<span class="kwa">start</span> (* ndiv i))
+				       (<span class="kwa">end</span> (* ndiv (+ i <span class="num">1</span>))))
+				   (<span class="kwa">lambda</span> () (<span class="kwa">loop</span> for y from start  to end 
+						 do (<span class="kwa">calc-row</span> y n bitmap bytes-per-row crvs inverse-h))))))))
+	(<span class="kwa">with-open-file</span> (<span class="kwa">stream</span> #p<span class="str">&quot;/dev/stdout&quot;</span>
+				:direction :output
+				:if-exists :append
+				:element-type '(<span class="kwa">unsigned-byte</span> <span class="num">8</span>))
+	  (<span class="kwa">write-sequence</span> (<span class="kwa">cbyte</span> (<span class="kwa">format</span> nil <span class="str">&quot;P4~%~d ~d~%&quot;</span> n n)) stream)
+	  (<span class="kwa">write-sequence</span> bitmap stream)))
+      (<span class="kwa">values</span>)))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> ))
+
+(<span class="kwa">in-package</span> :cl-user)
+
+(<span class="kwa">defun</span> main ()
+  (<span class="kwa">vops</span>::main))

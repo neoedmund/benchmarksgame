@@ -1,0 +1,16 @@
+
+Tue, 13 Jan 2015 00:43:13 GMT
+
+COMMAND LINE:
+/usr/local/src/lua-5.3.0/bin/lua  meteor.lua-4.lua 2098
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+/usr/local/src/lua-5.3.0/bin/lua: meteor.lua-4.lua:212: attempt to call a nil value (global 'loadstring')
+stack traceback:
+	meteor.lua-4.lua:212: in local 'generatesolver'
+	meteor.lua-4.lua:216: in main chunk
+	[C]: in ?

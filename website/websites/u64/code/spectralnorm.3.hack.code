@@ -1,0 +1,164 @@
+&lt;?hh 
+<span class="com">/* </span>
+<span class="com">   The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Isaac Gouy</span>
+<span class="com">   multicore by anon</span>
+<span class="com">   PHP as HHVM/Hack by Isaac Gouy</span>
+<span class="com"> */</span>
+
+
+<span class="kwa">function</span> <span class="kwd">A</span>(&amp;$i, &amp;$j){
+   <span class="kwa">return</span> <span class="num">1.0</span> / ( ( ( ($i+$j) * ($i+$j+<span class="num">1</span>) ) &gt;&gt; <span class="num">1</span> ) + $i + <span class="num">1</span> );
+}
+
+<span class="kwa">function</span> <span class="kwd">Av</span>(&amp;$n,&amp;$v,&amp;$start,&amp;$end){
+   <span class="kwa">global</span> $_tpl;
+   $Av = $_tpl;
+   <span class="kwa">for</span> ($i = $start; $i &lt; $end; ++$i) {
+      $sum = <span class="num">0.0</span>;
+      <span class="kwa">foreach</span>($v <span class="kwa">as</span> $j=&gt;$v_j) {
+         $sum += <span class="kwd">A</span>($i,$j) * $v_j;
+      }
+      $Av[$i] = $sum;
+   }
+   <span class="kwa">return</span> $Av;
+}
+
+<span class="kwa">function</span> <span class="kwd">Atv</span>(&amp;$n,&amp;$v,&amp;$start,&amp;$end){
+   <span class="kwa">global</span> $_tpl;
+   $Atv = $_tpl;
+   <span class="kwa">for</span>($i = $start; $i &lt; $end; ++$i) {
+      $sum = <span class="num">0.0</span>;
+      <span class="kwa">foreach</span>($v <span class="kwa">as</span> $j=&gt;$v_j) {
+         $sum += <span class="kwd">A</span>($j,$i) * $v_j;
+      }
+      $Atv[$i] = $sum;
+   }
+   <span class="kwa">return</span> $Atv;
+}
+
+<span class="kwa">function</span> <span class="kwd">AtAv</span>(&amp;$n,&amp;$v,&amp;$start,&amp;$end,&amp;$sync){
+
+   $tmp = <span class="kwd">Av</span>($n, $v, $start, $end);
+   <span class="kwa">if</span> ($sync) <span class="kwd">sync</span>($tmp);
+
+   $tmp = <span class="kwd">Atv</span>($n, $tmp, $start, $end);
+   <span class="kwa">if</span> ($sync) <span class="kwd">sync</span>($tmp);
+
+   <span class="kwa">return</span> $tmp;
+}
+
+<span class="kwa">function</span> <span class="kwd">sync</span>(&amp;$tmp) {
+
+   <span class="kwa">global</span> $parent,$chunk_data_size,$total_data_size,$pipe,$pipes;
+
+   <span class="kwa">if</span> (!$parent) {
+      <span class="kwd">array_unshift</span>($tmp, <span class="str">'d*'</span>);
+      $data = <span class="kwd">call_user_func_array</span>(<span class="str">'pack'</span>, $tmp);
+      <span class="kwd">safe_write</span>($pipe, $data);
+      $tmp = <span class="kwd">array_merge</span>(<span class="kwa">array</span>(), <span class="kwd">unpack</span>(<span class="str">'d*'</span>, <span class="kwd">safe_read</span>($pipe, $total_data_size)));
+   } <span class="kwa">else</span> {
+      $tmps = <span class="kwa">array</span>(<span class="kwa">array</span>(<span class="str">'d*'</span>));
+      <span class="kwa">foreach</span>($pipes <span class="kwa">as</span> $pipe) {
+         $tmps[] = <span class="kwd">unpack</span>(<span class="str">'d*'</span>, <span class="kwd">safe_read</span>($pipe, $chunk_data_size));
+      }
+      $tmps[] = &amp;$tmp;
+      $tmp = <span class="kwd">call_user_func_array</span>(<span class="str">'array_merge'</span>, $tmps);
+
+      $data = <span class="kwd">call_user_func_array</span>(<span class="str">'pack'</span>, $tmp);
+      <span class="kwa">foreach</span>($pipes <span class="kwa">as</span> $pipe) {
+         <span class="kwd">safe_write</span>($pipe, $data);
+      }
+      <span class="kwd">array_shift</span>($tmp);
+   }
+}
+
+<span class="kwa">function</span> <span class="kwd">safe_write</span>($fd, $data) {
+   $len = <span class="kwd">strlen</span>($data);
+   <span class="kwa">do</span> {
+      $w = <span class="kwd">fwrite</span>($fd, $data);
+      $len -= $w;
+   } <span class="kwa">while</span>($len &amp;&amp; ($data = <span class="kwd">substr</span>($data, $w)) !== FALSE);
+}
+<span class="kwa">function</span> <span class="kwd">safe_read</span>($fd, $len) {
+   $data = <span class="str">''</span>;
+   <span class="kwa">while</span> ($len &gt; <span class="num">0</span>) {
+      $d = <span class="kwd">fread</span>($fd, $len);
+      $len -= <span class="kwd">strlen</span>($d);
+      $data .= $d;
+   }
+   <span class="kwa">return</span> $data;
+}
+<span class="kwa">function</span> <span class="kwd">pipe</span>() {
+   <span class="kwa">return</span> <span class="kwd">stream_socket_pair</span>(STREAM_PF_UNIX, STREAM_SOCK_STREAM, <span class="num">0</span>);
+}
+
+
+$n = (<span class="kwb">int</span>) (($argc == <span class="num">2</span>) ? $argv[<span class="num">1</span>] : <span class="num">1</span>);
+
+$procs = <span class="num">1</span>;
+<span class="kwa">if</span> (<span class="kwd">file_exists</span>(<span class="str">'/proc/cpuinfo'</span>)) {
+   $procs = <span class="kwd">preg_match_all</span>(<span class="str">'/^processor\s/m'</span>, <span class="kwd">file_get_contents</span>(<span class="str">'/proc/cpuinfo'</span>), $discard);
+}
+
+<span class="kwa">if</span> ($n &lt; $procs) {
+   $procs = <span class="num">1</span>;
+}
+
+$chunk_size = (<span class="kwb">int</span>) ($n / $procs);
+$double_size = <span class="kwd">strlen</span>(<span class="kwd">pack</span>(<span class="str">'d'</span>, <span class="num">0.0</span>));
+$chunk_data_size = $double_size * $chunk_size;
+$total_data_size = $double_size * $n;
+
+$pipes = <span class="kwa">array</span>();
+$parent = FALSE;
+<span class="kwa">for</span>($i = <span class="num">0</span>; $i &lt; $procs; ++$i) {
+   $range_begin = $i * $chunk_size;
+   <span class="kwa">if</span> ($i &lt; ($procs - <span class="num">1</span>)) {
+      $pipe = <span class="kwd">pipe</span>();
+      $pipes[] = $pipe[<span class="num">0</span>];
+      $pipe = $pipe[<span class="num">1</span>];
+      $range_end = $range_begin + $chunk_size;
+      $pid = <span class="kwd">pcntl_fork</span>();
+      <span class="kwa">if</span> ($pid === -<span class="num">1</span>) {
+         <span class="kwa">die</span>(<span class="str">'could not fork'</span>);
+      } <span class="kwa">else if</span> ($pid) {
+         <span class="kwa">continue</span>;
+      }
+      <span class="kwa">break</span>;
+   } <span class="kwa">else</span> {
+      $range_end = $n;
+      $parent = TRUE;
+   }
+}
+
+$u = <span class="kwd">array_fill</span>(<span class="num">0</span>, $n, <span class="num">1.0</span>);
+$_tpl = <span class="kwd">array_fill</span>($range_begin, $range_end - $range_begin, <span class="num">0.0</span>);
+$sync = $procs &gt; <span class="num">0</span>;
+
+<span class="kwa">for</span> ($i=<span class="num">0</span>; $i&lt;<span class="num">10</span>; $i++){
+   $v = <span class="kwd">AtAv</span>($n,$u,$range_begin,$range_end,$sync);
+   $u = <span class="kwd">AtAv</span>($n,$v,$range_begin,$range_end,$sync);
+}
+
+<span class="kwa">if</span> (!$parent) {
+   <span class="kwa">exit</span>(<span class="num">0</span>);
+}
+
+$childs = $procs - <span class="num">1</span>;
+<span class="kwa">while</span> ($childs--) {
+   <span class="kwd">pcntl_wait</span>($s);
+}
+
+$vBv = <span class="num">0.0</span>;
+$vv = <span class="num">0.0</span>;
+$i = <span class="num">0</span>;
+<span class="kwa">foreach</span>($v <span class="kwa">as</span> $val) {
+   $vBv += $u[$i]*$val;
+   $vv += $val*$val;
+   ++$i;
+}
+<span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%0</span><span class="str">.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">sqrt</span>($vBv/$vv));
+

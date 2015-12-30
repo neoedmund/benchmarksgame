@@ -1,0 +1,17 @@
+
+Mon, 24 Aug 2015 04:06:18 GMT
+
+MAKE:
+/usr/bin/hh_client
+No errors!
+0.02s to complete and log all make actions
+
+COMMAND LINE:
+/usr/bin/hhvm  fannkuchredux.hack-3.hack 10
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+Fatal error: Call to undefined function shmop_open() in /home/dunham/benchmarksgame/bench/fannkuchredux/fannkuchredux.hack-3.hack on line 32

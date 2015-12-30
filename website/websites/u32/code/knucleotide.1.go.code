@@ -1,0 +1,128 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by The Go Authors.</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;bufio&quot;</span>
+   <span class="str">&quot;bytes&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;io/ioutil&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+   <span class="str">&quot;sort&quot;</span>
+)
+
+<span class="kwa">func</span> <span class="kwd">count</span>(data <span class="kwb">string</span>, n <span class="kwb">int</span>) <span class="kwa">map</span>[<span class="kwb">string</span>]<span class="kwb">int</span> {
+   counts := <span class="kwb">make</span>(<span class="kwa">map</span>[<span class="kwb">string</span>]<span class="kwb">int</span>)
+   top := <span class="kwb">len</span>(data) - n
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt;= top; i++ {
+      s := data[i : i+n]
+      counts[s]++
+   }
+   <span class="kwa">return</span> counts
+}
+
+<span class="kwa">func</span> <span class="kwd">countOne</span>(data <span class="kwb">string</span>, s <span class="kwb">string</span>) <span class="kwb">int</span> {
+   <span class="kwa">return</span> <span class="kwd">count</span>(data, <span class="kwb">len</span>(s))[s]
+}
+
+<span class="kwa">type</span> kNuc <span class="kwa">struct</span> {
+   name  <span class="kwb">string</span>
+   count <span class="kwb">int</span>
+}
+
+<span class="kwa">type</span> kNucArray []kNuc
+
+<span class="kwa">func</span> (kn kNucArray) <span class="kwd">Len</span>() <span class="kwb">int</span>      { <span class="kwa">return</span> <span class="kwb">len</span>(kn) }
+<span class="kwa">func</span> (kn kNucArray) <span class="kwd">Swap</span>(i, j <span class="kwb">int</span>) { kn[i], kn[j] = kn[j], kn[i] }
+<span class="kwa">func</span> (kn kNucArray) <span class="kwd">Less</span>(i, j <span class="kwb">int</span>) <span class="kwb">bool</span> {
+   <span class="kwa">if</span> kn[i].count == kn[j].count {
+      <span class="kwa">return</span> kn[i].name &gt; kn[j].name <span class="slc">// sort down</span>
+   }
+   <span class="kwa">return</span> kn[i].count &gt; kn[j].count
+}
+
+<span class="kwa">func</span> <span class="kwd">sortedArray</span>(m <span class="kwa">map</span>[<span class="kwb">string</span>]<span class="kwb">int</span>) kNucArray {
+   kn := <span class="kwb">make</span>(kNucArray, <span class="kwb">len</span>(m))
+   i := <span class="num">0</span>
+   <span class="kwa">for</span> k, v := <span class="kwa">range</span> m {
+      kn[i] = kNuc{k, v}
+      i++
+   }
+   sort.<span class="kwd">Sort</span>(kn)
+   <span class="kwa">return</span> kn
+}
+
+<span class="kwa">func</span> <span class="kwd">printKnucs</span>(a kNucArray) {
+   sum := <span class="num">0</span>
+   <span class="kwa">for</span> _, kn := <span class="kwa">range</span> a {
+      sum += kn.count
+   }
+   <span class="kwa">for</span> _, kn := <span class="kwa">range</span> a {
+      fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">%.3f</span><span class="esc">\n</span><span class="str">&quot;</span>, kn.name, <span class="num">100</span>*<span class="kwb">float64</span>(kn.count)/<span class="kwb">float64</span>(sum))
+   }
+   fmt.<span class="kwd">Print</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   runtime.<span class="kwd">GOMAXPROCS</span>(<span class="num">4</span>)
+   in := bufio.<span class="kwd">NewReader</span>(os.Stdin)
+   three := []<span class="kwb">byte</span>(<span class="str">&quot;&gt;THREE &quot;</span>)
+   <span class="kwa">for</span> {
+      line, err := in.<span class="kwd">ReadSlice</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+      <span class="kwa">if</span> err != <span class="kwb">nil</span> {
+         fmt.<span class="kwd">Fprintln</span>(os.Stderr, <span class="str">&quot;ReadLine err:&quot;</span>, err)
+         os.<span class="kwd">Exit</span>(<span class="num">2</span>)
+      }
+      <span class="kwa">if</span> line[<span class="num">0</span>] == <span class="str">'&gt;'</span> &amp;&amp; bytes.<span class="kwd">Equal</span>(line[<span class="num">0</span>:<span class="kwb">len</span>(three)], three) {
+         <span class="kwa">break</span>
+      }
+   }
+   data, err := ioutil.<span class="kwd">ReadAll</span>(in)
+   <span class="kwa">if</span> err != <span class="kwb">nil</span> {
+      fmt.<span class="kwd">Fprintln</span>(os.Stderr, <span class="str">&quot;ReadAll err:&quot;</span>, err)
+      os.<span class="kwd">Exit</span>(<span class="num">2</span>)
+   }
+   <span class="slc">// delete the newlines and convert to upper case</span>
+   j := <span class="num">0</span>
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; <span class="kwb">len</span>(data); i++ {
+      <span class="kwa">if</span> data[i] != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> {
+         data[j] = data[i] &amp;^ <span class="str">' '</span> <span class="slc">// upper case</span>
+         j++
+      }
+   }
+   str := <span class="kwb">string</span>(data[<span class="num">0</span>:j])
+
+   <span class="kwa">var</span> arr1, arr2 kNucArray
+   countsdone := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">bool</span>)
+   <span class="kwa">go func</span>() {
+      arr1 = <span class="kwd">sortedArray</span>(<span class="kwd">count</span>(str, <span class="num">1</span>))
+      countsdone &lt;- <span class="kwb">true</span>
+   }()
+   <span class="kwa">go func</span>() {
+      arr2 = <span class="kwd">sortedArray</span>(<span class="kwd">count</span>(str, <span class="num">2</span>))
+      countsdone &lt;- <span class="kwb">true</span>
+   }()
+
+   interests := []<span class="kwb">string</span>{<span class="str">&quot;GGT&quot;</span>, <span class="str">&quot;GGTA&quot;</span>, <span class="str">&quot;GGTATT&quot;</span>, <span class="str">&quot;GGTATTTTAATT&quot;</span>, <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>}
+   results := <span class="kwb">make</span>([]<span class="kwa">chan</span> <span class="kwb">string</span>, <span class="kwb">len</span>(interests))
+   <span class="kwa">for</span> i, s := <span class="kwa">range</span> interests {
+      ch := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">string</span>)
+      results[i] = ch
+      <span class="kwa">go func</span>(result <span class="kwa">chan</span> <span class="kwb">string</span>, ss <span class="kwb">string</span>) {
+         result &lt;- fmt.<span class="kwd">Sprintf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">%s</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">countOne</span>(str, ss), ss)
+      }(ch, s)
+   }
+   &lt;-countsdone
+   &lt;-countsdone
+   <span class="kwd">printKnucs</span>(arr1)
+   <span class="kwd">printKnucs</span>(arr2)
+   <span class="kwa">for</span> _, rc := <span class="kwa">range</span> results {
+      fmt.<span class="kwd">Print</span>(&lt;-rc)
+   }
+
+}

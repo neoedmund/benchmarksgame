@@ -1,0 +1,41 @@
+
+Tue, 19 May 2015 00:51:37 GMT
+
+MAKE:
+mv chameneosredux.scala chameneosredux.scala
+mv: ‘chameneosredux.scala’ and ‘chameneosredux.scala’ are the same file
+/home/dunham/benchmarksgame/nanobench/makefiles/u32.programs.Makefile:598: recipe for target 'chameneosredux.scala_run' failed
+make: [chameneosredux.scala_run] Error 1 (ignored)
+/usr/local/src/scala-2.11.6/bin/scalac -optimise -target:jvm-1.8 chameneosredux.scala
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+chameneosredux.scala:13: error: overloaded method constructor Enumeration with alternatives:
+  ()Enumeration <and>
+  (initial: Int)Enumeration
+ cannot be applied to (Int, String, String, String)
+  object Color extends Enumeration(0,"blue","red","yellow") {
+                       ^
+chameneosredux.scala:33: error: value foreach is not a member of object chameneosredux.Color
+      Color.foreach(c1 => Color.foreach(c2 => {
+            ^
+chameneosredux.scala:33: error: value foreach is not a member of object chameneosredux.Color
+      Color.foreach(c1 => Color.foreach(c2 => {
+                                ^
+chameneosredux.scala:121: warning: This catches all Throwables. If this is really intended, use `case _ : Throwable` to clear this warning.
+    val n = try { args(0).toInt } catch { case _ => 600 }
+                                               ^
+one warning found
+three errors found
+/home/dunham/benchmarksgame/nanobench/makefiles/u32.programs.Makefile:598: recipe for target 'chameneosredux.scala_run' failed
+make: [chameneosredux.scala_run] Error 1 (ignored)
+2.75s to complete and log all make actions
+
+COMMAND LINE:
+ /usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -Xbootclasspath/a:/usr/local/src/scala-2.11.6/lib/scala-library.jar:/usr/local/src/scala-2.11.6/lib/akka-actors.jar:/usr/local/src/scala-2.11.6/lib/typesafe-config.jar chameneosredux 60000
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Error: Could not find or load main class chameneosredux

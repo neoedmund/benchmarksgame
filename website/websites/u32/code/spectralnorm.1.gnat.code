@@ -1,0 +1,99 @@
+<span class="slc">-----------------------------------------</span>
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- </span>
+<span class="slc">-- Contributed by Jim Rogers</span>
+<span class="slc">-----------------------------------------</span>
+<span class="kwa">package</span> Spectral_Utils <span class="kwa">is</span>
+   <span class="kwa">type</span> Matrix <span class="kwa">is array</span>(<span class="kwb">Natural</span> <span class="kwa">range</span> &lt;&gt;) <span class="kwa">of</span> <span class="kwb">Long_Float</span>;
+   
+   <span class="kwa">function</span> Eval_A(I, J : <span class="kwb">Integer</span>) <span class="kwa">return</span> <span class="kwb">Long_Float</span>;
+   <span class="kwa">procedure</span> Eval_A_Times(U : Matrix; Au : <span class="kwa">out</span> Matrix);
+   <span class="kwa">procedure</span> Eval_At_Times(U : Matrix; Au : <span class="kwa">out</span> Matrix);
+   <span class="kwa">procedure</span> Eval_Ata_Times_U(U : Matrix; Atau : <span class="kwa">out</span> Matrix);
+<span class="kwa">end</span> Spectral_Utils;
+
+<span class="slc">-----------------------------------------</span>
+<span class="slc">-- The Great Computer Language Shootout</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Jim Rogers</span>
+<span class="slc">-----------------------------------------</span>
+<span class="kwa">package body</span> Spectral_Utils <span class="kwa">is</span>
+
+   <span class="kwa">function</span> Eval_A (I, J : <span class="kwb">Integer</span>) <span class="kwa">return</span> <span class="kwb">Long_Float</span> <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">return</span> <span class="num">1.0</span> / <span class="kwb">Long_Float</span>((I + J) * (I + J + <span class="num">1</span>) /<span class="num">2</span> + I + <span class="num">1</span>);
+   <span class="kwa">end</span> Eval_A;
+   
+   <span class="kwa">procedure</span> Eval_A_Times (U : Matrix; Au : <span class="kwa">out</span> Matrix) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> I <span class="kwa">in</span> Au<span class="kwd">'range</span> <span class="kwa">loop</span>
+         Au(I) := <span class="num">0.0</span>;
+         <span class="kwa">for</span> J <span class="kwa">in</span> U<span class="kwd">'range</span> <span class="kwa">loop</span>
+            Au(I) := Au(I) + Eval_A(I, J) * U(J);
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Eval_A_Times;
+   
+   <span class="kwa">procedure</span> Eval_At_Times (U : Matrix; Au : <span class="kwa">out</span> Matrix) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> I <span class="kwa">in</span> Au<span class="kwd">'range</span> <span class="kwa">loop</span>
+         Au(I) := <span class="num">0.0</span>;
+         <span class="kwa">for</span> J <span class="kwa">in</span> U<span class="kwd">'range</span> <span class="kwa">loop</span>
+            Au(I) := Au(I) + Eval_A(J, I) * U(J);
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Eval_At_Times;
+   
+   <span class="kwa">procedure</span> Eval_Ata_Times_U (U : Matrix; Atau : <span class="kwa">out</span> Matrix) <span class="kwa">is</span>
+      V : Matrix(<span class="num">0</span>..U<span class="kwd">'Length</span> - <span class="num">1</span>);
+   <span class="kwa">begin</span>
+      Eval_A_Times(U, V);
+      Eval_At_Times(V, Atau);
+   <span class="kwa">end</span> Eval_Ata_Times_U;
+   
+<span class="kwa">end</span> Spectral_Utils;
+
+<span class="slc">-----------------------------------------------------------</span>
+<span class="slc">-- The Great Computer Language Shootout</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Jim Rogers</span>
+<span class="slc">-----------------------------------------------------------</span>
+
+<span class="kwa">with</span> Ada.Text_Io;
+<span class="kwa">with</span> Ada.Numerics.Generic_Elementary_Functions ;
+<span class="kwa">with</span> Ada.Command_Line; <span class="kwa">use</span> Ada.Command_Line;
+<span class="kwa">with</span> Spectral_Utils; <span class="kwa">use</span> Spectral_Utils;
+
+<span class="kwa">procedure</span> SpectralNorm <span class="kwa">is</span>
+   <span class="kwa">package</span> Long_Io <span class="kwa">is new</span> Ada.Text_Io.Float_Io(<span class="kwb">Long_Float</span>);
+   <span class="kwa">package</span> Long_Funcs <span class="kwa">is new</span> Ada.Numerics.Generic_Elementary_Functions(<span class="kwb">Long_Float</span>);
+   <span class="kwa">use</span> Long_Funcs;
+   N : <span class="kwb">Natural</span> := <span class="num">100</span>;
+   Vbv, vv : <span class="kwb">Long_Float</span> := <span class="num">0.0</span>;
+<span class="kwa">begin</span>
+   <span class="kwa">if</span> Argument_Count = <span class="num">1</span> <span class="kwa">then</span>
+      N := <span class="kwb">Natural</span><span class="kwd">'Value</span>(Argument(<span class="num">1</span>));
+   <span class="kwa">end if</span>;
+   
+   <span class="kwa">declare</span>
+      U : Matrix(<span class="num">0</span>..N-<span class="num">1</span>) := (<span class="kwa">Others</span> =&gt; <span class="num">1.0</span>);
+      V : Matrix(<span class="num">0</span>..N-<span class="num">1</span>) := (<span class="kwa">Others</span> =&gt; <span class="num">0.0</span>);
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> I <span class="kwa">in</span> <span class="num">1</span>.<span class="num">.10</span> <span class="kwa">loop</span>
+         Eval_Ata_Times_U(U, V);
+         Eval_Ata_Times_U(V, U);
+      <span class="kwa">end loop</span>;
+      <span class="kwa">for</span> I <span class="kwa">in</span> V<span class="kwd">'range</span> <span class="kwa">loop</span>
+         Vbv := Vbv + U(I) * V(I);
+         Vv := Vv + V(I)*V(I);
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span>;
+   Long_Io.Put(Item =&gt; Sqrt(Vbv/Vv), Fore =&gt; <span class="num">1</span>, Aft =&gt; <span class="num">9</span>, Exp =&gt; <span class="num">0</span>);
+   Ada.Text_Io.New_Line;
+<span class="kwa">end</span> SpectralNorm;
+
+
+
+
+

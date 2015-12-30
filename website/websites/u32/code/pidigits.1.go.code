@@ -1,0 +1,122 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * based on pidigits.c (by Paolo Bonzini &amp; Sean Bartlett,</span>
+<span class="com"> *                      modified by Michael Mellor)</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by The Go Authors.</span>
+<span class="com"> * flag.Arg hack by Isaac Gouy</span>
+<span class="com"> * line printer hack by Sean Lake</span>
+<span class="com"> * &quot;math/big&quot; package replaced by &quot;github.com/ncw/gmp&quot; by pav5000</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;bufio&quot;</span>
+   <span class="str">&quot;flag&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   big <span class="str">&quot;github.com/ncw/gmp&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;strconv&quot;</span>
+)
+
+<span class="kwa">var</span> n = <span class="num">0</span>
+<span class="kwa">var</span> silent = <span class="kwb">false</span>
+
+<span class="kwa">var</span> (
+   tmp1  = big.<span class="kwd">NewInt</span>(<span class="num">0</span>)
+   tmp2  = big.<span class="kwd">NewInt</span>(<span class="num">0</span>)
+   tmp3  = big.<span class="kwd">NewInt</span>(<span class="num">0</span>)
+   y2    = big.<span class="kwd">NewInt</span>(<span class="num">0</span>)
+   bigk  = big.<span class="kwd">NewInt</span>(<span class="num">0</span>)
+   numer = big.<span class="kwd">NewInt</span>(<span class="num">1</span>)
+   accum = big.<span class="kwd">NewInt</span>(<span class="num">0</span>)
+   denom = big.<span class="kwd">NewInt</span>(<span class="num">1</span>)
+   ten   = big.<span class="kwd">NewInt</span>(<span class="num">10</span>)
+)
+
+<span class="kwa">func</span> <span class="kwd">extract_digit</span>() <span class="kwb">int64</span> {
+   <span class="kwa">if</span> numer.<span class="kwd">Cmp</span>(accum) &gt; <span class="num">0</span> {
+      <span class="kwa">return</span> -<span class="num">1</span>
+   }
+
+   <span class="slc">// Compute (numer * 3 + accum) / denom</span>
+   tmp1.<span class="kwd">Lsh</span>(numer, <span class="num">1</span>)
+   tmp1.<span class="kwd">Add</span>(tmp1, numer)
+   tmp1.<span class="kwd">Add</span>(tmp1, accum)
+   tmp1.<span class="kwd">DivMod</span>(tmp1, denom, tmp2)
+
+   <span class="slc">// Now, if (numer * 4 + accum) % denom...</span>
+   tmp2.<span class="kwd">Add</span>(tmp2, numer)
+
+   <span class="slc">// ... is normalized, then the two divisions have the same result.</span>
+   <span class="kwa">if</span> tmp2.<span class="kwd">Cmp</span>(denom) &gt;= <span class="num">0</span> {
+      <span class="kwa">return</span> -<span class="num">1</span>
+   }
+
+   <span class="kwa">return</span> tmp1.<span class="kwd">Int64</span>()
+}
+
+<span class="kwa">func</span> <span class="kwd">next_term</span>(k <span class="kwb">int64</span>) {
+   y2.<span class="kwd">SetInt64</span>(k*<span class="num">2</span> + <span class="num">1</span>)
+   bigk.<span class="kwd">SetInt64</span>(k)
+
+   tmp1.<span class="kwd">Lsh</span>(numer, <span class="num">1</span>)
+   accum.<span class="kwd">Add</span>(accum, tmp1)
+   accum.<span class="kwd">Mul</span>(accum, y2)
+   numer.<span class="kwd">Mul</span>(numer, bigk)
+   denom.<span class="kwd">Mul</span>(denom, y2)
+}
+
+<span class="kwa">func</span> <span class="kwd">eliminate_digit</span>(d <span class="kwb">int64</span>) {
+   tmp3.<span class="kwd">SetInt64</span>(d)
+   accum.<span class="kwd">Sub</span>(accum, tmp3.<span class="kwd">Mul</span>(denom, tmp3))
+   accum.<span class="kwd">Mul</span>(accum, ten)
+   numer.<span class="kwd">Mul</span>(numer, ten)
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   flag.<span class="kwd">Parse</span>()
+   <span class="kwa">if</span> flag.<span class="kwd">NArg</span>() &gt; <span class="num">0</span> {
+      n, _ = strconv.<span class="kwd">Atoi</span>(flag.<span class="kwd">Arg</span>(<span class="num">0</span>))
+   }
+
+   w := bufio.<span class="kwd">NewWriter</span>(os.Stdout)
+   <span class="kwa">defer</span> w.<span class="kwd">Flush</span>()
+
+   line := <span class="kwb">make</span>([]<span class="kwb">byte</span>, <span class="num">0</span>, <span class="num">10</span>)
+   i := <span class="kwb">int</span>(<span class="num">0</span>)
+   <span class="kwa">for</span> k := <span class="kwb">int64</span>(<span class="num">0</span>); ; {
+      d := <span class="kwb">int64</span>(-<span class="num">1</span>)
+      <span class="kwa">for</span> d &lt; <span class="num">0</span> {
+         k++
+         <span class="kwd">next_term</span>(k)
+         d = <span class="kwd">extract_digit</span>()
+      }
+
+      i++
+
+      line = <span class="kwd">append</span>(line, <span class="kwb">byte</span>(d)+<span class="str">'0'</span>)
+      <span class="kwa">if</span> <span class="kwb">len</span>(line) == <span class="num">10</span> {
+         <span class="kwa">if</span> silent != <span class="kwb">true</span> {
+            fmt.<span class="kwd">Fprintf</span>(w, <span class="kwb">string</span>(line))
+            fmt.<span class="kwd">Fprintf</span>(w, <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, i)
+         }
+
+         line = line[:<span class="num">0</span>]
+      }
+
+      <span class="kwa">if</span> i &gt;= n {
+         <span class="kwa">break</span>
+      }
+      <span class="kwd">eliminate_digit</span>(d)
+   }
+
+   <span class="kwa">if</span> <span class="kwb">len</span>(line) &gt; <span class="num">0</span> {
+      fmt.<span class="kwd">Fprintf</span>(w, <span class="kwb">string</span>(line))
+      fmt.<span class="kwd">Fprintf</span>(w, <span class="str">&quot;</span><span class="ipl">%s</span><span class="str"></span><span class="esc">\t</span><span class="str">:</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="str">&quot;          &quot;</span>[<span class="kwb">len</span>(line):], i)
+   }
+
+   <span class="kwa">return</span>
+}

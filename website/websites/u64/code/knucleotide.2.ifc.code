@@ -1,0 +1,310 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">! </span>
+<span class="slc">! Compilation:</span>
+<span class="slc">!  Single-core: ifort -fast knucleotide2.f90</span>
+<span class="slc">!  Multi-core : ifort -fast -openmp knucleotide2.f90</span>
+<span class="slc">!</span>
+<span class="slc">! contributed by Steve Decker</span>
+<span class="slc">! modified by Andrei Jirnyi:</span>
+<span class="slc">! - added OpenMP parallelization (very naively)</span>
+<span class="slc">! - changed the hash function to FNV hash:</span>
+<span class="slc">!   see http://www.isthe.com/chongo/tech/comp/fnv/</span>
+<span class="slc">!   (ifort is better at multiplication on intel cpu's)</span>
+<span class="slc">! - changed internal string comparison to a library call :)</span>
+<span class="slc">! - I/O is unoptimized and very slow (&gt;10 sec.) --</span>
+<span class="slc">!   there is much to gain there.</span>
+<span class="slc">! - Sequences are in ASCII format; it seems that the C/C++</span>
+<span class="slc">!   programs are compressing these. much to gain there too.</span>
+<span class="slc">! - IMPORTANT NOTE: this is a DIRTY HACK!!</span>
+<span class="slc">!   this code probably contains various NASTY BUGS.</span>
+
+<span class="kwa">module</span> knuc_mod
+  <span class="kwa">use</span>, <span class="kwa">intrinsic</span> :: iso_c_binding
+  <span class="kwa">implicit none</span>
+  private
+  public :: init_table, read_frame, keys_of_given_len, cnt
+
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: MaxWordLen = <span class="num">18</span>
+  <span class="kwa">type</span>, public :: <span class="kwa">key</span>
+     <span class="kwa">integer</span>                   :: count = <span class="num">0</span>
+     <span class="kwa">character</span>(len=MaxWordLen) :: word = <span class="str">&quot;&quot;</span>
+  <span class="kwa">end type key</span>
+
+  <span class="kwa">type</span>, public :: table
+     <span class="kwa">integer</span> :: hashBits, maxWords, nWords
+     <span class="kwa">type</span>(<span class="kwa">key</span>), allocatable, <span class="kwa">dimension</span>(:) :: words
+  <span class="kwa">end type</span> table
+
+  <span class="kwa">interface</span>
+     <span class="slc">! what's wrong with using a standard library?! :)</span>
+     <span class="kwa">integer</span>(c_int) <span class="kwa">function</span> <span class="kwd">strncmp</span>(s1,s2,n) <span class="kwd">bind</span>(C)
+       import
+       <span class="kwa">character</span>(kind=c_char),  <span class="kwd">intent</span>(in) :: <span class="kwd">s1</span>(*)
+       <span class="kwa">character</span>(kind=c_char),  <span class="kwd">intent</span>(in)  :: <span class="kwd">s2</span>(*)
+       <span class="kwa">integer</span>(c_size_t), value, <span class="kwd">intent</span>(in) :: n
+     <span class="kwa">end function</span> strncmp
+
+  <span class="kwa">end interface</span>
+
+<span class="kwa">contains</span>
+
+  pure <span class="kwa">subroutine</span> <span class="kwd">init_table</span>(kNuc, nBits)
+    <span class="kwa">type</span>(table), <span class="kwd">intent</span>(out) :: kNuc
+    <span class="kwa">integer</span>,     <span class="kwd">intent</span>(in)  :: nBits
+
+    kNuc = <span class="kwd">table</span>(nBits, <span class="num">2</span>**nBits, <span class="num">0</span>, <span class="kwd">null</span>())
+    <span class="kwd">allocate</span>(kNuc%<span class="kwd">words</span>(kNuc%maxWords))
+  <span class="kwa">end subroutine</span> init_table
+
+  <span class="kwa">subroutine</span> <span class="kwd">read_frame</span>(buf, n, length, kNuc)
+    <span class="kwa">character</span>, <span class="kwa">dimension</span>(:), <span class="kwd">intent</span>(in)    :: buf
+    <span class="kwa">integer</span>,                 <span class="kwd">intent</span>(in)    :: n, length
+    <span class="kwa">type</span>(table),             <span class="kwd">intent</span>(inout) :: kNuc
+
+    <span class="kwa">integer</span>               :: i, j
+    <span class="kwa">character</span>(len=length) :: word
+
+    <span class="kwa">do</span> i = <span class="num">1</span>, n
+       <span class="kwa">do</span> j = <span class="num">1</span>, length
+          <span class="kwd">word</span>(j:j) = <span class="kwd">buf</span>(i+j-<span class="num">1</span>)
+       <span class="kwa">end do</span>
+       <span class="kwa">call</span> <span class="kwd">add</span>(kNuc, word)
+    <span class="kwa">end do</span>
+  <span class="kwa">end subroutine</span> read_frame
+
+  <span class="kwa">subroutine</span> <span class="kwd">add</span>(kNuc, word)
+    <span class="kwa">type</span>(table),      <span class="kwd">intent</span>(inout) :: kNuc
+    <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in)    :: word
+
+    <span class="kwa">integer</span> :: m
+
+    m = <span class="kwd">hash_value</span>(word, kNuc%maxWords)
+    <span class="kwa">do</span>
+       <span class="kwa">if</span> (kNuc%<span class="kwd">words</span>(m)%count == <span class="num">0</span>) <span class="kwa">then</span> 
+          kNuc%<span class="kwd">words</span>(m) = <span class="kwa">key</span>(<span class="num">1</span>, word)
+          kNuc%nWords = kNuc%nWords + <span class="num">1</span>
+          <span class="kwa">if</span> (kNuc%nWords &gt; kNuc%maxWords/<span class="num">2</span>) <span class="kwa">call</span> <span class="kwd">resize_table</span>(kNuc)
+          exit
+       <span class="kwa">else if</span> (<span class="kwd">strncmp</span>(kNuc%<span class="kwd">words</span>(m)%word,word,<span class="kwd">int</span>(<span class="kwd">len</span>(word),c_size_t)) == <span class="num">0</span>) <span class="kwa">then</span> 
+          kNuc%<span class="kwd">words</span>(m)%count = kNuc%<span class="kwd">words</span>(m)%count + <span class="num">1</span>
+          exit
+       <span class="kwa">end if</span>
+       m = <span class="kwd">merge</span>(<span class="num">1</span>, m+<span class="num">1</span>, m == kNuc%maxWords)
+    <span class="kwa">end do</span>
+  <span class="kwa">end subroutine</span> add
+
+  <span class="kwa">subroutine</span> <span class="kwd">resize_table</span>(kNuc)
+    <span class="kwa">type</span>(table), <span class="kwd">intent</span>(inout) :: kNuc
+
+    <span class="kwa">integer</span>     :: i, m
+    <span class="kwa">type</span>(table) :: temp
+
+    temp = <span class="kwd">table</span>(kNuc%hashBits + <span class="num">1</span>, <span class="num">2</span> * kNuc%maxWords, kNuc%nWords, <span class="kwd">null</span>())
+    <span class="kwd">allocate</span>(temp%<span class="kwd">words</span>(temp%maxWords))
+
+    <span class="kwa">do</span> i = <span class="num">1</span>, kNuc%maxWords
+       <span class="kwa">if</span> (kNuc%<span class="kwd">words</span>(i)%count &gt; <span class="num">0</span>) <span class="kwa">then</span>
+          m = <span class="kwd">hash_value</span>(<span class="kwd">trim</span>(kNuc%<span class="kwd">words</span>(i)%word), temp%maxWords)
+          <span class="kwa">do</span>
+             <span class="kwa">if</span> (temp%<span class="kwd">words</span>(m)%count == <span class="num">0</span>) <span class="kwa">then</span>
+                temp%<span class="kwd">words</span>(m) = kNuc%<span class="kwd">words</span>(i)
+                exit
+             <span class="kwa">end if</span>
+             m = <span class="kwd">merge</span>(<span class="num">1</span>, m+<span class="num">1</span>, m == temp%maxWords)
+          <span class="kwa">end do</span>
+       <span class="kwa">end if</span>
+    <span class="kwa">end do</span>
+
+    kNuc = temp
+  <span class="kwa">end subroutine</span> resize_table
+
+  pure <span class="kwa">function</span> <span class="kwd">keys_of_given_len</span>(kNuc, length)
+    <span class="kwa">type</span>(table), <span class="kwd">intent</span>(in) :: kNuc
+    <span class="kwa">integer</span>,     <span class="kwd">intent</span>(in) :: length
+    <span class="kwa">type</span>(<span class="kwa">key</span>), <span class="kwa">dimension</span>(<span class="num">4</span>**length) :: keys_of_given_len
+
+    <span class="kwa">integer</span> :: i, n
+
+    n = <span class="num">1</span>
+    <span class="kwa">do</span> i = <span class="num">1</span>, kNuc%maxWords
+       <span class="kwa">if</span> (<span class="kwd">len_trim</span>(kNuc%<span class="kwd">words</span>(i)%word) == length) <span class="kwa">then</span>
+          <span class="kwd">keys_of_given_len</span>(n) = kNuc%<span class="kwd">words</span>(i)
+          n = n + <span class="num">1</span>
+          <span class="kwa">if</span> (n &gt; <span class="kwd">size</span>(keys_of_given_len)) exit
+       <span class="kwa">end if</span>
+    <span class="kwa">end do</span>
+  <span class="kwa">end function</span> keys_of_given_len
+
+  <span class="kwa">integer function</span> <span class="kwd">cnt</span>(kNuc, string)
+    <span class="kwa">type</span>(table), <span class="kwd">intent</span>(in)      :: kNuc
+    <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: string
+
+    <span class="kwa">integer</span> :: m
+
+    m = <span class="kwd">hash_value</span>(string, kNuc%maxWords)
+    <span class="kwa">do</span>
+       <span class="kwa">if</span> (kNuc%<span class="kwd">words</span>(m)%word == string .or. kNuc%<span class="kwd">words</span>(m)%count == <span class="num">0</span>) <span class="kwa">then</span>
+          cnt = kNuc%<span class="kwd">words</span>(m)%count
+          exit
+       <span class="kwa">end if</span>
+       m = <span class="kwd">merge</span>(<span class="num">1</span>, m+<span class="num">1</span>, m == kNuc%maxWords)
+    <span class="kwa">end do</span>
+  <span class="kwa">end function</span> cnt
+
+
+  <span class="kwa">integer function</span> <span class="kwd">hash_value</span>(<span class="kwa">key</span>, range)
+    <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: <span class="kwa">key</span>
+    <span class="kwa">integer</span>,          <span class="kwd">intent</span>(in) :: range
+
+    <span class="kwa">integer</span> :: i,  tmp
+    
+    tmp = <span class="kwd">ieor</span>(<span class="num">2166136261</span> * <span class="num">16777619</span>, <span class="kwd">iachar</span>(<span class="kwa">key</span>(<span class="num">1</span>:<span class="num">1</span>)))
+
+    <span class="kwa">do</span> i=<span class="num">2</span>,<span class="kwd">len</span>(<span class="kwa">key</span>)
+       tmp = tmp * <span class="num">16777619</span>
+       tmp = <span class="kwd">ieor</span>(tmp,<span class="kwd">iachar</span>(<span class="kwa">key</span>(i:i)))
+    <span class="kwa">end do</span>
+    hash_value = <span class="kwd">iand</span>(tmp, range - <span class="num">1</span>) + <span class="num">1</span>
+        
+  <span class="kwa">end function</span> hash_value
+
+<span class="kwa">end module</span> knuc_mod
+
+<span class="kwa">program</span> knucleotide
+  <span class="kwa">use</span> knuc_mod
+  <span class="kwa">implicit none</span>
+
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: LineLen = <span class="num">60</span>, InitialTableSize = <span class="num">1</span>
+
+  <span class="kwa">integer</span> :: bufferSize = <span class="num">16384</span>, istat, n = <span class="num">0</span>, i
+  <span class="kwa">logical</span> :: atThirdPart = .false.
+  
+  <span class="kwa">type</span>(table) :: kn, <span class="kwd">kn1</span>(<span class="num">7</span>)
+  <span class="slc">! having just one kn1 should work too (I think!!) --</span>
+  <span class="slc">!  but for some reason for me it does not (with 12.0.3).</span>
+  <span class="slc">!  Perhaps bugs in the code are to blame.</span>
+  <span class="slc">!  Seems to work with 12.1.0, but better safe than sorry.</span>
+  
+  <span class="kwa">character</span>(len=LineLen) :: line
+  <span class="kwa">character</span>(len=<span class="num">1</span>) :: <span class="kwd">line1</span>(LineLen)
+  <span class="kwa">equivalence</span>(line,line1)
+  <span class="kwa">character</span>, <span class="kwa">dimension</span>(:), allocatable :: buffer, tempBuffer
+
+  <span class="kwa">character</span>, <span class="kwa">dimension</span>(<span class="num">1</span>:<span class="num">116</span>), <span class="kwa">parameter</span> :: &amp;
+       Codes = (/ (<span class="str">&quot; &quot;</span>,i = <span class="num">1</span>,<span class="num">64</span>), <span class="str">&quot;A&quot;</span>, <span class="str">&quot; &quot;</span>, <span class="str">&quot;C&quot;</span>,  &amp;
+       (<span class="str">&quot; &quot;</span>, i = <span class="num">68</span>, <span class="num">70</span>), <span class="str">&quot;G&quot;</span>, (<span class="str">&quot; &quot;</span>, i = <span class="num">72</span>, <span class="num">83</span>), <span class="str">&quot;T&quot;</span>, (<span class="str">&quot; &quot;</span>, i = <span class="num">85</span>, <span class="num">96</span>),  &amp;
+       <span class="str">&quot;A&quot;</span>, <span class="str">&quot; &quot;</span>, <span class="str">&quot;C&quot;</span>, (<span class="str">&quot; &quot;</span>, i = <span class="num">100</span>, <span class="num">102</span>), <span class="str">&quot;G&quot;</span>, (<span class="str">&quot; &quot;</span>, i = <span class="num">104</span>, <span class="num">115</span>), <span class="str">&quot;T&quot;</span> /)
+
+  <span class="kwa">character</span>(len=<span class="num">40</span>), <span class="kwa">dimension</span>(<span class="num">5</span>) :: lines, lines1
+  <span class="kwa">integer</span> :: <span class="kwd">lenghts</span>(<span class="num">5</span>)
+  
+  <span class="kwd">allocate</span>(<span class="kwd">buffer</span>(bufferSize))
+
+  <span class="slc">! Read FASTA file line-by-line, extracting sequence three, and converting to</span>
+  <span class="slc">! uppercase.</span>
+  <span class="slc">! This is very slow and can certainly be optimized a lot further.</span>
+  <span class="kwa">do</span>
+     <span class="kwa">read</span>(*, <span class="str">&quot;(a)&quot;</span>, iostat=istat) line
+     <span class="kwa">if</span> (istat /= <span class="num">0</span>) exit
+     <span class="kwa">if</span> (.not. atThirdPart) <span class="kwa">then</span>
+        atThirdPart = <span class="kwd">line</span>(<span class="num">1</span>:<span class="num">3</span>) == <span class="str">&quot;&gt;TH&quot;</span>
+     <span class="kwa">else</span>
+        <span class="kwa">if</span> (n+LineLen &gt; bufferSize) <span class="kwa">then</span>
+           <span class="kwd">allocate</span>(<span class="kwd">tempBuffer</span>(<span class="num">2</span>*bufferSize))
+           <span class="kwd">tempBuffer</span>(<span class="num">1</span>:bufferSize) = buffer
+           <span class="kwd">tempBuffer</span>(bufferSize+<span class="num">1</span> : ) = <span class="str">&quot; &quot;</span>
+           <span class="kwa">call</span> <span class="kwd">move_alloc</span>(tempBuffer, buffer)
+           bufferSize = <span class="num">2</span>*bufferSize
+        <span class="kwa">end if</span>
+        <span class="kwd">buffer</span>(n+<span class="num">1</span> : n+LineLen) = <span class="kwd">Codes</span>(<span class="kwd">iachar</span>(line1))
+        n = n + LineLen
+     <span class="kwa">end if</span>
+  <span class="kwa">end do</span>
+  n = <span class="kwd">minloc</span>(<span class="kwd">iachar</span>(buffer),<span class="num">1</span>) - <span class="num">1</span>
+
+
+  <span class="kwa">call</span> <span class="kwd">init_table</span>(kn, InitialTableSize)
+
+  <span class="kwd">lines</span>(<span class="num">1</span>) = <span class="str">&quot;GGT&quot;</span>
+  <span class="kwd">lines</span>(<span class="num">2</span>) = <span class="str">&quot;GGTA&quot;</span>
+  <span class="kwd">lines</span>(<span class="num">3</span>) = <span class="str">&quot;GGTATT&quot;</span>
+  <span class="kwd">lines</span>(<span class="num">4</span>) = <span class="str">&quot;GGTATTTTAATT&quot;</span>
+  <span class="kwd">lines</span>(<span class="num">5</span>) = <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>
+  lenghts = [<span class="num">3</span>, <span class="num">4</span>, <span class="num">6</span>, <span class="num">12</span>, <span class="num">18</span>]
+
+  <span class="slc">!$omp  parallel default(firstprivate) &amp;</span>
+  <span class="slc">!$omp&amp; shared(lines, lines1, kn, lenghts)</span>
+
+  <span class="slc">!$omp do schedule(dynamic,1)  </span>
+  <span class="kwa">do</span> i=<span class="num">5</span>,<span class="num">1</span>,-<span class="num">1</span>
+     <span class="kwd">kn1</span>(i) = kn  <span class="slc">! not sure if an array is really needed here...</span>
+     <span class="kwa">call</span> <span class="kwd">write_count</span>(<span class="kwd">kn1</span>(i), <span class="kwd">lines</span>(i)(<span class="num">1</span>:<span class="kwd">lenghts</span>(i)), <span class="kwd">lines1</span>(i))
+  <span class="kwa">end do</span>
+  <span class="slc">!$omp end do nowait</span>
+
+  <span class="slc">!$omp do schedule(dynamic,1)</span>
+  <span class="kwa">do</span> i=<span class="num">1</span>,<span class="num">2</span>
+     <span class="kwd">kn1</span>(i+<span class="num">5</span>) = kn
+     <span class="kwa">call</span> <span class="kwd">write_frequencies</span>(<span class="kwd">kn1</span>(i+<span class="num">5</span>),i)
+  <span class="kwa">end do</span>
+  <span class="slc">!$omp end do nowait</span>
+
+  <span class="slc">!$omp end parallel</span>
+
+  <span class="kwa">do</span> i=<span class="num">1</span>,<span class="num">5</span>
+     <span class="kwa">write</span>(*,<span class="str">'(a)'</span>) <span class="kwd">trim</span>(<span class="kwd">adjustl</span>(<span class="kwd">lines1</span>(i)))
+  <span class="kwa">end do</span>
+
+<span class="kwa">contains</span>
+
+  <span class="kwa">subroutine</span> <span class="kwd">write_frequencies</span>(kn, length)
+    <span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: length
+    <span class="kwa">type</span>(table) :: kn
+
+    <span class="kwa">integer</span> :: numNuc, i, j
+    <span class="kwa">type</span>(<span class="kwa">key</span>), <span class="kwa">dimension</span>(<span class="num">4</span>**length) :: nucleotides
+    <span class="kwa">type</span>(<span class="kwa">key</span>) :: temp
+
+    numNuc = n - length + <span class="num">1</span>
+
+    <span class="kwa">call</span> <span class="kwd">read_frame</span>(buffer, numNuc, length, kn)
+
+    nucleotides = <span class="kwd">keys_of_given_len</span>(kn, length)
+
+    <span class="slc">! Insertion sort</span>
+    <span class="kwa">do</span> i = <span class="num">2</span>, <span class="kwd">size</span>(nucleotides)
+       temp = <span class="kwd">nucleotides</span>(i)
+       <span class="kwa">do</span> j = i, <span class="num">2</span>, -<span class="num">1</span>
+          <span class="kwa">if</span> (<span class="kwd">nucleotides</span>(j-<span class="num">1</span>)%count &gt; temp%count .or.  &amp;
+               <span class="kwd">nucleotides</span>(j-<span class="num">1</span>)%count == temp%count .and.  &amp;
+               <span class="kwd">nucleotides</span>(j-<span class="num">1</span>)%word &lt; temp%word) exit
+          <span class="kwd">nucleotides</span>(j) = <span class="kwd">nucleotides</span>(j-<span class="num">1</span>)
+       <span class="kwa">end do</span>
+       <span class="kwd">nucleotides</span>(j) = temp
+    <span class="kwa">end do</span>
+
+    <span class="kwa">do</span> i = <span class="num">1</span>, <span class="kwd">size</span>(nucleotides)
+       <span class="kwa">write</span>(*, <span class="str">&quot;(a2,f6.3)&quot;</span>) <span class="kwd">nucleotides</span>(i)%<span class="kwd">word</span>(<span class="num">1</span>:<span class="num">2</span>),  &amp;
+            <span class="num">100</span>. * <span class="kwd">nucleotides</span>(i)%count / <span class="kwa">real</span>(numNuc)
+    <span class="kwa">end do</span>
+    <span class="kwa">write</span>(*, <span class="str">&quot;(a)&quot;</span>) <span class="str">&quot;&quot;</span>
+  <span class="kwa">end subroutine</span> write_frequencies
+
+  <span class="kwa">subroutine</span> <span class="kwd">write_count</span>(kn, string, string1)
+    <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: string
+    <span class="kwa">character</span>(len=<span class="num">40</span>), <span class="kwd">intent</span>(out) :: string1
+    <span class="kwa">type</span>(table) :: kn
+
+    <span class="kwa">character</span>, <span class="kwa">parameter</span> :: tab = <span class="kwd">achar</span>(<span class="num">9</span>)
+    <span class="kwa">integer</span> :: length, numNuc
+
+    length = <span class="kwd">len</span>(string)
+    numNuc = n - length + <span class="num">1</span>
+
+    <span class="kwa">call</span> <span class="kwd">read_frame</span>(buffer, numNuc, length, kn)
+
+    <span class="kwa">write</span>(string1, <span class="str">&quot;(i0,a)&quot;</span>) <span class="kwd">cnt</span>(kn, string), tab//string
+  <span class="kwa">end subroutine</span> write_count
+
+<span class="kwa">end program</span> knucleotide

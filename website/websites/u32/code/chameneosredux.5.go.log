@@ -1,0 +1,40 @@
+
+Thu, 20 Aug 2015 01:58:23 GMT
+
+MAKE:
+/usr/local/src/go/bin/go build -o chameneosredux.go-5.go_run
+0.59s to complete and log all make actions
+
+COMMAND LINE:
+./chameneosredux.go-5.go_run 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+ blue red yellow
+3595449 zero
+4596685 zero
+3807866 zero
+ one two zero zero zero zero zero zero
+
+ blue red yellow red yellow blue red yellow red blue
+992034 zero
+1148923 zero
+1001369 zero
+824292 zero
+1325052 zero
+1283387 zero
+1253068 zero
+1023073 zero
+1643405 zero
+1505397 zero
+ one two zero zero zero zero zero zero
+

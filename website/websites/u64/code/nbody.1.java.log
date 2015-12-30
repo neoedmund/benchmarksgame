@@ -1,0 +1,39 @@
+
+Wed, 20 May 2015 00:06:57 GMT
+
+MAKE:
+mv nbody.java nbody.java
+mv: ‘nbody.java’ and ‘nbody.java’ are the same file
+/home/dunham/benchmarksgame/nanobench/makefiles/u64.programs.Makefile:305: recipe for target 'nbody.java_run' failed
+make: [nbody.java_run] Error 1 (ignored)
+/usr/local/src/jdk1.8.0_45/bin/javac nbody.java
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+0.81s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java -XX:MaxMetaspaceSize=3m -XX:InitialCodeCacheSize=2048K -XX:ReservedCodeCacheSize=2048K -server -XX:+TieredCompilation -XX:+AggressiveOpts nbody 500000
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+java.lang.OutOfMemoryError 
+ - klass: 'java/lang/OutOfMemoryError'
+#
+# A fatal error has been detected by the Java Runtime Environment:
+#
+#  Internal Error (exceptions.cpp:427), pid=25011, tid=140048033580800
+#  fatal error: ExceptionMark destructor expects no pending exceptions
+#
+# JRE version: Java(TM) SE Runtime Environment (8.0_45-b14) (build 1.8.0_45-b14)
+# Java VM: Java HotSpot(TM) 64-Bit Server VM (25.45-b02 mixed mode linux-amd64 compressed oops)
+# Failed to write core dump. Core dumps have been disabled. To enable core dumping, try "ulimit -c unlimited" before starting Java again
+#
+# An error report file with more information is saved as:
+# /home/dunham/benchmarksgame_onecore/nbody/tmp/hs_err_pid25011.log
+#
+# If you would like to submit a bug report, please visit:
+#   http://bugreport.java.com/bugreport/crash.jsp
+#
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

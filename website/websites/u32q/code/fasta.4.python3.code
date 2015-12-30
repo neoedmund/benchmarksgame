@@ -1,0 +1,138 @@
+<span class="hl slc"># The Computer Language Benchmarks Game</span>
+<span class="hl slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">#</span>
+<span class="hl slc"># modified by Ian Osgood</span>
+<span class="hl slc"># modified again by Heinrich Acker</span>
+<span class="hl slc"># modified by Justin Peel</span>
+<span class="hl slc"># Modified by Christopher Sean Forgeron</span>
+
+<span class="hl kwa">import</span> sys
+<span class="hl kwa">import</span> bisect
+
+alu <span class="hl opt">= (</span>
+   <span class="hl str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG'</span>
+   <span class="hl str">'GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA'</span>
+   <span class="hl str">'CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT'</span>
+   <span class="hl str">'ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA'</span>
+   <span class="hl str">'GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG'</span>
+   <span class="hl str">'AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC'</span>
+   <span class="hl str">'AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span><span class="hl opt">)</span>
+
+iub <span class="hl opt">=</span> <span class="hl kwb">list</span><span class="hl opt">(</span><span class="hl kwb">zip</span><span class="hl opt">(</span><span class="hl str">'acgtBDHKMNRSVWY'</span><span class="hl opt">, [</span><span class="hl num">0.27</span><span class="hl opt">,</span> <span class="hl num">0.12</span><span class="hl opt">,</span> <span class="hl num">0.12</span><span class="hl opt">,</span> <span class="hl num">0.27</span><span class="hl opt">] + [</span><span class="hl num">0.02</span><span class="hl opt">] *</span> <span class="hl num">11</span><span class="hl opt">))</span>
+
+homosapiens <span class="hl opt">= [</span>
+    <span class="hl opt">(</span><span class="hl str">'a'</span><span class="hl opt">,</span> <span class="hl num">0.3029549426680</span><span class="hl opt">),</span>
+    <span class="hl opt">(</span><span class="hl str">'c'</span><span class="hl opt">,</span> <span class="hl num">0.1979883004921</span><span class="hl opt">),</span>
+    <span class="hl opt">(</span><span class="hl str">'g'</span><span class="hl opt">,</span> <span class="hl num">0.1975473066391</span><span class="hl opt">),</span>
+    <span class="hl opt">(</span><span class="hl str">'t'</span><span class="hl opt">,</span> <span class="hl num">0.3015094502008</span><span class="hl opt">),</span>
+<span class="hl opt">]</span>
+
+
+<span class="hl kwa">def</span> <span class="hl kwd">make_cumulative</span><span class="hl opt">(</span>table<span class="hl opt">):</span>
+    P <span class="hl opt">= []</span>
+    C <span class="hl opt">= []</span>
+    prob <span class="hl opt">=</span> <span class="hl num">0</span><span class="hl opt">.</span>
+    <span class="hl kwa">for</span> char<span class="hl opt">,</span> p <span class="hl kwa">in</span> table<span class="hl opt">:</span>
+        prob <span class="hl opt">+=</span> p
+        P <span class="hl opt">+= [</span>prob<span class="hl opt">]</span>
+        C <span class="hl opt">+= [</span><span class="hl kwb">ord</span><span class="hl opt">(</span>char<span class="hl opt">)]</span>
+    <span class="hl kwa">return</span> <span class="hl opt">(</span>P<span class="hl opt">,</span> C<span class="hl opt">)</span>
+
+
+<span class="hl kwa">def</span> <span class="hl kwd">repeat_fasta</span><span class="hl opt">(</span>src<span class="hl opt">,</span> n<span class="hl opt">):</span>
+    width <span class="hl opt">=</span> <span class="hl num">60</span>
+    nprint <span class="hl opt">=</span> sys<span class="hl opt">.</span>stdout<span class="hl opt">.</span><span class="hl kwb">buffer</span><span class="hl opt">.</span>write
+
+    is_trailing_line <span class="hl opt">=</span> <span class="hl kwa">False</span>
+    count_modifier <span class="hl opt">=</span> <span class="hl num">0.0</span>
+
+    len_of_src <span class="hl opt">=</span> <span class="hl kwb">len</span><span class="hl opt">(</span>src<span class="hl opt">)</span>
+    ss <span class="hl opt">=</span> src <span class="hl opt">+</span> src <span class="hl opt">+</span> src<span class="hl opt">[:</span>n <span class="hl opt">%</span> len_of_src<span class="hl opt">]</span>
+    <span class="hl slc"># CSF - It's faster to work with a bytearray than a string</span>
+    s <span class="hl opt">=</span> <span class="hl kwd">bytearray</span><span class="hl opt">(</span>ss<span class="hl opt">,</span> encoding<span class="hl opt">=</span><span class="hl str">'utf8'</span><span class="hl opt">)</span>
+
+    <span class="hl kwa">if</span> n <span class="hl opt">%</span> width<span class="hl opt">:</span>
+        <span class="hl slc"># We don't end on a 60 char wide line</span>
+        is_trailing_line <span class="hl opt">=</span> <span class="hl kwa">True</span>
+        count_modifier <span class="hl opt">=</span> <span class="hl num">1.0</span>
+
+    <span class="hl slc"># CSF - Here we are stuck with using an int instead of a float for the loop,</span>
+    <span class="hl slc"># but testing showed it still to be faster than a for loop</span>
+    count <span class="hl opt">=</span> <span class="hl num">0</span>
+    end <span class="hl opt">= (</span>n <span class="hl opt">/</span> <span class="hl kwb">float</span><span class="hl opt">(</span>width<span class="hl opt">)) -</span> count_modifier
+    <span class="hl kwa">while</span> count <span class="hl opt">&lt;</span> end<span class="hl opt">:</span>
+        i <span class="hl opt">=</span> count<span class="hl opt">*</span><span class="hl num">60</span> <span class="hl opt">%</span> len_of_src
+        <span class="hl kwd">nprint</span><span class="hl opt">(</span>s<span class="hl opt">[</span>i<span class="hl opt">:</span>i<span class="hl opt">+</span><span class="hl num">60</span><span class="hl opt">] +</span> b<span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">)</span>
+        count <span class="hl opt">+=</span> <span class="hl num">1</span>
+    <span class="hl kwa">if</span> is_trailing_line<span class="hl opt">:</span>
+        <span class="hl kwd">nprint</span><span class="hl opt">(</span>s<span class="hl opt">[-(</span>n <span class="hl opt">%</span> width<span class="hl opt">):] +</span> b<span class="hl str">'</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">)</span>
+
+
+<span class="hl kwa">def</span> <span class="hl kwd">random_fasta</span><span class="hl opt">(</span>table<span class="hl opt">,</span> n<span class="hl opt">,</span> seed<span class="hl opt">):</span>
+    width <span class="hl opt">=</span> <span class="hl num">60</span>
+    r <span class="hl opt">=</span> <span class="hl kwb">range</span><span class="hl opt">(</span>width<span class="hl opt">)</span>
+    bb <span class="hl opt">=</span> bisect<span class="hl opt">.</span>bisect
+
+    <span class="hl slc"># If we don't have a multiple of the width, then we will have a trailing</span>
+    <span class="hl slc"># line, which needs a slightly different approach</span>
+    is_trailing_line <span class="hl opt">=</span> <span class="hl kwa">False</span>
+    count_modifier <span class="hl opt">=</span> <span class="hl num">0.0</span>
+
+    <span class="hl slc"># CSF - nprint allows us to print a bytearray directly to stdout, avoiding</span>
+    <span class="hl slc"># some conversion steps along the way, including a call to join</span>
+    nprint <span class="hl opt">=</span> sys<span class="hl opt">.</span>stdout<span class="hl opt">.</span><span class="hl kwb">buffer</span><span class="hl opt">.</span>write
+    line <span class="hl opt">=</span> <span class="hl kwd">bytearray</span><span class="hl opt">(</span>width <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">)</span>    <span class="hl slc"># Width of 60 + 1 for the \n char</span>
+
+    probs<span class="hl opt">,</span> chars <span class="hl opt">=</span> <span class="hl kwd">make_cumulative</span><span class="hl opt">(</span>table<span class="hl opt">)</span>
+
+    <span class="hl slc"># pRNG Vars</span>
+    im <span class="hl opt">=</span> <span class="hl num">139968</span>
+
+    <span class="hl kwa">if</span> n <span class="hl opt">%</span> width<span class="hl opt">:</span>
+        <span class="hl slc"># We don't end on a 60 char wide line</span>
+        is_trailing_line <span class="hl opt">=</span> <span class="hl kwa">True</span>
+        count_modifier <span class="hl opt">=</span> <span class="hl num">1.0</span>
+
+    <span class="hl slc"># CSF - Loops with a high iteration count run faster as a while/float loop.</span>
+    count <span class="hl opt">=</span> <span class="hl num">0.0</span>
+    end <span class="hl opt">= (</span>n <span class="hl opt">/</span> <span class="hl kwb">float</span><span class="hl opt">(</span>width<span class="hl opt">)) -</span> count_modifier
+    <span class="hl kwa">while</span> count <span class="hl opt">&lt;</span> end<span class="hl opt">:</span>
+        <span class="hl slc"># CSF - Low iteration count loops may run faster as a for loop.</span>
+        <span class="hl kwa">for</span> i <span class="hl kwa">in</span> r<span class="hl opt">:</span>
+            <span class="hl slc"># CSF - Python is faster for all float math than it is for int, on my</span>
+            <span class="hl slc"># machine at least. HOWEVER, it was considered to be not within the rules for</span>
+            <span class="hl slc"># this benchmark, so we're doing math on ints instead.</span>
+            seed <span class="hl opt">= (</span>seed <span class="hl opt">*</span> <span class="hl num">3877</span> <span class="hl opt">+</span> <span class="hl num">29573</span><span class="hl opt">) %</span> <span class="hl num">139968</span>
+            <span class="hl slc"># CSF - While real values, not variables are faster for most things, on my</span>
+            <span class="hl slc"># machine, it's faster to have 'im' already in a var</span>
+            line<span class="hl opt">[</span>i<span class="hl opt">] =</span> chars<span class="hl opt">[</span><span class="hl kwd">bb</span><span class="hl opt">(</span>probs<span class="hl opt">,</span> seed <span class="hl opt">/</span> im<span class="hl opt">)]</span>
+
+        line<span class="hl opt">[</span><span class="hl num">60</span><span class="hl opt">] =</span> <span class="hl num">10</span>   <span class="hl slc"># End of Line</span>
+        <span class="hl kwd">nprint</span><span class="hl opt">(</span>line<span class="hl opt">)</span>
+        count <span class="hl opt">+=</span> <span class="hl num">1.0</span>
+
+    <span class="hl kwa">if</span> is_trailing_line<span class="hl opt">:</span>
+        <span class="hl kwa">for</span> i <span class="hl kwa">in</span> <span class="hl kwb">range</span><span class="hl opt">(</span>n <span class="hl opt">%</span> width<span class="hl opt">):</span>
+            seed <span class="hl opt">= (</span>seed <span class="hl opt">*</span> <span class="hl num">3877</span> <span class="hl opt">+</span> <span class="hl num">29573</span><span class="hl opt">) %</span> <span class="hl num">139968</span>
+            line<span class="hl opt">[</span>i<span class="hl opt">] =</span> chars<span class="hl opt">[</span><span class="hl kwd">bb</span><span class="hl opt">(</span>probs<span class="hl opt">,</span> seed <span class="hl opt">/</span> im<span class="hl opt">)]</span>
+
+        <span class="hl kwd">nprint</span><span class="hl opt">(</span>line<span class="hl opt">[:</span>i<span class="hl opt">+</span><span class="hl num">1</span><span class="hl opt">] +</span> b<span class="hl str">&quot;</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">)</span>
+
+    <span class="hl kwa">return</span> seed
+
+<span class="hl kwa">def</span> <span class="hl kwd">main</span><span class="hl opt">():</span>
+    n <span class="hl opt">=</span> <span class="hl kwb">int</span><span class="hl opt">(</span>sys<span class="hl opt">.</span>argv<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">])</span>
+    nprint <span class="hl opt">=</span> sys<span class="hl opt">.</span>stdout<span class="hl opt">.</span><span class="hl kwb">buffer</span><span class="hl opt">.</span>write
+    <span class="hl kwd">nprint</span><span class="hl opt">(</span>b<span class="hl str">'&gt;ONE Homo sapiens alu</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">)</span>
+    <span class="hl kwd">repeat_fasta</span><span class="hl opt">(</span>alu<span class="hl opt">,</span> n <span class="hl opt">*</span> <span class="hl num">2</span><span class="hl opt">)</span>
+
+    <span class="hl slc"># We need to keep track of the state of 'seed' so we pass it in, and return</span>
+    <span class="hl slc"># it back so our output can pass the diff test</span>
+    <span class="hl kwd">nprint</span><span class="hl opt">(</span>b<span class="hl str">'&gt;TWO IUB ambiguity codes</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">)</span>
+    seed<span class="hl opt">=</span><span class="hl kwd">random_fasta</span><span class="hl opt">(</span>iub<span class="hl opt">,</span> n <span class="hl opt">*</span> <span class="hl num">3</span><span class="hl opt">,</span> seed<span class="hl opt">=</span><span class="hl num">42</span><span class="hl opt">)</span>
+
+    <span class="hl kwd">nprint</span><span class="hl opt">(</span>b<span class="hl str">'&gt;THREE Homo sapiens frequency</span><span class="hl esc">\n</span><span class="hl str">'</span><span class="hl opt">)</span>
+    <span class="hl kwd">random_fasta</span><span class="hl opt">(</span>homosapiens<span class="hl opt">,</span> n <span class="hl opt">*</span> <span class="hl num">5</span><span class="hl opt">,</span> seed<span class="hl opt">)</span>
+
+<span class="hl kwa">if</span> __name__ <span class="hl opt">==</span> <span class="hl str">&quot;__main__&quot;</span><span class="hl opt">:</span>
+    <span class="hl kwd">main</span><span class="hl opt">()</span>

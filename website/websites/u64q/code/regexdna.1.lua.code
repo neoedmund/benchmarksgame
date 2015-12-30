@@ -1,0 +1,45 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- contributed by Jim Roseborough</span>
+
+seq = io.<span class="kwb">read</span>(<span class="str">&quot;*a&quot;</span>)
+ilen = #seq
+seq = seq:<span class="kwb">gsub</span>(<span class="str">'&gt;[^%c]*%c*'</span>,<span class="str">''</span>):<span class="kwb">gsub</span>(<span class="str">'%c+'</span>,<span class="str">''</span>)
+clen = #seq
+
+variants = {
+   <span class="str">'agggtaaa|tttaccct'</span>,
+   <span class="str">'[cgt]gggtaaa|tttaccc[acg]'</span>,
+   <span class="str">'a[act]ggtaaa|tttacc[agt]t'</span>,
+   <span class="str">'ag[act]gtaaa|tttac[agt]ct'</span>,
+   <span class="str">'agg[act]taaa|ttta[agt]cct'</span>,
+   <span class="str">'aggg[acg]aaa|ttt[cgt]ccct'</span>,
+   <span class="str">'agggt[cgt]aa|tt[acg]accct'</span>,
+   <span class="str">'agggta[cgt]a|t[acg]taccct'</span>,
+   <span class="str">'agggtaa[cgt]|[acg]ttaccct'</span>,
+}
+
+subst = {
+   B=<span class="str">'(c|g|t)'</span>, D=<span class="str">'(a|g|t)'</span>,   H=<span class="str">'(a|c|t)'</span>, K=<span class="str">'(g|t)'</span>,
+   M=<span class="str">'(a|c)'</span>,   N=<span class="str">'(a|c|g|t)'</span>, R=<span class="str">'(a|g)'</span>,   S=<span class="str">'(c|g)'</span>,
+   V=<span class="str">'(a|c|g)'</span>, W=<span class="str">'(a|t)'</span>,     Y=<span class="str">'(c|t)'</span>
+}
+
+<span class="kwa">function</span> <span class="kwd">countmatches</span>(variant)
+   <span class="kwa">local</span> n = <span class="num">0</span>
+   <span class="kwa">local</span> counter = <span class="kwa">function</span>() n = n + <span class="num">1</span> <span class="kwa">return</span> <span class="str">'-'</span> <span class="kwa">end</span>
+   variant:<span class="kwb">gsub</span>(<span class="str">'([^|]+)|?'</span>, <span class="kwa">function</span>(pattern)
+      seq:<span class="kwb">gsub</span>(pattern,counter)
+   <span class="kwa">end</span>)
+   <span class="kwa">return</span> n
+<span class="kwa">end</span>
+
+<span class="kwa">for</span> i,p <span class="kwa">in</span> <span class="kwd">ipairs</span>(variants) <span class="kwa">do</span>
+   io.<span class="kwb">write</span>(<span class="kwb">string</span>.<span class="kwb">format</span>(<span class="str">'%s %d</span><span class="esc">\n</span><span class="str">'</span>, p, <span class="kwd">countmatches</span>(p)))
+<span class="kwa">end</span>
+
+<span class="kwa">for</span> k,v <span class="kwa">in</span> <span class="kwd">pairs</span>(subst) <span class="kwa">do</span>
+   seq = seq:<span class="kwb">gsub</span>(k,v)
+<span class="kwa">end</span>
+
+io.<span class="kwb">write</span>(<span class="kwb">string</span>.<span class="kwb">format</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">'</span>, ilen, clen, #seq))

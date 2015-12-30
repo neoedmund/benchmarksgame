@@ -1,0 +1,129 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Francesco Abbate</span>
+<span class="com"> */</span>
+
+
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+
+<span class="kwc">typedef</span> off_t off64_t;
+<span class="ppc">#include &lt;apr_pools.h&gt;</span>
+
+<span class="kwb">const size_t</span>	LINE_SIZE = <span class="num">64</span>;
+
+<span class="kwb">struct</span> node
+{
+  <span class="kwb">int</span> i;
+  <span class="kwb">struct</span> node *left;
+  <span class="kwb">struct</span> node *right;
+};
+
+<span class="kwb">int</span>
+<span class="kwd">node_check</span>(<span class="kwb">const struct</span> node *n)
+{
+  <span class="kwa">if</span> (n-&gt;left)
+    {
+      <span class="kwb">int</span> lc = <span class="kwd">node_check</span> (n-&gt;left);
+      <span class="kwb">int</span> rc = <span class="kwd">node_check</span> (n-&gt;right);
+      <span class="kwa">return</span> lc + n-&gt;i - rc;
+    }
+
+  <span class="kwa">return</span> n-&gt;i;
+}
+
+<span class="kwb">struct</span> node *
+<span class="kwd">node_get_avail</span> (apr_pool_t *pool)
+{
+  <span class="kwa">return</span> <span class="kwd">apr_palloc</span> (pool, <span class="kwa">sizeof</span>(<span class="kwb">struct</span> node));
+}
+
+<span class="kwb">struct</span> node *
+<span class="kwd">make</span> (<span class="kwb">int</span> i, <span class="kwb">int</span> depth, apr_pool_t *pool)
+{
+  <span class="kwb">struct</span> node *curr = <span class="kwd">node_get_avail</span> (pool);
+
+  curr-&gt;i = i;
+
+  <span class="kwa">if</span> (depth &gt; <span class="num">0</span>)
+    {
+      curr-&gt;left  = <span class="kwd">make</span> (<span class="num">2</span>*i-<span class="num">1</span>, depth - <span class="num">1</span>, pool);
+      curr-&gt;right = <span class="kwd">make</span> (<span class="num">2</span>*i  , depth - <span class="num">1</span>, pool);
+    }
+  <span class="kwa">else</span>
+    {
+      curr-&gt;left  = NULL;
+      curr-&gt;right = NULL;
+    }
+
+  <span class="kwa">return</span> curr;
+}
+
+<span class="kwb">int</span>
+<span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[])
+{
+  apr_pool_t *long_lived_pool;
+  <span class="kwb">int</span> min_depth = <span class="num">4</span>;
+  <span class="kwb">int</span> req_depth = (argc == <span class="num">2</span> ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">10</span>);
+  <span class="kwb">int</span> max_depth = (req_depth &gt; min_depth + <span class="num">2</span> ? req_depth : min_depth + <span class="num">2</span>);
+  <span class="kwb">int</span> stretch_depth = max_depth+<span class="num">1</span>;
+
+  <span class="kwd">apr_initialize</span>();
+
+  <span class="com">/* Alloc then dealloc stretchdepth tree */</span>
+  {
+    apr_pool_t *store;
+    <span class="kwb">struct</span> node *curr;
+
+    <span class="kwd">apr_pool_create</span> (&amp;store, NULL);
+    curr = <span class="kwd">make</span> (<span class="num">0</span>, stretch_depth, store);
+    <span class="kwd">printf</span> (<span class="str">&quot;stretch tree of depth %i</span><span class="esc">\t</span> <span class="str">check: %i</span><span class="esc">\n</span><span class="str">&quot;</span>, stretch_depth, 
+	    <span class="kwd">node_check</span> (curr));
+    <span class="kwd">apr_pool_destroy</span> (store);
+  }
+
+  <span class="kwd">apr_pool_create</span> (&amp;long_lived_pool, NULL);
+
+  {
+    <span class="kwb">struct</span> node *long_lived_tree = <span class="kwd">make</span>(<span class="num">0</span>, max_depth, long_lived_pool);
+
+    <span class="com">/* buffer to store output of each thread */</span>
+    <span class="kwb">char</span> *outputstr = (<span class="kwb">char</span>*) <span class="kwd">malloc</span>(LINE_SIZE * (max_depth +<span class="num">1</span>) * <span class="kwa">sizeof</span>(<span class="kwb">char</span>));
+    <span class="kwb">int</span> d;
+
+<span class="ppc">#pragma omp parallel for</span>
+    <span class="kwa">for</span> (d = min_depth; d &lt;= max_depth; d += <span class="num">2</span>)
+      {
+        <span class="kwb">int</span> iterations = <span class="num">1</span> &lt;&lt; (max_depth - d + min_depth);
+	apr_pool_t *store;
+        <span class="kwb">int</span> c = <span class="num">0</span>, i;
+
+	<span class="kwd">apr_pool_create</span> (&amp;store, NULL);
+
+        <span class="kwa">for</span> (i = <span class="num">1</span>; i &lt;= iterations; ++i)
+	  {
+	    <span class="kwb">struct</span> node *a, *b;
+
+	    a = <span class="kwd">make</span> ( i, d, store);
+	    b = <span class="kwd">make</span> (-i, d, store);
+            c += <span class="kwd">node_check</span> (a) + <span class="kwd">node_check</span> (b);
+	    <span class="kwd">apr_pool_clear</span> (store);
+        }
+	<span class="kwd">apr_pool_destroy</span> (store);
+	
+	<span class="com">/* each thread write to separate location */</span>
+	<span class="kwd">sprintf</span>(outputstr + LINE_SIZE * d, <span class="str">&quot;%d</span><span class="esc">\t</span> <span class="str">trees of depth %d</span><span class="esc">\t</span> <span class="str">check: %d</span><span class="esc">\n</span><span class="str">&quot;</span>, (<span class="num">2</span> * iterations), d, c);
+      }
+
+    <span class="com">/* print all results */</span>
+    <span class="kwa">for</span> (d = min_depth; d &lt;= max_depth; d += <span class="num">2</span>)
+      <span class="kwd">printf</span>(<span class="str">&quot;%s&quot;</span>, outputstr + (d * LINE_SIZE) );
+    <span class="kwd">free</span>(outputstr);
+
+    <span class="kwd">printf</span> (<span class="str">&quot;long lived tree of depth %i</span><span class="esc">\t</span> <span class="str">check: %i</span><span class="esc">\n</span><span class="str">&quot;</span>, max_depth, 
+	    <span class="kwd">node_check</span> (long_lived_tree));
+
+    <span class="kwa">return</span> <span class="num">0</span>;
+  }
+}

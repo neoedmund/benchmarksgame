@@ -1,0 +1,50 @@
+
+Mon, 30 Nov 2015 00:23:59 GMT
+
+MAKE:
+mv mandelbrot.fpascal-4.fpascal mandelbrot.fpascal-4.pas
+/usr/local/src/fpc-3.0.0.i386-linux/bin/fpc -FuInclude/fpascal -XXs -Oppentiumm -Cppentiumm -O3 -Cfsse2  -oFPASCAL_RUN mandelbrot.fpascal-4.pas
+Free Pascal Compiler version 3.0.0 [2015/11/24] for i386
+Copyright (c) 1993-2015 by Florian Klaempfl and others
+Target OS: Linux for i386
+Compiling mandelbrot.fpascal-4.pas
+Linking FPASCAL_RUN
+mandelbrot.fpascal-4.pas(118,1) Warning: "crti.o" not found, this will probably cause a linking failure
+mandelbrot.fpascal-4.pas(118,1) Warning: "crtn.o" not found, this will probably cause a linking failure
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/usr/bin/ld: warning: link.res contains output sections; did you forget -T?
+118 lines compiled, 0.3 sec
+2 warning(s) issued
+mv FPASCAL_RUN mandelbrot.fpascal-4.fpascal_run
+rm mandelbrot.fpascal-4.pas
+0.28s to complete and log all make actions
+
+COMMAND LINE:
+./mandelbrot.fpascal-4.fpascal_run 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN

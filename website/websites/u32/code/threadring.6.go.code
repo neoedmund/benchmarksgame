@@ -1,0 +1,71 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by KP</span>
+<span class="com">   modified by fwip</span>
+<span class="com">*/</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+   <span class="str">&quot;strconv&quot;</span>
+   <span class="str">&quot;sync&quot;</span>
+)
+
+<span class="kwa">type</span> Token <span class="kwb">int</span>
+
+<span class="kwa">type</span> T <span class="kwa">struct</span> {
+   next  *T
+   label <span class="kwb">int</span>
+   value <span class="kwb">int</span>
+   mux   sync.Mutex
+}
+
+<span class="kwa">func</span> (w *T) <span class="kwd">put</span>(v <span class="kwb">int</span>) {
+   w.value = v
+   <span class="kwa">if</span> v == <span class="num">0</span> {
+      res &lt;- w.label
+   } <span class="kwa">else</span> {
+      w.mux.<span class="kwd">Unlock</span>()
+   }
+}
+
+<span class="kwa">func</span> (w *T) <span class="kwd">run</span>() {
+   <span class="kwa">for</span> {
+      w.mux.<span class="kwd">Lock</span>()
+      w.next.<span class="kwd">put</span>(w.value - <span class="num">1</span>)
+      runtime.<span class="kwd">Gosched</span>()
+   }
+}
+
+<span class="kwa">func</span> (w *T) <span class="kwd">Start</span>(label <span class="kwb">int</span>, next *T) {
+   w.label = label
+   w.next = next
+   w.mux.<span class="kwd">Lock</span>()
+   <span class="kwa">go</span> w.<span class="kwd">run</span>()
+}
+
+<span class="kwa">const</span> NThreads = <span class="num">503</span>
+
+<span class="kwa">var</span> res = <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">int</span>)
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   n := <span class="num">1000</span>
+   <span class="kwa">if</span> <span class="kwb">len</span>(os.Args) &gt; <span class="num">1</span> {
+      n, _ = strconv.<span class="kwd">Atoi</span>(os.Args[<span class="num">1</span>])
+   }
+
+   runtime.<span class="kwd">GOMAXPROCS</span>(<span class="num">1</span>)
+
+   <span class="kwa">var</span> channels [NThreads]T
+   <span class="kwa">for</span> i := <span class="kwa">range</span> channels {
+      channels[i].<span class="kwd">Start</span>(i+<span class="num">1</span>, &amp;channels[(i+<span class="num">1</span>)%NThreads])
+   }
+
+   channels[<span class="num">0</span>].<span class="kwd">put</span>(n)
+   fmt.<span class="kwd">Println</span>(&lt;-res)
+}
+

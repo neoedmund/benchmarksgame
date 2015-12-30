@@ -1,0 +1,55 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Kannan Goundan</span>
+<span class="com">   modified by Isaac Gouy</span>
+<span class="com">   optimized by David Pollak</span>
+<span class="com">   updated for 2.8 and parallelized by Rex Kerr</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> scala.actors.Futures._
+
+<span class="kwa">object</span> binarytrees {
+  <span class="kwa">def</span> <span class="kwd">report</span>(name: String, depth: Int, check: Int) =
+    <span class="kwd">println</span>(name + <span class="str">&quot; of depth &quot;</span> + depth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + check)
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) = {
+    <span class="kwa">val</span> n = <span class="kwa">try</span>{ <span class="kwd">args</span>(<span class="num">0</span>).toInt } <span class="kwa">catch</span> { <span class="kwa">case</span> _ =&gt; <span class="num">1</span> }
+    <span class="kwa">val</span> minDepth = <span class="num">4</span>
+    <span class="kwa">val</span> maxDepth = n <span class="kwd">max</span> (minDepth+<span class="num">2</span>)
+    <span class="kwa">val</span> threads = <span class="num">3</span>  <span class="slc">// More than 3 tends to overwhelm GC</span>
+
+    <span class="kwd">report</span>(<span class="str">&quot;stretch tree&quot;</span>, maxDepth+<span class="num">1</span>, <span class="kwd">Tree</span>(<span class="num">0</span>,maxDepth+<span class="num">1</span>).isum)
+    <span class="kwa">val</span> longLivedTree = <span class="kwd">Tree</span>(<span class="num">0</span>,maxDepth)
+    <span class="kwa">var</span> depth = minDepth
+    <span class="kwa">while</span> (depth &lt;= maxDepth) {
+      <span class="kwa">val</span> iterations = <span class="num">1</span> &lt;&lt; (maxDepth - depth + minDepth)
+      <span class="kwa">val</span> limits = (<span class="num">0</span> to threads).<span class="kwd">map</span>(_*iterations/threads).<span class="kwd">sliding</span>(<span class="num">2</span>).toList
+      <span class="kwa">val</span> check = limits.<span class="kwd">map</span>(i =&gt; <span class="kwd">future</span>(<span class="kwd">Go</span>(<span class="kwd">i</span>(<span class="num">0</span>)+<span class="num">1</span>,<span class="kwd">i</span>(<span class="num">1</span>),depth).calc))
+      <span class="kwd">report</span>(iterations*<span class="num">2</span> + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">trees&quot;</span>, depth, check.<span class="kwd">map</span>(<span class="kwd">_</span>()).sum)
+      depth += <span class="num">2</span>
+    }
+    <span class="kwd">report</span>(<span class="str">&quot;long lived tree&quot;</span>, maxDepth, longLivedTree.isum)
+  }
+}
+
+<span class="kwa">case class</span> <span class="kwd">Sum</span>(<span class="kwa">var</span> sum: Int) {
+  <span class="kwa">def</span> +=(i: Int) = { sum+=i; <span class="kwa">this</span> }
+}
+
+<span class="kwa">case class</span> <span class="kwd">Go</span>(i0: Int, i1: Int, depth: Int) {
+  <span class="kwa">def</span> calc = (<span class="kwd">Sum</span>(<span class="num">0</span>) /: (i0 to i1))((s,i) =&gt;
+    s += <span class="kwd">Tree</span>(i,depth).isum + <span class="kwd">Tree</span>(-i,depth).isum
+  ).sum
+}
+
+<span class="kwa">final class</span> <span class="kwd">Tree</span>(i: Int, left: Tree, right: Tree) {
+  <span class="kwa">def</span> isum: Int = <span class="kwa">if</span> (left eq null) i <span class="kwa">else</span> i + left.isum - right.isum
+}
+<span class="kwa">object</span> Tree {
+  <span class="kwa">def</span> <span class="kwd">apply</span>(i: Int, depth: Int): Tree = {
+    <span class="kwa">if</span> (depth &gt; <span class="num">0</span>) <span class="kwa">new</span> <span class="kwd">Tree</span>(i, <span class="kwd">Tree</span>(i*<span class="num">2</span>-<span class="num">1</span>, depth-<span class="num">1</span>), <span class="kwd">Tree</span>(i*<span class="num">2</span>, depth-<span class="num">1</span>))
+    <span class="kwa">else new</span> <span class="kwd">Tree</span>(i, null, null)
+  }
+}
+

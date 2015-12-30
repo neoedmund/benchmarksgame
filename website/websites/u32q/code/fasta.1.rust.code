@@ -1,0 +1,105 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by TeXitoi</span>
+
+<span class="kwa">use</span> std::cmp::min;
+<span class="kwa">use</span> std::io;
+
+<span class="kwa">const</span> LINE_LENGTH: usize = <span class="num">60</span>;
+<span class="kwa">const</span> IM: u32 = <span class="num">139968</span>;
+
+<span class="kwa">struct</span> MyRandom {
+    last: u32
+}
+<span class="kwa">impl</span> MyRandom {
+    <span class="kwa">fn</span> new() -&gt; MyRandom { MyRandom { last: <span class="num">42</span> } }
+    <span class="kwa">fn</span> normalize(p: f32) -&gt; u32 {(p * IM <span class="kwa">as</span> f32).floor() <span class="kwa">as</span> u32}
+    <span class="kwa">fn</span> gen(&amp;<span class="kwa">mut self</span>) -&gt; u32 {
+        <span class="kwa">self</span>.last = (<span class="kwa">self</span>.last * <span class="num">3877</span> + <span class="num">29573</span>) % IM;
+        <span class="kwa">self</span>.last
+    }
+}
+
+<span class="kwa">struct</span> AAGen&lt;'a&gt; {
+    rng: &amp;'a <span class="kwa">mut</span> MyRandom,
+    data: Vec&lt;(u32, u8)&gt;
+}
+<span class="kwa">impl</span>&lt;'a&gt; AAGen&lt;'a&gt; {
+    <span class="kwa">fn</span> new&lt;'b&gt;(rng: &amp;'b <span class="kwa">mut</span> MyRandom, aa: &amp;[(char, f32)]) -&gt; AAGen&lt;'b&gt; {
+        <span class="kwa">let mut</span> cum = <span class="num">0</span>.;
+        <span class="kwa">let</span> data = aa.iter()
+            .map(|&amp;(ch, p)| { cum += p; (MyRandom::normalize(cum), ch <span class="kwa">as</span> u8) })
+            .collect();
+        AAGen { rng: rng, data: data }
+    }
+}
+<span class="kwa">impl</span>&lt;'a&gt; Iterator <span class="kwa">for</span> AAGen&lt;'a&gt; {
+    <span class="kwa">type</span> Item = u8;
+
+    <span class="kwa">fn</span> next(&amp;<span class="kwa">mut self</span>) -&gt; Option&lt;u8&gt; {
+        <span class="kwa">let</span> r = <span class="kwa">self</span>.rng.gen();
+        <span class="kwa">self</span>.data.iter()
+            .skip_while(|pc| pc<span class="num">.0</span> &lt; r)
+            .map(|&amp;(_, c)| c)
+            .next()
+    }
+}
+
+<span class="kwa">fn</span> make_fasta&lt;W: io::Write, I: Iterator&lt;Item=u8&gt;&gt;(
+    wr: &amp;<span class="kwa">mut</span> W, header: &amp;str, <span class="kwa">mut</span> it: I, <span class="kwa">mut</span> n: usize)
+    -&gt; io::Result&lt;()&gt;
+{
+    try!(wr.write_all(header.as_bytes()));
+    <span class="kwa">let mut</span> line = [<span class="num">0u8</span>; LINE_LENGTH + <span class="num">1</span>];
+    <span class="kwa">while</span> n &gt; <span class="num">0</span> {
+        <span class="kwa">let</span> nb = min(LINE_LENGTH, n);
+        <span class="kwa">for</span> i <span class="kwa">in</span> (<span class="num">0</span>..nb) {
+            line[i] = it.next().unwrap();
+        }
+        n -= nb;
+        line[nb] = '<span class="esc">\n</span>' <span class="kwa">as</span> u8;
+        try!(wr.write_all(&amp;line[..(nb+<span class="num">1</span>)]));
+    }
+    Ok(())
+}
+
+<span class="kwa">fn</span> run&lt;W: io::Write&gt;(writer: &amp;<span class="kwa">mut</span> W) -&gt; io::Result&lt;()&gt; {
+    <span class="kwa">let</span> n = std::env::args_os().nth(<span class="num">1</span>)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">1000</span>);
+
+    <span class="kwa">let</span> rng = &amp;<span class="kwa">mut</span> MyRandom::new();
+    <span class="kwa">let</span> alu =
+        <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG\</span>
+<span class="str">        GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA\</span>
+<span class="str">        CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT\</span>
+<span class="str">        ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA\</span>
+<span class="str">        GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG\</span>
+<span class="str">        AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC\</span>
+<span class="str">        AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+    <span class="kwa">let</span> iub = &amp;[('a', <span class="num">0.27</span>), ('c', <span class="num">0.12</span>), ('g', <span class="num">0.12</span>),
+                ('t', <span class="num">0.27</span>), ('B', <span class="num">0.02</span>), ('D', <span class="num">0.02</span>),
+                ('H', <span class="num">0.02</span>), ('K', <span class="num">0.02</span>), ('M', <span class="num">0.02</span>),
+                ('N', <span class="num">0.02</span>), ('R', <span class="num">0.02</span>), ('S', <span class="num">0.02</span>),
+                ('V', <span class="num">0.02</span>), ('W', <span class="num">0.02</span>), ('Y', <span class="num">0.02</span>)];
+    <span class="kwa">let</span> homosapiens = &amp;[('a', <span class="num">0.3029549426680</span>),
+                        ('c', <span class="num">0.1979883004921</span>),
+                        ('g', <span class="num">0.1975473066391</span>),
+                        ('t', <span class="num">0.3015094502008</span>)];
+
+    try!(make_fasta(writer, <span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>,
+                    alu.as_bytes().iter().cycle().map(|c| *c), n * <span class="num">2</span>));
+    try!(make_fasta(writer, <span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>,
+                    AAGen::new(rng, iub), n * <span class="num">3</span>));
+    try!(make_fasta(writer, <span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>,
+                    AAGen::new(rng, homosapiens), n * <span class="num">5</span>));
+
+    writer.flush()
+}
+
+<span class="kwa">fn</span> main() {
+    run(&amp;<span class="kwa">mut</span> io::stdout()).unwrap()
+}

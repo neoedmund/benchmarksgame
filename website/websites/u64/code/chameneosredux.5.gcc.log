@@ -1,0 +1,45 @@
+
+Wed, 20 May 2015 02:15:43 GMT
+
+MAKE:
+/usr/bin/gcc -pipe -Wall -O3 -fomit-frame-pointer -march=native -pthread chameneosredux.gcc-5.c -o chameneosredux.gcc-5.gcc_run 
+chameneosredux.gcc-5.c: In function ‘join_and_output’:
+chameneosredux.gcc-5.c:400:13: warning: format ‘%u’ expects argument of type ‘unsigned int’, but argument 2 has type ‘size_t’ [-Wformat=]
+             spell_number(chameneos[i]->meet_same_count));
+             ^
+rm chameneosredux.gcc-5.c
+0.25s to complete and log all make actions
+
+COMMAND LINE:
+./chameneosredux.gcc-5.gcc_run 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+ blue red yellow
+4003829 zero
+3977829 zero
+4018342 zero
+ one two zero zero zero zero zero zero
+
+ blue red yellow red yellow blue red yellow red blue
+1188523 zero
+1200168 zero
+1202621 zero
+1192468 zero
+1197165 zero
+1204191 zero
+1203452 zero
+1204149 zero
+1206204 zero
+1201059 zero
+ one two zero zero zero zero zero zero
+

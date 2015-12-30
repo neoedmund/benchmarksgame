@@ -1,0 +1,65 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   from Scala version by Otto Bommer, August 2010</span>
+<span class="com">*)</span>
+
+<span class="kwa">let</span> fannkuch n =
+  <span class="kwa">begin</span>
+  <span class="kwa">let</span> perm1 = <span class="kwd">Array</span>.create n <span class="num">0</span> <span class="kwa">in for</span> i = <span class="num">0</span> <span class="kwa">to</span> (n-<span class="num">1</span>) <span class="kwa">do</span> perm1.[i] &lt;- i <span class="kwa">done</span>;
+  <span class="kwa">let</span> perm = <span class="kwd">Array</span>.create n <span class="num">0</span>
+  <span class="kwa">let</span> count = <span class="kwd">Array</span>.create n <span class="num">0</span>
+  <span class="kwa">let mutable</span> flips = <span class="num">0</span> 
+  <span class="kwa">let mutable</span> maxflips = <span class="num">0</span> 
+  <span class="kwa">let mutable</span> checksum = <span class="num">0</span> 
+  <span class="kwa">let mutable</span> nperm = <span class="num">0</span>
+  <span class="kwa">let mutable</span> r = n
+  <span class="kwa">while</span> r &gt; <span class="num">0</span> <span class="kwa">do</span> 
+    <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> n-<span class="num">1</span> <span class="kwa">do</span> perm.[i] &lt;- perm1.[i] <span class="kwa">done</span>;
+
+    <span class="kwa">while</span> r &lt;&gt; <span class="num">1</span> <span class="kwa">do</span> count.[r-<span class="num">1</span>] &lt;- r; r &lt;- r - <span class="num">1</span>; <span class="kwa">done</span>;
+
+    flips &lt;- <span class="num">0</span>;
+    <span class="kwa">let</span> k = <span class="kwb">ref</span> perm.[<span class="num">0</span>] <span class="kwa">in</span>
+    <span class="kwa">while</span> !k &lt;&gt; <span class="num">0</span> <span class="kwa">do</span>
+      <span class="kwa">let</span> t = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+      <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> !k / <span class="num">2</span> <span class="kwa">do</span>
+        t := perm.[i];
+        perm.[i] &lt;- perm.[!k - i];
+        perm.[!k - i] &lt;- !t;
+        <span class="kwa">done</span>;
+        
+      k := perm.[<span class="num">0</span>];
+      flips &lt;- flips + <span class="num">1</span>;
+      <span class="kwa">done</span>;
+
+    maxflips &lt;- max maxflips flips;
+    <span class="kwa">if</span> nperm &amp;&amp;&amp; <span class="num">1</span> = <span class="num">0</span> <span class="kwa">then</span> checksum &lt;- checksum + flips <span class="kwa">else</span> checksum &lt;- checksum - flips
+    
+    <span class="kwa">let mutable</span> go = <span class="kwa">true in</span>
+    <span class="kwa">let mutable</span> t = <span class="num">0</span> <span class="kwa">in</span>
+    <span class="kwa">while</span> go <span class="kwa">do</span>
+      <span class="kwa">if</span> r = n <span class="kwa">then begin</span> go &lt;- <span class="kwa">false</span>; r &lt;- <span class="num">0</span>; <span class="kwa">end</span>
+      <span class="kwa">else</span>
+        <span class="kwa">begin</span>
+        t &lt;- perm1.[<span class="num">0</span>];
+        <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> r - <span class="num">1</span> <span class="kwa">do</span> perm1.[i] &lt;- perm1.[i+<span class="num">1</span>] <span class="kwa">done</span>;
+        perm1.[r] &lt;- t;
+
+        count.[r] &lt;- count.[r] - <span class="num">1</span>;
+        <span class="kwa">if</span> count.[r] &gt; <span class="num">0</span> <span class="kwa">then</span> go &lt;- <span class="kwa">false</span>
+        <span class="kwa">else</span> r &lt;- r + <span class="num">1</span>;
+        <span class="kwa">end</span>
+      <span class="kwa">done</span>;
+
+    nperm &lt;- nperm + <span class="num">1</span>;
+    <span class="kwa">done</span>;
+
+  (maxflips, checksum);
+  <span class="kwa">end</span>
+
+<span class="kwa">let</span> _ =
+  <span class="kwa">let</span> n = <span class="kwa">try</span> <span class="kwb">int</span>((<span class="kwd">System</span>.<span class="kwd">Environment</span>.<span class="kwd">GetCommandLineArgs</span>()).[<span class="num">1</span>]) <span class="kwa">with</span> _ -&gt; <span class="num">7</span>
+  <span class="kwa">let</span> (maxflips, checksum) = fannkuch n
+  <span class="kwd">Printf</span>.printf <span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">Pfannkuchen(</span><span class="ipl">%d</span><span class="str">) =</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> checksum n maxflips
+

@@ -1,0 +1,453 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Contributed by Andrew Moon</span>
+<span class="com">*/</span>
+
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;iomanip&gt;</span>
+<span class="ppc">#include &lt;vector&gt;</span>
+<span class="ppc">#include &lt;algorithm&gt;</span>
+
+<span class="ppc">#include &lt;sched.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;ext/pb_ds/assoc_container.hpp&gt;</span>
+<span class="ppc">#include &lt;ext/pb_ds/hash_policy.hpp&gt;</span>
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned long long</span> u64;
+<span class="kwc">typedef</span> <span class="kwb">unsigned int</span> u32;
+<span class="kwc">typedef</span> <span class="kwb">signed int</span> s32;
+<span class="kwc">typedef</span> <span class="kwb">unsigned short</span> u16;
+<span class="kwc">typedef</span> <span class="kwb">unsigned char</span> u8;
+
+<span class="kwa">using namespace</span> std;
+
+<span class="kwb">struct</span> CPUs {
+  <span class="kwd">CPUs</span>() {
+    cpu_set_t cs;
+    <span class="kwd">CPU_ZERO</span>( &amp;cs );
+    <span class="kwd">sched_getaffinity</span>( <span class="num">0</span>, <span class="kwa">sizeof</span>(cs), &amp;cs );
+    count = <span class="num">0</span>;
+    <span class="kwa">for</span> ( <span class="kwb">size_t</span> i = <span class="num">0</span>; i &lt; CPU_SETSIZE; i++ )
+      count += <span class="kwd">CPU_ISSET</span>( i, &amp;cs ) ? <span class="num">1</span> : <span class="num">0</span>;
+    count = std::<span class="kwd">max</span>( count, <span class="kwd">u32</span>(<span class="num">1</span>) );
+  }
+
+  u32 count;
+} cpus;
+
+
+<span class="com">/*</span>
+<span class="com">  Smart selection of u32 or u64 based on storage needs</span>
+<span class="com"></span>
+<span class="com">  PreferU64 will use u32 if (size == 4 &amp;&amp; system = 32bit), otherwise u64.</span>
+<span class="com">*/</span>
+
+<span class="kwc">template</span>&lt; <span class="kwb">int</span> N &gt; <span class="kwb">struct</span> TypeSelector;
+<span class="kwc">template</span>&lt;&gt; <span class="kwb">struct</span> TypeSelector&lt;<span class="num">4</span>&gt; { <span class="kwb">enum</span> { bits = <span class="num">32</span>, }; <span class="kwc">typedef</span> u32 tint; };
+<span class="kwc">template</span>&lt;&gt; <span class="kwb">struct</span> TypeSelector&lt;<span class="num">8</span>&gt; { <span class="kwb">enum</span> { bits = <span class="num">64</span>, }; <span class="kwc">typedef</span> u64 tint; };
+
+<span class="kwc">template</span>&lt; <span class="kwb">int</span> N &gt; <span class="kwb">struct</span> PreferU64 { 
+  <span class="kwb">enum</span> { bits = TypeSelector&lt;<span class="num">8</span>&gt;::bits }; 
+  <span class="kwc">typedef</span> typename TypeSelector&lt;<span class="num">8</span>&gt;::tint tint;
+};
+
+<span class="kwc">template</span>&lt;&gt; <span class="kwb">struct</span> PreferU64&lt;<span class="num">4</span>&gt; {
+  <span class="kwb">enum</span> { selector = <span class="kwa">sizeof</span>(u32 *) };
+  <span class="kwb">enum</span> { bits = TypeSelector&lt;selector&gt;::bits }; 
+  <span class="kwc">typedef</span> TypeSelector&lt;selector&gt;::tint tint;
+};
+
+<span class="kwc">typedef</span> TypeSelector&lt;<span class="kwa">sizeof</span>(<span class="kwb">int</span> *)&gt;::tint tint;
+
+<span class="com">/*</span>
+<span class="com">  DNASource handles enum defs we're interested in and extracting</span>
+<span class="com">  DNA sequences from a packed DNA stream (2 bits per nucleotide)</span>
+<span class="com"></span>
+<span class="com">  Will use 64 bits for the state on 64bit machines, otherwise</span>
+<span class="com">  32/64 bits depending on the size of the DNA sequence</span>
+<span class="com"></span>
+<span class="com">  left0 = # of nucleotides left in state</span>
+<span class="com">  left1 = # of nucleotides left in the upcoming tstore, lower[1]</span>
+<span class="com">*/</span>
+
+<span class="kwc">template</span>&lt; <span class="kwb">int</span> N &gt;
+<span class="kwb">struct</span> DNASource {
+  <span class="kwb">enum</span> {
+    completedwords = N / <span class="num">4</span>,
+    partialbytes = N &amp; <span class="num">3</span>,
+    storagedwords = ( N + <span class="num">15</span> ) / <span class="num">16</span>,
+    storagebytes = storagedwords * <span class="num">4</span>,
+
+    bits = PreferU64&lt;storagebytes&gt;::bits,
+    maxsequences = bits / <span class="num">2</span>,
+    sequencebits = N * <span class="num">2</span>,
+  };
+  <span class="kwc">typedef</span> typename TypeSelector&lt;storagebytes&gt;::tint tint;
+  <span class="kwc">typedef</span> typename PreferU64&lt;storagebytes&gt;::tint tstore;
+
+  <span class="kwd">DNASource</span>( <span class="kwb">const char</span> *data, u32 offset ) : <span class="kwd">in</span>(data) {
+    <span class="kwb">const</span> u32 partial = offset &amp; ( maxsequences - <span class="num">1</span> );
+    lower = (tstore *)data + ( offset / maxsequences );
+    <span class="kwb">const</span> u32 rshift = partial * <span class="num">2</span>, lshift = bits - rshift;    
+    state = ( partial ) ? ( lower[<span class="num">0</span>] &gt;&gt; rshift ) | ( lower[<span class="num">1</span>] &lt;&lt; lshift ) : lower[<span class="num">0</span>];
+    left0 = maxsequences;
+    left1 = lshift / <span class="num">2</span>;
+  }
+
+  <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">extractto</span>( tint &amp;out ) {
+    <span class="slc">// reload if needed</span>
+    <span class="kwa">if</span> ( ( N &gt; maxsequences / <span class="num">2</span> ) || ( left0 &lt; N ) ) {
+      s32 want = maxsequences - left0;
+      state |= ( lower[<span class="num">1</span>] &gt;&gt; ( ( maxsequences - left1 ) * <span class="num">2</span> ) ) &lt;&lt; ( left0 * <span class="num">2</span> );
+      <span class="kwa">if</span> ( left1 &gt; want ) {
+        left1 -= want;
+      } <span class="kwa">else</span> {
+        lower++;
+        left1 += left0;
+      }
+      <span class="kwa">if</span> ( left1 != maxsequences )
+        state |= ( lower[<span class="num">1</span>] &lt;&lt; ( left1 * <span class="num">2</span> ) );
+      left0 = maxsequences;
+    }
+
+    <span class="slc">// load the nucleotides</span>
+    <span class="kwa">if</span> ( sequencebits != bits ) {
+      tstore shift = sequencebits, mask = ( <span class="kwd">tstore</span>(<span class="num">1</span>) &lt;&lt; shift ) - <span class="num">1</span>;
+      out = <span class="kwd">tint</span>(state &amp; mask);
+    } <span class="kwa">else</span> {
+      out = <span class="kwd">tint</span>(state);
+    }
+    state &gt;&gt;= ( N * <span class="num">2</span> );
+    left0 -= N;
+  }
+
+<span class="kwc">protected</span>:
+  <span class="kwb">const char</span> *in;
+  s32 left0, left1;
+  tstore state, *lower;
+};
+
+<span class="com">/*</span>
+<span class="com">  A packed DNA key. Each nucleotide is packed down to 2 bits (we only have</span>
+<span class="com">  4 to keep track of).</span>
+<span class="com"></span>
+<span class="com">  0000:0xx0 are the bits we want. A,C,G,T and a,c,g,t both map to the same</span>
+<span class="com">  four values with this bitmask, but not in alphabetical order. Convert</span>
+<span class="com">  the key to a string to sort!</span>
+<span class="com">*/</span>
+
+<span class="kwc">template</span>&lt; <span class="kwb">int</span> N &gt;
+<span class="kwb">struct</span> Key {
+  <span class="kwc">typedef</span> typename DNASource&lt;N&gt;::tint tint;
+
+  <span class="kwb">struct</span> Ops {
+    <span class="kwb">enum</span> { bucket_size = <span class="num">4</span>, min_buckets = <span class="num">8</span> };
+    <span class="slc">// hash</span>
+    u32 <span class="kwc">operator</span>() ( <span class="kwb">const</span> Key &amp;k ) <span class="kwb">const</span> {
+      <span class="kwa">if</span> ( N &lt;= <span class="num">4</span> ) {
+        <span class="kwa">return</span> <span class="kwd">u32</span>(~k);
+      } <span class="kwa">else if</span> ( N &lt;= <span class="num">16</span> ) {
+        u8 shift = N / <span class="num">2</span>;
+        <span class="kwa">return</span> <span class="kwd">u32</span>(~k + ( ~k &gt;&gt; shift ));
+      } <span class="kwa">else</span> {
+        u8 shift = N / <span class="num">2</span>;
+        <span class="kwa">return</span> <span class="kwd">u32</span>(~k + ( ~k &gt;&gt; <span class="num">13</span> ) + ( ~k &gt;&gt; shift ));
+      }
+    }
+
+    <span class="slc">// equals</span>
+    <span class="kwb">bool</span> <span class="kwc">operator</span>() ( <span class="kwb">const</span> Key &amp;a, <span class="kwb">const</span> Key &amp;b ) <span class="kwb">const</span> { <span class="kwa">return</span> ~a == ~b; }
+  };
+
+  <span class="kwd">Key</span>() {}
+
+  <span class="slc">// packing this way isn't efficient, but called rarely</span>
+  <span class="kwd">Key</span>( <span class="kwb">const char</span> *in ) : <span class="kwd">packed</span>(<span class="num">0</span>) {
+    u8 *bytes = (u8 *)&amp;packed;
+    <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; N; i++ )
+      bytes[i/<span class="num">4</span>] |= ( ( *in++ &gt;&gt; <span class="num">1</span> ) &amp; <span class="num">0x3</span> ) &lt;&lt; ( ( i % <span class="num">4</span> ) * <span class="num">2</span> );
+  }
+
+  <span class="slc">// up to 2 instances active at once</span>
+  <span class="kwb">const char</span> *<span class="kwd">tostring</span>() <span class="kwb">const</span> {
+    <span class="kwb">static char</span> names[<span class="num">2</span>][N+<span class="num">1</span>], table[<span class="num">4</span>] = { <span class="str">'A'</span>, <span class="str">'C'</span>, <span class="str">'T'</span>, <span class="str">'G'</span> };
+    <span class="kwb">static</span> u32 on = <span class="num">0</span>;
+    u64 bits = packed;
+    on ^= <span class="num">1</span>;
+    <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; N; i++, bits &gt;&gt;= <span class="num">2</span> )
+      names[on][i] = table[bits &amp; <span class="num">3</span>];
+    names[on][N] = <span class="num">0</span>;
+    <span class="kwa">return</span> names[on];
+  }
+
+  <span class="slc">// for sorting</span>
+  <span class="kwb">bool</span> <span class="kwc">operator</span>&lt; ( <span class="kwb">const</span> Key &amp;b ) <span class="kwb">const</span> {
+    <span class="kwa">return</span> <span class="kwd">strcmp</span>( <span class="kwd">tostring</span>(), b.<span class="kwd">tostring</span>() ) &lt; <span class="num">0</span>;
+  }
+
+  <span class="slc">// direct access</span>
+  tint &amp;<span class="kwc">operator</span>~ () { <span class="kwa">return</span> packed; }
+  <span class="kwb">const</span> tint &amp;<span class="kwc">operator</span>~ () <span class="kwb">const</span> { <span class="kwa">return</span> packed; }
+
+<span class="kwc">protected</span>:
+  tint packed;
+};
+
+<span class="slc">// hash table wrapper</span>
+<span class="kwc">template</span>&lt; <span class="kwb">int</span> N &gt;
+  <span class="kwc">class</span> KeyHash :
+    <span class="kwc">public</span> __gnu_pbds::cc_hash_table &lt;
+      Key&lt;N&gt;, <span class="slc">// key</span>
+      u32, <span class="slc">// value</span>
+      typename Key&lt;N&gt;::Ops, <span class="slc">// hash</span>
+      typename Key&lt;N&gt;::Ops <span class="slc">// equality</span>
+    &gt; {};
+
+<span class="kwb">static const</span> u32 lengths[] = { <span class="num">18</span>, <span class="num">12</span>, <span class="num">6</span>, <span class="num">4</span>, <span class="num">3</span>, <span class="num">2</span>, <span class="num">1</span> }, numLengths = <span class="num">7</span>;
+<span class="kwb">static const</span> u32 lineLength = <span class="num">60</span>;
+
+<span class="com">/*</span>
+<span class="com">  A DNA block to analyze. Requires a single block of memory to</span>
+<span class="com">  hold the block for efficiency. Block starts at 32mb and grows</span>
+<span class="com">  exponentially</span>
+<span class="com">*/</span>
+
+<span class="kwb">struct</span> Block {
+  <span class="kwd">Block</span>() : <span class="kwd">data</span>(NULL), <span class="kwd">count</span>(<span class="num">0</span>), <span class="kwd">alloc</span>(<span class="num">32</span> * <span class="num">1048576</span>) {
+    data = (<span class="kwb">char</span> *)<span class="kwd">realloc</span>( data, alloc );
+  }
+
+  ~<span class="kwd">Block</span>() { <span class="kwd">free</span>( data ); }
+
+  <span class="slc">// read the block in until the end of the sequence or a new sequence starts</span>
+  <span class="kwb">void</span> <span class="kwd">read</span>() {
+    <span class="kwb">char</span> buffer[lineLength + <span class="num">2</span>];
+    buffer[lineLength] = -<span class="num">1</span>;
+    <span class="kwa">while</span> ( <span class="kwd">fgets_unlocked</span>( buffer, lineLength + <span class="num">2</span>, stdin ) ) {
+      <span class="kwa">if</span> ( buffer[<span class="num">0</span>] == <span class="str">'&gt;'</span> )
+        <span class="kwa">return</span>;
+      <span class="slc">// -1 trick should keep us from calling strlen</span>
+      <span class="kwa">if</span> ( buffer[lineLength] != <span class="num">0xa</span> )
+        <span class="kwa">return</span> <span class="kwd">addline</span>( buffer, <span class="kwb">int</span>(<span class="kwd">strlen</span>( buffer )) - <span class="num">1</span> );
+      <span class="kwd">addline</span>( buffer, lineLength );
+      buffer[lineLength] = -<span class="num">1</span>;
+    }
+  }
+
+  <span class="slc">// read lines until we get a match</span>
+  <span class="kwb">bool</span> <span class="kwd">untilheader</span>( <span class="kwb">const char</span> *match ) {
+    <span class="kwb">size_t</span> len = <span class="kwd">strlen</span>( match );
+    <span class="kwb">const</span> u32 *in = (<span class="kwb">const</span> u32 *)data, *want = (<span class="kwb">const</span> u32 *)match;
+    <span class="kwa">while</span> ( <span class="kwd">fgets_unlocked</span>( data, alloc, stdin ) )
+      <span class="kwa">if</span> ( ( *in == *want ) &amp;&amp; ( <span class="kwd">memcmp</span>( data, match, len ) == <span class="num">0</span> ) )
+        <span class="kwa">return true</span>;
+    <span class="kwa">return false</span>;
+  }
+
+  <span class="kwb">int</span> <span class="kwd">getcount</span>() <span class="kwb">const</span> { <span class="kwa">return</span> count; }
+  <span class="kwb">char</span> *<span class="kwd">getdata</span>() { <span class="kwa">return</span> data; }
+
+<span class="kwc">protected</span>:
+  <span class="slc">// convert a string of input to packed DNA</span>
+  <span class="kwb">void</span> <span class="kwd">addline</span>( <span class="kwb">const char</span> *buffer, <span class="kwb">int</span> bytes ) {
+    <span class="kwa">if</span> ( ( ( count + bytes ) / <span class="num">4</span> ) &gt; alloc ) {
+      alloc *= <span class="num">2</span>;
+      data = (<span class="kwb">char</span> *)<span class="kwd">realloc</span>( data, alloc );
+    }
+    <span class="kwb">const</span> u32 *in = (<span class="kwb">const</span> u32 *)buffer;
+    u8 *out = (u8 *)( data + count / <span class="num">4</span> );
+    <span class="slc">// 00000dd0:00000cc0-00000bb0:00000aa0 -&gt; ddccbbaa</span>
+    <span class="kwa">for</span> ( <span class="kwb">int</span> i = bytes / <span class="num">4</span>; i; i-- ) {
+      u32 conv = ( *in++ &gt;&gt; <span class="num">1</span> ) &amp; <span class="num">0x03030303</span>;
+      *out++ = conv | ( conv &gt;&gt; <span class="num">6</span> ) | ( conv &gt;&gt; <span class="num">12</span> ) | ( conv &gt;&gt; <span class="num">18</span> );
+    }
+    buffer = (<span class="kwb">const char</span> *)in;
+    <span class="kwa">for</span> ( <span class="kwb">int</span> i = bytes &amp; <span class="num">3</span>, shift = <span class="num">0</span>; i; i--, shift += <span class="num">2</span> )
+      *out |= ( (<span class="kwb">unsigned</span> )( *buffer++ &amp; <span class="num">6</span> ) &gt;&gt; <span class="num">1</span> ) &lt;&lt; (shift &amp; <span class="num">7</span>);
+    count += bytes;
+  }
+
+  <span class="kwb">char</span> *data;
+  <span class="kwb">int</span> count, alloc;
+};
+
+<span class="com">/*</span>
+<span class="com">  Queue hands out work states to process</span>
+<span class="com">  </span>
+<span class="com">  st holds two u16 values, the current offset in the sequence, and the</span>
+<span class="com">  current length of the sequence</span>
+<span class="com">*/</span>
+
+<span class="kwb">struct</span> Queue {
+  <span class="kwd">Queue</span>() : <span class="kwd">st</span>(<span class="num">0</span>) {}
+
+  <span class="kwb">bool</span> <span class="kwd">get</span>( u32 &amp;sequence, u32 &amp;offset ) {
+    <span class="kwa">while</span> ( <span class="kwa">true</span> ) {
+      u32 cur = st;
+      <span class="kwa">if</span> ( ( cur &gt;&gt; <span class="num">16</span> ) == numLengths )
+        <span class="kwa">return false</span>;
+
+      <span class="slc">// try to claim the next set</span>
+      <span class="kwa">if</span> ( <span class="kwd">__sync_val_compare_and_swap</span>( &amp;st, cur, <span class="kwd">nextstate</span>( cur ) ) != cur )
+        <span class="kwa">continue</span>;
+
+      <span class="slc">// it's ours</span>
+      sequence = lengths[cur &gt;&gt; <span class="num">16</span>];
+      offset = cur &amp; <span class="num">0xffff</span>;
+      <span class="kwa">return true</span>;
+    }
+  }
+
+  u32 <span class="kwd">nextstate</span>( u32 cur ) {
+    u16 offset = ( cur &amp; <span class="num">0xffff</span> ), length = ( cur &gt;&gt; <span class="num">16</span> );
+    <span class="kwa">if</span> ( ++offset == lengths[length] ) {
+      offset = <span class="num">0</span>;
+      length++;
+    }
+    <span class="kwa">return</span> ( length &lt;&lt; <span class="num">16</span> ) | offset;
+  }
+
+<span class="kwc">protected</span>:
+  <span class="kwc">volatile</span> u32 st;
+};
+
+
+<span class="kwb">struct</span> Worker {
+  <span class="kwd">Worker</span>() {}
+
+  <span class="kwc">template</span>&lt; <span class="kwb">int</span> N, <span class="kwc">class</span> Hash &gt;
+  <span class="kwb">void</span> <span class="kwd">process</span>( Hash &amp;hash ) {
+    Key&lt;N&gt; key;
+    DNASource&lt;N&gt; <span class="kwd">source</span>( block-&gt;<span class="kwd">getdata</span>(), offset );
+    <span class="kwa">for</span> ( <span class="kwb">int</span> i = block-&gt;<span class="kwd">getcount</span>() - offset; i &gt;= N; i -= N ) {
+      source.<span class="kwd">extractto</span>( ~key );
+      hash[key]++;
+    }
+  }
+
+  <span class="kwb">void</span> <span class="kwd">run</span>() {
+    <span class="kwa">while</span> ( workQueue-&gt;<span class="kwd">get</span>( length, offset ) ) {
+      <span class="kwa">switch</span> ( length ) {
+        <span class="kwa">case</span> <span class="num">1</span>: process&lt;<span class="num">1</span>&gt;( hash1 ); <span class="kwa">break</span>;
+        <span class="kwa">case</span> <span class="num">2</span>: process&lt;<span class="num">2</span>&gt;( hash2 ); <span class="kwa">break</span>;
+        <span class="kwa">case</span> <span class="num">3</span>: process&lt;<span class="num">3</span>&gt;( hash3 ); <span class="kwa">break</span>;
+        <span class="kwa">case</span> <span class="num">4</span>: process&lt;<span class="num">4</span>&gt;( hash4 ); <span class="kwa">break</span>;
+        <span class="kwa">case</span> <span class="num">6</span>: process&lt;<span class="num">6</span>&gt;( hash6 ); <span class="kwa">break</span>;
+        <span class="kwa">case</span> <span class="num">12</span>: process&lt;<span class="num">12</span>&gt;( hash12 ); <span class="kwa">break</span>;
+        <span class="kwa">case</span> <span class="num">18</span>: process&lt;<span class="num">18</span>&gt;( hash18 ); <span class="kwa">break</span>;
+        <span class="kwa">default</span>: <span class="kwa">break</span>;
+      }
+    }
+  }
+
+  <span class="kwb">void</span> <span class="kwd">join</span>() { <span class="kwd">pthread_join</span>( handle, <span class="num">0</span> ); }
+  <span class="kwb">void</span> <span class="kwd">start</span>( Queue *queue, Block *in ) {
+    workQueue = queue;
+    block = in;
+    <span class="kwd">pthread_create</span>( &amp;handle, <span class="num">0</span>, Worker::thread, <span class="kwa">this</span> );
+  }
+  <span class="kwb">static void</span> *<span class="kwd">thread</span>( <span class="kwb">void</span> *arg ) { ((Worker *)arg)-&gt;<span class="kwd">run</span>(); <span class="kwa">return</span> <span class="num">0</span>; }
+
+  pthread_t handle;
+  Block *block;
+  Queue *workQueue;
+  u32 length, offset;
+
+  KeyHash&lt;<span class="num">18</span>&gt; hash18;
+  KeyHash&lt;<span class="num">12</span>&gt; hash12;
+  KeyHash&lt;<span class="num">6</span>&gt; hash6;
+  KeyHash&lt;<span class="num">4</span>&gt; hash4;
+  KeyHash&lt;<span class="num">3</span>&gt; hash3;
+  KeyHash&lt;<span class="num">2</span>&gt; hash2;
+  KeyHash&lt;<span class="num">1</span>&gt; hash1;
+};
+
+<span class="kwc">template</span>&lt; <span class="kwb">int</span> N, <span class="kwc">class</span> W &gt; KeyHash&lt;N&gt; &amp;<span class="kwd">Get</span>( W &amp;w );
+
+<span class="kwc">template</span>&lt;&gt; KeyHash&lt;<span class="num">1</span>&gt; &amp;<span class="kwd">Get</span>( Worker &amp;w ) { <span class="kwa">return</span> w.hash1; }
+<span class="kwc">template</span>&lt;&gt; KeyHash&lt;<span class="num">2</span>&gt; &amp;<span class="kwd">Get</span>( Worker &amp;w ) { <span class="kwa">return</span> w.hash2; }
+<span class="kwc">template</span>&lt;&gt; KeyHash&lt;<span class="num">3</span>&gt; &amp;<span class="kwd">Get</span>( Worker &amp;w ) { <span class="kwa">return</span> w.hash3; }
+<span class="kwc">template</span>&lt;&gt; KeyHash&lt;<span class="num">4</span>&gt; &amp;<span class="kwd">Get</span>( Worker &amp;w ) { <span class="kwa">return</span> w.hash4; }
+<span class="kwc">template</span>&lt;&gt; KeyHash&lt;<span class="num">6</span>&gt; &amp;<span class="kwd">Get</span>( Worker &amp;w ) { <span class="kwa">return</span> w.hash6; }
+<span class="kwc">template</span>&lt;&gt; KeyHash&lt;<span class="num">12</span>&gt; &amp;<span class="kwd">Get</span>( Worker &amp;w ) { <span class="kwa">return</span> w.hash12; }
+<span class="kwc">template</span>&lt;&gt; KeyHash&lt;<span class="num">18</span>&gt; &amp;<span class="kwd">Get</span>( Worker &amp;w ) { <span class="kwa">return</span> w.hash18; }
+
+<span class="kwc">template</span>&lt; <span class="kwb">int</span> N &gt;
+<span class="kwb">void</span> <span class="kwd">printcount</span>( Worker *workers, <span class="kwb">const char</span> *key ) {
+  Key&lt;N&gt; <span class="kwd">find</span>( key );
+  u32 count = <span class="num">0</span>;
+  <span class="kwa">for</span> ( u32 i = <span class="num">0</span>; i &lt; cpus.count; i++ )
+    count += Get&lt;N&gt;( workers[i] )[find];
+  cout &lt;&lt; count &lt;&lt; <span class="str">'</span><span class="esc">\t</span><span class="str">'</span> &lt;&lt; find.<span class="kwd">tostring</span>() &lt;&lt; endl;
+}
+
+<span class="kwc">template</span>&lt;<span class="kwc">class</span> T&gt;
+<span class="kwb">struct</span> CompareFirst {
+  <span class="kwb">bool</span> <span class="kwc">operator</span>() ( <span class="kwb">const</span> T &amp;a, <span class="kwb">const</span> T &amp;b ) { <span class="kwa">return</span> a.first &lt; b.first; }
+};
+
+<span class="kwc">template</span>&lt;<span class="kwc">class</span> T&gt;
+<span class="kwb">struct</span> CompareSecond {
+  <span class="kwb">bool</span> <span class="kwc">operator</span>() ( <span class="kwb">const</span> T &amp;a, <span class="kwb">const</span> T &amp;b ) { <span class="kwa">return</span> a.second &gt; b.second; }
+};
+
+
+<span class="kwc">template</span>&lt; <span class="kwb">int</span> N &gt;
+<span class="kwb">void</span> <span class="kwd">printfreq</span>( Worker *workers ) {
+  cout.<span class="kwd">setf</span>( ios::fixed, ios::floatfield );
+  cout.<span class="kwd">precision</span>( <span class="num">3</span> );
+
+  u32 count = <span class="num">0</span>;
+  KeyHash&lt;N&gt; sum;
+  <span class="kwa">for</span> ( u32 i = <span class="num">0</span>; i &lt; cpus.count; i++ ) {
+    KeyHash&lt;N&gt; &amp;hash = Get&lt;N&gt;( workers[i] );
+    typename KeyHash&lt;N&gt;::iterator iter = hash.<span class="kwd">begin</span>(), end = hash.<span class="kwd">end</span>();
+    <span class="kwa">for</span> ( ; iter != end; ++iter ) {
+      count += iter-&gt;second;
+      sum[iter-&gt;first] += iter-&gt;second;
+    }
+  }
+
+  <span class="kwc">typedef</span> pair&lt; Key&lt;N&gt;, u32 &gt; sequence;
+  vector&lt;sequence&gt; <span class="kwd">seqs</span>( sum.<span class="kwd">begin</span>(), sum.<span class="kwd">end</span>() );
+  <span class="kwd">stable_sort</span>( seqs.<span class="kwd">begin</span>(), seqs.<span class="kwd">end</span>(), CompareFirst&lt;sequence&gt;() ); <span class="slc">// by name</span>
+  <span class="kwd">stable_sort</span>( seqs.<span class="kwd">begin</span>(), seqs.<span class="kwd">end</span>(), CompareSecond&lt;sequence&gt;() ); <span class="slc">// by count</span>
+
+  typename vector&lt;sequence&gt;::iterator iter = seqs.<span class="kwd">begin</span>(), end = seqs.<span class="kwd">end</span>();
+  <span class="kwa">for</span> ( ; iter != end; ++iter )
+    cout &lt;&lt;  iter-&gt;first.<span class="kwd">tostring</span>() &lt;&lt; <span class="str">&quot; &quot;</span> &lt;&lt; (<span class="num">100.0</span>f * iter-&gt;second / count) &lt;&lt; endl;
+  cout &lt;&lt; endl;
+}
+
+
+<span class="kwb">int</span> <span class="kwd">main</span>( <span class="kwb">int</span> argc, <span class="kwb">const char</span> *argv[] ) {
+  Block *block = <span class="kwa">new</span> <span class="kwd">Block</span>();
+  <span class="kwa">if</span> ( !block-&gt;<span class="kwd">untilheader</span>( <span class="str">&quot;&gt;THREE&quot;</span> ) )
+    <span class="kwa">return</span> -<span class="num">1</span>;
+  block-&gt;<span class="kwd">read</span>();
+
+  Queue workQueue;
+  Worker *workers = <span class="kwa">new</span> Worker[cpus.count];
+  <span class="kwa">for</span> ( u32 i = <span class="num">0</span>; i &lt; cpus.count; i++ )
+    workers[i].<span class="kwd">start</span>( &amp;workQueue, block );
+  <span class="kwa">for</span> ( u32 i = <span class="num">0</span>; i &lt; cpus.count; i++ )
+    workers[i].<span class="kwd">join</span>();
+
+  printfreq&lt;<span class="num">1</span>&gt;( workers );
+  printfreq&lt;<span class="num">2</span>&gt;( workers );
+
+  printcount&lt;<span class="num">3</span>&gt;( workers, <span class="str">&quot;ggt&quot;</span> );
+  printcount&lt;<span class="num">4</span>&gt;( workers, <span class="str">&quot;ggta&quot;</span> );
+  printcount&lt;<span class="num">6</span>&gt;( workers, <span class="str">&quot;ggtatt&quot;</span> );
+  printcount&lt;<span class="num">12</span>&gt;( workers, <span class="str">&quot;ggtattttaatt&quot;</span> );
+  printcount&lt;<span class="num">18</span>&gt;( workers, <span class="str">&quot;ggtattttaatttatagt&quot;</span> );
+
+  <span class="kwa">delete</span>[] workers;
+  <span class="kwa">return</span> <span class="num">0</span>;
+}

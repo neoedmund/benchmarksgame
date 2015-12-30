@@ -1,0 +1,34 @@
+
+Mon, 21 Sep 2015 20:38:27 GMT
+
+MAKE:
+mv meteor.ghc-3.ghc meteor.ghc-3.hs
+/usr/local/src/ghc-7.10.2/bin/ghc --make -fllvm -O2 -XBangPatterns -rtsopts -XScopedTypeVariables -XTypeSynonymInstances -XFlexibleInstances meteor.ghc-3.hs -o meteor.ghc-3.ghc_run
+[1 of 1] Compiling Main             ( meteor.ghc-3.hs, meteor.ghc-3.o )
+
+meteor.ghc-3.hs:123:9:
+    Non type-variable argument in the constraint: IArray a [Mask]
+    (Use FlexibleContexts to permit this)
+    When checking that ‘pieceMasksAtCell'’ has the inferred type
+      pieceMasksAtCell' :: forall (a :: * -> * -> *).
+                           IArray a [Mask] =>
+                           [Mask] -> a Int [Mask]
+    In an equation for ‘pieceMasksAtCell’:
+        pieceMasksAtCell
+          = amap pieceMasksAtCell' pieceMasks
+          where
+              pieceMasksAtCell' masks
+                = array (0, width * height - 1) $ pieceMasksAtCell'' masks cellis
+                where
+                    pieceMasksAtCell'' masks [] = ...
+                    pieceMasksAtCell'' masks (c : cs) = ...
+/home/dunham/benchmarksgame/nanobench/makefiles/u64.programs.Makefile:297: recipe for target 'meteor.ghc-3.ghc_run' failed
+make: [meteor.ghc-3.ghc_run] Error 1 (ignored)
+rm meteor.ghc-3.hs
+0.32s to complete and log all make actions
+
+COMMAND LINE:
+./meteor.ghc-3.ghc_run  2098
+
+MAKE ERROR 
+

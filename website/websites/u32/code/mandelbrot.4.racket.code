@@ -1,0 +1,60 @@
+#lang racket/base
+
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;; contributed by Eli Barzilay</span>
+<span class="slc">;; parallelized by Sam Tobin-Hochstadt</span>
+
+(<span class="kwa">require</span> racket/require (<span class="kwa">for-syntax</span> racket/base) racket/future
+         (<span class="kwa">filtered-in</span> (<span class="kwa">lambda</span> (<span class="kwa">n</span>) (<span class="kwa">regexp-replace</span> #rx<span class="str">&quot;unsafe-&quot;</span> n <span class="str">&quot;&quot;</span>))
+                       racket/unsafe/ops)
+         (<span class="kwa">only-in</span> racket/flonum make-flvector)
+         racket/cmdline)
+
+(<span class="kwa">define</span> LIMIT-SQR <span class="num">4.0</span>)
+(<span class="kwa">define</span> ITERATIONS <span class="num">50</span>)
+(<span class="kwa">define</span> N (<span class="kwa">command-line</span> #:args (<span class="kwa">n</span>) (<span class="kwa">string-</span>&gt;number n)))
+(<span class="kwa">define</span> N<span class="num">.0</span> (<span class="kwa">fx-</span>&gt;fl N))
+(<span class="kwa">define</span> <span class="num">2</span>/N (<span class="kwa">fl</span>/ <span class="num">2.0</span> N<span class="num">.0</span>))
+(<span class="kwa">define</span> Crs
+  (<span class="kwa">let</span> ([v (<span class="kwa">make-flvector</span> N)])
+    (<span class="kwa">for</span> ([x (<span class="kwa">in-range</span> N)])
+      (<span class="kwa">flvector-set</span>! v x (<span class="kwa">fl-</span> (<span class="kwa">fl</span>/ (<span class="kwa">fx-</span>&gt;fl (<span class="kwa">fx</span>* <span class="num">2</span> x)) N<span class="num">.0</span>) <span class="num">1.5</span>)))
+    v))
+
+(<span class="kwa">define</span> bpr (<span class="kwa">ceiling</span> (/ N <span class="num">8</span>)))
+(<span class="kwa">define</span> bitmap (<span class="kwa">make-bytes</span> (* N bpr)))
+
+(<span class="kwa">define-syntax</span> (<span class="kwa">let-n</span> s)
+  (<span class="kwa">syntax-case</span> s ()
+    [(<span class="kwa">_</span> N bs E)
+     (<span class="kwa">for</span>/fold ([E #'E]) ([_ (<span class="kwa">syntax-e</span> #'N)]) #`(<span class="kwa">let</span> bs #,E))]))
+
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">M</span> Cr Ci)
+  (<span class="kwa">let</span> loop ([i <span class="num">0</span>] [Zr <span class="num">0.0</span>] [Zi <span class="num">0.0</span>])
+    (<span class="kwa">cond</span> [(<span class="kwa">fl</span>&gt; (<span class="kwa">fl</span>+ (<span class="kwa">fl</span>* Zr Zr) (<span class="kwa">fl</span>* Zi Zi)) LIMIT-SQR) <span class="num">0</span>]
+          [(<span class="kwa">fx</span>= i ITERATIONS) <span class="num">1</span>]
+          [else (<span class="kwa">let-n</span> <span class="num">5</span> ([Zr (<span class="kwa">fl</span>+ (<span class="kwa">fl-</span> (<span class="kwa">fl</span>* Zr Zr) (<span class="kwa">fl</span>* Zi Zi)) Cr)]
+                          [Zi (<span class="kwa">fl</span>+ (<span class="kwa">fl</span>* <span class="num">2.0</span> (<span class="kwa">fl</span>* Zr Zi)) Ci)])
+                  (<span class="kwa">loop</span> (<span class="kwa">fx</span>+ i <span class="num">5</span>) Zr Zi))])))
+
+(<span class="kwa">printf</span> <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">~a ~a</span><span class="esc">\n</span><span class="str">&quot;</span> N N)
+(<span class="kwa">for-each</span>
+ touch
+ (<span class="kwa">for</span>/list ([y (<span class="kwa">in-range</span> N <span class="num">0</span> -<span class="num">1</span>)])
+   (<span class="kwa">future</span>
+    (λ ()
+      (<span class="kwa">define</span> Ci (<span class="kwa">fl-</span> (<span class="kwa">fl</span>* <span class="num">2</span>/N (<span class="kwa">fx-</span>&gt;fl y)) <span class="num">1.0</span>))
+      (<span class="kwa">let</span> loop-x ([x <span class="num">0</span>] [bitnum <span class="num">0</span>] [byteacc <span class="num">0</span>] [aindex (<span class="kwa">fx</span>* bpr (<span class="kwa">fx-</span> N y))])
+        (<span class="kwa">cond</span> [(<span class="kwa">fx</span>&lt; x N)
+               (<span class="kwa">define</span> Cr (<span class="kwa">flvector-ref</span> Crs x))
+               (<span class="kwa">define</span> byteacc* (<span class="kwa">fx</span>+ (<span class="kwa">fxlshift</span> byteacc <span class="num">1</span>) (<span class="kwa">M</span> Cr Ci)))
+               (<span class="kwa">cond</span> [(<span class="kwa">fx</span>= bitnum <span class="num">7</span>)
+                      (<span class="kwa">bytes-set</span>! bitmap aindex byteacc*)
+                      (<span class="kwa">loop-x</span> (<span class="kwa">fx</span>+ x <span class="num">1</span>) <span class="num">0 0</span> (<span class="kwa">fx</span>+ aindex <span class="num">1</span>))]
+                     [else (<span class="kwa">loop-x</span> (<span class="kwa">fx</span>+ x <span class="num">1</span>) (<span class="kwa">fx</span>+ bitnum <span class="num">1</span>) byteacc* aindex)])]
+              [else
+               (<span class="kwa">when</span> (<span class="kwa">fx</span>&gt; bitnum <span class="num">0</span>)
+                 (<span class="kwa">bytes-set</span>! bitmap aindex
+                             (<span class="kwa">fxlshift</span> byteacc (<span class="kwa">fx-</span> <span class="num">8</span> (<span class="kwa">fxand</span> N #x7)))))]))))))
+(<span class="kwa">void</span> (<span class="kwa">write-bytes</span> bitmap))

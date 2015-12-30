@@ -1,0 +1,11 @@
+
+Wed, 19 Aug 2015 21:57:03 GMT
+
+MAKE:
+/usr/local/src/go/bin/go build -o mandelbrot.go_run
+0.59s to complete and log all make actions
+
+COMMAND LINE:
+./mandelbrot.go_run 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN

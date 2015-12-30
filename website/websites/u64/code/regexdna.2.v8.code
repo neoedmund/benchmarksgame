@@ -1,0 +1,25 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="kwc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by Jesse Millikan</span>
+<span class="slc">// Base on the Ruby version by jose fco. gonzalez</span>
+<span class="slc">// fixed by Matthew Wilson</span>
+
+<span class="kwa">var</span> i = <span class="str">&quot;&quot;</span>, ilen, clen, j, q = [ <span class="kwc">/agggtaaa|tttaccct/ig</span>,
+  <span class="kwc">/[cgt]gggtaaa|tttaccc[acg]/ig</span>, <span class="kwc">/a[act]ggtaaa|tttacc[agt]t/ig</span>,
+  <span class="kwc">/ag[act]gtaaa|tttac[agt]ct/ig</span>, <span class="kwc">/agg[act]taaa|ttta[agt]cct/ig</span>,
+  <span class="kwc">/aggg[acg]aaa|ttt[cgt]ccct/ig</span>, <span class="kwc">/agggt[cgt]aa|tt[acg]accct/ig</span>,
+  <span class="kwc">/agggta[cgt]a|t[acg]taccct/ig</span>, <span class="kwc">/agggtaa[cgt]|[acg]ttaccct/ig</span>],
+  b = [ <span class="kwc">/B/g</span>, <span class="str">'(c|g|t)'</span>, <span class="kwc">/D/g</span>, <span class="str">'(a|g|t)'</span>, <span class="kwc">/H/g</span>, <span class="str">'(a|c|t)'</span>, <span class="kwc">/K/g</span>, <span class="str">'(g|t)'</span>,
+  <span class="kwc">/M/g</span>, <span class="str">'(a|c)'</span>, <span class="kwc">/N/g</span>, <span class="str">'(a|c|g|t)'</span>, <span class="kwc">/R/g</span>, <span class="str">'(a|g)'</span>, <span class="kwc">/S/g</span>, <span class="str">'(c|g)'</span>,
+  <span class="kwc">/V/g</span>, <span class="str">'(a|c|g)'</span>, <span class="kwc">/W/g</span>, <span class="str">'(a|t)'</span>, <span class="kwc">/Y/g</span>, <span class="str">'(c|t)'</span>]
+
+<span class="kwa">while</span>(j = <span class="kwd">readline</span>()) i+=j+<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>; ilen = i.length
+
+i = i.<span class="kwd">replace</span>(<span class="kwc">/^&gt;.*\n|\n/mg</span>, <span class="str">''</span>); clen = i.length
+
+<span class="kwa">for</span>(j = <span class="num">0</span>; j&lt;q.length; ++j) <span class="kwd">print</span>(q[j].source, (i.<span class="kwd">match</span>(q[j]) || []).length)
+
+<span class="kwa">for</span>(j = -<span class="num">1</span>; j&lt;b.length - <span class="num">1</span>;) i = i.<span class="kwd">replace</span>(b[++j], b[++j])
+
+<span class="kwd">print</span>([<span class="str">&quot;&quot;</span>, ilen, clen, i.length].<span class="kwd">join</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>))

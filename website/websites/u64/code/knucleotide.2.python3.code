@@ -1,0 +1,59 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># submitted by Ian Osgood</span>
+<span class="slc"># modified by Sokolov Yura</span>
+<span class="slc"># modified by bearophile</span>
+<span class="slc"># modified by jacek2v: few changes in algorytm, added multiprocessing, used str.count (nucleo newer overlapping)</span>
+
+<span class="kwa">from</span> sys <span class="kwa">import</span> stdin
+<span class="kwa">from</span> collections <span class="kwa">import</span> defaultdict
+<span class="kwa">from</span> multiprocessing <span class="kwa">import</span> Process, Pool, cpu_count
+
+<span class="kwa">def</span> <span class="kwd">gen_freq</span>(seq, frame):
+    frequences = <span class="kwd">defaultdict</span>(<span class="kwb">int</span>)
+    ns = <span class="kwb">len</span>(seq) + <span class="num">1</span> - frame
+    <span class="kwa">for</span> ii <span class="kwa">in</span> <span class="kwb">range</span>(ns):
+        frequences[seq[ii:ii + frame]] += <span class="num">1</span>
+    <span class="kwa">return</span> ns, frequences
+
+<span class="kwa">def</span> <span class="kwd">sort_seq</span>(seq, length):
+    n, frequences = <span class="kwd">gen_freq</span>(seq, length)
+    <span class="slc">#l = sorted(frequences.items(), reverse=True, key=lambda (seq,freq): (freq,seq))</span>
+    l = <span class="kwb">sorted</span>(<span class="kwb">list</span>(frequences.<span class="kwd">items</span>()), reverse=<span class="kwa">True</span>, key=<span class="kwa">lambda</span> seq_freq: (seq_freq[<span class="num">1</span>],seq_freq[<span class="num">0</span>]))
+    <span class="kwa">return</span> [(st, <span class="num">100.0</span>*fr/n) <span class="kwa">for</span> st, fr <span class="kwa">in</span> l]
+
+<span class="kwa">def</span> <span class="kwd">find_seq</span>(seq, nucleo):
+    count = seq.<span class="kwd">count</span>(nucleo)
+    <span class="kwa">return</span> nucleo, count
+
+<span class="kwa">def</span> <span class="kwd">load</span>():
+    <span class="kwa">for</span> line <span class="kwa">in</span> stdin:
+        <span class="kwa">if</span> line[<span class="num">0</span>:<span class="num">3</span>] == <span class="str">&quot;&gt;TH&quot;</span>:
+            <span class="kwa">break</span>
+    seq = []
+    <span class="kwa">for</span> line <span class="kwa">in</span> stdin:
+        <span class="kwa">if</span> line[<span class="num">0</span>] <span class="kwa">in</span> <span class="str">&quot;&gt;;&quot;</span>:
+            <span class="kwa">break</span>
+        seq.<span class="kwd">append</span>( line[:-<span class="num">1</span>] )
+    <span class="kwa">return</span> seq
+
+<span class="kwa">def</span> <span class="kwd">main</span>():
+    nucleos = <span class="str">&quot;GGT GGTA GGTATT GGTATTTTAATT GGTATTTTAATTTATAGT&quot;</span>
+    sequence = <span class="str">&quot;&quot;</span>.<span class="kwd">join</span>(<span class="kwd">load</span>()).<span class="kwd">upper</span>()
+    plres = []
+    pl = <span class="kwd">Pool</span>(processes=<span class="kwd">cpu_count</span>() + <span class="num">1</span>)
+    
+    <span class="kwa">for</span> nl <span class="kwa">in</span> <span class="num">1</span>,<span class="num">2</span>:
+        plres.<span class="kwd">append</span>(pl.<span class="kwd">apply_async</span>(sort_seq, (sequence, nl, )))
+    <span class="kwa">for</span> se <span class="kwa">in</span> nucleos.<span class="kwd">split</span>():
+        plres.<span class="kwd">append</span>(pl.<span class="kwd">apply_async</span>(find_seq, (sequence, se, )))
+    pl.<span class="kwd">close</span>()
+    pl.<span class="kwd">join</span>()
+
+    <span class="kwa">for</span> ii <span class="kwa">in</span> <span class="num">0</span>,<span class="num">1</span>:
+        <span class="kwa">print</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>.<span class="kwd">join</span>(<span class="str">&quot;</span><span class="ipl">%s %</span><span class="str">.3f&quot;</span> % (st, fr) <span class="kwa">for</span> st,fr <span class="kwa">in</span> plres[ii].<span class="kwd">get</span>()))
+        <span class="kwa">print</span>(<span class="str">''</span>)
+    <span class="kwa">for</span> ii <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">2</span>, <span class="kwb">len</span>(nucleos.<span class="kwd">split</span>()) + <span class="num">2</span>):
+        <span class="kwa">print</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">%s</span><span class="str">&quot;</span> % (plres[ii].<span class="kwd">get</span>()[<span class="num">1</span>], plres[ii].<span class="kwd">get</span>()[<span class="num">0</span>]))
+<span class="kwd">main</span>()

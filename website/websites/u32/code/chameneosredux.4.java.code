@@ -1,0 +1,243 @@
+<span class="com">/**</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Michael Barker</span>
+<span class="com"> * modified by Daryl Griffith</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.util.concurrent.Exchanger;
+<span class="kwa">import</span> java.util.concurrent.Phaser;
+<span class="kwa">import</span> java.util.concurrent.atomic.AtomicInteger;
+
+<span class="kwa">public class</span> chameneosredux {
+
+    enum Colour {
+
+        BLUE {
+            <span class="kwc">&#64;Override</span>
+            Colour <span class="kwd">complement</span>(Colour colour) {
+                <span class="kwa">return</span> colour.blue;
+            }
+            
+            <span class="kwc">&#64;Override</span>
+            <span class="kwa">public</span> String <span class="kwd">toString</span>() {
+                <span class="kwa">return</span> <span class="str">&quot;blue&quot;</span>;
+            }
+        },
+        RED {
+            <span class="kwc">&#64;Override</span>
+            Colour <span class="kwd">complement</span>(Colour colour) {
+                <span class="kwa">return</span> colour.red;
+            }
+            
+            <span class="kwc">&#64;Override</span>
+            <span class="kwa">public</span> String <span class="kwd">toString</span>() {
+                <span class="kwa">return</span> <span class="str">&quot;red&quot;</span>;
+            }
+        },
+        YELLOW {
+            <span class="kwc">&#64;Override</span>
+            Colour <span class="kwd">complement</span>(Colour colour) {
+                <span class="kwa">return</span> colour.yellow;
+            }
+            
+            <span class="kwc">&#64;Override</span>
+            <span class="kwa">public</span> String <span class="kwd">toString</span>() {
+                <span class="kwa">return</span> <span class="str">&quot;yellow&quot;</span>;
+            }
+        };
+
+        <span class="kwa">private</span> Colour blue;
+        <span class="kwa">private</span> Colour red;
+        <span class="kwa">private</span> Colour yellow;
+
+        <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">setColours</span>(Colour blue, Colour red, Colour yellow) {
+            <span class="kwa">this</span>.blue = blue;
+            <span class="kwa">this</span>.red = red;
+            <span class="kwa">this</span>.yellow = yellow;
+        }
+
+        <span class="kwa">abstract</span> Colour <span class="kwd">complement</span>(Colour colour);
+    }
+
+    <span class="kwa">static</span> {
+
+        Colour.BLUE.<span class="kwd">setColours</span>(Colour.BLUE, Colour.YELLOW, Colour.RED);
+        Colour.RED.<span class="kwd">setColours</span>(Colour.YELLOW, Colour.RED, Colour.BLUE);
+        Colour.YELLOW.<span class="kwd">setColours</span>(Colour.RED, Colour.BLUE, Colour.YELLOW);
+    }
+    
+    <span class="kwa">static final class</span> CreatureExchange {
+
+        Colour colour;
+        <span class="kwb">int</span> id;
+    }
+
+    <span class="kwa">static final class</span> MeetingPlace {
+
+        <span class="kwa">private final</span> Exchanger&lt;CreatureExchange&gt; exchanger = <span class="kwa">new</span> Exchanger&lt;&gt;();
+        <span class="kwa">private final</span> AtomicInteger meetingsLeft = <span class="kwa">new</span> <span class="kwd">AtomicInteger</span>();
+
+        <span class="kwa">public</span> <span class="kwd">MeetingPlace</span>(<span class="kwa">final</span> <span class="kwb">int</span> meetings) {
+            meetingsLeft.<span class="kwd">set</span>(meetings + meetings);
+        }
+
+        <span class="kwa">public</span> CreatureExchange <span class="kwd">meet</span>(<span class="kwa">final</span> CreatureExchange info) {
+            <span class="kwa">final</span> <span class="kwb">int</span> meetings = meetingsLeft.<span class="kwd">decrementAndGet</span>();
+
+            <span class="kwa">if</span> (meetings &gt;= <span class="num">0</span>) {
+                <span class="kwa">try</span> {
+                    <span class="kwa">return</span> exchanger.<span class="kwd">exchange</span>(info);
+                } <span class="kwa">catch</span> (InterruptedException ex) {
+                }
+            }
+            <span class="kwa">return</span> null;
+        }
+    }
+
+    <span class="kwa">static final class</span> Creature <span class="kwa">extends</span> Thread {
+
+        <span class="kwa">private final</span> CreatureExchange exchange = <span class="kwa">new</span> <span class="kwd">CreatureExchange</span>();
+        <span class="kwa">private final</span> MeetingPlace place;
+        <span class="kwa">private final</span> Phaser phaser;
+        <span class="kwa">private</span> <span class="kwb">int</span> count = <span class="num">0</span>;
+        <span class="kwa">private</span> <span class="kwb">int</span> sameCount = <span class="num">0</span>;
+
+        <span class="kwa">public</span> <span class="kwd">Creature</span>(<span class="kwa">final</span> MeetingPlace place
+                , <span class="kwa">final</span> Colour colour
+                , <span class="kwa">final</span> Phaser phaser) {
+            <span class="kwa">this</span>.place = place;
+            <span class="kwa">this</span>.phaser = phaser;
+            exchange.id = System.<span class="kwd">identityHashCode</span>(<span class="kwa">this</span>);
+            exchange.colour = colour;
+        }
+
+        <span class="kwc">&#64;Override</span>
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+            CreatureExchange otherCreature;
+
+            <span class="kwa">for</span> (;;) {
+                otherCreature = place.<span class="kwd">meet</span>(exchange);
+                <span class="kwa">if</span> (otherCreature == null) {
+                    phaser.<span class="kwd">arrive</span>();
+                    <span class="kwa">break</span>;
+                }
+                exchange.colour
+                        = exchange.colour.<span class="kwd">complement</span>(otherCreature.colour);
+                count++;
+                <span class="kwa">if</span> (exchange.id == otherCreature.id) {
+                    sameCount++;
+                }
+            }
+        }
+
+        <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">printAndGetCount</span>() {
+            System.out.<span class="kwd">append</span>(Integer.<span class="kwd">toString</span>(count));
+            <span class="kwa">return</span> count;
+        }
+        
+        <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">getSameCount</span>() {
+            <span class="kwa">return</span> sameCount;
+        }
+    }
+
+    <span class="kwa">final static class</span> CreaturePhaser <span class="kwa">extends</span> Phaser {
+
+        <span class="kwa">static final</span> String[] NUMBERS = {
+            <span class="str">&quot;zero&quot;</span>, <span class="str">&quot;one&quot;</span>, <span class="str">&quot;two&quot;</span>, <span class="str">&quot;three&quot;</span>, <span class="str">&quot;four&quot;</span>, <span class="str">&quot;five&quot;</span>,
+            <span class="str">&quot;six&quot;</span>, <span class="str">&quot;seven&quot;</span>, <span class="str">&quot;eight&quot;</span>, <span class="str">&quot;nine&quot;</span>
+        };
+        <span class="kwa">static final</span> Object lock = <span class="kwa">new</span> <span class="kwd">Object</span>();
+        <span class="kwa">static</span> <span class="kwb">boolean</span> firstHasNotFinished = true;
+        <span class="kwa">final</span> <span class="kwb">boolean</span> isFirst;
+        <span class="kwa">final</span> Colour[] colours;
+        <span class="kwa">final</span> Creature[] creatures;
+
+        <span class="kwa">public</span> <span class="kwd">CreaturePhaser</span>(<span class="kwa">final</span> <span class="kwb">boolean</span> isFirst
+                , <span class="kwa">final</span> Colour[] colours
+                , <span class="kwa">final</span> Creature[] creatures
+                , <span class="kwa">final</span> <span class="kwb">int</span> phases) {
+            <span class="kwa">super</span>(phases);
+            <span class="kwa">this</span>.isFirst = isFirst;
+            <span class="kwa">this</span>.colours = colours;
+            <span class="kwa">this</span>.creatures = creatures;
+        }
+
+        <span class="kwc">&#64;Override</span>
+        <span class="kwa">protected</span> <span class="kwb">boolean</span> <span class="kwd">onAdvance</span>(<span class="kwa">final</span> <span class="kwb">int</span> phase
+                , <span class="kwa">final</span> <span class="kwb">int</span> registeredParties) {
+            <span class="kwa">synchronized</span> (lock) {
+                <span class="kwa">if</span> (!isFirst) {
+                    <span class="kwa">while</span> (firstHasNotFinished) {
+                        <span class="kwa">try</span> {
+                            lock.<span class="kwd">wait</span>();
+                        } <span class="kwa">catch</span> (InterruptedException ex) {
+                        }
+                    }
+                }
+                <span class="kwa">for</span> (<span class="kwa">final</span> Colour colour : colours) {
+                    System.out.<span class="kwd">append</span>(<span class="str">' '</span>).<span class="kwd">append</span>(colour.<span class="kwd">toString</span>());
+                }
+                System.out.<span class="kwd">append</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>);
+
+                <span class="kwb">int</span> total = <span class="num">0</span>;
+                <span class="kwa">for</span> (<span class="kwa">final</span> Creature creature : creatures) {
+                    total += creature.<span class="kwd">printAndGetCount</span>();
+                    <span class="kwd">printNumber</span>(creature.<span class="kwd">getSameCount</span>());
+                }
+                <span class="kwd">printNumber</span>(total);
+                System.out.<span class="kwd">append</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>);
+                <span class="kwa">if</span> (isFirst) {
+                    firstHasNotFinished = false;
+                    lock.<span class="kwd">notify</span>();
+                }
+            }
+            <span class="kwa">return</span> true;
+        }
+    
+        <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">printNumber</span>(<span class="kwa">final</span> <span class="kwb">int</span> n) {
+            <span class="kwa">final</span> String nStr = Integer.<span class="kwd">toString</span>(n);
+
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; nStr.<span class="kwd">length</span>(); i++) {
+                System.out.<span class="kwd">append</span>(<span class="str">' '</span>)
+                        .<span class="kwd">append</span>(NUMBERS[Character.<span class="kwd">getNumericValue</span>(nStr.<span class="kwd">charAt</span>(i))]);
+            }
+            System.out.<span class="kwd">append</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>);
+        }
+    }
+
+    <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">startMeeting</span>(<span class="kwa">final</span> <span class="kwb">boolean</span> isFirst
+            , <span class="kwa">final</span> <span class="kwb">int</span> n
+            , <span class="kwa">final</span> Colour... colours) {
+        <span class="kwa">final</span> <span class="kwb">int</span> len = colours.length;
+        <span class="kwa">final</span> MeetingPlace place = <span class="kwa">new</span> <span class="kwd">MeetingPlace</span>(n);
+        <span class="kwa">final</span> Creature[] creatures = <span class="kwa">new</span> Creature[len];
+        <span class="kwa">final</span> Phaser latch
+                = <span class="kwa">new</span> <span class="kwd">CreaturePhaser</span>(isFirst, colours, creatures, len);
+
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; creatures.length; i++) {
+            creatures[i] = <span class="kwa">new</span> <span class="kwd">Creature</span>(place, colours[i], latch);
+            creatures[i].<span class="kwd">start</span>();
+        }
+    }
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(<span class="kwa">final</span> String[] args) {
+        <span class="kwb">int</span> n = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+
+        <span class="kwd">startMeeting</span>(true, n, Colour.BLUE, Colour.RED, Colour.YELLOW);
+        <span class="kwd">startMeeting</span>(false, n, Colour.BLUE, Colour.RED, Colour.YELLOW,
+                Colour.RED, Colour.YELLOW, Colour.BLUE, Colour.RED,
+                Colour.YELLOW, Colour.RED, Colour.BLUE);
+        <span class="kwa">for</span> (<span class="kwa">final</span> Colour c1 : Colour.<span class="kwd">values</span>()) {
+            <span class="kwa">for</span> (<span class="kwa">final</span> Colour c2 : Colour.<span class="kwd">values</span>()) {
+                System.out.<span class="kwd">append</span>(c1.<span class="kwd">toString</span>())
+                        .<span class="kwd">append</span>(<span class="str">&quot; + &quot;</span>)
+                        .<span class="kwd">append</span>(c2.<span class="kwd">toString</span>())
+                        .<span class="kwd">append</span>(<span class="str">&quot; -&gt; &quot;</span>)
+                        .<span class="kwd">append</span>(c1.<span class="kwd">complement</span>(c2).<span class="kwd">toString</span>())
+                        .<span class="kwd">append</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>);
+            }
+        }
+        System.out.<span class="kwd">append</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>);
+    }
+}

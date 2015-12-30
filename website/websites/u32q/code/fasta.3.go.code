@@ -1,0 +1,208 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">* http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">*</span>
+<span class="com">* contributed by The Go Authors.</span>
+<span class="com">* Based on C program by Joern Inge Vestgaarden</span>
+<span class="com">* and Jorge Peixoto de Morais Neto.</span>
+<span class="com">* flag.Arg hack by Isaac Gouy</span>
+<span class="com">* parallel implementation by Chris Bainbridge</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;bufio&quot;</span>
+   <span class="str">&quot;flag&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+   <span class="str">&quot;strconv&quot;</span>
+   <span class="str">&quot;sync&quot;</span>
+)
+
+<span class="kwa">var</span> out *bufio.Writer
+
+<span class="kwa">const</span> WIDTH = <span class="num">60</span>   <span class="slc">// Fold lines after WIDTH bytes</span>
+<span class="kwa">const</span> LINES = <span class="num">1024</span> <span class="slc">// Lines to be processed at a time</span>
+<span class="kwa">const</span> BLKLEN = WIDTH * LINES
+
+<span class="kwa">func</span> <span class="kwd">min</span>(a, b <span class="kwb">int</span>) <span class="kwb">int</span> {
+   <span class="kwa">if</span> a &lt; b {
+      <span class="kwa">return</span> a
+   }
+   <span class="kwa">return</span> b
+}
+
+<span class="kwa">type</span> AminoAcid <span class="kwa">struct</span> {
+   p <span class="kwb">float64</span>
+   c <span class="kwb">byte</span>
+}
+
+<span class="kwa">func</span> <span class="kwd">AccumulateProbabilities</span>(genelist []AminoAcid) {
+   <span class="kwa">for</span> i := <span class="num">1</span>; i &lt; <span class="kwb">len</span>(genelist); i++ {
+      genelist[i].p += genelist[i-<span class="num">1</span>].p
+   }
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; <span class="kwb">len</span>(genelist); i++ {
+      genelist[i].p *= IM
+   }
+}
+
+<span class="slc">// RepeatFasta prints the characters of the byte slice s. When it</span>
+<span class="slc">// reaches the end of the slice, it goes back to the beginning.</span>
+<span class="slc">// It stops after generating count characters.</span>
+<span class="slc">// After each WIDTH characters it prints a newline.</span>
+<span class="slc">// It assumes that WIDTH &lt;= len(s) + 1.</span>
+<span class="kwa">func</span> <span class="kwd">RepeatFasta</span>(s []<span class="kwb">byte</span>, count <span class="kwb">int</span>) {
+   pos := <span class="num">0</span>
+   s2 := <span class="kwb">make</span>([]<span class="kwb">byte</span>, <span class="kwb">len</span>(s)+WIDTH)
+   <span class="kwd">copy</span>(s2, s)
+   <span class="kwd">copy</span>(s2[<span class="kwb">len</span>(s):], s)
+   <span class="kwa">for</span> count &gt; <span class="num">0</span> {
+      line := <span class="kwd">min</span>(WIDTH, count)
+      out.<span class="kwd">Write</span>(s2[pos : pos+line])
+      out.<span class="kwd">WriteByte</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+      pos += line
+      <span class="kwa">if</span> pos &gt;= <span class="kwb">len</span>(s) {
+         pos -= <span class="kwb">len</span>(s)
+      }
+      count -= line
+   }
+}
+
+<span class="kwa">var</span> lastrandom <span class="kwb">uint32</span> = <span class="num">42</span>
+
+<span class="kwa">const</span> (
+   IM = <span class="num">139968</span>
+   IA = <span class="num">3877</span>
+   IC = <span class="num">29573</span>
+)
+
+<span class="slc">// Each element of genelist is a struct with a character and</span>
+<span class="slc">// a floating point number p between 0 and 1.</span>
+<span class="slc">// RandomFasta generates a random float r and</span>
+<span class="slc">// finds the first element such that p &gt;= r.</span>
+<span class="slc">// This is a weighted random selection.</span>
+<span class="slc">// RandomFasta then prints the character of the array element.</span>
+<span class="slc">// This sequence is repeated count times.</span>
+<span class="slc">// Between each WIDTH consecutive characters, the function prints a newline.</span>
+<span class="kwa">func</span> <span class="kwd">RandomFasta</span>(genelist []AminoAcid, count <span class="kwb">int</span>) {
+   <span class="kwa">var</span> rng sync.Mutex
+   threads := runtime.<span class="kwd">NumCPU</span>()
+
+   c0 := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">bool</span>, <span class="num">1</span>)
+   c0 &lt;- <span class="kwb">true</span>
+   c1 := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">bool</span>, <span class="num">1</span>)
+   cs := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">bool</span>)
+   <span class="kwa">for</span> thread := <span class="num">0</span>; thread &lt; threads; thread++ {
+      <span class="kwa">go func</span>() {
+         <span class="kwa">var</span> block [BLKLEN]<span class="kwb">uint32</span>
+         buf := <span class="kwb">make</span>([]<span class="kwb">byte</span>, BLKLEN+LINES)
+         <span class="kwa">for</span> {
+            rng.<span class="kwd">Lock</span>()
+            <span class="kwa">if</span> count == <span class="num">0</span> {
+               rng.<span class="kwd">Unlock</span>()
+               <span class="kwa">break</span>
+            }
+            line := <span class="kwd">min</span>(BLKLEN, count)
+            count -= line
+            <span class="slc">// generate random number block</span>
+            <span class="kwa">for</span> pos := <span class="num">0</span>; pos &lt; line; pos++ {
+               lastrandom = (lastrandom*IA + IC) % IM
+               block[pos] = lastrandom
+            }
+            c0x := c0
+            c1x := c1
+            countx := count
+            c0 = c1
+            c1 = <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">bool</span>, <span class="num">1</span>)
+            rng.<span class="kwd">Unlock</span>()
+            <span class="slc">// convert random block to aminoacid block</span>
+            j := <span class="num">0</span>
+            <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; line; i++ {
+               <span class="kwa">if</span> i &gt; <span class="num">0</span> &amp;&amp; i%WIDTH == <span class="num">0</span> {
+                  buf[j] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>
+                  j++
+               }
+               r := <span class="kwb">float64</span>(<span class="kwb">int</span>(block[i]))
+               <span class="kwa">for</span> _, v := <span class="kwa">range</span> genelist {
+                  <span class="kwa">if</span> v.p &gt;= r {
+                     buf[j] = v.c
+                     j++
+                     <span class="kwa">break</span>
+                  }
+               }
+            }
+            <span class="slc">// fix len of buf (final block is shorter)</span>
+            buf[j] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>
+            j++
+            <span class="kwa">if</span> <span class="kwb">len</span>(buf) != j {
+               buf = buf[:j]
+            }
+            <span class="slc">// print buf</span>
+            &lt;-c0x
+            out.<span class="kwd">Write</span>(buf)
+            <span class="kwa">if</span> countx != <span class="num">0</span> {
+               c1x &lt;- <span class="kwb">true</span>
+            } <span class="kwa">else</span> {
+               cs &lt;- <span class="kwb">true</span>
+            }
+         }
+      }()
+   }
+   &lt;-cs
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   runtime.<span class="kwd">GOMAXPROCS</span>(runtime.<span class="kwd">NumCPU</span>())
+   out = bufio.<span class="kwd">NewWriter</span>(os.Stdout)
+   <span class="kwa">defer</span> out.<span class="kwd">Flush</span>()
+
+   flag.<span class="kwd">Parse</span>()
+   n := <span class="num">0</span>
+   <span class="kwa">if</span> flag.<span class="kwd">NArg</span>() &gt; <span class="num">0</span> {
+      n, _ = strconv.<span class="kwd">Atoi</span>(flag.<span class="kwd">Arg</span>(<span class="num">0</span>))
+   }
+
+   iub := []AminoAcid{
+      AminoAcid{<span class="num">0.27</span>, <span class="str">'a'</span>},
+      AminoAcid{<span class="num">0.12</span>, <span class="str">'c'</span>},
+      AminoAcid{<span class="num">0.12</span>, <span class="str">'g'</span>},
+      AminoAcid{<span class="num">0.27</span>, <span class="str">'t'</span>},
+      AminoAcid{<span class="num">0.02</span>, <span class="str">'B'</span>},
+      AminoAcid{<span class="num">0.02</span>, <span class="str">'D'</span>},
+      AminoAcid{<span class="num">0.02</span>, <span class="str">'H'</span>},
+      AminoAcid{<span class="num">0.02</span>, <span class="str">'K'</span>},
+      AminoAcid{<span class="num">0.02</span>, <span class="str">'M'</span>},
+      AminoAcid{<span class="num">0.02</span>, <span class="str">'N'</span>},
+      AminoAcid{<span class="num">0.02</span>, <span class="str">'R'</span>},
+      AminoAcid{<span class="num">0.02</span>, <span class="str">'S'</span>},
+      AminoAcid{<span class="num">0.02</span>, <span class="str">'V'</span>},
+      AminoAcid{<span class="num">0.02</span>, <span class="str">'W'</span>},
+      AminoAcid{<span class="num">0.02</span>, <span class="str">'Y'</span>},
+   }
+
+   homosapiens := []AminoAcid{
+      AminoAcid{<span class="num">0.3029549426680</span>, <span class="str">'a'</span>},
+      AminoAcid{<span class="num">0.1979883004921</span>, <span class="str">'c'</span>},
+      AminoAcid{<span class="num">0.1975473066391</span>, <span class="str">'g'</span>},
+      AminoAcid{<span class="num">0.3015094502008</span>, <span class="str">'t'</span>},
+   }
+
+   <span class="kwd">AccumulateProbabilities</span>(iub)
+   <span class="kwd">AccumulateProbabilities</span>(homosapiens)
+
+   alu := []<span class="kwb">byte</span>(
+      <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span> +
+         <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span> +
+         <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span> +
+         <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span> +
+         <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span> +
+         <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span> +
+         <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>)
+
+   out.<span class="kwd">WriteString</span>(<span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>)
+   <span class="kwd">RepeatFasta</span>(alu, <span class="num">2</span>*n)
+   out.<span class="kwd">WriteString</span>(<span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>)
+   <span class="kwd">RandomFasta</span>(iub, <span class="num">3</span>*n)
+   out.<span class="kwd">WriteString</span>(<span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>)
+   <span class="kwd">RandomFasta</span>(homosapiens, <span class="num">5</span>*n)
+}

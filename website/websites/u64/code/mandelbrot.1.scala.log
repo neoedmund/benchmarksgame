@@ -1,0 +1,18 @@
+
+Tue, 19 May 2015 23:58:29 GMT
+
+MAKE:
+mv mandelbrot.scala mandelbrot.scala
+mv: ‘mandelbrot.scala’ and ‘mandelbrot.scala’ are the same file
+/home/dunham/benchmarksgame/nanobench/makefiles/u64.programs.Makefile:596: recipe for target 'mandelbrot.scala_run' failed
+make: [mandelbrot.scala_run] Error 1 (ignored)
+/usr/local/src/scala-2.11.6/bin/scalac -optimise -target:jvm-1.8 mandelbrot.scala
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+5.11s to complete and log all make actions
+
+COMMAND LINE:
+ /usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -Xbootclasspath/a:/usr/local/src/scala-2.11.6/lib/scala-library.jar:/usr/local/src/scala-2.11.6/lib/akka-actors.jar:/usr/local/src/scala-2.11.6/lib/typesafe-config.jar mandelbrot 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

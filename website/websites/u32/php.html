@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="index,follow,archive" />
+<meta name="description" content="PHP programs vs Python 3 programs (performance on 32-bit Ubuntu one core)." />
+<title>PHP&nbsp;vs&nbsp;Python 3 (32-bit Ubuntu one core) | Computer Language Benchmarks Game </title>
+<style><!--
+a{color:black;text-decoration:none}article{padding: 0 0 2.9em}article,div,header{margin:auto;width:92%}body{font:100% Droid Sans,Ubuntu,Verdana,sans-serif;margin:0;-webkit-text-size-adjust:100%}h1,h2,h3,nav li a{font-family:Ubuntu Mono,Consolas,Menlo,monospace}div,header{max-width:31em}h1{font-size:1.4em;font-weight:bold;margin:0;padding:.4em}h1,h1 a{color:white}h2,h3{margin:1.5em 0 0}h2{font-size:1.4em;font-weight:normal}h3{font-size:1.2em}li{display:inline-block}nav li{list-style-type:none}nav li a{display:block;font-size:1.2em;margin:.5em .5em 0;padding:.5em .5em .3em}nav ul{clear:left;margin:-0.3em 0 1.5em;text-align:center}p{color:#333;line-height:1.4;margin:.3em 0 0}p a{border-bottom:.15em dotted #aaa}
+#u64,#u64q{background-color:#c90016}#u32{background-color:#ffb515}#u32q{background-color:#ff6309}.best{font-weight:bold}.message{font-size:.8em}table{color:#333;margin:1.3em auto 0;text-align:right}tbody:after{content:"-";display:block;line-height:2.6em;visibility:hidden}tbody:last-child{text-align:left}td{border-bottom:.15em dotted #eee;padding:.7em 0 0 1em}td a,th a{display:block}td:first-child,th:first-child{text-align:left;padding-left:0}td:nth-child(6),th:nth-child(6){display:table-cell}th{font-weight:normal;padding:0 0 0 1em}
+@media only screen{th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5),th:nth-child(6),td:nth-child(6){display:none}}@media only screen and (min-width:28em){th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){display:table-cell}}@media only screen and (min-width:41em){th:nth-child(6),td:nth-child(6){display:table-cell}}@media only screen and (min-width:60em){article,footer,header{font-size:1.25em}}
+--></style>
+<link rel="shortcut icon" href="./favicon.ico">
+<header id="top">
+  <h1 id="u32"><a href="http://benchmarksgame.alioth.debian.org/">The&nbsp;Computer&nbsp;Language<br>Benchmarks&nbsp;Game</a></h1>
+</header>
+<article>
+  <div>
+    <h2>PHP programs versus Python 3</h2>
+    <aside>
+      <p><a href="./measurements.php?lang=php">all the PHP program measurements</a>
+    </aside>
+  </div>
+  <section>
+    <div>
+      <h3>by benchmark task performance</h3>
+    </div>
+    <table>
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=knucleotide">k-nucleotide</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=knucleotide&amp;lang=php&amp;id=1">PHP</a>
+        <td class="best">25.75
+        <td>250,224
+        <td>1036
+        <td>25.72
+        <td class="message">0%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=knucleotide&amp;lang=python3&amp;id=3">Python&nbsp;3</a>
+        <td>317.42
+        <td>219,028
+        <td>1937
+        <td>317.16
+        <td class="message">0%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=spectralnorm">spectral-norm</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=spectralnorm&amp;lang=php&amp;id=1">PHP</a>
+        <td class="best">180.24
+        <td>15,332
+        <td>1135
+        <td>180.18
+        <td class="message">1%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=spectralnorm&amp;lang=python3&amp;id=6">Python&nbsp;3</a>
+        <td>1,105.41
+        <td>7,120
+        <td>328
+        <td>1,105.02
+        <td class="message">1%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=regexdna">regex-dna</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=regexdna&amp;lang=php&amp;id=4">PHP</a>
+        <td class="best">4.85
+        <td>105,416
+        <td>832
+        <td>4.83
+        <td class="message">1%&nbsp;100%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=regexdna&amp;lang=python3&amp;id=1">Python&nbsp;3</a>
+        <td>25.11
+        <td>249,088
+        <td>478
+        <td>24.98
+        <td class="message">1%&nbsp;0%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=binarytrees">binary-trees</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=binarytrees&amp;lang=php&amp;id=3">PHP</a>
+        <td class="best">174.79
+        <td>1,137,816
+        <td>483
+        <td>174.64
+        <td class="message">1%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=binarytrees&amp;lang=python3&amp;id=1">Python&nbsp;3</a>
+        <td>497.80
+        <td>482,656
+        <td>596
+        <td>497.40
+        <td class="message">1%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=nbody">n-body</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=nbody&amp;lang=php&amp;id=3">PHP</a>
+        <td class="best">422.83
+        <td>7,196
+        <td>1082
+        <td>422.71
+        <td class="message">1%&nbsp;32%&nbsp;68%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=nbody&amp;lang=python3&amp;id=2">Python&nbsp;3</a>
+        <td>1,024.87
+        <td>6,324
+        <td>1228
+        <td>1,024.54
+        <td class="message">1%&nbsp;0%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fannkuchredux">fannkuch-redux</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fannkuchredux&amp;lang=php&amp;id=2">PHP</a>
+        <td class="best">1,030.87
+        <td>7,056
+        <td>441
+        <td>1,030.62
+        <td class="message">1%&nbsp;13%&nbsp;57%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=fannkuchredux&amp;lang=python3&amp;id=4">Python&nbsp;3</a>
+        <td>2,464.08
+        <td>44,564
+        <td>944
+        <td>2,463.20
+        <td class="message">1%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=mandelbrot">mandelbrot</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=mandelbrot&amp;lang=php&amp;id=3">PHP</a>
+        <td class="best">524.11
+        <td>131,376
+        <td>863
+        <td>523.94
+        <td class="message">1%&nbsp;60%&nbsp;40%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=mandelbrot&amp;lang=python3&amp;id=7">Python&nbsp;3</a>
+        <td>1,209.01
+        <td>40,500
+        <td>686
+        <td>1,208.52
+        <td class="message">1%&nbsp;0%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fasta">fasta</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fasta&amp;lang=php&amp;id=3">PHP</a>
+        <td class="best">60.65
+        <td>7,192
+        <td>1030
+        <td>60.63
+        <td class="message">1%&nbsp;100%&nbsp;0%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=fasta&amp;lang=python3&amp;id=3">Python&nbsp;3</a>
+        <td>122.25
+        <td>6,508
+        <td>977
+        <td>122.19
+        <td class="message">1%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=revcomp">reverse-complement</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=revcomp&amp;lang=php&amp;id=1">PHP</a>
+        <td class="best">4.62
+        <td>358,028
+        <td>297
+        <td>4.62
+        <td class="message">2%&nbsp;1%&nbsp;100%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=revcomp&amp;lang=python3&amp;id=6">Python&nbsp;3</a>
+        <td>5.54
+        <td>262,360
+        <td>800
+        <td>5.53
+        <td class="message">1%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=pidigits">pidigits</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=pidigits&amp;lang=php&amp;id=5">PHP</a>
+        <td>2.80
+        <td>8,180
+        <td>394
+        <td>2.80
+        <td class="message">1%&nbsp;2%&nbsp;100%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=pidigits&amp;lang=python3&amp;id=5">Python&nbsp;3</a>
+        <td>2.74
+        <td>8,468
+        <td>335
+        <td>2.73
+        <td class="message">0%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fastaredux">fasta-redux</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fastaredux&amp;lang=php&amp;id=4">PHP</a>
+        <td>0.51
+        <td>7,112
+        <td>1110
+        <td>0.51
+        <td class="message">6%&nbsp;100%&nbsp;0%&nbsp;98%
+      <tr>
+        <td>&nbsp;
+        <td class="message">No&nbsp;program
+        <td class="message" colspan="4"><a href="./play.html">contribute your program</a>
+      <tbody>
+      <tr>
+        <td>PHP
+        <td colspan="5" class="message"><p>PHP 7.0.0 (cli) (built: Dec  3 2015 16:21:26) ( NTS )<br>
+Copyright (c) 1997-2015 The PHP Group<br>
+Zend Engine v3.0.0, Copyright (c) 1998-2015 Zend Technologies
+
+      <tr>
+        <td>Python&nbsp;3
+        <td colspan="5" class="message"><p>Python 3.5.0 (default, Sep 14 2015, 09:36:50) 
+[GCC 4.9.2] on linux
+
+      </table>
+      <nav>
+        <ul>
+          <li><a href="./compare.php?lang=php&amp;lang2=hack">vs Hack</a>
+          <li class="best">vs Python
+          <li><a href="./compare.php?lang=php&amp;lang2=yarv">vs Ruby</a>
+        </ul>
+      </nav>
+  </section>
+</article>
+<script>
+window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+ga('create', 'UA-37137205-1', 'auto');
+ga('send', 'pageview');
+</script>
+<script async src='//www.google-analytics.com/analytics.js'></script>
+

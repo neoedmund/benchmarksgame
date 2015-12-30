@@ -1,0 +1,12 @@
+
+Thu, 26 Mar 2015 18:44:10 GMT
+
+COMMAND LINE:
+/usr/local/src/php-5.6.7/bin/php -n -d memory_limit=2048M binarytrees.php-3.php 20
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+Fatal error: Allowed memory size of 2147483648 bytes exhausted (tried to allocate 72 bytes) in /home/dunham/benchmarksgame/bench/binarytrees/binarytrees.php-3.php on line 11

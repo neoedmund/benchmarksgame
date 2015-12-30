@@ -1,0 +1,53 @@
+#lang racket/base
+
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; Based on a version by by Anthony Borla</span>
+<span class="slc">;; Parallelize by Sam Tobin-Hochstadt</span>
+
+(<span class="kwa">require</span> racket/port racket/place)
+
+<span class="slc">;; -------------------------------</span>
+
+(<span class="kwa">define</span> VARIANTS
+  '(#<span class="str">&quot;agggtaaa|tttaccct&quot;</span> #<span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span> #<span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>
+    #<span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span> #<span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span> #<span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>
+    #<span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span> #<span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span> #<span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>))
+
+
+(<span class="kwa">define</span> IUBS
+  '((#<span class="str">&quot;B&quot;</span> #<span class="str">&quot;(c|g|t)&quot;</span>) (#<span class="str">&quot;D&quot;</span> #<span class="str">&quot;(a|g|t)&quot;</span>) (#<span class="str">&quot;H&quot;</span> #<span class="str">&quot;(a|c|t)&quot;</span>)
+    (#<span class="str">&quot;K&quot;</span> #<span class="str">&quot;(g|t)&quot;</span>) (#<span class="str">&quot;M&quot;</span> #<span class="str">&quot;(a|c)&quot;</span>) (#<span class="str">&quot;N&quot;</span> #<span class="str">&quot;(a|c|g|t)&quot;</span>)
+    (#<span class="str">&quot;R&quot;</span> #<span class="str">&quot;(a|g)&quot;</span>) (#<span class="str">&quot;S&quot;</span> #<span class="str">&quot;(c|g)&quot;</span>) (#<span class="str">&quot;V&quot;</span> #<span class="str">&quot;(a|c|g)&quot;</span>)
+    (#<span class="str">&quot;W&quot;</span> #<span class="str">&quot;(a|t)&quot;</span>) (#<span class="str">&quot;Y&quot;</span> #<span class="str">&quot;(c|t)&quot;</span>)))
+
+<span class="slc">;; -------------------------------</span>
+
+(<span class="kwa">define</span> (<span class="kwa">main</span> . _)
+  <span class="slc">;; Load sequence and record its length</span>
+  (<span class="kwa">define</span> orig (<span class="kwa">port-</span>&gt;bytes))
+  (<span class="kwa">define</span> filtered (<span class="kwa">regexp-replace</span>* #rx#<span class="str">&quot;(?:&gt;.*?</span><span class="esc">\n</span><span class="str">)|</span><span class="esc">\n</span><span class="str">&quot;</span> orig #<span class="str">&quot;&quot;</span>))
+  <span class="slc">;; Perform regexp counts</span>
+  (<span class="kwa">define</span> pls
+    (<span class="kwa">for</span>/list ([i (<span class="kwa">in-list</span> VARIANTS)])
+      (<span class="kwa">define</span> p (<span class="kwa">place</span> ch
+                       (<span class="kwa">define</span> seq (<span class="kwa">place-channel-get</span> ch))
+                       (<span class="kwa">define</span> i (<span class="kwa">place-channel-get</span> ch))
+                       (<span class="kwa">place-channel-put</span> ch (<span class="kwa">length</span> (<span class="kwa">regexp-match-positions</span>* (<span class="kwa">byte-regexp</span> i) seq)))))
+      (<span class="kwa">place-channel-put</span> p filtered)
+      (<span class="kwa">place-channel-put</span> p i)
+      p))
+
+  <span class="slc">;; Perform regexp replacements, and record sequence length</span>
+  (<span class="kwa">define</span> replaced
+    (<span class="kwa">for</span>/fold ([sequence filtered]) ([IUB IUBS])
+      (<span class="kwa">regexp-replace</span>* (<span class="kwa">byte-regexp</span> (<span class="kwa">car</span> IUB)) sequence (<span class="kwa">cadr</span> IUB))))
+  (<span class="kwa">for</span> ([p pls] [i VARIANTS]) (<span class="kwa">printf</span> <span class="str">&quot;~a ~a</span><span class="esc">\n</span><span class="str">&quot;</span> i (<span class="kwa">place-channel-get</span> p)))
+
+  <span class="slc">;; Print statistics</span>
+  (<span class="kwa">printf</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">~a</span><span class="esc">\n</span><span class="str">~a</span><span class="esc">\n</span><span class="str">~a</span><span class="esc">\n</span><span class="str">&quot;</span>
+          (<span class="kwa">bytes-length</span> orig)
+          (<span class="kwa">bytes-length</span> filtered)
+          (<span class="kwa">bytes-length</span> replaced)))
+(<span class="kwa">provide</span> main)

@@ -1,0 +1,70 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">! Simon Geard, 6/1/05</span>
+<span class="slc">! Adapted  mandelbrot.c by Greg Buchholz</span>
+<span class="slc">! Modified to use explicit kind parameters by Jason Blevins, 4/10/10.</span>
+<span class="slc">!</span>
+<span class="slc">!          ifort mandelbrot.f90 -O3 -static-libcxa -o mandelbrot</span>
+
+<span class="kwa">program</span> mandelbrot
+  <span class="kwa">implicit none</span>
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: dp = <span class="kwd">kind</span>(<span class="num">1.0d0</span>)
+  <span class="kwa">integer</span> w, h, x, y, bit_num
+  <span class="kwa">integer</span>(kind=<span class="num">1</span>) byte_acc
+  <span class="kwa">integer</span>(kind=<span class="num">1</span>), <span class="kwa">parameter</span> :: K0 = <span class="num">0</span>
+  <span class="kwa">integer</span>(kind=<span class="num">1</span>), <span class="kwa">parameter</span> :: K1 = <span class="num">1</span>
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: iter = <span class="num">50</span>
+  <span class="kwa">real</span>(kind=dp), <span class="kwa">parameter</span>  :: limit2 = <span class="num">4.0</span>_dp
+  <span class="kwa">integer</span>  i
+  <span class="kwa">character</span>(len=<span class="num">8</span>) argv
+  <span class="kwa">complex</span>(kind=dp) :: Z, C
+  <span class="kwa">logical</span> debug, in_mandelbrot
+
+  <span class="kwa">call</span> <span class="kwd">getarg</span>(<span class="num">1</span>,argv)
+  <span class="kwa">read</span>(argv,*) w
+  h = w
+  bit_num = <span class="num">0</span>
+  byte_acc = K0
+  <span class="slc">! Output pbm header</span>
+  <span class="kwa">write</span>(*,<span class="str">'(a)'</span>) <span class="str">'P4'</span>
+  <span class="kwa">write</span>(*,<span class="str">'(i0,a,i0)'</span>) w,<span class="str">' '</span>,h
+  <span class="kwa">do</span> y=<span class="num">0</span>,h-<span class="num">1</span>
+     <span class="kwa">do</span> x=<span class="num">0</span>,w-<span class="num">1</span>
+        C = <span class="kwd">cmplx</span>(<span class="num">2.0d0</span>*x/w-<span class="num">1.5d0</span>,<span class="num">2.0d0</span>*y/h-<span class="num">1.0d0</span>, dp)
+        Z = (<span class="num">0.0d0</span>,<span class="num">0.0d0</span>)
+        in_mandelbrot = .true.
+        <span class="kwa">do</span> i=<span class="num">0</span>,iter-<span class="num">1</span>
+           Z = Z**<span class="num">2</span> + C
+           <span class="kwa">if</span> (<span class="kwa">real</span>(Z*<span class="kwd">conjg</span>(Z)) &gt; limit2) <span class="kwa">then</span>
+              in_mandelbrot = .false.
+              exit
+           <span class="kwa">end if</span>
+        <span class="kwa">end do</span>
+        <span class="kwa">if</span> (in_mandelbrot) <span class="kwa">then</span>
+           <span class="slc">! Inside the set so set this bit to 1</span>
+           byte_acc = <span class="kwd">ior</span>(<span class="kwd">ishft</span>(byte_acc,<span class="num">1</span>),K1)
+        <span class="kwa">else</span>
+           <span class="slc">! Outside the set so set this bit to 0</span>
+           byte_acc = <span class="kwd">ishft</span>(byte_acc,<span class="num">1</span>)
+        <span class="kwa">end if</span>
+
+        bit_num = bit_num + <span class="num">1</span>
+        <span class="kwa">if</span> (bit_num == <span class="num">8</span>) <span class="kwa">then</span>
+           <span class="slc">! All bits set so output them</span>
+           <span class="kwa">write</span>(*,<span class="str">'(a1)'</span>,advance=<span class="str">'no'</span>) <span class="kwd">char</span>(byte_acc)
+           byte_acc = K0
+           bit_num = <span class="num">0</span>
+
+        <span class="kwa">elseif</span> (x == w-<span class="num">1</span>) <span class="kwa">then</span>
+           <span class="slc">! End of a row so left-justify the bits we have and output them</span>
+           byte_acc = <span class="kwd">ishft</span>(byte_acc,<span class="num">8</span>-<span class="kwd">mod</span>(w,<span class="num">8</span>))
+           <span class="kwa">write</span>(*,<span class="str">'(a1)'</span>,advance=<span class="str">'no'</span>) <span class="kwd">char</span>(byte_acc)
+           byte_acc = K0
+           bit_num = <span class="num">0</span>
+
+        <span class="kwa">end if</span>
+
+     <span class="kwa">end do</span>
+  <span class="kwa">end do</span>
+<span class="kwa">end program</span> mandelbrot

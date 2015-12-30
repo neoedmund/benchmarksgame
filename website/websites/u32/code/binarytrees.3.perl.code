@@ -1,0 +1,71 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc"># </span>
+<span class="slc"># contributed by Emanuele Zeppieri</span>
+<span class="slc"># modified by Christian Walde (threads)</span>
+
+<span class="kwa">use</span> threads;
+
+<span class="kwa">sub</span> bottomup_tree {
+    <span class="kwc">my</span> ( <span class="kwb">$value</span>, <span class="kwb">$depth</span> ) = <span class="kwb">&#64;_</span>;
+    <span class="kwa">return</span> <span class="kwb">$value</span> <span class="kwa">unless</span> <span class="kwb">$depth</span>;
+    <span class="kwc">my</span> <span class="kwb">$value2</span> = <span class="kwb">$value</span> * <span class="num">2</span>;
+    <span class="kwb">$depth</span>--;
+    <span class="kwa">return</span> [ bottomup_tree( <span class="kwb">$value2</span> - <span class="num">1</span>, <span class="kwb">$depth</span> ), bottomup_tree( <span class="kwb">$value2</span>, <span class="kwb">$depth</span> ), <span class="kwb">$value</span> ];
+}
+
+<span class="kwa">sub</span> check_tree {
+    <span class="kwc">my</span> ( <span class="kwb">$left</span>, <span class="kwb">$right</span>, <span class="kwb">$value</span> ) = &#64;{ <span class="kwb">$_</span>[<span class="num">0</span>] };
+    <span class="kwa">return</span> <span class="kwb">$value</span> + ( <span class="kwc">ref</span> <span class="kwb">$left</span> ? check_tree( <span class="kwb">$left</span> ) - check_tree( <span class="kwb">$right</span> ) : <span class="kwb">$left</span> - <span class="kwb">$right</span> );
+}
+
+<span class="kwa">sub</span> depth_iteration {
+    <span class="kwc">my</span> ( <span class="kwb">$depth</span>, <span class="kwb">$max_depth</span>, <span class="kwb">$min_depth</span> ) = <span class="kwb">&#64;_</span>;
+
+    <span class="kwc">my</span> <span class="kwb">$iterations</span> = <span class="num">2</span> &lt;&lt; <span class="kwb">$max_depth</span> - <span class="kwb">$depth</span> + <span class="kwb">$min_depth</span> - <span class="num">1</span>;
+    <span class="kwc">my</span> <span class="kwb">$check</span>      = <span class="num">0</span>;
+
+    <span class="kwa">foreach</span> ( <span class="num">1</span> .. <span class="kwb">$iterations</span> ) {
+        <span class="kwb">$check</span> += check_tree( bottomup_tree( <span class="kwb">$_</span>,  <span class="kwb">$depth</span> ) );
+        <span class="kwb">$check</span> += check_tree( bottomup_tree( -<span class="kwb">$_</span>, <span class="kwb">$depth</span> ) );
+    }
+
+    <span class="kwa">return</span> ( <span class="kwb">$depth</span> =&gt; [ <span class="kwb">$iterations</span>, <span class="kwb">$depth</span>, <span class="kwb">$check</span> ] );
+}
+
+<span class="kwc">my</span> <span class="kwb">$max_depth</span> = <span class="kwc">shift</span> <span class="kwb">&#64;ARGV</span>;
+<span class="kwc">my</span> <span class="kwb">$min_depth</span> = <span class="num">4</span>;
+
+<span class="kwb">$max_depth</span> = <span class="kwb">$min_depth</span> + <span class="num">2</span> <span class="kwa">if</span> <span class="kwb">$min_depth</span> + <span class="num">2</span> &gt; <span class="kwb">$max_depth</span>;
+
+<span class="kwc">my</span> <span class="kwb">$stretch_depth</span> = <span class="kwb">$max_depth</span> + <span class="num">1</span>;
+<span class="kwc">my</span> <span class="kwb">$stretch_tree</span> = bottomup_tree( <span class="num">0</span>, <span class="kwb">$stretch_depth</span> );
+<span class="kwc">print</span> <span class="str">&quot;stretch tree of depth</span> <span class="ipl">$stretch_depth</span><span class="str"></span><span class="esc">\t</span> <span class="str">check: &quot;</span>, check_tree( <span class="kwb">$stretch_tree</span> ), <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+<span class="kwc">undef</span> <span class="kwb">$stretch_tree</span>;
+
+<span class="kwc">my</span> <span class="kwb">$longlived_tree</span> = bottomup_tree( <span class="num">0</span>, <span class="kwb">$max_depth</span> );
+
+<span class="kwc">my</span> <span class="kwb">&#64;results</span>;
+<span class="kwa">for</span> ( <span class="kwc">my</span> <span class="kwb">$depth</span> = <span class="kwb">$min_depth</span> ; <span class="kwb">$depth</span> &lt;= <span class="kwb">$max_depth</span> ; <span class="kwb">$depth</span> += <span class="num">2</span> ) {
+    <span class="kwa">while</span> ( <span class="num">1</span> ) {
+        <span class="kwa">last if</span> threads-&gt;<span class="kwd">list</span> &lt; <span class="num">4</span>;
+        <span class="kwc">push</span> <span class="kwb">&#64;results</span>, <span class="kwb">$_</span>-&gt;<span class="kwc">join</span> <span class="kwa">for</span> threads-&gt;<span class="kwd">list</span>( threads::joinable );
+    }
+
+    threads-&gt;<span class="kwd">create</span>(
+        { <span class="str">'context'</span> =&gt; <span class="str">'list'</span>, <span class="str">'stack_size'</span> =&gt; <span class="num">64</span> },    <span class="slc">#</span>
+        <span class="kwa">sub</span> { depth_iteration( <span class="kwb">$depth</span>, <span class="kwb">$max_depth</span>, <span class="kwb">$min_depth</span> ) }
+    );
+}
+
+<span class="kwa">while</span> ( threads-&gt;<span class="kwd">list</span> ) {
+    <span class="kwc">push</span> <span class="kwb">&#64;results</span>, <span class="kwb">$_</span>-&gt;<span class="kwc">join</span> <span class="kwa">for</span> threads-&gt;<span class="kwd">list</span>( threads::joinable );
+}
+
+<span class="kwc">my</span> <span class="kwb">%results</span> = <span class="kwb">&#64;results</span>;
+<span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$key</span> ( <span class="kwc">sort</span> { <span class="kwb">$a</span> &lt;=&gt; <span class="kwb">$b</span> } <span class="kwc">keys</span> <span class="kwb">%results</span> ) {
+    <span class="kwc">my</span> ( <span class="kwb">$iterations</span>, <span class="kwb">$depth</span>, <span class="kwb">$check</span> ) = &#64;{ <span class="kwb">$results</span>{<span class="kwb">$key</span>} };
+    <span class="kwc">print</span> <span class="num">2</span> * <span class="kwb">$iterations</span>, <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">trees of depth</span> <span class="ipl">$depth</span><span class="str"></span><span class="esc">\t</span> <span class="str">check: &quot;</span>, <span class="kwb">$check</span>, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+}
+
+<span class="kwc">print</span> <span class="str">&quot;long lived tree of depth</span> <span class="ipl">$max_depth</span><span class="str"></span><span class="esc">\t</span> <span class="str">check: &quot;</span>, check_tree( <span class="kwb">$longlived_tree</span> ), <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;

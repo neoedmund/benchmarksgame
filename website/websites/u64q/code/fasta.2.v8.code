@@ -1,0 +1,70 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="kwc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">//  Contributed by Ian Osgood</span>
+<span class="slc">//  Largely rewritten by Matthew Wilson</span>
+
+<span class="kwa">function</span> <span class="kwd">fastaRepeat</span>(n, seq) {
+  <span class="kwa">var</span> seqi = <span class="num">0</span>, len = seq.length, i, j, k, l, block, 
+    str = <span class="kwd">Array</span>(len*<span class="num">60</span>+<span class="num">1</span>).<span class="kwd">join</span>(seq), lines = <span class="kwd">Array</span>(i=j=len*len);
+  <span class="kwa">while</span> (--j&gt;-<span class="num">1</span>) { lines[j] = str.<span class="kwd">substr</span>(<span class="num">60</span>*j, <span class="num">60</span>) }
+  block = lines.<span class="kwd">join</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+  <span class="kwa">for</span> (j=<span class="num">0</span>, k=Math.<span class="kwd">floor</span>((l=Math.<span class="kwd">floor</span>(n<span class="kwc">/60))/i</span>); j&lt;k; ++j) { <span class="kwd">print</span>(block) }
+  <span class="kwa">for</span> (j = <span class="num">0</span>, k = l % i; j &lt; k; ++j) { <span class="kwd">print</span>(lines[j]) }
+  <span class="kwa">if</span> (n % <span class="num">60</span> &gt; <span class="num">0</span>) { <span class="kwd">print</span>(lines[k].<span class="kwd">substr</span>(<span class="num">0</span>, n % <span class="num">60</span>)) }
+}
+
+<span class="kwa">var</span> rand=(<span class="kwa">function</span>() {
+  <span class="kwa">var</span> Last = <span class="num">42</span>;
+  <span class="kwa">return function</span>() { <span class="kwa">return</span> (Last=(Last * <span class="num">3877</span> + <span class="num">29573</span>) % <span class="num">139968</span>) / <span class="num">139968</span> }
+})();
+
+<span class="kwa">function</span> <span class="kwd">printLineMaker</span>(table) {
+  <span class="kwa">var</span> h = <span class="num">0</span>, k = [], v = [], c, l=<span class="num">0</span>;
+  <span class="kwa">for</span> (c <span class="kwa">in</span> table) { l = v[h] = table[k[h++] = c]+=l; }
+  <span class="kwa">return function</span>(x) {
+    <span class="kwa">var</span> line = <span class="str">&quot;&quot;</span>;
+    next: <span class="kwa">for</span> (<span class="kwa">var</span> i=<span class="num">0</span>; i&lt;x; ++i) {
+      <span class="kwa">var</span> r = <span class="kwd">rand</span>(), j=<span class="num">0</span>;
+      <span class="kwa">for</span> (;;++j) {
+        <span class="kwa">if</span> (r &lt; v[j]) {
+          line += k[j];
+          <span class="kwa">continue</span> next;
+        }
+      }
+    }
+    <span class="kwd">print</span>(line);
+  }
+}
+
+<span class="kwa">function</span> <span class="kwd">fastaRandom</span>(n, table) {
+  <span class="kwa">var</span> printLine=<span class="kwd">printLineMaker</span>(table);
+  <span class="kwa">while</span> ((n -= <span class="num">60</span>) &gt; -<span class="num">1</span>) { <span class="kwd">printLine</span>(<span class="num">60</span>) }
+  <span class="kwa">if</span> (n&lt;<span class="num">0</span> &amp;&amp; n&gt;-<span class="num">60</span>) { <span class="kwd">printLine</span>(<span class="num">60</span> + n) }
+}
+
+(<span class="kwa">function</span> <span class="kwd">main</span>(n) {
+  <span class="kwa">var</span> ALU = <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span> +
+            <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span> +
+            <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span> +
+            <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span> +
+            <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span> +
+            <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span> +
+            <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+  <span class="kwa">var</span> IUB = { a:<span class="num">0.27</span>, c:<span class="num">0.12</span>, g:<span class="num">0.12</span>, t:<span class="num">0.27</span>, B:<span class="num">0.02</span>, D:<span class="num">0.02</span>, H:<span class="num">0.02</span>, K:<span class="num">0.02</span>,
+              M:<span class="num">0.02</span>, N:<span class="num">0.02</span>, R:<span class="num">0.02</span>, S:<span class="num">0.02</span>, V:<span class="num">0.02</span>, W:<span class="num">0.02</span>, Y:<span class="num">0.02</span> }
+
+  <span class="kwa">var</span> HomoSap = {
+    a:<span class="num">0.3029549426680</span>, c:<span class="num">0.1979883004921</span>, g:<span class="num">0.1975473066391</span>, t:<span class="num">0.3015094502008</span>
+  }
+
+  <span class="kwd">print</span>(<span class="str">&quot;&gt;ONE Homo sapiens alu&quot;</span>)
+  <span class="kwd">fastaRepeat</span>(<span class="num">2</span>*n, ALU)
+
+  <span class="kwd">print</span>(<span class="str">&quot;&gt;TWO IUB ambiguity codes&quot;</span>)
+  <span class="kwd">fastaRandom</span>(<span class="num">3</span>*n, IUB)
+
+  <span class="kwd">print</span>(<span class="str">&quot;&gt;THREE Homo sapiens frequency&quot;</span>)
+  <span class="kwd">fastaRandom</span>(<span class="num">5</span>*n, HomoSap)
+}).<span class="kwd">call</span>(<span class="kwa">this</span>, <span class="num">1</span>*arguments[<span class="num">0</span>]*<span class="num">1</span>)

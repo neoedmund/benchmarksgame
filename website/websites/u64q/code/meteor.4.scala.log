@@ -1,0 +1,25 @@
+
+Tue, 19 May 2015 19:49:32 GMT
+
+MAKE:
+mv meteor.scala-4.scala meteor.scala
+/usr/local/src/scala-2.11.6/bin/scalac -optimise -target:jvm-1.8 meteor.scala
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+meteor.scala:157: error: value findIndexOf is not a member of Array[BoardCell]
+   def firstEmptyCellIndex() = cells.findIndexOf(c => c.isEmpty)
+                                     ^
+one error found
+/home/dunham/benchmarksgame/nanobench/makefiles/u64q.programs.Makefile:606: recipe for target 'meteor.scala-4.scala_run' failed
+make: [meteor.scala-4.scala_run] Error 1 (ignored)
+3.56s to complete and log all make actions
+
+COMMAND LINE:
+ /usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -Xbootclasspath/a:/usr/local/src/scala-2.11.6/lib/scala-library.jar:/usr/local/src/scala-2.11.6/lib/akka-actors.jar:/usr/local/src/scala-2.11.6/lib/typesafe-config.jar meteor 2098
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Error: Could not find or load main class meteor

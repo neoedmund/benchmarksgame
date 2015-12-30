@@ -1,0 +1,42 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># transliterated from Mario Pernici's Python 3 program</span>
+<span class="slc"># contributed by Jesse Luehrs</span>
+
+<span class="kwa">use</span> strict;
+<span class="kwa">use</span> Math::GMP;
+
+<span class="kwc">my</span> <span class="kwb">$N</span> = <span class="kwb">$ARGV</span>[<span class="num">0</span>];
+
+<span class="kwc">my</span> (<span class="kwb">$i</span>, <span class="kwb">$k</span>, <span class="kwb">$ns</span>) = (<span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>);
+<span class="kwc">my</span> <span class="kwb">$k1</span> = <span class="num">1</span>;
+<span class="kwc">my</span> (<span class="kwb">$n</span>, <span class="kwb">$a</span>, <span class="kwb">$d</span>, <span class="kwb">$t</span>, <span class="kwb">$u</span>) = <span class="kwc">map</span> Math::GMP-&gt;<span class="kwd">new</span>(<span class="kwb">$_</span>), (<span class="num">1</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="num">0</span>);
+
+<span class="kwa">while</span> (<span class="num">1</span>) {
+    <span class="kwb">$k</span>++;
+    <span class="kwb">$t</span> = <span class="kwb">$n</span> * <span class="num">2</span>;
+    <span class="kwb">$n</span> *= <span class="kwb">$k</span>;
+    <span class="kwb">$a</span> += <span class="kwb">$t</span>;
+    <span class="kwb">$k1</span> += <span class="num">2</span>;
+    <span class="kwb">$a</span> *= <span class="kwb">$k1</span>;
+    <span class="kwb">$d</span> *= <span class="kwb">$k1</span>;
+    <span class="kwa">if</span> (<span class="kwb">$a</span> &gt;= <span class="kwb">$n</span>) {
+        <span class="kwb">$u</span> = <span class="kwb">$n</span> * <span class="num">3</span> + <span class="kwb">$a</span>;
+        <span class="kwb">$t</span> = <span class="kwb">$u</span> / <span class="kwb">$d</span>;
+        <span class="kwb">$u</span> -= <span class="kwb">$t</span> * <span class="kwb">$d</span>;
+        <span class="kwb">$u</span> += <span class="kwb">$n</span>;
+        <span class="kwa">if</span> (<span class="kwb">$d</span> &gt; <span class="kwb">$u</span>) {
+            <span class="kwb">$ns</span> = <span class="kwb">$ns</span> * <span class="num">10</span> + <span class="kwb">$t</span>;
+            <span class="kwb">$i</span>++;
+            <span class="kwa">if</span> (<span class="kwb">$i</span> % <span class="num">10</span> == <span class="num">0</span>) {
+                <span class="kwc">printf</span> <span class="str">&quot;</span><span class="ipl">%010d</span><span class="str"></span><span class="esc">\t</span><span class="str">:</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwb">$ns</span>, <span class="kwb">$i</span>;
+                <span class="kwb">$ns</span> = <span class="num">0</span>;
+            }
+            <span class="kwa">last if</span> <span class="kwb">$i</span> &gt;= <span class="kwb">$N</span>;
+            <span class="kwb">$a</span> -= <span class="kwb">$d</span> * <span class="kwb">$t</span>;
+            <span class="kwb">$a</span> *= <span class="num">10</span>;
+            <span class="kwb">$n</span> *= <span class="num">10</span>;
+        }
+    }
+}

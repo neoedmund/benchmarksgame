@@ -1,0 +1,9 @@
+
+Thu, 17 Sep 2015 02:19:06 GMT
+
+COMMAND LINE:
+/usr/local/src/lua-5.3.0/bin/lua  fannkuchredux.lua 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

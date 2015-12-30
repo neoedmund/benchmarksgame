@@ -1,0 +1,19 @@
+
+Thu, 24 Dec 2015 02:35:14 GMT
+
+MAKE:
+/usr/local/src/swift-2.2-SNAPSHOT-2015-12-22-a-ubuntu15.10/usr/bin/swiftc spectralnorm.swift -Ounchecked -whole-module-optimization  -o spectralnorm.swift_run
+0.86s to complete and log all make actions
+
+COMMAND LINE:
+./spectralnorm.swift_run 500
+
+UNEXPECTED OUTPUT 
+
+1c1
+< ("%.9f", 1.2742241159529055)
+---
+> 1.274224116
+
+PROGRAM OUTPUT:
+("%.9f", 1.2742241159529055)

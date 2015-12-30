@@ -1,0 +1,146 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by Rick Branson</span>
+
+<span class="kwa">require</span> <span class="str">&quot;thread&quot;</span>
+
+<span class="kwa">def</span> <span class="kwd">eval_a</span>(i, j<span class="opt">)</span>
+  <span class="num">1.0</span><span class="kwc">/((i+j)*(i+j+1.0)/</span><span class="num">2.0</span>+i+<span class="num">1.0</span><span class="opt">)</span>
+<span class="kwa">end</span>
+
+<span class="kwa">class</span> Barrier  
+  <span class="kwa">def</span> <span class="kwd">initialize</span>(count<span class="opt">)</span>
+    <span class="kwb">&#64;mutex</span> = Mutex.new
+    <span class="kwb">&#64;count</span> = count
+    reset_generation
+  <span class="kwa">end</span>
+  
+  <span class="kwa">def</span> reset_generation
+    <span class="kwb">&#64;generation</span> = { :waiting =&gt; 0 }    
+  <span class="kwa">end</span>
+  
+  <span class="kwa">def</span> wait
+    generation = <span class="kwa">nil</span>
+    
+    <span class="kwb">&#64;mutex</span>.synchronize <span class="kwa">do</span>
+      generation = <span class="kwb">&#64;generation</span>
+    <span class="kwa">end</span>
+    
+    <span class="kwb">&#64;mutex</span>.synchronize <span class="kwa">do</span>
+      generation[<span class="kwc">:waiting</span>] += <span class="num">1</span>
+      
+      <span class="kwa">if</span> generation[<span class="kwc">:waiting</span>] == <span class="kwb">&#64;count</span>
+        reset_generation
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+    
+    <span class="kwa">loop do</span>
+      <span class="kwb">&#64;mutex</span>.synchronize <span class="kwa">do</span>
+        <span class="kwa">if</span> generation[<span class="kwc">:waiting</span>] == <span class="kwb">&#64;count</span>
+          <span class="kwa">return</span>
+        <span class="kwa">end</span>
+      <span class="kwa">end</span>
+      
+      Thread.pass
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">class</span> SpectralNorm
+  <span class="kwa">class</span> Worker
+    <span class="kwa">def</span> <span class="kwd">initialize</span>(sn, range<span class="opt">)</span>
+      <span class="kwb">&#64;u</span>, <span class="kwb">&#64;v</span>, <span class="kwb">&#64;mtx</span>, <span class="kwb">&#64;tmp</span>, <span class="kwb">&#64;range</span> = sn.u, sn.v, sn.mtx, sn.tmp, range
+
+      <span class="kwa">for</span> i <span class="kwa">in</span> (<span class="num">1</span>.<span class="num">.10</span><span class="opt">)</span>
+        <span class="kwd">multiply_at_av</span>(<span class="kwb">&#64;u</span>, <span class="kwb">&#64;tmp</span>, <span class="kwb">&#64;v</span><span class="opt">)</span>
+        <span class="kwd">multiply_at_av</span>(<span class="kwb">&#64;v</span>, <span class="kwb">&#64;tmp</span>, <span class="kwb">&#64;u</span><span class="opt">)</span>
+      <span class="kwa">end</span>
+      
+      <span class="kwb">&#64;vBv</span> = <span class="num">0</span>
+      <span class="kwb">&#64;vv</span>  = <span class="num">0</span>
+      
+      <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">&#64;range</span>
+        <span class="kwb">&#64;vBv</span> += <span class="kwb">&#64;u</span>[i] * <span class="kwb">&#64;v</span>[i]
+        <span class="kwb">&#64;vv</span>  += <span class="kwb">&#64;v</span>[i] * <span class="kwb">&#64;v</span>[i]
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+
+    <span class="kwa">def</span> values
+      [ <span class="kwb">&#64;vBv</span>, <span class="kwb">&#64;vv</span> ]
+    <span class="kwa">end</span>
+    
+    private
+    
+    <span class="kwa">def</span> <span class="kwd">multiply_atv</span>(v, atv<span class="opt">)</span>
+      <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">&#64;range</span>
+        sum = <span class="num">0.0</span>
+        
+        <span class="kwa">for</span> j <span class="kwa">in</span> (<span class="num">0</span> .. (v.size - <span class="num">1</span><span class="opt">))</span>
+          sum += <span class="kwd">eval_a</span>(j, i<span class="opt">)</span> * v[j]
+        <span class="kwa">end</span>
+        
+        atv[i] = sum
+      <span class="kwa">end</span>      
+    <span class="kwa">end</span>
+    
+    <span class="kwa">def</span> <span class="kwd">multiply_av</span>(v, av<span class="opt">)</span>
+      <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">&#64;range</span>
+        sum = <span class="num">0.0</span>
+        
+        <span class="kwa">for</span> j <span class="kwa">in</span> (<span class="num">0</span> .. (v.size - <span class="num">1</span><span class="opt">))</span>
+          sum += <span class="kwd">eval_a</span>(i, j<span class="opt">)</span> * v[j]
+        <span class="kwa">end</span>
+        
+        av[i] = sum
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+    
+    <span class="kwa">def</span> <span class="kwd">multiply_at_av</span>(v, tmp, at_av<span class="opt">)</span>
+      <span class="kwd">multiply_av</span>(v, tmp<span class="opt">)</span>
+      <span class="kwb">&#64;mtx</span>.wait
+      <span class="kwd">multiply_atv</span>(tmp, at_av<span class="opt">)</span>
+      <span class="kwb">&#64;mtx</span>.wait
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+  
+  attr_reader <span class="kwc">:u</span>
+  attr_reader <span class="kwc">:v</span>
+  attr_reader <span class="kwc">:tmp</span>
+  attr_reader <span class="kwc">:mtx</span>
+
+  <span class="kwa">def</span> <span class="kwd">initialize</span>(n, threads = <span class="num">4</span><span class="opt">)</span>
+    <span class="kwb">&#64;n</span>        = n
+    <span class="kwb">&#64;u</span>        = [<span class="num">1.0</span>] * n
+    <span class="kwb">&#64;v</span>        = Array.<span class="kwd">new</span>(n<span class="opt">)</span>
+    <span class="kwb">&#64;tmp</span>      = Array.<span class="kwd">new</span>(n<span class="opt">)</span>
+    <span class="kwb">&#64;threads</span>  = threads
+    <span class="kwb">&#64;mtx</span>      = Barrier.<span class="kwd">new</span>(threads<span class="opt">)</span>
+  <span class="kwa">end</span>
+  
+  <span class="kwa">def</span> run
+    vBv = <span class="num">0</span>
+    vv  = <span class="num">0</span>
+    ths = []
+    chk = <span class="kwb">&#64;n</span> / <span class="kwb">&#64;threads</span>
+    
+    <span class="kwb">&#64;threads</span>.times <span class="kwa">do</span> |i|
+      r = ((i * chk<span class="opt">)</span> .. ((i &lt; (<span class="kwb">&#64;threads</span> - <span class="num">1</span><span class="opt">)</span> ? (i * chk<span class="opt">)</span> + chk : <span class="kwb">&#64;n</span><span class="opt">)</span> - <span class="num">1</span><span class="opt">))</span>
+
+      ths &lt;&lt; Thread.new <span class="kwa">do</span>
+        Thread.current[<span class="kwc">:worker</span>] = Worker.<span class="kwd">new</span>(<span class="kwa">self</span>, r<span class="opt">)</span>
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+    
+    ths.each <span class="kwa">do</span> |t|
+      t.join
+      t_vBv, t_vv = t[<span class="kwc">:worker</span>].values
+      vBv += t_vBv
+      vv  += t_vv
+    <span class="kwa">end</span>
+    
+    Math.<span class="kwd">sqrt</span>(vBv / vv<span class="opt">)</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+print <span class="str">&quot;%0.9f&quot;</span> % SpectralNorm.<span class="kwd">new</span>(<span class="kwc">ARGV</span>[<span class="num">0</span>].to_i<span class="opt">)</span>.run, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>

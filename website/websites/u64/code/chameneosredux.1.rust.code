@@ -1,0 +1,206 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by TeXitoi</span>
+
+<span class="kwa">use self</span>::Color::{Red, Yellow, Blue};
+<span class="kwa">use</span> std::sync::mpsc::{channel, Sender, Receiver};
+<span class="kwa">use</span> std::fmt;
+<span class="kwa">use</span> std::thread::spawn;
+
+<span class="kwa">fn</span> print_complements() {
+    <span class="kwa">let</span> all = [Blue, Red, Yellow];
+    <span class="kwa">for</span> aa <span class="kwa">in</span> all.iter() {
+        <span class="kwa">for</span> bb <span class="kwa">in</span> all.iter() {
+            println!(<span class="str">&quot;{} + {} -&gt; {}&quot;</span>, *aa, *bb, transform(*aa, *bb));
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+<span class="kwa">enum</span> Color {
+    Red,
+    Yellow,
+    Blue,
+}
+
+<span class="kwa">impl</span> fmt::Display <span class="kwa">for</span> Color {
+    <span class="kwa">fn</span> fmt(&amp;<span class="kwa">self</span>, f: &amp;<span class="kwa">mut</span> fmt::Formatter) -&gt; fmt::Result {
+        <span class="kwa">let</span> str = <span class="kwa">match</span> *<span class="kwa">self</span> {
+            Red =&gt; <span class="str">&quot;red&quot;</span>,
+            Yellow =&gt; <span class="str">&quot;yellow&quot;</span>,
+            Blue =&gt; <span class="str">&quot;blue&quot;</span>,
+        };
+        write!(f, <span class="str">&quot;{}&quot;</span>, str)
+    }
+}
+
+#[derive(Clone, Copy)]
+<span class="kwa">struct</span> CreatureInfo {
+    name: usize,
+    color: Color
+}
+
+<span class="kwa">fn</span> show_color_list(set: Vec&lt;Color&gt;) -&gt; String {
+    <span class="kwa">let mut</span> out = String::new();
+    <span class="kwa">for</span> col <span class="kwa">in</span> set.iter() {
+        out.push(' ');
+        out.push_str(&amp;*format!(<span class="str">&quot;{}&quot;</span>, col));
+    }
+    out
+}
+
+<span class="kwa">fn</span> show_digit(nn: usize) -&gt; &amp;'<span class="kwa">static</span> str {
+    <span class="kwa">match</span> nn {
+        <span class="num">0</span> =&gt; {<span class="str">&quot; zero&quot;</span>}
+        <span class="num">1</span> =&gt; {<span class="str">&quot; one&quot;</span>}
+        <span class="num">2</span> =&gt; {<span class="str">&quot; two&quot;</span>}
+        <span class="num">3</span> =&gt; {<span class="str">&quot; three&quot;</span>}
+        <span class="num">4</span> =&gt; {<span class="str">&quot; four&quot;</span>}
+        <span class="num">5</span> =&gt; {<span class="str">&quot; five&quot;</span>}
+        <span class="num">6</span> =&gt; {<span class="str">&quot; six&quot;</span>}
+        <span class="num">7</span> =&gt; {<span class="str">&quot; seven&quot;</span>}
+        <span class="num">8</span> =&gt; {<span class="str">&quot; eight&quot;</span>}
+        <span class="num">9</span> =&gt; {<span class="str">&quot; nine&quot;</span>}
+        _ =&gt; {panic!(<span class="str">&quot;expected digits from 0 to 9...&quot;</span>)}
+    }
+}
+
+<span class="kwa">struct</span> Number(usize);
+<span class="kwa">impl</span> fmt::Display <span class="kwa">for</span> Number {
+    <span class="kwa">fn</span> fmt(&amp;<span class="kwa">self</span>, f: &amp;<span class="kwa">mut</span> fmt::Formatter) -&gt; fmt::Result {
+        <span class="kwa">let mut</span> out = vec![];
+        <span class="kwa">let</span> Number(<span class="kwa">mut</span> num) = *<span class="kwa">self</span>;
+        <span class="kwa">if</span> num == <span class="num">0</span> { out.push(show_digit(<span class="num">0</span>)) };
+
+        <span class="kwa">while</span> num != <span class="num">0</span> {
+            <span class="kwa">let</span> dig = num % <span class="num">10</span>;
+            num = num / <span class="num">10</span>;
+            <span class="kwa">let</span> s = show_digit(dig);
+            out.push(s);
+        }
+
+        <span class="kwa">for</span> s <span class="kwa">in</span> out.iter().rev() {
+            try!(write!(f, <span class="str">&quot;{}&quot;</span>, s))
+        }
+        Ok(())
+    }
+}
+
+<span class="kwa">fn</span> transform(aa: Color, bb: Color) -&gt; Color {
+    <span class="kwa">match</span> (aa, bb) {
+        (Red,    Red   ) =&gt; { Red    }
+        (Red,    Yellow) =&gt; { Blue   }
+        (Red,    Blue  ) =&gt; { Yellow }
+        (Yellow, Red   ) =&gt; { Blue   }
+        (Yellow, Yellow) =&gt; { Yellow }
+        (Yellow, Blue  ) =&gt; { Red    }
+        (Blue,   Red   ) =&gt; { Yellow }
+        (Blue,   Yellow) =&gt; { Red    }
+        (Blue,   Blue  ) =&gt; { Blue   }
+    }
+}
+
+<span class="kwa">fn</span> creature(
+    name: usize,
+    <span class="kwa">mut</span> color: Color,
+    from_rendezvous: Receiver&lt;CreatureInfo&gt;,
+    to_rendezvous: Sender&lt;CreatureInfo&gt;,
+    to_rendezvous_log: Sender&lt;String&gt;
+) {
+    <span class="kwa">let mut</span> creatures_met = <span class="num">0</span>i32;
+    <span class="kwa">let mut</span> evil_clones_met = <span class="num">0</span>;
+    <span class="kwa">let mut</span> rendezvous = from_rendezvous.iter();
+
+    <span class="kwa">loop</span> {
+        <span class="slc">// ask for a pairing</span>
+        to_rendezvous.send(CreatureInfo {name: name, color: color}).unwrap();
+
+        <span class="slc">// log and change, or quit</span>
+        <span class="kwa">match</span> rendezvous.next() {
+            Some(other_creature) =&gt; {
+                color = transform(color, other_creature.color);
+
+                <span class="slc">// track some statistics</span>
+                creatures_met += <span class="num">1</span>;
+                <span class="kwa">if</span> other_creature.name == name {
+                   evil_clones_met += <span class="num">1</span>;
+                }
+            }
+            None =&gt; <span class="kwa">break</span>
+        }
+    }
+    <span class="slc">// log creatures met and evil clones of self</span>
+    <span class="kwa">let</span> report = format!(<span class="str">&quot;{}{}&quot;</span>, creatures_met, Number(evil_clones_met));
+    to_rendezvous_log.send(report).unwrap();
+}
+
+<span class="kwa">fn</span> rendezvous(nn: usize, set: Vec&lt;Color&gt;) {
+    <span class="slc">// these ports will allow us to hear from the creatures</span>
+    <span class="kwa">let</span> (to_rendezvous, from_creatures) = channel::&lt;CreatureInfo&gt;();
+
+    <span class="slc">// these channels will be passed to the creatures so they can talk to us</span>
+    <span class="kwa">let</span> (to_rendezvous_log, from_creatures_log) = channel::&lt;String&gt;();
+
+    <span class="slc">// these channels will allow us to talk to each creature by 'name'/index</span>
+    <span class="kwa">let</span> to_creature: Vec&lt;Sender&lt;CreatureInfo&gt;&gt; =
+        set.iter().enumerate().map(|(ii, &amp;col)| {
+            <span class="slc">// create each creature as a listener with a port, and</span>
+            <span class="slc">// give us a channel to talk to each</span>
+            <span class="kwa">let</span> to_rendezvous = to_rendezvous.clone();
+            <span class="kwa">let</span> to_rendezvous_log = to_rendezvous_log.clone();
+            <span class="kwa">let</span> (to_creature, from_rendezvous) = channel();
+            spawn(<span class="kwa">move</span>|| {
+                creature(ii,
+                         col,
+                         from_rendezvous,
+                         to_rendezvous,
+                         to_rendezvous_log);
+            });
+            to_creature
+        }).collect();
+
+    <span class="kwa">let mut</span> creatures_met = <span class="num">0</span>;
+
+    <span class="slc">// set up meetings...</span>
+    <span class="kwa">for</span> _ <span class="kwa">in</span> (<span class="num">0</span>..nn) {
+        <span class="kwa">let</span> fst_creature = from_creatures.recv().unwrap();
+        <span class="kwa">let</span> snd_creature = from_creatures.recv().unwrap();
+
+        creatures_met += <span class="num">2</span>;
+
+        to_creature[fst_creature.name].send(snd_creature).unwrap();
+        to_creature[snd_creature.name].send(fst_creature).unwrap();
+    }
+
+    <span class="slc">// tell each creature to stop</span>
+    drop(to_creature);
+
+    <span class="slc">// print each color in the set</span>
+    println!(<span class="str">&quot;{}&quot;</span>, show_color_list(set));
+
+    <span class="slc">// print each creature's stats</span>
+    drop(to_rendezvous_log);
+    <span class="kwa">for</span> rep <span class="kwa">in</span> from_creatures_log.iter() {
+        println!(<span class="str">&quot;{}&quot;</span>, rep);
+    }
+
+    <span class="slc">// print the total number of creatures met</span>
+    println!(<span class="str">&quot;{}</span><span class="esc">\n</span><span class="str">&quot;</span>, Number(creatures_met));
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> nn = std::env::args_os().nth(<span class="num">1</span>)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">600</span>);
+
+    print_complements();
+    println!(<span class="str">&quot;&quot;</span>);
+
+    rendezvous(nn, vec!(Blue, Red, Yellow));
+
+    rendezvous(nn,
+        vec!(Blue, Red, Yellow, Red, Yellow, Blue, Red, Yellow, Red, Blue));
+}

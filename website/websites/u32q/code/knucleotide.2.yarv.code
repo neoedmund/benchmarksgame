@@ -1,0 +1,44 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by jose fco. gonzalez</span>
+<span class="slc"># modified by Sokolov Yura</span>
+
+seq = String.new
+
+<span class="kwa">def</span> <span class="kwd">frecuency</span>( seq,length <span class="opt">)</span>
+    n, table = seq.length - length + <span class="num">1</span>, Hash.<span class="kwd">new</span>(<span class="num">0</span><span class="opt">)</span>
+    f, i = <span class="kwa">nil</span>, <span class="kwa">nil</span>
+    (<span class="num">0</span> ... length<span class="opt">)</span>.each <span class="kwa">do</span> |f|
+        (f ... n<span class="opt">)</span>.<span class="kwd">step</span>(length<span class="opt">)</span> <span class="kwa">do</span> |i|
+            table[seq[i,length]] += <span class="num">1</span>
+        <span class="kwa">end</span>
+    <span class="kwa">end</span>
+    [n,table]
+
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">sort_by_freq</span>( seq,length <span class="opt">)</span>
+    n,table = <span class="kwd">frecuency</span>( seq,length <span class="opt">)</span>
+    a, b, v = <span class="kwa">nil</span>, <span class="kwa">nil</span>, <span class="kwa">nil</span>
+    table.sort{|a,b| b[1] &lt;=&gt; a[1]}.each <span class="kwa">do</span> |v|
+        puts <span class="str">&quot;%s %.3f&quot;</span> % [v[<span class="num">0</span>].upcase,((v[<span class="num">1</span>]*<span class="num">100</span><span class="opt">)</span>.to_f/n<span class="opt">)</span>]
+    <span class="kwa">end</span>
+    puts
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">find_seq</span>( seq,s <span class="opt">)</span>
+    n,table = <span class="kwd">frecuency</span>( seq,s.length <span class="opt">)</span>
+    puts <span class="str">&quot;</span><span class="ipl">#{table[s].to_s}</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">#{s.upcase}</span><span class="str">&quot;</span>
+<span class="kwa">end</span>
+
+line = <span class="kwc">STDIN</span>.gets <span class="kwa">while</span> line !~ <span class="kwc">/^&gt;THREE/</span>
+line = <span class="kwc">STDIN</span>.gets
+<span class="kwa">while</span> (line !~ <span class="kwc">/^&gt;/</span><span class="opt">)</span> &amp; line <span class="kwa">do</span>
+    seq &lt;&lt; line.chomp
+    line = <span class="kwc">STDIN</span>.gets
+<span class="kwa">end</span>
+
+[<span class="num">1</span>,<span class="num">2</span>].each {|i| sort_by_freq( seq,i ) }
+
+%<span class="kwd">w</span>(ggt ggta ggtatt ggtattttaatt ggtattttaatttatagt<span class="opt">)</span>.each{|s| find_seq( seq,s) }

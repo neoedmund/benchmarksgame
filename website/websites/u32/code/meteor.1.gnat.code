@@ -1,0 +1,1145 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">-- Translation of the C++ version of Ben St. John</span>
+<span class="slc">-- by Francois Fabien (novembre 2011)</span>
+<span class="slc">--  + addition of the incomplete search of solutions.</span>
+<span class="slc">--</span>
+<span class="slc">-- Expected build command:</span>
+<span class="slc">-- gnatchop -w meteor.gnat</span>
+<span class="slc">-- gnatmake  -O3 -gnatp -gnatn -f meteor.adb -o meteor.gnat_run -largs -s</span>
+<span class="slc">------------------------------------------------------------------------------</span>
+<span class="kwa">with</span> Ada.Unchecked_Conversion;
+<span class="kwa">with</span> Interfaces; <span class="kwa">use</span> Interfaces;
+
+<span class="kwa">package</span> Meteors <span class="kwa">is</span>
+
+   N_COL : <span class="kwa">constant</span> := <span class="num">5</span>;
+   N_ROW : <span class="kwa">constant</span> := <span class="num">10</span>;
+
+   N_ELEM : <span class="kwa">constant</span> := <span class="num">5</span>;
+   N_PIECE_TYPE : <span class="kwa">constant</span> := <span class="num">10</span>;
+   <span class="kwa">type</span> Ext_Piecenr <span class="kwa">is range</span> <span class="num">0</span> .. N_PIECE_TYPE;
+   <span class="kwa">for</span> Ext_Piecenr<span class="kwd">'Size</span> <span class="kwa">use</span> <span class="num">8</span>;
+
+   No_Piece : <span class="kwa">constant</span> Ext_Piecenr := N_PIECE_TYPE;
+
+   <span class="kwa">subtype</span> Piecenr <span class="kwa">is</span> Ext_Piecenr <span class="kwa">range</span> <span class="num">0</span> .. N_PIECE_TYPE - <span class="num">1</span>;
+
+   N_ORIENT : <span class="kwa">constant</span> := <span class="num">12</span>;
+   <span class="kwa">type</span> ExtOrientation <span class="kwa">is range</span> -<span class="num">1</span> .. N_ORIENT - <span class="num">1</span>;
+   <span class="kwa">for</span> ExtOrientation<span class="kwd">'Size</span> <span class="kwa">use</span> <span class="num">8</span>;
+   <span class="kwa">subtype</span> Orientation <span class="kwa">is</span> ExtOrientation <span class="kwa">range</span> <span class="num">0</span> .. N_ORIENT - <span class="num">1</span>;
+
+   <span class="kwa">type</span> Trow <span class="kwa">is range</span> <span class="num">0</span> .. N_ROW - <span class="num">1</span>;
+   <span class="kwa">for</span> Trow<span class="kwd">'Size</span> <span class="kwa">use</span> <span class="num">8</span>;
+   <span class="kwa">type</span> Tcol <span class="kwa">is range</span> <span class="num">0</span> .. N_COL - <span class="num">1</span>;
+   <span class="kwa">for</span> Tcol<span class="kwd">'Size</span> <span class="kwa">use</span> <span class="num">8</span>;
+
+   <span class="kwa">type</span> Parity <span class="kwa">is</span> (Even, Odd);
+   <span class="kwa">for</span> Parity<span class="kwd">'Size</span> <span class="kwa">use</span> <span class="num">8</span>;
+   <span class="kwa">for</span> Parity <span class="kwa">use</span> (Even =&gt; <span class="num">0</span>, Odd =&gt; <span class="num">1</span>);
+
+   <span class="slc">-- warning =&gt; First row is Trow = 0 and is even</span>
+   <span class="kwa">function</span> Row_Parity (R : Trow) <span class="kwa">return</span> Parity;
+   <span class="kwa">pragma</span> Inline_Always(Row_Parity);
+   <span class="kwa">function</span> Parity_to_Row <span class="kwa">is new</span> Ada.Unchecked_Conversion (Parity, Trow);
+
+
+   <span class="kwa">type</span> TElement <span class="kwa">is range</span> <span class="num">0</span> .. N_ELEM - <span class="num">1</span>;
+   <span class="kwa">for</span> TElement<span class="kwd">'Size</span> <span class="kwa">use</span> <span class="num">8</span>;
+
+   <span class="kwa">type</span> Dimensions <span class="kwa">is</span> (dimx, dimy);
+   <span class="slc">-- Coordinates of the points of a given element</span>
+   <span class="kwa">type</span> TPts <span class="kwa">is array</span> (TElement, Dimensions) <span class="kwa">of</span> Integer_8;
+
+   <span class="kwa">type</span> BitVecs <span class="kwa">is new</span> Unsigned_32;
+
+   <span class="kwa">function</span> toBitVector (pts : TPts) <span class="kwa">return</span> BitVecs;
+   <span class="kwa">pragma</span> Inline(ToBitVector);
+   <span class="kwa">function</span> setCoordList (vec : <span class="kwa">in</span> BitVecs) <span class="kwa">return</span> TPts;
+
+
+   <span class="kwa">function</span> Get_First_One
+     (V        : BitVecs;
+      Startpos : <span class="kwb">Natural</span> := <span class="num">0</span>)
+      <span class="kwa">return</span>     <span class="kwb">Natural</span>;
+   <span class="kwa">pragma</span> Inline(Get_First_One);
+
+   S_FirstOne : <span class="kwa">constant array</span> (<span class="num">0</span> .. <span class="num">31</span>) <span class="kwa">of</span> <span class="kwb">Natural</span> := (
+   <span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">3</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,
+   <span class="num">4</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">3</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>);
+<span class="kwa">end</span> Meteors;
+<span class="slc">------------------------------------------------------------------------------</span>
+
+<span class="kwa">package body</span> Meteors <span class="kwa">is</span>
+
+   <span class="kwa">function</span> Row_Parity (R : Trow) <span class="kwa">return</span> Parity <span class="kwa">is</span>
+      <span class="kwa">function</span> Unsigned_To_Parity <span class="kwa">is new</span> Ada.Unchecked_Conversion (
+         Unsigned_8,
+         Parity);
+   <span class="kwa">begin</span>
+      <span class="kwa">return</span> Unsigned_To_Parity (Unsigned_8 (R) <span class="kwa">and</span> <span class="num">1</span>);
+   <span class="kwa">end</span> Row_Parity;
+
+   <span class="kwa">function</span> toBitVector (pts : TPts) <span class="kwa">return</span> BitVecs <span class="kwa">is</span>
+      Result : BitVecs := <span class="num">0</span>;
+      x, y   : Integer_8;
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> Element <span class="kwa">in</span> TElement<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         x      := pts (Element, dimx);
+         y      := pts (Element, dimy);
+         Result := Result <span class="kwa">or</span> Shift_Left (<span class="num">1</span>, <span class="kwb">Natural</span> (y * N_COL + x));
+      <span class="kwa">end loop</span>;
+      <span class="kwa">return</span> Result;
+   <span class="kwa">end</span> toBitVector;
+
+   <span class="kwa">function</span> setCoordList (vec : <span class="kwa">in</span> BitVecs) <span class="kwa">return</span> TPts <span class="kwa">is</span>
+      iPt  : TElement := <span class="num">0</span>;
+      Mask : BitVecs  := <span class="num">1</span>;
+      Pts  : TPts;
+
+   <span class="kwa">begin</span>
+
+      Outer : <span class="kwa">for</span> y <span class="kwa">in</span> Trow<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         <span class="kwa">for</span> x <span class="kwa">in</span> Tcol<span class="kwd">'Range</span> <span class="kwa">loop</span>
+            <span class="kwa">if</span> ((Mask <span class="kwa">and</span> vec) /= <span class="num">0</span>) <span class="kwa">then</span>
+               Pts (iPt, dimx) := Integer_8 (x);
+               Pts (iPt, dimy) := Integer_8 (y);
+               <span class="kwa">exit</span> Outer <span class="kwa">when</span> iPt = TElement<span class="kwd">'Last</span>;
+               iPt := iPt + <span class="num">1</span>;
+            <span class="kwa">end if</span>;
+            Mask := Shift_Left (Mask, <span class="num">1</span>);
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end loop</span> Outer;
+      <span class="kwa">return</span> Pts;
+   <span class="kwa">end</span> setCoordList;
+
+   <span class="kwa">function</span> Get_First_One
+     (V        : BitVecs;
+      Startpos : <span class="kwb">Natural</span> := <span class="num">0</span>)
+      <span class="kwa">return</span>     <span class="kwb">Natural</span>
+   <span class="kwa">is</span>
+      IPos              : <span class="kwb">Natural</span> := Startpos;
+      mask              : BitVecs;
+      Result, Resultlow : BitVecs;
+   <span class="kwa">begin</span>
+      <span class="kwa">if</span> V = <span class="num">0</span> <span class="kwa">then</span>
+         <span class="kwa">return</span> <span class="num">0</span>;
+      <span class="kwa">end if</span>;
+
+      mask := Shift_Left (<span class="num">16</span>#ff#, Startpos);
+      <span class="kwa">while</span> (mask <span class="kwa">and</span> V) = <span class="num">0</span> <span class="kwa">loop</span>
+         mask := Shift_Left (mask, <span class="num">8</span>);
+         IPos := IPos + <span class="num">8</span>;
+      <span class="kwa">end loop</span>;
+
+      Result    := Shift_Right (mask <span class="kwa">and</span> V, IPos);
+      Resultlow := Result <span class="kwa">and</span> <span class="num">16</span>#<span class="num">0</span>f#;
+      <span class="kwa">if</span> Resultlow /= <span class="num">0</span> <span class="kwa">then</span>
+         IPos := IPos + S_FirstOne (<span class="kwb">Integer</span> (Resultlow));
+      <span class="kwa">else</span>
+         IPos := IPos + <span class="num">4</span> + S_FirstOne (<span class="kwb">Integer</span> (Shift_Right (Result, <span class="num">4</span>)));
+      <span class="kwa">end if</span>;
+      <span class="kwa">return</span> IPos;
+   <span class="kwa">end</span> Get_First_One;
+
+<span class="kwa">end</span> Meteors;
+<span class="slc">------------------------------------------------------------------------------</span>
+<span class="slc">--   Operations On Pieces</span>
+<span class="slc">------------------------------------------------------------------------------</span>
+<span class="kwa">package</span> Meteors.Pieces <span class="kwa">is</span>
+
+   SKIP_PIECE : <span class="kwa">constant</span> := <span class="num">5</span>;
+   <span class="kwa">type</span> Instance <span class="kwa">is record</span>
+      m_allowed : Unsigned_64 :=<span class="num">0</span>;
+      m_vec     : BitVecs     :=<span class="num">0</span>;
+      m_offset  : Integer_8   :=<span class="num">0</span>;
+   <span class="kwa">end record</span>;
+
+   <span class="kwa">type</span> M_Instance_Type <span class="kwa">is array</span> (Parity) <span class="kwa">of</span> Instance;
+
+   <span class="kwa">type</span> Piece <span class="kwa">is record</span>
+      m_instance : M_Instance_Type;
+   <span class="kwa">end record</span>;
+
+   s_basePiece : <span class="kwa">array</span> (Piecenr, Orientation) <span class="kwa">of</span> Piece;
+
+   BaseVecs : <span class="kwa">constant array</span> (Piecenr) <span class="kwa">of</span> BitVecs :=
+     (<span class="num">16</span>#<span class="num">10</span>f#, <span class="num">16</span>#<span class="num">0</span>cb#,  <span class="num">16</span>#<span class="num">1087</span>#, <span class="num">16</span>#<span class="num">427</span>#, <span class="num">16</span>#<span class="num">465</span>#,
+      <span class="num">16</span>#<span class="num">0</span>c7#, <span class="num">16</span>#<span class="num">8423</span>#, <span class="num">16</span>#<span class="num">0</span>a7#,  <span class="num">16</span>#<span class="num">187</span>#, <span class="num">16</span>#<span class="num">08</span>f#);
+
+   <span class="kwa">function</span> getPiece
+     (IPiece  : Piecenr;
+      iOrient : Orientation;
+      iParity : Parity)
+      <span class="kwa">return</span>    Instance;
+
+   <span class="kwa">procedure</span> gen_orientation
+     (vec     : BitVecs;
+      iOrient : Orientation;
+      target  : <span class="kwa">in out</span> Piece);
+   <span class="kwa">procedure</span> shiftUpLines (pts : <span class="kwa">in out</span> TPts; shift : Integer_8);
+   <span class="kwa">procedure</span> shiftToX0
+     (pts       : <span class="kwa">in out</span> TPts;
+      Inst      : <span class="kwa">in out</span> Instance;
+      Offsetrow : Integer_8;
+      W         : <span class="kwa">out</span> Integer_8);
+   <span class="kwa">procedure</span> Set_Ok_Positions
+     (Self  : <span class="kwa">in out</span> Piece;
+      isOdd : Parity;
+      W, H  : Integer_8);
+   <span class="kwa">procedure</span> Gen_All_Orientations;
+
+   <span class="kwa">type</span> NPieces_Type <span class="kwa">is array</span> (Piecenr) <span class="kwa">of</span> ExtOrientation;
+   <span class="kwa">type</span> PieceVec_Type <span class="kwa">is array</span> (Piecenr, Orientation) <span class="kwa">of</span> BitVecs;
+
+   <span class="kwa">type</span> OkPieces <span class="kwa">is record</span>
+      nPieces  : NPieces_Type  := (<span class="kwa">others</span> =&gt; -<span class="num">1</span>); <span class="slc">-- -1 for empty piecevec</span>
+      pieceVec : PieceVec_Type := (<span class="kwa">others</span> =&gt; (<span class="kwa">others</span> =&gt; <span class="num">0</span>));
+   <span class="kwa">end record</span>;
+
+   g_okPieces        : <span class="kwa">array</span> (Trow, Tcol) <span class="kwa">of</span> OkPieces;
+
+<span class="kwa">end</span> Meteors.Pieces;
+<span class="slc">------------------------------------------------------------------------------</span>
+<span class="kwa">with</span> Meteors.Board; <span class="kwa">use</span> Meteors.Board;
+<span class="kwa">package body</span> Meteors.Pieces <span class="kwa">is</span>
+
+   <span class="kwa">function</span> floor (top, bottom : Integer_8) <span class="kwa">return</span> Integer_8 <span class="kwa">is</span>
+      toZero : Integer_8;
+   <span class="kwa">begin</span>
+      toZero := top / bottom;
+      <span class="slc">--  negative numbers should be rounded down, not towards zero</span>
+      <span class="kwa">if</span> (toZero * bottom /= top) <span class="kwa">and</span> ((top &lt; <span class="num">0</span>) <span class="kwa">xor</span> (bottom &lt;= <span class="num">0</span>)) <span class="kwa">then</span>
+         toZero := toZero - <span class="num">1</span>;
+      <span class="kwa">end if</span>;
+      <span class="kwa">return</span> toZero;
+   <span class="kwa">end</span> floor;
+
+   <span class="kwa">function</span> getPiece
+     (IPiece  : Piecenr;
+      iOrient : Orientation;
+      iParity : Parity)
+      <span class="kwa">return</span>    Instance
+   <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">return</span> s_basePiece (IPiece, iOrient).m_instance (iParity);
+   <span class="kwa">end</span> getPiece;
+   <span class="kwa">pragma</span> Inline (getPiece);
+
+   <span class="kwa">procedure</span> gen_orientation
+     (vec     : BitVecs;
+      iOrient : Orientation;
+      target  : <span class="kwa">in out</span> Piece)
+   <span class="kwa">is</span>
+      pts        : TPts;
+      X, Y       : Integer_8;
+      H, W       : Integer_8;
+      Ymin, Ymax : Integer_8;
+      rot        : Orientation;
+      Even_inst  : Instance <span class="kwa">renames</span> target.m_instance (Even);
+      Odd_inst   : Instance <span class="kwa">renames</span> target.m_instance (Odd);
+   <span class="kwa">begin</span>
+      <span class="slc">--  get (x,y) coordinates</span>
+      pts := setCoordList (vec);
+
+      <span class="slc">-- flip</span>
+      <span class="kwa">if</span> (iOrient &gt;= <span class="num">6</span>) <span class="kwa">then</span>
+         <span class="kwa">for</span> iPt <span class="kwa">in</span> TElement<span class="kwd">'Range</span> <span class="kwa">loop</span>
+            pts (iPt, dimy) := -pts (iPt, dimy);
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end if</span>;
+
+      <span class="slc">--  rotate as necessary</span>
+      rot := iOrient <span class="kwa">mod</span> <span class="num">6</span>;
+      <span class="kwa">while</span> rot &gt; <span class="num">0</span> <span class="kwa">loop</span>
+
+         <span class="kwa">for</span> iPt <span class="kwa">in</span> TElement<span class="kwd">'Range</span> <span class="kwa">loop</span>
+            X := pts (iPt, dimx);
+            Y := pts (iPt, dimy);
+
+            <span class="slc">--  I just worked this out by hand. Took a while.</span>
+            pts (iPt, dimx) := floor ((<span class="num">2</span> * X - <span class="num">3</span> * Y + <span class="num">1</span>), <span class="num">4</span>);
+            pts (iPt, dimy) := floor ((<span class="num">2</span> * X + Y + <span class="num">1</span>), <span class="num">2</span>);
+         <span class="kwa">end loop</span>;
+         rot := rot - <span class="num">1</span>;
+      <span class="kwa">end loop</span>;
+
+      <span class="slc">--  determine vertical shift</span>
+      Ymin := pts (<span class="num">0</span>, dimy);
+      Ymax := Ymin;
+      <span class="kwa">for</span> iPt <span class="kwa">in</span> TElement<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         Y := pts (iPt, dimy);
+
+         <span class="kwa">if</span> Y &lt; Ymin <span class="kwa">then</span>
+            Ymin := Y;
+         <span class="kwa">elsif</span> Y &gt; Ymax <span class="kwa">then</span>
+            Ymax := Y;
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+      H := Ymax - Ymin;
+
+      shiftUpLines (pts, Ymin);
+      shiftToX0 (pts, Even_inst, <span class="num">0</span>, W);
+      Set_Ok_Positions (target, Even, W, H);
+      Even_inst.m_vec :=
+         Shift_Right (Even_inst.m_vec, <span class="kwb">Natural</span> (Even_inst.m_offset));
+
+      <span class="slc">-- shift down one line</span>
+      shiftUpLines (pts, -<span class="num">1</span>);
+      shiftToX0 (pts, Odd_inst, <span class="num">1</span>, W);
+
+      <span class="slc">-- shift the bitmask back one line</span>
+      Odd_inst.m_vec := Shift_Right (Odd_inst.m_vec, N_COL);
+      Set_Ok_Positions (target, Odd, W, H);
+      Odd_inst.m_vec :=
+         Shift_Right (Odd_inst.m_vec, <span class="kwb">Natural</span> (Odd_inst.m_offset));
+   <span class="kwa">end</span> gen_orientation;
+
+   <span class="kwa">procedure</span> shiftUpLines (pts : <span class="kwa">in out</span> TPts; shift : Integer_8) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="slc">--  vertical shifts have a twist if shift is odd and Y is odd</span>
+      <span class="kwa">for</span> iPt <span class="kwa">in</span> TElement<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         <span class="kwa">if</span> (shift <span class="kwa">mod</span> <span class="num">2</span> = <span class="num">1</span>) <span class="kwa">and</span> (pts (iPt, dimy) <span class="kwa">mod</span> <span class="num">2</span>) = <span class="num">1</span> <span class="kwa">then</span>
+            pts (iPt, dimx) := pts (iPt, dimx) + <span class="num">1</span>;
+         <span class="kwa">end if</span>;
+         pts (iPt, dimy) := pts (iPt, dimy) - shift;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> shiftUpLines;
+
+   <span class="kwa">procedure</span> shiftToX0
+     (pts       : <span class="kwa">in out</span> TPts;
+      Inst      : <span class="kwa">in out</span> Instance;
+      Offsetrow : Integer_8;
+      W         : <span class="kwa">out</span> Integer_8)
+   <span class="kwa">is</span>
+      x          : Integer_8;
+      Offset     : Integer_8;
+      Xmin, Xmax : Integer_8 := pts (<span class="num">0</span>, dimx);
+   <span class="kwa">begin</span>
+      <span class="slc">--determine shift</span>
+      <span class="kwa">for</span> iPt <span class="kwa">in</span> <span class="num">1</span> .. TElement<span class="kwd">'Last</span> <span class="kwa">loop</span>
+         x := pts (iPt, dimx);
+         <span class="kwa">if</span> x &lt; Xmin <span class="kwa">then</span>
+            Xmin := x;
+         <span class="kwa">elsif</span> x &gt; Xmax <span class="kwa">then</span>
+            Xmax := x;
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+
+      Offset := N_ELEM;
+      <span class="kwa">for</span> iPt <span class="kwa">in</span> TElement<span class="kwd">'Range</span> <span class="kwa">loop</span>
+
+         pts (iPt, dimx) := pts (iPt, dimx) - Xmin;
+         <span class="slc">--  check offset -- leftmost cell on top line</span>
+         <span class="kwa">if</span> (pts (iPt, dimy) = Offsetrow) <span class="kwa">and</span>
+            (pts (iPt, dimx) &lt; Offset)
+         <span class="kwa">then</span>
+            Offset := pts (iPt, dimx);
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+
+      Inst.m_offset := Offset;
+      Inst.m_vec    := toBitVector (pts);
+      W             := Xmax - Xmin;
+   <span class="kwa">end</span> shiftToX0;
+
+   <span class="kwa">procedure</span> Set_Ok_Positions
+     (Self  : <span class="kwa">in out</span> Piece;
+      isOdd : Parity;
+      W, H  : Integer_8)
+   <span class="kwa">is</span>
+      Y        : Integer_8;
+      Inst     : Instance <span class="kwa">renames</span> Self.m_instance (isOdd);
+      PosMask  : Unsigned_64 :=
+         Shift_Left (<span class="num">1</span>, N_COL * <span class="kwb">Natural</span> (Parity_to_Row (isOdd)));
+      PieceVec : BitVecs;
+   <span class="kwa">begin</span>
+      Inst.m_allowed := <span class="num">0</span>;
+
+      Y := Integer_8 (Parity_to_Row (isOdd));
+      <span class="kwa">while</span> Y &lt; N_ROW - H <span class="kwa">loop</span>
+
+         <span class="kwa">if</span> Inst.m_offset /= <span class="num">0</span> <span class="kwa">then</span>
+            PosMask := Shift_Left (PosMask, <span class="kwb">Natural</span> (Inst.m_offset));
+         <span class="kwa">end if</span>;
+
+         <span class="kwa">for</span> Xpos <span class="kwa">in</span> <span class="num">0</span> .. (N_COL - <span class="num">1</span> - Inst.m_offset) <span class="kwa">loop</span>
+            <span class="slc">--  check if the new position is on the board</span>
+
+            <span class="kwa">if</span> Xpos &lt; (N_COL - W) <span class="kwa">then</span>
+               <span class="slc">--move it to the desired location</span>
+               PieceVec := Shift_Left (Inst.m_vec, <span class="kwb">Natural</span> (Xpos));
+               <span class="kwa">if not</span> Has_Bad_Islands_Single (PieceVec, Trow (Y)) <span class="kwa">then</span>
+                  <span class="slc">-- position is allowed</span>
+                  Inst.m_allowed := Inst.m_allowed <span class="kwa">or</span> PosMask;
+               <span class="kwa">end if</span>;
+            <span class="kwa">end if</span>;
+            PosMask := Shift_Left (PosMask, <span class="num">1</span>);
+         <span class="kwa">end loop</span>;
+
+         <span class="kwa">exit when</span> (Y &gt; N_ROW - <span class="num">3</span>);
+         Y       := Y + <span class="num">2</span>;
+         PosMask := Shift_Left (PosMask, N_COL);
+      <span class="kwa">end loop</span>;
+
+   <span class="kwa">end</span> Set_Ok_Positions;
+
+   <span class="kwa">procedure</span> Gen_All_Orientations <span class="kwa">is</span>
+      refpiece  : BitVecs;
+      n, npiece : Unsigned_8 := <span class="num">0</span>;
+      Mask      : Unsigned_64;
+      Inst      : Instance;
+   <span class="kwa">begin</span>
+      <span class="slc">-- Filling s_basePiece</span>
+      <span class="kwa">for</span> iPiece <span class="kwa">in</span> Piecenr<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         refpiece := BaseVecs (iPiece);
+         <span class="kwa">for</span> iOrient <span class="kwa">in</span> Orientation<span class="kwd">'Range</span> <span class="kwa">loop</span>
+            <span class="kwa">declare</span>
+               P : Piece <span class="kwa">renames</span> s_basePiece (iPiece, iOrient);
+            <span class="kwa">begin</span>
+               gen_orientation (refpiece, iOrient, P);
+               <span class="kwa">if</span> (iPiece = SKIP_PIECE) <span class="kwa">and</span>
+                  ((Unsigned_8 (iOrient / <span class="num">3</span>) <span class="kwa">and</span> <span class="num">1</span>) /= <span class="num">0</span>)
+               <span class="kwa">then</span>
+                  P.m_instance (Even).m_allowed := <span class="num">0</span>;
+                  P.m_instance (Odd).m_allowed  := <span class="num">0</span>;
+               <span class="kwa">end if</span>;
+            <span class="kwa">end</span>;
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end loop</span>;
+
+      <span class="slc">-- Filling array g_okPieces</span>
+      <span class="kwa">for</span> iPiece <span class="kwa">in</span> Piecenr<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         <span class="kwa">for</span> iOrient <span class="kwa">in</span> Orientation<span class="kwd">'Range</span> <span class="kwa">loop</span>
+
+            Mask := <span class="num">1</span>;
+            <span class="kwa">for</span> iRow <span class="kwa">in</span> Trow<span class="kwd">'Range</span> <span class="kwa">loop</span>
+               Inst := getPiece (iPiece, iOrient, Row_Parity (iRow));
+               <span class="kwa">for</span> iCol <span class="kwa">in</span> Tcol<span class="kwd">'Range</span> <span class="kwa">loop</span>
+                  <span class="kwa">declare</span>
+                     Allowed : OkPieces <span class="kwa">renames</span> g_okPieces (iRow, iCol);
+                     nPiece  : ExtOrientation <span class="kwa">renames</span> Allowed.nPieces (iPiece);
+                  <span class="kwa">begin</span>
+                     <span class="kwa">if</span> ((Inst.m_allowed <span class="kwa">and</span> Mask) /= <span class="num">0</span>) <span class="kwa">then</span>
+                        nPiece                            := nPiece + <span class="num">1</span>;
+                        Allowed.pieceVec (iPiece, nPiece) :=
+                           Shift_Left (Inst.m_vec, <span class="kwb">Natural</span> (iCol));
+                     <span class="kwa">end if</span>;
+                  <span class="kwa">end</span>;
+                  Mask := Shift_Left (Mask, <span class="num">1</span>);
+               <span class="kwa">end loop</span>;
+            <span class="kwa">end loop</span>;
+
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Gen_All_Orientations;
+
+<span class="kwa">end</span> Meteors.Pieces;
+<span class="slc">------------------------------------------------------------------------------</span>
+<span class="slc">--   Operations On Board</span>
+<span class="slc">------------------------------------------------------------------------------</span>
+<span class="kwa">with</span> Meteors.Pieces;   <span class="kwa">use</span> Meteors.Pieces;
+<span class="kwa">with</span> Meteors.Solution; <span class="kwa">use</span> Meteors.Solution;
+
+<span class="kwa">package</span> Meteors.Board <span class="kwa">is</span>
+
+   L_EDGE_MASK : <span class="kwa">constant</span> BitVecs :=
+      <span class="num">2</span>#<span class="num">0100</span>_0010_0001_0000_1000_0100_0010_0001#;
+   R_EDGE_MASK : <span class="kwa">constant</span> BitVecs := Shift_Left (L_EDGE_MASK, <span class="num">4</span>);
+   TOP_ROW     : <span class="kwa">constant</span> BitVecs := Shift_Left (<span class="num">1</span>, N_COL) - <span class="num">1</span>;
+   ROW_0_MASK  : <span class="kwa">constant</span> BitVecs :=
+      TOP_ROW <span class="kwa">or</span>
+      Shift_Left (TOP_ROW, <span class="num">10</span>) <span class="kwa">or</span>
+      Shift_Left (TOP_ROW, <span class="num">20</span>) <span class="kwa">or</span>
+      Shift_Left (TOP_ROW, <span class="num">30</span>);
+   ROW_1_MASK  : <span class="kwa">constant</span> BitVecs := Shift_Left (ROW_0_MASK, <span class="num">5</span>);
+   BOARD_MASK  : <span class="kwa">constant</span> BitVecs := Shift_Left (<span class="num">1</span>, <span class="num">30</span>) - <span class="num">1</span>;
+   LAST_ROW    : <span class="kwa">constant</span> BitVecs := Shift_Left (TOP_ROW, <span class="num">5</span> * N_COL);
+
+   <span class="kwa">type</span> Goodbad <span class="kwa">is</span> (Good, Bad, Always_Bad);
+
+   <span class="kwa">type</span> Fixed <span class="kwa">is</span> (Open, Closed);
+
+   <span class="kwa">type</span> Has_Bad_Array <span class="kwa">is array</span> (Fixed, Parity) <span class="kwa">of</span> BitVecs;
+   <span class="kwa">type</span> Is_Known_Array <span class="kwa">is array</span> (Fixed, Parity) <span class="kwa">of</span> BitVecs;
+   <span class="kwa">type</span> AlwaysBad_Array <span class="kwa">is array</span> (Parity) <span class="kwa">of</span> BitVecs;
+
+   <span class="kwa">type</span> islandinfo <span class="kwa">is record</span>
+      has_bad   : Has_Bad_Array   := (<span class="kwa">others</span> =&gt; (<span class="kwa">others</span> =&gt; <span class="num">0</span>));
+      is_known  : Is_Known_Array  := (<span class="kwa">others</span> =&gt; (<span class="kwa">others</span> =&gt; <span class="num">0</span>));
+      alwaysBad : AlwaysBad_Array := (<span class="kwa">others</span> =&gt; <span class="num">0</span>);
+   <span class="kwa">end record</span>;
+
+   MAX_ISLAND_OFFSET : <span class="kwa">constant</span> := <span class="num">1024</span>;
+   g_islandInfo      : <span class="kwa">array</span> (<span class="num">0</span> .. MAX_ISLAND_OFFSET - <span class="num">1</span>) <span class="kwa">of</span> islandinfo;
+
+   <span class="kwa">procedure</span> badregion
+     (to_fill : <span class="kwa">in out</span> BitVecs;
+      rnew    : BitVecs;
+      Isbad   : <span class="kwa">out</span> <span class="kwb">Boolean</span>);
+
+   <span class="kwa">function</span> Has_Bad_Islands (boardVec : BitVecs; row : Trow) <span class="kwa">return</span> Goodbad;
+
+   <span class="kwa">function</span> Calc_Bad_Islands
+     (boardVec : BitVecs;
+      row      : Trow)
+      <span class="kwa">return</span>     Goodbad;
+
+   <span class="kwa">procedure</span> Calc_Always_Bad;
+
+   <span class="kwa">function</span> Has_Bad_Islands_Single
+     (boardVec : BitVecs;
+      row      : Trow)
+      <span class="kwa">return</span>     <span class="kwb">Boolean</span>;
+
+   <span class="kwa">procedure</span> Gen_All_Solutions
+     (boardVec     : BitVecs;
+      placedPieces : BitVecs;
+      Row          : Trow);
+
+   <span class="kwa">procedure</span> Record_Solution (s : <span class="kwa">in out</span> Soln);
+
+   m_minSoln            : Soln := init (N_PIECE_TYPE);
+   m_curSoln, m_maxSoln : Soln := init (<span class="num">0</span>);
+
+   M_NSoln   : <span class="kwb">Natural</span> := <span class="num">0</span>;
+   Max_NSoln : <span class="kwb">Natural</span> := <span class="num">3000</span>; <span class="slc">-- above 2098</span>
+
+   g_firstRegion : <span class="kwa">constant array</span> (<span class="num">0</span> .. <span class="num">31</span>) <span class="kwa">of</span> BitVecs := (
+      <span class="num">16</span>#<span class="num">00</span>#, <span class="num">16</span>#<span class="num">01</span>#, <span class="num">16</span>#<span class="num">02</span>#, <span class="num">16</span>#<span class="num">03</span>#,   <span class="num">16</span>#<span class="num">04</span>#, <span class="num">16</span>#<span class="num">01</span>#, <span class="num">16</span>#<span class="num">06</span>#, <span class="num">16</span>#<span class="num">07</span>#,
+      <span class="num">16</span>#<span class="num">08</span>#, <span class="num">16</span>#<span class="num">01</span>#, <span class="num">16</span>#<span class="num">02</span>#, <span class="num">16</span>#<span class="num">03</span>#,   <span class="num">16</span>#<span class="num">0</span>c#, <span class="num">16</span>#<span class="num">01</span>#, <span class="num">16</span>#<span class="num">0</span>e#, <span class="num">16</span>#<span class="num">0</span>f#,
+
+      <span class="num">16</span>#<span class="num">10</span>#, <span class="num">16</span>#<span class="num">01</span>#, <span class="num">16</span>#<span class="num">02</span>#, <span class="num">16</span>#<span class="num">03</span>#,   <span class="num">16</span>#<span class="num">04</span>#, <span class="num">16</span>#<span class="num">01</span>#, <span class="num">16</span>#<span class="num">06</span>#, <span class="num">16</span>#<span class="num">07</span>#,
+      <span class="num">16</span>#<span class="num">18</span>#, <span class="num">16</span>#<span class="num">01</span>#, <span class="num">16</span>#<span class="num">02</span>#, <span class="num">16</span>#<span class="num">03</span>#,   <span class="num">16</span>#<span class="num">1</span>c#, <span class="num">16</span>#<span class="num">01</span>#, <span class="num">16</span>#<span class="num">1</span>e#, <span class="num">16</span>#<span class="num">1</span>f#);
+
+   g_flip : <span class="kwa">constant array</span> (<span class="num">0</span> .. <span class="num">31</span>) <span class="kwa">of</span> BitVecs := (
+     <span class="num">16</span>#<span class="num">00</span>#, <span class="num">16</span>#<span class="num">10</span>#, <span class="num">16</span>#<span class="num">08</span>#, <span class="num">16</span>#<span class="num">18</span>#, <span class="num">16</span>#<span class="num">04</span>#, <span class="num">16</span>#<span class="num">14</span>#, <span class="num">16</span>#<span class="num">0</span>c#, <span class="num">16</span>#<span class="num">1</span>c#,
+     <span class="num">16</span>#<span class="num">02</span>#, <span class="num">16</span>#<span class="num">12</span>#, <span class="num">16</span>#<span class="num">0</span>a#, <span class="num">16</span>#<span class="num">1</span>a#, <span class="num">16</span>#<span class="num">06</span>#, <span class="num">16</span>#<span class="num">16</span>#, <span class="num">16</span>#<span class="num">0</span>e#, <span class="num">16</span>#<span class="num">1</span>e#,
+
+     <span class="num">16</span>#<span class="num">01</span>#, <span class="num">16</span>#<span class="num">11</span>#, <span class="num">16</span>#<span class="num">09</span>#, <span class="num">16</span>#<span class="num">19</span>#, <span class="num">16</span>#<span class="num">05</span>#, <span class="num">16</span>#<span class="num">15</span>#, <span class="num">16</span>#<span class="num">0</span>d#, <span class="num">16</span>#<span class="num">1</span>d#,
+     <span class="num">16</span>#<span class="num">03</span>#, <span class="num">16</span>#<span class="num">13</span>#, <span class="num">16</span>#<span class="num">0</span>b#, <span class="num">16</span>#<span class="num">1</span>b#, <span class="num">16</span>#<span class="num">07</span>#, <span class="num">16</span>#<span class="num">17</span>#, <span class="num">16</span>#<span class="num">0</span>f#, <span class="num">16</span>#<span class="num">1</span>f#);
+
+<span class="kwa">end</span> Meteors.Board;
+<span class="slc">------------------------------------------------------------------------------</span>
+<span class="kwa">with</span> Meteors.Solution; <span class="kwa">use</span> Meteors.Solution;
+<span class="kwa">with</span> Meteors.Pieces;   <span class="kwa">use</span> Meteors.Pieces;
+
+<span class="kwa">package body</span> Meteors.Board <span class="kwa">is</span>
+
+   <span class="kwa">procedure</span> badregion
+     (to_fill : <span class="kwa">in out</span> BitVecs;
+      rnew    : BitVecs;
+      Isbad   : <span class="kwa">out</span> <span class="kwb">Boolean</span>)
+   <span class="kwa">is</span>
+      <span class="kwa">function</span> count_ones (v : BitVecs) <span class="kwa">return</span> Integer_8 <span class="kwa">is</span>
+         Result : Integer_8 := <span class="num">0</span>;
+         Vect   : BitVecs   := v;
+      <span class="kwa">begin</span>
+         <span class="kwa">while</span> Vect /= <span class="num">0</span> <span class="kwa">loop</span>
+            Result := Result + <span class="num">1</span>;
+            Vect   := Vect <span class="kwa">and</span> (Vect - <span class="num">1</span>);
+         <span class="kwa">end loop</span>;
+         <span class="kwa">return</span> Result;
+      <span class="kwa">end</span> count_ones;
+
+      lrnew                   : BitVecs := rnew;
+      region                  : BitVecs;
+      Even_Region, Odd_Region : BitVecs;
+      ncells                  : Integer_8;
+
+   <span class="kwa">begin</span>
+      <span class="slc">--  Grow empty region, until it doesn't change any more.</span>
+      <span class="kwa">loop</span>
+         region      := lrnew;
+         Even_Region := region <span class="kwa">and</span> (ROW_0_MASK <span class="kwa">and not</span> L_EDGE_MASK);
+         Odd_Region  := region <span class="kwa">and</span> (ROW_1_MASK <span class="kwa">and not</span> R_EDGE_MASK);
+         <span class="slc">--  simple grow up/down</span>
+         lrnew := lrnew <span class="kwa">or</span> Shift_Right (region, N_COL);
+         lrnew := lrnew <span class="kwa">or</span> Shift_Left (region, N_COL);
+
+         <span class="slc">--  grow right/left</span>
+         lrnew := lrnew <span class="kwa">or</span> Shift_Right (region <span class="kwa">and not</span> L_EDGE_MASK, <span class="num">1</span>);
+         lrnew := lrnew <span class="kwa">or</span> Shift_Left (region <span class="kwa">and not</span> R_EDGE_MASK, <span class="num">1</span>);
+
+         <span class="slc">--  tricky growth</span>
+         lrnew := lrnew <span class="kwa">or</span> Shift_Right (Even_Region, N_COL + <span class="num">1</span>);
+         lrnew := lrnew <span class="kwa">or</span> Shift_Left (Even_Region, N_COL - <span class="num">1</span>);
+         lrnew := lrnew <span class="kwa">or</span> Shift_Right (Odd_Region, N_COL - <span class="num">1</span>);
+         lrnew := lrnew <span class="kwa">or</span> Shift_Left (Odd_Region, N_COL + <span class="num">1</span>);
+         <span class="slc">--clamp against existing pieces</span>
+         lrnew := lrnew <span class="kwa">and</span> to_fill;
+         <span class="kwa">exit when</span> (lrnew = to_fill) <span class="kwa">or</span> (lrnew = region);
+      <span class="kwa">end loop</span>;
+
+      <span class="slc">--  Subtract empty region from board.</span>
+      to_fill := to_fill <span class="kwa">xor</span> lrnew;
+      ncells  := count_ones (to_fill);
+      Isbad   := (ncells <span class="kwa">mod</span> N_ELEM) /= <span class="num">0</span>;
+   <span class="kwa">end</span> badregion;
+
+   <span class="kwa">function</span> Has_Bad_Islands (boardVec : BitVecs; row : Trow) <span class="kwa">return</span> Goodbad <span class="kwa">is</span>
+      iInfo         : <span class="kwb">Natural</span>;
+      Mask, lastrow : BitVecs;
+      isodd         : Parity;
+      isclosed      : Fixed;
+      lboardVec     : BitVecs := boardVec;
+
+      lrow   : Trow := row;
+      Result : Goodbad;
+   <span class="kwa">begin</span>
+      <span class="slc">--  skip over any filled rows</span>
+      <span class="kwa">while</span> (lboardVec <span class="kwa">and</span> TOP_ROW) = TOP_ROW <span class="kwa">loop</span>
+         lboardVec := Shift_Right (lboardVec, N_COL);
+         <span class="kwa">if</span> lrow = Trow<span class="kwd">'Last</span> <span class="kwa">then</span> <span class="slc">-- the board is filled</span>
+            <span class="kwa">return</span> Good;
+         <span class="kwa">else</span>
+            lrow := lrow + <span class="num">1</span>;
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+
+      iInfo := <span class="kwb">Natural</span> (lboardVec <span class="kwa">and</span> (Shift_Left (<span class="num">1</span>, <span class="num">2</span> * N_COL) - <span class="num">1</span>));
+      <span class="kwa">declare</span>
+         info : islandinfo <span class="kwa">renames</span> g_islandInfo (iInfo);
+      <span class="kwa">begin</span>
+         lastrow := Shift_Right (lboardVec, <span class="num">2</span> * N_COL) <span class="kwa">and</span> TOP_ROW;
+         Mask    := Shift_Left (<span class="num">1</span>, <span class="kwb">Natural</span> (lastrow));
+         isodd   := Row_Parity (lrow);
+
+         <span class="kwa">if</span> (info.alwaysBad (isodd) <span class="kwa">and</span> Mask) /= <span class="num">0</span> <span class="kwa">then</span>
+            <span class="kwa">return</span> Bad;
+         <span class="kwa">end if</span>;
+
+         <span class="kwa">if</span> (lboardVec <span class="kwa">and</span> Shift_Left (TOP_ROW, N_COL * <span class="num">3</span>)) /= <span class="num">0</span> <span class="kwa">then</span>
+            <span class="kwa">return</span> Calc_Bad_Islands (lboardVec, lrow);
+         <span class="kwa">end if</span>;
+         <span class="kwa">if</span> lrow &gt; <span class="num">6</span> <span class="kwa">then</span> <span class="slc">-- we track 3 rows</span>
+            isclosed := Closed;
+         <span class="kwa">else</span>
+            isclosed := Open;
+         <span class="kwa">end if</span>;
+         <span class="kwa">declare</span>
+            Isknownvector : BitVecs <span class="kwa">renames</span> info.is_known (isclosed, isodd);
+            badislevector : BitVecs <span class="kwa">renames</span> info.has_bad (isclosed, isodd);
+         <span class="kwa">begin</span>
+            <span class="kwa">if</span> (Isknownvector <span class="kwa">and</span> Mask) /= <span class="num">0</span> <span class="kwa">then</span>
+               <span class="kwa">if</span> (badislevector <span class="kwa">and</span> Mask) = <span class="num">0</span> <span class="kwa">then</span>
+                  <span class="kwa">return</span> Good;
+               <span class="kwa">else</span>
+                  <span class="kwa">return</span> Bad;
+               <span class="kwa">end if</span>;
+            <span class="kwa">end if</span>;
+
+            <span class="kwa">if</span> lboardVec = <span class="num">0</span> <span class="kwa">then</span>
+               <span class="kwa">return</span> Good;
+            <span class="kwa">end if</span>;
+
+            Result        := Calc_Bad_Islands (lboardVec, lrow);
+            Isknownvector := Isknownvector <span class="kwa">or</span> Mask;
+            <span class="kwa">if</span> Result /= Good <span class="kwa">then</span>
+               badislevector := badislevector <span class="kwa">or</span> Mask;
+            <span class="kwa">end if</span>;
+         <span class="kwa">end</span>;
+         <span class="kwa">return</span> Result;
+      <span class="kwa">end</span>;
+   <span class="kwa">end</span> Has_Bad_Islands;
+
+   <span class="kwa">function</span> Calc_Bad_Islands
+     (boardVec : BitVecs;
+      row      : Trow)
+      <span class="kwa">return</span>     Goodbad
+   <span class="kwa">is</span>
+      tofill, boardmask, bottom, startregion : BitVecs;
+      Boardmaskshift                         : <span class="kwb">Natural</span>;
+      filled                                 : <span class="kwb">Boolean</span>;
+      Lrow                                   : Trow := row;
+      Isbad                                  : <span class="kwb">Boolean</span>;
+      Ipos                                   : <span class="kwb">Natural</span>;
+   <span class="kwa">begin</span>
+      tofill := <span class="kwa">not</span> boardVec;
+      <span class="slc">--  Compensate for odd rows.</span>
+      <span class="kwa">if</span> Row_Parity (Lrow) = Odd <span class="kwa">then</span>
+         Lrow   := Lrow - <span class="num">1</span>;
+         tofill := Shift_Left (tofill, N_COL);
+      <span class="kwa">end if</span>;
+
+      boardmask := BOARD_MASK; <span class="slc">--  all but the first two bits</span>
+
+      <span class="kwa">if</span> Lrow &gt; <span class="num">4</span> <span class="kwa">then</span>
+         Boardmaskshift := <span class="kwb">Natural</span> (Lrow - <span class="num">4</span>) * N_COL;
+         boardmask      := Shift_Right (boardmask, Boardmaskshift);
+      <span class="kwa">end if</span>;
+      tofill := tofill <span class="kwa">and</span> boardmask;
+
+      <span class="slc">--  a little pre-work to speed things up</span>
+      bottom := Shift_Left (TOP_ROW, <span class="num">5</span> * N_COL);
+      filled := (bottom <span class="kwa">and</span> tofill) = bottom;
+      <span class="kwa">while</span> (bottom <span class="kwa">and</span> tofill) = bottom <span class="kwa">loop</span>
+         tofill := tofill <span class="kwa">xor</span> bottom;
+         bottom := Shift_Right (bottom, N_COL);
+      <span class="kwa">end loop</span>;
+
+      <span class="kwa">if</span> filled <span class="kwa">or</span> (Lrow &lt; <span class="num">4</span>) <span class="kwa">then</span>
+         startregion := bottom <span class="kwa">and</span> tofill;
+      <span class="kwa">else</span>
+         startregion := g_firstRegion (<span class="kwb">Natural</span> (tofill <span class="kwa">and</span> TOP_ROW));
+         <span class="kwa">if</span> startregion = <span class="num">0</span> <span class="kwa">then</span>
+            startregion := Shift_Right (tofill, N_COL) <span class="kwa">and</span> TOP_ROW;
+            startregion := g_firstRegion (<span class="kwb">Natural</span> (startregion));
+            startregion := Shift_Left (startregion, N_COL);
+         <span class="kwa">end if</span>;
+         startregion := startregion <span class="kwa">or</span>
+                        (Shift_Right (startregion, N_COL) <span class="kwa">and</span> tofill);
+      <span class="kwa">end if</span>;
+
+      <span class="kwa">while</span> tofill /= <span class="num">0</span> <span class="kwa">loop</span>
+         badregion (tofill, startregion, Isbad);
+         <span class="kwa">if</span> Isbad <span class="kwa">then</span>
+            <span class="kwa">if</span> tofill /= <span class="num">0</span> <span class="kwa">then</span>
+               <span class="kwa">return</span> Always_Bad;
+            <span class="kwa">else</span>
+               <span class="kwa">return</span> Bad;
+            <span class="kwa">end if</span>;
+         <span class="kwa">end if</span>;
+         Ipos        := Get_First_One (tofill);
+         startregion := Shift_Left (<span class="num">1</span>, Ipos);
+      <span class="kwa">end loop</span>;
+
+      <span class="kwa">return</span> Good;
+   <span class="kwa">end</span> Calc_Bad_Islands;
+
+   <span class="kwa">procedure</span> Calc_Always_Bad <span class="kwa">is</span>
+
+      <span class="kwa">function</span> Flip_Two_Rows (Bits : <span class="kwb">Integer</span>) <span class="kwa">return</span> <span class="kwb">Integer</span> <span class="kwa">is</span>
+         result  : <span class="kwb">Integer</span> := <span class="num">0</span>;
+         Flipped : BitVecs := Shift_Right (BitVecs (Bits), N_COL);
+         interim : BitVecs := BitVecs (Bits) <span class="kwa">and</span> TOP_ROW;
+      <span class="kwa">begin</span>
+         Flipped := Shift_Left (g_flip (<span class="kwb">Natural</span> (Flipped)), N_COL);
+         result  := <span class="kwb">Integer</span> (Flipped <span class="kwa">or</span> g_flip (<span class="kwb">Natural</span> (interim)));
+         <span class="kwa">return</span> result;
+      <span class="kwa">end</span> Flip_Two_Rows;
+
+      <span class="kwa">procedure</span> Markbad
+        (Info   : <span class="kwa">in out</span> islandinfo;
+         Mask   : <span class="kwa">in</span> BitVecs;
+         Eo     : <span class="kwa">in</span> Parity;
+         Always : <span class="kwa">in</span> <span class="kwb">Boolean</span>)
+      <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Info.has_bad (Open, Eo)   := Info.has_bad (Open, Eo) <span class="kwa">or</span> Mask;
+         Info.has_bad (Closed, Eo) := Info.has_bad (Closed, Eo) <span class="kwa">or</span> Mask;
+         <span class="kwa">if</span> Always <span class="kwa">then</span>
+            Info.alwaysBad (Eo) := Info.alwaysBad (Eo) <span class="kwa">and</span> Mask;
+         <span class="kwa">end if</span>;
+      <span class="kwa">end</span> Markbad;
+
+      Mask, Flipmask, boardvec : BitVecs;
+      hasbad                   : Goodbad;
+      always                   : <span class="kwb">Boolean</span>;
+
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> iWord <span class="kwa">in</span> <span class="num">1</span> .. MAX_ISLAND_OFFSET - <span class="num">1</span> <span class="kwa">loop</span>
+         <span class="kwa">declare</span>
+            IsleInfo : islandinfo <span class="kwa">renames</span> g_islandInfo (iWord);
+            flipped  : islandinfo <span class="kwa">renames</span> g_islandInfo (Flip_Two_Rows
+                                                           (iWord));
+         <span class="kwa">begin</span>
+            Mask := <span class="num">1</span>;
+            <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span> .. <span class="num">31</span> <span class="kwa">loop</span>
+
+               boardvec := Shift_Left (BitVecs (i), <span class="num">2</span> * N_COL) <span class="kwa">or</span>
+                           BitVecs (iWord);
+
+               <span class="kwa">if</span> ((IsleInfo.is_known (Open, Even) <span class="kwa">and</span> Mask) = <span class="num">0</span>) <span class="kwa">then</span>
+                  hasbad := Calc_Bad_Islands (boardvec, <span class="num">0</span>);
+                  <span class="kwa">if</span> hasbad /= Good <span class="kwa">then</span>
+                     always := (hasbad = Always_Bad);
+                     Markbad (IsleInfo, Mask, Even, always);
+                     Flipmask := Shift_Left (<span class="num">1</span>, <span class="kwb">Natural</span> (g_flip (i)));
+                     Markbad (flipped, Flipmask, Odd, always);
+                  <span class="kwa">end if</span>;
+               <span class="kwa">end if</span>;
+               Mask := Shift_Left (Mask, <span class="num">1</span>);
+            <span class="kwa">end loop</span>;
+            IsleInfo.is_known (Open, Even) := BitVecs (BitVecs<span class="kwd">'Last</span>);
+            flipped.is_known (Open, Odd)   := BitVecs (BitVecs<span class="kwd">'Last</span>);
+
+         <span class="kwa">end</span>;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Calc_Always_Bad;
+
+   <span class="kwa">function</span> has_bad_islands_single
+     (boardVec : BitVecs;
+      row      : Trow)
+      <span class="kwa">return</span>     <span class="kwb">Boolean</span>
+   <span class="kwa">is</span>
+      Isbad                          : <span class="kwb">Boolean</span>;
+      tofill, startregion, boardmask : BitVecs;
+      isodd                          : <span class="kwb">Boolean</span> := Row_Parity (row) = Odd;
+      lrow                           : Trow    := row;
+      Ipos                           : <span class="kwb">Natural</span>;
+   <span class="kwa">begin</span>
+      tofill := <span class="kwa">not</span> boardVec;
+      <span class="kwa">if</span> isodd <span class="kwa">then</span>
+         lrow   := lrow - <span class="num">1</span>;
+         tofill := Shift_Left (tofill, N_COL);<span class="slc">--  shift to even aligned</span>
+         tofill := tofill <span class="kwa">or</span> TOP_ROW;
+      <span class="kwa">end if</span>;
+
+      startregion := TOP_ROW;
+      boardmask   := BOARD_MASK; <span class="slc">--  all but the first two bits</span>
+
+      <span class="kwa">if</span> lrow &gt;= <span class="num">4</span> <span class="kwa">then</span>
+         boardmask := Shift_Right (boardmask, <span class="kwb">Natural</span> (lrow - <span class="num">4</span>) * N_COL);
+      <span class="kwa">elsif</span> isodd <span class="kwa">or</span> (lrow = <span class="num">0</span>) <span class="kwa">then</span>
+         startregion := LAST_ROW;
+      <span class="kwa">end if</span>;
+
+      tofill      := tofill <span class="kwa">and</span> boardmask;
+      startregion := startregion <span class="kwa">and</span> tofill;
+
+      <span class="kwa">while</span> tofill /= <span class="num">0</span> <span class="kwa">loop</span>
+         badregion (tofill, startregion, Isbad);
+         <span class="kwa">if</span> Isbad <span class="kwa">then</span>
+            <span class="kwa">return</span> <span class="kwd">True</span>;
+         <span class="kwa">end if</span>;
+         Ipos        := Get_First_One (tofill);
+         startregion := Shift_Left (<span class="num">1</span>, Ipos);
+      <span class="kwa">end loop</span>;
+      <span class="kwa">return</span> <span class="kwd">False</span>;
+   <span class="kwa">end</span> has_bad_islands_single;
+
+   <span class="kwa">procedure</span> Gen_All_Solutions
+     (boardVec     : BitVecs;
+      placedPieces : BitVecs;
+      Row          : Trow)
+   <span class="kwa">is</span>
+
+      l_boardVec     : BitVecs := boardVec;
+      l_placedPieces : BitVecs := placedPieces;
+      l_Row          : Trow    := Row;
+
+      ALL_PIECE_MASK : <span class="kwa">constant</span> BitVecs := <span class="num">2</span>#<span class="num">11</span>_1111_1111#;
+
+      INextFill           : Tcol;
+      ipiece              : Piecenr;
+      Piecemask, piecevec : BitVecs;
+   <span class="kwa">begin</span>
+      <span class="kwa">while</span> (l_boardVec <span class="kwa">and</span> TOP_ROW) = TOP_ROW <span class="kwa">loop</span>
+         l_boardVec := Shift_Right (l_boardVec, N_COL);
+         l_Row      := l_Row + <span class="num">1</span>;
+      <span class="kwa">end loop</span>;
+
+      INextFill :=
+        Tcol (S_FirstOne (<span class="kwb">Natural</span> ((<span class="kwa">not</span> l_boardVec) <span class="kwa">and</span> TOP_ROW)));
+      <span class="kwa">declare</span>
+         Allowed : OkPieces <span class="kwa">renames</span> g_okPieces (l_Row, INextFill);
+      <span class="kwa">begin</span>
+         ipiece    := Piecenr (Get_First_One (<span class="kwa">not</span> l_placedPieces));
+         Piecemask := Shift_Left (<span class="num">1</span>, <span class="kwb">Natural</span> (ipiece));
+         <span class="kwa">loop</span>
+
+         <span class="slc">-- go on only if we've not already used this piece</span>
+            <span class="kwa">if</span> (Piecemask <span class="kwa">and</span> l_placedPieces) = <span class="num">0</span> <span class="kwa">then</span>
+               l_placedPieces := l_placedPieces <span class="kwa">or</span> Piecemask;
+
+               <span class="kwa">for</span> Iorient <span class="kwa">in</span> <span class="num">0</span> .. Allowed.nPieces (ipiece) <span class="kwa">loop</span>
+                  piecevec := Allowed.pieceVec (ipiece, Iorient);
+
+                  <span class="slc">--check if piece conflicts with other pieces</span>
+                  <span class="kwa">if</span> (piecevec <span class="kwa">and</span> l_boardVec) = <span class="num">0</span> <span class="kwa">then</span>
+                     <span class="slc">-- add the piece to the board</span>
+                     l_boardVec := l_boardVec <span class="kwa">or</span> piecevec;
+                     <span class="kwa">if</span> Has_Bad_Islands (l_boardVec, l_Row) = Good <span class="kwa">then</span>
+
+                        pushPiece (m_curSoln, piecevec, ipiece, l_Row);
+                        <span class="slc">-- recur or record solution</span>
+                        <span class="kwa">if</span> (l_placedPieces /= ALL_PIECE_MASK) <span class="kwa">then</span>
+                           Gen_All_Solutions
+                             (l_boardVec,
+                              l_placedPieces,
+                              l_Row);
+                        <span class="kwa">else</span>
+                           Record_Solution (m_curSoln);
+                           popPiece (m_curSoln);
+                           <span class="kwa">return</span>;
+                        <span class="kwa">end if</span>;
+                        <span class="kwa">if</span> M_NSoln &gt;= Max_NSoln <span class="kwa">then</span>
+                           <span class="kwa">return</span>;
+                        <span class="kwa">end if</span>;
+                        popPiece (m_curSoln);
+                     <span class="kwa">end if</span>;
+                     <span class="slc">-- remove the piece before continuing with a new piece</span>
+                     l_boardVec := l_boardVec <span class="kwa">xor</span> piecevec;
+                  <span class="kwa">end if</span>;
+               <span class="kwa">end loop</span>;
+
+               l_placedPieces := l_placedPieces <span class="kwa">xor</span> Piecemask;
+            <span class="kwa">end if</span>;
+            <span class="kwa">exit when</span> ipiece = Piecenr<span class="kwd">'Last</span>;
+            ipiece    := ipiece + <span class="num">1</span>;
+            Piecemask := Shift_Left (Piecemask, <span class="num">1</span>);
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end</span>;
+   <span class="kwa">end</span> Gen_All_Solutions;
+
+   <span class="kwa">procedure</span> record_solution (S : <span class="kwa">in out</span> Soln) <span class="kwa">is</span>
+      spun : Soln;
+   <span class="kwa">begin</span>
+      setCells (s);
+      M_NSoln := M_NSoln + <span class="num">2</span>; <span class="slc">--  add solution and its rotation</span>
+
+      <span class="kwa">if</span> isEmpty (m_minSoln) <span class="kwa">then</span>
+         m_minSoln := s;
+         m_maxSoln := s;
+         <span class="kwa">return</span>;
+      <span class="kwa">end if</span>;
+
+      <span class="kwa">if</span> s &lt; m_minSoln <span class="kwa">then</span>
+         m_minSoln := s;
+      <span class="kwa">elsif</span> m_maxSoln &lt; s <span class="kwa">then</span>
+         m_maxSoln := s;
+      <span class="kwa">end if</span>;
+
+      spin (s, spun);
+      <span class="kwa">if</span> spun &lt; m_minSoln <span class="kwa">then</span>
+         m_minSoln := spun;
+      <span class="kwa">elsif</span> m_maxSoln &lt; spun <span class="kwa">then</span>
+         m_maxSoln := spun;
+      <span class="kwa">end if</span>;
+   <span class="kwa">end</span> record_solution;
+
+<span class="kwa">end</span> Meteors.Board;
+<span class="slc">------------------------------------------------------------------------------</span>
+<span class="slc">--   Operations on Solutions</span>
+<span class="slc">------------------------------------------------------------------------------</span>
+<span class="kwa">package</span> Meteors.Solution <span class="kwa">is</span>
+
+   <span class="kwa">type</span> Soln <span class="kwa">is private</span>;
+
+   <span class="kwa">procedure</span> setCells (Self : <span class="kwa">in out</span> Soln);
+   <span class="slc">-- Left and right must be synched by setcells before comparaison.</span>
+   <span class="kwa">function</span> <span class="str">&quot;&lt;&quot;</span> (Left : Soln; Right : Soln) <span class="kwa">return</span> <span class="kwb">Boolean</span>;
+   <span class="kwa">function</span> init (value : Ext_Piecenr := No_Piece) <span class="kwa">return</span> Soln;
+   <span class="kwa">procedure</span> spin (Self : <span class="kwa">in out</span> Soln; spun : <span class="kwa">out</span> Soln);
+
+   <span class="kwa">function</span> isEmpty (Self : Soln) <span class="kwa">return</span> <span class="kwb">Boolean</span>;
+
+   <span class="kwa">procedure</span> popPiece (Self : <span class="kwa">in out</span> Soln);
+   <span class="kwa">pragma</span> Inline (popPiece);
+
+   <span class="kwa">procedure</span> pushPiece
+     (Self     : <span class="kwa">in out</span> Soln;
+      A_vec    : BitVecs;
+      A_iPiece : Piecenr;
+      A_row    : Trow);
+   <span class="kwa">pragma</span> Inline (pushPiece);
+
+   <span class="kwa">procedure</span> Output (Nbr_Sol : <span class="kwb">Natural</span>; Smin, Smax : Soln);
+
+<span class="kwa">private</span>
+   <span class="kwa">type</span> Spieces <span class="kwa">is record</span>
+      bitvec : BitVecs;
+      ipiece : Piecenr;
+      row    : Trow;
+   <span class="kwa">end record</span>;
+
+   <span class="kwa">type</span> M_Pieces_Type <span class="kwa">is array</span> (Piecenr) <span class="kwa">of</span> Spieces;
+   <span class="kwa">type</span> M_Cells_Type <span class="kwa">is array</span> (Trow, Tcol) <span class="kwa">of</span> Ext_Piecenr;
+
+   <span class="kwa">type</span> Soln <span class="kwa">is record</span>
+      m_pieces  : M_Pieces_Type;
+      m_nPiece  : Ext_Piecenr := <span class="num">0</span>;
+      m_cells   : M_Cells_Type;
+      m_synched : <span class="kwb">Boolean</span>     := <span class="kwd">True</span>;
+   <span class="kwa">end record</span>;
+
+<span class="kwa">end</span> Meteors.Solution;
+<span class="slc">------------------------------------------------------------------------------</span>
+<span class="kwa">with</span> Ada.Streams.Stream_IO; <span class="kwa">use</span> Ada.Streams.Stream_IO;
+<span class="kwa">with</span> Unchecked_Conversion;
+<span class="kwa">with</span> Ada.Text_IO;           <span class="kwa">use</span> Ada.Text_IO;
+
+<span class="kwa">package body</span> Meteors.Solution <span class="kwa">is</span>
+
+   <span class="kwa">procedure</span> setCells (Self : <span class="kwa">in out</span> Soln) <span class="kwa">is</span>
+      nNewcells : <span class="kwb">Natural</span>;
+   <span class="kwa">begin</span>
+      <span class="kwa">if</span> Self.m_synched <span class="kwa">then</span>
+         <span class="kwa">return</span>;
+      <span class="kwa">end if</span>;
+      <span class="kwa">for</span> iPiece <span class="kwa">in</span> <span class="num">0</span> .. Self.m_nPiece - <span class="num">1</span> <span class="kwa">loop</span>
+         <span class="kwa">declare</span>
+            P         : Spieces <span class="kwa">renames</span> Self.m_pieces (iPiece);
+            Vec       : BitVecs     := P.bitvec;
+            pID       : Ext_Piecenr := P.ipiece;
+            RowOffset : Trow        := P.row;
+         <span class="kwa">begin</span>
+            nNewcells := <span class="num">0</span>;
+            Outer : <span class="kwa">for</span> y <span class="kwa">in</span> RowOffset .. Trow<span class="kwd">'Last</span> <span class="kwa">loop</span>
+               <span class="kwa">for</span> x <span class="kwa">in</span> Tcol<span class="kwd">'Range</span> <span class="kwa">loop</span>
+                  <span class="kwa">if</span> ((Vec <span class="kwa">and</span> <span class="num">1</span>) /= <span class="num">0</span>) <span class="kwa">then</span>
+                     Self.m_cells (y, x) := pID;
+                     nNewcells           := nNewcells + <span class="num">1</span>;
+                     <span class="kwa">exit</span> Outer <span class="kwa">when</span> nNewcells = N_ELEM;
+                  <span class="kwa">end if</span>;
+                  Vec := Shift_Right (Vec, <span class="num">1</span>);
+               <span class="kwa">end loop</span>;
+            <span class="kwa">end loop</span> Outer;
+         <span class="kwa">end</span>;
+      <span class="kwa">end loop</span>;
+      Self.m_synched := <span class="kwd">True</span>;
+   <span class="kwa">end</span> setCells;
+
+   <span class="kwa">function</span> <span class="str">&quot;&lt;&quot;</span> (Left : Soln; Right : Soln) <span class="kwa">return</span> <span class="kwb">Boolean</span> <span class="kwa">is</span>
+      lval, rval : Ext_Piecenr;
+   <span class="kwa">begin</span>
+      <span class="kwa">if not</span> (Left.m_synched <span class="kwa">and</span> Right.m_synched) <span class="kwa">then</span>
+         <span class="kwa">raise</span> Constraint_Error;
+      <span class="kwa">end if</span>;
+      <span class="kwa">if</span> Left.m_pieces (<span class="num">0</span>).ipiece /= Right.m_pieces (<span class="num">0</span>).ipiece <span class="kwa">then</span>
+         <span class="kwa">return</span> Left.m_pieces (<span class="num">0</span>).ipiece &lt; Right.m_pieces (<span class="num">0</span>).ipiece;
+      <span class="kwa">end if</span>;
+
+      <span class="kwa">for</span> y <span class="kwa">in</span> Trow<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         <span class="kwa">for</span> x <span class="kwa">in</span> Tcol<span class="kwd">'Range</span> <span class="kwa">loop</span>
+            lval := Left.m_cells (y, x);
+            rval := Right.m_cells (y, x);
+            <span class="kwa">if</span> lval /= rval <span class="kwa">then</span>
+               <span class="kwa">return</span> lval &lt; rval;
+            <span class="kwa">end if</span>;
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end loop</span>;
+      <span class="slc">--  solutions are equal</span>
+      <span class="kwa">return</span> <span class="kwd">False</span>;
+   <span class="kwa">end</span> <span class="str">&quot;&lt;&quot;</span>;
+
+   <span class="kwa">function</span> init (value : Ext_Piecenr := No_Piece) <span class="kwa">return</span> Soln <span class="kwa">is</span>
+      Self : Soln;
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> I <span class="kwa">in</span> Trow<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         <span class="kwa">for</span> J <span class="kwa">in</span> Tcol<span class="kwd">'Range</span> <span class="kwa">loop</span>
+            Self.m_cells (I, J) := value;
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end loop</span>;
+      Self.m_synched := <span class="kwd">True</span>;
+      Self.m_nPiece  := <span class="num">0</span>;
+      <span class="kwa">return</span> Self;
+   <span class="kwa">end</span> init;
+
+   <span class="kwa">procedure</span> spin (Self : <span class="kwa">in out</span> Soln; spun : <span class="kwa">out</span> Soln) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      setCells (Self);
+      <span class="slc">--  swap cells</span>
+      <span class="kwa">for</span> y <span class="kwa">in</span> Trow<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         <span class="kwa">for</span> x <span class="kwa">in</span> Tcol<span class="kwd">'Range</span> <span class="kwa">loop</span>
+            spun.m_cells (y, x) :=
+              Self.m_cells (Trow<span class="kwd">'Last</span> - y, Tcol<span class="kwd">'Last</span> - x);
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end loop</span>;
+      <span class="slc">--  swap first and last pieces (the rest aren't used)</span>
+      spun.m_pieces (<span class="num">0</span>).ipiece := Self.m_pieces (Piecenr<span class="kwd">'Last</span>).ipiece;
+      spun.m_synched           := <span class="kwd">True</span>;
+   <span class="kwa">end</span> spin;
+
+   <span class="kwa">function</span> isEmpty (Self : Soln) <span class="kwa">return</span> <span class="kwb">Boolean</span> <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">return</span> (Self.m_nPiece = <span class="num">0</span>);
+   <span class="kwa">end</span> isEmpty;
+
+   <span class="kwa">procedure</span> popPiece (Self : <span class="kwa">in out</span> Soln) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      Self.m_nPiece  := Self.m_nPiece - <span class="num">1</span>;
+      Self.m_synched := <span class="kwd">False</span>;
+   <span class="kwa">end</span> popPiece;
+
+   <span class="kwa">procedure</span> pushPiece
+     (Self     : <span class="kwa">in out</span> Soln;
+      A_vec    : <span class="kwa">in</span> BitVecs;
+      A_iPiece : <span class="kwa">in</span> Piecenr;
+      A_row    : <span class="kwa">in</span> Trow)
+   <span class="kwa">is</span>
+
+      P : Spieces <span class="kwa">renames</span> Self.m_pieces (Self.m_nPiece);
+   <span class="kwa">begin</span>
+      P.bitvec       := A_vec;
+      P.ipiece       := A_iPiece;
+      P.row          := A_row;
+      Self.m_nPiece  := Self.m_nPiece + <span class="num">1</span>;
+      Self.m_synched := <span class="kwd">False</span>;
+   <span class="kwa">end</span> pushPiece;
+
+   <span class="kwa">procedure</span> Output (Nbr_Sol : <span class="kwb">Natural</span>; Smin, Smax : Soln) <span class="kwa">is</span>
+      <span class="kwa">use</span> Ada.Streams, ASCII;
+
+      <span class="kwa">package</span> Int_IO <span class="kwa">is new</span> Integer_IO (<span class="kwb">Integer</span>);
+
+      <span class="kwa">subtype</span> Item <span class="kwa">is</span> <span class="kwb">String</span> (<span class="num">1</span> .. <span class="num">254</span>);
+
+      <span class="kwa">subtype</span> Index <span class="kwa">is</span> Stream_Element_Offset <span class="kwa">range</span>
+         Stream_Element_Offset (Item<span class="kwd">'First</span>) ..
+         Stream_Element_Offset (Item<span class="kwd">'Last</span>);
+      <span class="kwa">subtype</span> XBytes <span class="kwa">is</span> Stream_Element_Array (Index);
+      <span class="kwa">function</span> To_Bytes <span class="kwa">is new</span> Unchecked_Conversion (
+         Source =&gt; Item,
+         Target =&gt; XBytes);
+
+      Stdout : Stream_IO.File_Type;
+      Result : Item;
+
+      <span class="kwa">function</span> To_String (S : Soln) <span class="kwa">return</span> <span class="kwb">String</span> <span class="kwa">is</span>
+         N   : <span class="kwb">Natural</span> := <span class="num">0</span>;
+         Res : <span class="kwb">String</span> (<span class="num">1</span> .. <span class="num">116</span>);
+      <span class="kwa">begin</span>
+         <span class="kwa">for</span> I <span class="kwa">in</span> Trow<span class="kwd">'Range</span> <span class="kwa">loop</span>
+            <span class="kwa">if</span> (I <span class="kwa">mod</span> <span class="num">2</span>) = <span class="num">1</span> <span class="kwa">then</span><span class="slc">--  indent every second line</span>
+               N       := N + <span class="num">1</span>;
+               Res (N) := <span class="str">' '</span>;
+            <span class="kwa">end if</span>;
+
+            <span class="kwa">for</span> J <span class="kwa">in</span> Tcol<span class="kwd">'Range</span> <span class="kwa">loop</span>
+               N := N + <span class="num">1</span>;
+               Int_IO.Put (Res (N .. N), <span class="kwb">Integer</span> (S.m_cells (I, J)));
+               N       := N + <span class="num">1</span>;
+               Res (N) := <span class="str">' '</span>;
+            <span class="kwa">end loop</span>;
+            N       := N + <span class="num">1</span>;
+            Res (N) := LF;
+         <span class="kwa">end loop</span>;
+         N       := N + <span class="num">1</span>;
+         Res (N) := LF;
+         <span class="kwa">return</span> Res;
+      <span class="kwa">end</span> To_String;
+
+   <span class="kwa">begin</span>
+      Int_IO.Put (Result (<span class="num">1</span> .. <span class="num">4</span>), Nbr_Sol);
+      Result (<span class="num">5</span> .. <span class="num">22</span>)    := (<span class="str">&quot; solutions found&quot;</span> &amp; LF &amp; LF);
+      Result (<span class="num">23</span> .. <span class="num">138</span>)  := (To_String (Smin));
+      Result (<span class="num">139</span> .. <span class="num">254</span>) := (To_String (Smax));
+
+      Stream_IO.Open (File =&gt; Stdout, Mode =&gt; Out_File, Name =&gt; <span class="str">&quot;/dev/stdout&quot;</span>);
+      Stream_IO.Write (Stdout, To_Bytes (Result));
+      Stream_IO.Close (Stdout);
+   <span class="kwa">end</span> Output;
+
+<span class="kwa">end</span> Meteors.Solution;
+<span class="slc">------------------------------------------------------------------------------</span>
+<span class="kwa">with</span> Meteors;          <span class="kwa">use</span> Meteors;
+<span class="kwa">with</span> Meteors.Pieces;
+<span class="kwa">with</span> Meteors.Solution; <span class="kwa">use</span> Meteors.Solution;
+<span class="kwa">with</span> Meteors.Board;    <span class="kwa">use</span> Meteors.Board;
+<span class="kwa">with</span> Ada.Command_Line; <span class="kwa">use</span> Ada.Command_Line;
+
+<span class="kwa">procedure</span> Meteor <span class="kwa">is</span>
+<span class="kwa">begin</span>
+   <span class="kwa">if</span> Argument_Count &gt; <span class="num">0</span> <span class="kwa">then</span>
+      <span class="slc">--Program will search only max number of solutions.</span>
+      Max_NSoln := <span class="kwb">Natural</span><span class="kwd">'Value</span> (Argument (<span class="num">1</span>));
+   <span class="kwa">end if</span>;
+   Pieces.Gen_All_Orientations;
+   Calc_Always_Bad;
+   Gen_All_Solutions (<span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>);
+   Output (M_NSoln, m_minSoln, m_maxSoln);
+<span class="kwa">end</span> Meteor;

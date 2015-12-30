@@ -1,0 +1,225 @@
+﻿<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * byte processing, C# 3.0 idioms, frame level paralellism by Robert F. Tobler</span>
+<span class="com"> * modified by Rene Koeldorfer</span>
+<span class="com"> */</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.IO;
+<span class="kwa">using</span> System.Collections.Generic;
+<span class="kwa">using</span> System.Linq;
+<span class="kwa">using</span> System.Text;
+<span class="kwa">using</span> System.Threading;
+
+
+<span class="kwa">public static class</span> Extensions
+{
+   <span class="kwa">public static</span> <span class="kwb">byte</span>[] <span class="kwd">GetBytes</span>(<span class="kwa">this</span> List&lt;<span class="kwb">string</span>&gt; lines)
+   {
+      <span class="kwb">int</span> count = lines.<span class="kwd">Aggregate</span>(<span class="num">0</span>, (cnt, str) =&gt; cnt + str.Length);
+      var array = <span class="kwa">new</span> <span class="kwb">byte</span>[count];
+      lines.<span class="kwd">Aggregate</span>(<span class="num">0</span>, (pos, str) =&gt; {
+         Encoding.ASCII.<span class="kwd">GetBytes</span>(str, <span class="num">0</span>, str.Length, array, pos);
+         <span class="kwa">return</span> pos + str. Length;
+      });
+      <span class="kwa">return</span> array;
+   }
+}
+
+<span class="kwa">public class</span> Program
+{
+   <span class="kwa">public static</span> <span class="kwb">int</span> TaskCount;
+   <span class="kwa">public static</span> <span class="kwb">int</span> Current = -<span class="num">1</span>;
+   <span class="kwa">public static</span> KNucleotide[] kna;
+      <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(<span class="kwb">string</span>[] args) {
+
+      <span class="kwb">string</span> line;
+      StreamReader source = <span class="kwa">new</span> <span class="kwd">StreamReader</span>(Console.<span class="kwd">OpenStandardInput</span>());
+      var input = <span class="kwa">new</span> List&lt;<span class="kwb">string</span>&gt;();
+
+      <span class="kwa">while</span> ( (line = source.<span class="kwd">ReadLine</span>() ) != <span class="kwa">null</span> )
+         <span class="kwa">if</span> (line[<span class="num">0</span>] == <span class="str">'&gt;'</span> &amp;&amp; line.<span class="kwd">Substring</span>(<span class="num">1</span>, <span class="num">5</span>) == <span class="str">&quot;THREE&quot;</span>)
+            <span class="kwa">break</span>;
+
+      <span class="kwa">while</span> ( (line = source.<span class="kwd">ReadLine</span>()) != <span class="kwa">null</span> ) {
+         <span class="kwb">char</span> c = line[<span class="num">0</span>];
+         <span class="kwa">if</span> (c == <span class="str">'&gt;'</span>) <span class="kwa">break</span>;
+         <span class="kwa">if</span> (c != <span class="str">';'</span>) input.<span class="kwd">Add</span>(line.<span class="kwd">ToUpper</span>());
+      }
+
+      var lengths = <span class="kwa">new</span> [] { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>, <span class="num">6</span>, <span class="num">12</span>, <span class="num">18</span> };
+
+      TaskCount = lengths.<span class="kwd">Aggregate</span>(<span class="num">0</span>, (cnt, len) =&gt; cnt + len);
+      kna = <span class="kwa">new</span> KNucleotide[TaskCount];
+
+      var bytes = input.<span class="kwd">GetBytes</span>();        
+      lengths.<span class="kwd">Aggregate</span>(<span class="num">0</span>, (cnt, len) =&gt; 
+         {
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; len; i++)
+               kna[cnt + i] = <span class="kwa">new</span> <span class="kwd">KNucleotide</span>(bytes, len, i); 
+            <span class="kwa">return</span> cnt + len;
+         });
+
+      var threads = <span class="kwa">new</span> Thread[Environment.ProcessorCount];
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; threads.Length; i++)
+         (threads[i] = <span class="kwa">new</span> <span class="kwd">Thread</span>(CountFrequencies)).<span class="kwd">Start</span>();
+
+      <span class="kwa">foreach</span> (var t <span class="kwa">in</span> threads)
+         t.<span class="kwd">Join</span>();
+
+      var seqs = <span class="kwa">new</span>[] { <span class="kwa">null</span>, <span class="kwa">null</span>,
+         <span class="str">&quot;GGT&quot;</span>, <span class="str">&quot;GGTA&quot;</span>, <span class="str">&quot;GGTATT&quot;</span>, <span class="str">&quot;GGTATTTTAATT&quot;</span>,
+         <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>};
+
+      <span class="kwb">int</span> index = <span class="num">0</span>;
+      lengths.<span class="kwd">Aggregate</span>(<span class="num">0</span>, (cnt, len) =&gt;
+         {
+            <span class="kwa">if</span> (len &lt; <span class="num">3</span>)
+            {
+               <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">1</span>; i &lt; len; i++)
+                  kna[cnt].<span class="kwd">AddFrequencies</span>(kna[cnt+i]);
+               kna[cnt].<span class="kwd">WriteFrequencies</span>();                    
+            }
+            <span class="kwa">else</span>
+            {
+               var fragment = seqs[index];
+               <span class="kwb">int</span> freq = <span class="num">0</span>;
+               <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; len; i++)
+                  freq += kna[cnt + i].<span class="kwd">GetCount</span>(fragment);
+               Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="ipl">{0}</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">{1}</span><span class="str">&quot;</span>, freq, fragment);
+            }
+            index++;
+            <span class="kwa">return</span> cnt + len;
+         });
+
+   
+   }
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">CountFrequencies</span>()
+   {
+      <span class="kwb">int</span> index;
+      <span class="kwa">while</span> ((index = Interlocked.<span class="kwd">Increment</span>(<span class="kwa">ref</span> Current)) &lt; TaskCount)
+         kna[index].<span class="kwd">KFrequency</span>();
+   }
+
+}
+
+<span class="kwa">public class</span> KNucleotide {
+
+   <span class="kwa">private class</span> KNucleotideNode {
+      <span class="kwa">public</span> <span class="kwb">int</span> V;
+      <span class="kwa">public</span> <span class="kwb">int</span> KeyLength;
+      <span class="kwa">public</span> <span class="kwd">KNucleotideNode</span>(<span class="kwb">int</span> v,<span class="kwb">int</span> keyLength) { V = v;KeyLength=keyLength; }
+   }
+   <span class="kwa">private static</span> <span class="kwb">byte</span>[] tonum=<span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">256</span>];
+   <span class="kwa">private static</span> <span class="kwb">char</span>[] tochar=<span class="kwa">new</span> <span class="kwb">char</span>[<span class="num">4</span>];
+
+   <span class="kwa">static</span> <span class="kwd">KNucleotide</span>()
+   {
+      tonum[<span class="str">'A'</span>] = <span class="num">0</span>;
+      tonum[<span class="str">'C'</span>] = <span class="num">1</span>;
+      tonum[<span class="str">'T'</span>] = <span class="num">2</span>;
+      tonum[<span class="str">'G'</span>] = <span class="num">3</span>;
+      tochar[<span class="num">0</span>] = <span class="str">'A'</span>;
+      tochar[<span class="num">1</span>] = <span class="str">'C'</span>;
+      tochar[<span class="num">2</span>] = <span class="str">'T'</span>;
+      tochar[<span class="num">3</span>] = <span class="str">'G'</span>;
+   }
+
+   <span class="kwa">private static</span> <span class="kwb">ulong</span> <span class="kwd">CreateKey</span>(<span class="kwb">byte</span>[] s,<span class="kwb">int</span> keyStart,<span class="kwb">int</span> keyLength)
+   {
+      <span class="kwb">ulong</span> key = <span class="num">0</span>;
+      <span class="kwa">for</span>(<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; keyLength; i++)
+      {
+         key &lt;&lt;= <span class="num">2</span>;
+         key |= tonum[s[keyStart+i]];
+      }
+      <span class="kwa">return</span> key;
+   }
+
+   <span class="kwa">private static</span> <span class="kwb">string</span> <span class="kwd">PrintKey</span>(<span class="kwb">ulong</span> key,<span class="kwb">int</span> keyLenght)
+   {
+
+      <span class="kwb">char</span>[] items = <span class="kwa">new</span> <span class="kwb">char</span>[keyLenght];
+      <span class="kwa">for</span>(<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; keyLenght; ++i)
+      {
+         items[keyLenght-i-<span class="num">1</span>]=tochar[key &amp; <span class="num">0x3</span>];
+         key &gt;&gt;= <span class="num">2</span>;
+      }
+      <span class="kwa">return new</span> <span class="kwb">string</span>(items);
+   }
+
+   <span class="kwa">private</span> <span class="kwb">ulong</span> <span class="kwd">CreateKey</span>(<span class="kwb">byte</span>[] s,<span class="kwb">int</span> start)
+   {
+      <span class="kwa">return</span> <span class="kwd">CreateKey</span> (s, start, length);
+   }
+
+   <span class="kwa">private static</span> <span class="kwb">ulong</span> <span class="kwd">CreateKey</span>(<span class="kwb">string</span> keyString)
+   {
+      <span class="kwb">byte</span>[] byteArray = System.Text.Encoding.ASCII.<span class="kwd">GetBytes</span> (keyString);
+      <span class="kwa">return</span> <span class="kwd">CreateKey</span> (byteArray, <span class="num">0</span>, keyString.Length);
+   }
+
+
+   <span class="kwa">private</span> Dictionary&lt;<span class="kwb">ulong</span>, KNucleotideNode&gt; frequencies
+   = <span class="kwa">new</span> Dictionary&lt;<span class="kwb">ulong</span>, KNucleotideNode&gt;();
+   <span class="kwa">private</span> <span class="kwb">byte</span>[] sequence;
+   <span class="kwb">int</span> length;
+   <span class="kwb">int</span> frame;
+
+   <span class="kwa">public</span> <span class="kwd">KNucleotide</span>(<span class="kwb">byte</span>[] s, <span class="kwb">int</span> l, <span class="kwb">int</span> f)
+   {   
+      sequence = s; length = l; frame = f;
+   }
+
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">AddFrequencies</span>(KNucleotide other)
+   {
+      <span class="kwa">foreach</span>(var kvp <span class="kwa">in</span> other.frequencies)            
+      {
+         KNucleotideNode kNucleotideNode;
+         <span class="kwa">if</span> (frequencies.<span class="kwd">TryGetValue</span>(kvp.Key, out kNucleotideNode))
+            kNucleotideNode.V += kvp.Value.V;
+         <span class="kwa">else</span>
+            frequencies[kvp.Key] = kvp.Value;
+      }
+   }
+
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">WriteFrequencies</span>() {
+      var items = <span class="kwa">new</span> List&lt;KeyValuePair&lt;<span class="kwb">ulong</span>, KNucleotideNode&gt;&gt;(frequencies);
+      items.<span class="kwd">Sort</span>(SortByFrequencyAndCode);    
+      <span class="kwb">double</span> percent = <span class="num">100.0</span> / (sequence.Length - length + <span class="num">1</span>);
+      <span class="kwa">foreach</span> (var item <span class="kwa">in</span> items)
+         Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="ipl">{0}</span> <span class="str">{1:f3}&quot;</span>,
+            <span class="kwd">PrintKey</span>(item.Key,item.Value.KeyLength), item.Value.V * percent);
+      Console.<span class="kwd">WriteLine</span>();
+   }
+
+   <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">GetCount</span>(<span class="kwb">string</span> fragment) {
+      KNucleotideNode kNucleotideNode;
+      <span class="kwb">ulong</span> key = <span class="kwd">CreateKey</span> (fragment);
+      <span class="kwa">if</span> (!frequencies.<span class="kwd">TryGetValue</span>(key, out kNucleotideNode))
+         kNucleotideNode = <span class="kwa">new</span> <span class="kwd">KNucleotideNode</span>(<span class="num">0</span>,<span class="num">0</span>);
+      <span class="kwa">return</span> kNucleotideNode.V;
+   }
+
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">KFrequency</span>() {
+      <span class="kwb">int</span> n = sequence.Length - length + <span class="num">1</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = frame; i &lt; n; i += length) {
+         var key = <span class="kwd">CreateKey</span>(sequence, i, length);
+         KNucleotideNode kNucleotideNode;
+         <span class="kwa">if</span> (frequencies.<span class="kwd">TryGetValue</span>(key, out kNucleotideNode))
+            kNucleotideNode.V++;
+         <span class="kwa">else</span>
+            frequencies[key] = <span class="kwa">new</span> <span class="kwd">KNucleotideNode</span>(<span class="num">1</span>,length);
+      }
+   }
+
+   <span class="kwb">int</span> <span class="kwd">SortByFrequencyAndCode</span>(
+      KeyValuePair&lt;<span class="kwb">ulong</span>, KNucleotideNode&gt; i0,
+      KeyValuePair&lt;<span class="kwb">ulong</span>, KNucleotideNode&gt; i1) {
+      <span class="kwb">int</span> order = i1.Value.V.<span class="kwd">CompareTo</span>(i0.Value.V);
+      <span class="kwa">if</span> (order != <span class="num">0</span>) <span class="kwa">return</span> order;
+      <span class="kwa">return</span> i0.Key.<span class="kwd">CompareTo</span>(i1.Key);
+   }
+}

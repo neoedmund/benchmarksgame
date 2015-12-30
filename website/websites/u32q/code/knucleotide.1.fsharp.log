@@ -1,0 +1,27 @@
+
+Tue, 11 Aug 2015 04:34:38 GMT
+
+MAKE:
+mv knucleotide.fsharp knucleotide.fs
+/usr/local/bin/fsharpc --target:exe --platform:x86 -O  -o knucleotide.fsharp_run.exe knucleotide.fs
+F# Compiler for F# 4.0 (Open Source Edition)
+Freely distributed under the Apache 2.0 Open Source License
+rm knucleotide.fs
+4.60s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/mono --llvm knucleotide.fsharp_run.exe 0 < knucleotide-input250000.txt
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+* Assertion at mini-exceptions.c:522, condition `generic_info' not met
+
+* Assertion at mini-exceptions.c:522, condition `generic_info' not met
+
+
+Stacktrace:
+
+  at <unknown> <0xffffffff>
+  at (wrapper managed-to-native) System.Diagnostics.StackTrace.get_trace (System.Exception,int,bool) <0xffffffff>

@@ -1,0 +1,128 @@
+<span class="com">/**</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Fabien Le Floc'h</span>
+<span class="com"> *</span>
+<span class="com"> * Java implementation of thread-ring benchmark. Best performance is achieved with </span>
+<span class="com"> * MAX_THREAD=1 as the thread-ring test is bested with only 1 os thread.</span>
+<span class="com"> * This implementation shows using a simple thread pool solves the thread context</span>
+<span class="com"> * switch issue.</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.util.concurrent.BlockingQueue;
+<span class="kwa">import</span> java.util.concurrent.ExecutorService;
+<span class="kwa">import</span> java.util.concurrent.Executors;
+<span class="kwa">import</span> java.util.concurrent.LinkedBlockingQueue;
+
+<span class="kwa">public class</span> threadring {
+    <span class="kwa">private static final</span> <span class="kwb">int</span> MAX_NODES = <span class="num">503</span>;
+    <span class="kwa">private static final</span> <span class="kwb">int</span> MAX_THREADS = <span class="num">503</span>;
+
+    <span class="kwa">private</span> ExecutorService executor;
+    <span class="kwa">private final</span> <span class="kwb">int</span> N;
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) {
+        threadring ring = <span class="kwa">new</span> <span class="kwd">threadring</span>(Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]));
+        Node node = ring.<span class="kwd">start</span>(MAX_NODES);
+        node.<span class="kwd">sendMessage</span>(<span class="kwa">new</span> <span class="kwd">TokenMessage</span>(<span class="num">1</span>,<span class="num">0</span>));
+    }
+    
+    <span class="kwa">public</span> <span class="kwd">threadring</span>(<span class="kwb">int</span> n) {
+        N = n;
+    }
+
+    <span class="kwa">public</span> Node <span class="kwd">start</span>(<span class="kwb">int</span> n) {
+        Node[] nodes = <span class="kwd">spawnNodes</span>(n);
+        <span class="kwd">connectNodes</span>(n, nodes);
+        <span class="kwa">return</span> nodes[<span class="num">0</span>];
+    }
+
+    <span class="kwa">private</span> Node[] <span class="kwd">spawnNodes</span>(<span class="kwb">int</span> n) {
+        executor = Executors.<span class="kwd">newFixedThreadPool</span>(MAX_THREADS);
+        Node[] nodes = <span class="kwa">new</span> Node[n+<span class="num">1</span>];
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; n ; i++) {
+            nodes[i] = <span class="kwa">new</span> <span class="kwd">Node</span>(i+<span class="num">1</span>, null);
+        }
+        <span class="kwa">return</span> nodes;
+    }
+    
+    <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">connectNodes</span>(<span class="kwb">int</span> n, Node[] nodes) {
+        nodes[n] = nodes[<span class="num">0</span>];
+        <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; i++) {
+            nodes[i].<span class="kwd">connect</span>(nodes[i+<span class="num">1</span>]);
+        }
+    }
+
+    <span class="kwa">private static class</span> TokenMessage {
+        <span class="kwa">private</span> <span class="kwb">int</span> nodeId;
+        <span class="kwa">private volatile</span> <span class="kwb">int</span> value;
+        <span class="kwa">private</span> <span class="kwb">boolean</span> isStop;
+
+        <span class="kwa">public</span> <span class="kwd">TokenMessage</span>(<span class="kwb">int</span> nodeId, <span class="kwb">int</span> value) {
+            <span class="kwa">this</span>.nodeId = nodeId;
+            <span class="kwa">this</span>.value = value;
+        }
+
+        <span class="kwa">public</span> <span class="kwd">TokenMessage</span>(<span class="kwb">int</span> nodeId, <span class="kwb">int</span> value, <span class="kwb">boolean</span> isStop) {
+            <span class="kwa">this</span>.nodeId = nodeId;
+            <span class="kwa">this</span>.value = value;
+            <span class="kwa">this</span>.isStop = isStop;
+        }
+    }
+
+    <span class="kwa">private class</span> Node <span class="kwa">implements</span> Runnable {
+        <span class="kwa">private</span> <span class="kwb">int</span> nodeId;
+        <span class="kwa">private</span> Node nextNode;
+        <span class="kwa">private</span> BlockingQueue&lt;TokenMessage&gt; queue = <span class="kwa">new</span> LinkedBlockingQueue&lt;TokenMessage&gt;();
+        <span class="kwa">private</span> <span class="kwb">boolean</span> isActive = false;
+        <span class="kwa">private</span> <span class="kwb">int</span> counter;
+
+        <span class="kwa">public</span> <span class="kwd">Node</span>(<span class="kwb">int</span> id, Node nextNode) {
+            <span class="kwa">this</span>.nodeId = id;
+            <span class="kwa">this</span>.nextNode = nextNode;
+            <span class="kwa">this</span>.counter = <span class="num">0</span>;
+        }
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">connect</span>(Node node) {
+            <span class="kwa">this</span>.nextNode = node;
+            isActive = true;
+        }
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">sendMessage</span>(TokenMessage m) {
+            queue.<span class="kwd">add</span>(m);
+            executor.<span class="kwd">execute</span>(<span class="kwa">this</span>);
+        }
+
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+            <span class="kwa">if</span> (isActive) {
+                <span class="kwa">try</span> {
+                    TokenMessage m = queue.<span class="kwd">take</span>();
+                    <span class="kwa">if</span> (m.isStop) {
+                        <span class="kwb">int</span> nextValue = m.value+<span class="num">1</span>;
+                        <span class="kwa">if</span> (nextValue == MAX_NODES) {
+<span class="slc">//                            System.out.println(&quot;last one&quot;);</span>
+                            executor.<span class="kwd">shutdown</span>();                            
+                        } <span class="kwa">else</span> {
+                            m.value = nextValue;
+                            nextNode.<span class="kwd">sendMessage</span>(m);
+                        }
+                        isActive = false;
+<span class="slc">//                        System.out.println(&quot;ending node &quot;+nodeId);</span>
+                    } <span class="kwa">else</span> {
+                        <span class="kwa">if</span> (m.value == N) {
+                            System.out.<span class="kwd">println</span>(nodeId);
+                            nextNode.<span class="kwd">sendMessage</span>(<span class="kwa">new</span> <span class="kwd">TokenMessage</span>(nodeId, <span class="num">0</span>, true));
+                        } <span class="kwa">else</span> {
+                            m.value = m.value + <span class="num">1</span>;
+                            nextNode.<span class="kwd">sendMessage</span>(m);
+                        }
+                    }
+                } <span class="kwa">catch</span> (InterruptedException ie) {
+                    ie.<span class="kwd">printStackTrace</span>();
+                }
+            }
+        }
+    }
+}

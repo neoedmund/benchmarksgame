@@ -1,0 +1,39 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Greg Buchholz</span>
+<span class="com">   compile:  g++ -O3</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include&lt;iostream&gt;</span>
+<span class="ppc">#include&lt;complex&gt;</span>
+
+<span class="kwb">int</span> <span class="kwd">main</span> (<span class="kwb">int</span> argc, <span class="kwb">char</span> **argv)
+{
+  <span class="kwb">char</span>  bit_num = <span class="num">0</span>, byte_acc = <span class="num">0</span>;
+  <span class="kwb">const int</span> iter = <span class="num">50</span>;
+  <span class="kwb">const double</span> lim = <span class="num">2.0</span> * <span class="num">2.0</span>;
+  
+  std::ios_base::<span class="kwd">sync_with_stdio</span>(<span class="kwa">false</span>);
+  <span class="kwb">int</span> n = <span class="kwd">atoi</span>(argv[<span class="num">1</span>]);
+
+  std::cout &lt;&lt; <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">&quot;</span> &lt;&lt; n &lt;&lt; <span class="str">&quot; &quot;</span> &lt;&lt; n &lt;&lt; std::endl;
+
+  <span class="kwa">for</span>(<span class="kwb">int</span> y=<span class="num">0</span>; y&lt;n; ++y) 
+    <span class="kwa">for</span>(<span class="kwb">int</span> x=<span class="num">0</span>; x&lt;n; ++x)
+    {
+       std::<span class="kwb">complex</span>&lt;<span class="kwb">double</span>&gt; <span class="kwd">Z</span>(<span class="num">0</span>,<span class="num">0</span>),<span class="kwd">C</span>(<span class="num">2</span>*(<span class="kwb">double</span>)x/n - <span class="num">1.5</span>, <span class="num">2</span>*(<span class="kwb">double</span>)y/n - <span class="num">1.0</span>);
+       
+       <span class="slc">//manually inlining &quot;norm&quot; results in a 5x-7x speedup on gcc</span>
+       <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;iter <span class="kwa">and</span> Z.<span class="kwd">real</span>()*Z.<span class="kwd">real</span>() + Z.<span class="kwd">imag</span>()*Z.<span class="kwd">imag</span>() &lt;= lim; ++i)
+         Z = Z*Z + C;
+        
+       byte_acc = (byte_acc &lt;&lt; <span class="num">1</span>) | ((<span class="kwd">norm</span>(Z) &gt; lim) ? <span class="num">0x00</span>:<span class="num">0x01</span>);
+
+       <span class="kwa">if</span>(++bit_num == <span class="num">8</span>){ std::cout &lt;&lt; byte_acc; bit_num = byte_acc = <span class="num">0</span>; }
+       <span class="kwa">else if</span>(x == n-<span class="num">1</span>) { byte_acc  &lt;&lt;= (<span class="num">8</span>-n%<span class="num">8</span>);
+                           std::cout &lt;&lt; byte_acc;
+                           bit_num = byte_acc = <span class="num">0</span>; }
+    }
+}

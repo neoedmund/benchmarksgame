@@ -1,0 +1,138 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># modified by Ian Osgood</span>
+<span class="slc"># modified again by Heinrich Acker</span>
+<span class="slc"># modified by Justin Peel</span>
+<span class="slc"># Modified by Christopher Sean Forgeron</span>
+
+<span class="kwa">import</span> sys
+<span class="kwa">import</span> bisect
+
+alu = (
+   <span class="str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG'</span>
+   <span class="str">'GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA'</span>
+   <span class="str">'CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT'</span>
+   <span class="str">'ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA'</span>
+   <span class="str">'GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG'</span>
+   <span class="str">'AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC'</span>
+   <span class="str">'AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span>)
+
+iub = <span class="kwb">list</span>(<span class="kwb">zip</span>(<span class="str">'acgtBDHKMNRSVWY'</span>, [<span class="num">0.27</span>, <span class="num">0.12</span>, <span class="num">0.12</span>, <span class="num">0.27</span>] + [<span class="num">0.02</span>] * <span class="num">11</span>))
+
+homosapiens = [
+    (<span class="str">'a'</span>, <span class="num">0.3029549426680</span>),
+    (<span class="str">'c'</span>, <span class="num">0.1979883004921</span>),
+    (<span class="str">'g'</span>, <span class="num">0.1975473066391</span>),
+    (<span class="str">'t'</span>, <span class="num">0.3015094502008</span>),
+]
+
+
+<span class="kwa">def</span> <span class="kwd">make_cumulative</span>(table):
+    P = []
+    C = []
+    prob = <span class="num">0</span>.
+    <span class="kwa">for</span> char, p <span class="kwa">in</span> table:
+        prob += p
+        P += [prob]
+        C += [<span class="kwb">ord</span>(char)]
+    <span class="kwa">return</span> (P, C)
+
+
+<span class="kwa">def</span> <span class="kwd">repeat_fasta</span>(src, n):
+    width = <span class="num">60</span>
+    nprint = sys.stdout.<span class="kwb">buffer</span>.write
+
+    is_trailing_line = <span class="kwa">False</span>
+    count_modifier = <span class="num">0.0</span>
+
+    len_of_src = <span class="kwb">len</span>(src)
+    ss = src + src + src[:n % len_of_src]
+    <span class="slc"># CSF - It's faster to work with a bytearray than a string</span>
+    s = <span class="kwd">bytearray</span>(ss, encoding=<span class="str">'utf8'</span>)
+
+    <span class="kwa">if</span> n % width:
+        <span class="slc"># We don't end on a 60 char wide line</span>
+        is_trailing_line = <span class="kwa">True</span>
+        count_modifier = <span class="num">1.0</span>
+
+    <span class="slc"># CSF - Here we are stuck with using an int instead of a float for the loop,</span>
+    <span class="slc"># but testing showed it still to be faster than a for loop</span>
+    count = <span class="num">0</span>
+    end = (n / <span class="kwb">float</span>(width)) - count_modifier
+    <span class="kwa">while</span> count &lt; end:
+        i = count*<span class="num">60</span> % len_of_src
+        <span class="kwd">nprint</span>(s[i:i+<span class="num">60</span>] + b<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+        count += <span class="num">1</span>
+    <span class="kwa">if</span> is_trailing_line:
+        <span class="kwd">nprint</span>(s[-(n % width):] + b<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+
+
+<span class="kwa">def</span> <span class="kwd">random_fasta</span>(table, n, seed):
+    width = <span class="num">60</span>
+    r = <span class="kwb">range</span>(width)
+    bb = bisect.bisect
+
+    <span class="slc"># If we don't have a multiple of the width, then we will have a trailing</span>
+    <span class="slc"># line, which needs a slightly different approach</span>
+    is_trailing_line = <span class="kwa">False</span>
+    count_modifier = <span class="num">0.0</span>
+
+    <span class="slc"># CSF - nprint allows us to print a bytearray directly to stdout, avoiding</span>
+    <span class="slc"># some conversion steps along the way, including a call to join</span>
+    nprint = sys.stdout.<span class="kwb">buffer</span>.write
+    line = <span class="kwd">bytearray</span>(width + <span class="num">1</span>)    <span class="slc"># Width of 60 + 1 for the \n char</span>
+
+    probs, chars = <span class="kwd">make_cumulative</span>(table)
+
+    <span class="slc"># pRNG Vars</span>
+    im = <span class="num">139968.0</span>
+    <span class="slc">#seed = 42.0</span>
+
+    <span class="kwa">if</span> n % width:
+        <span class="slc"># We don't end on a 60 char wide line</span>
+        is_trailing_line = <span class="kwa">True</span>
+        count_modifier = <span class="num">1.0</span>
+
+    <span class="slc"># CSF - Loops with a high iteration count run faster as a while/float loop.</span>
+    count = <span class="num">0.0</span>
+    end = (n / <span class="kwb">float</span>(width)) - count_modifier
+    <span class="kwa">while</span> count &lt; end:
+        <span class="slc"># CSF - Low iteration count loops may run faster as a for loop.</span>
+        <span class="kwa">for</span> i <span class="kwa">in</span> r:
+            <span class="slc"># CSF - Python is faster for all float math than it is for int, on my</span>
+            <span class="slc"># machine at least.</span>
+            seed = (seed * <span class="num">3877.0</span> + <span class="num">29573.0</span>) % <span class="num">139968.0</span>
+            <span class="slc"># CSF - While real values, not variables are faster for most things, on my</span>
+            <span class="slc"># machine, it's faster to have 'im' already in a var</span>
+            line[i] = chars[<span class="kwd">bb</span>(probs, seed / im)]
+
+        line[<span class="num">60</span>] = <span class="num">10</span>   <span class="slc"># End of Line</span>
+        <span class="kwd">nprint</span>(line)
+        count += <span class="num">1.0</span>
+
+    <span class="kwa">if</span> is_trailing_line:
+        <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(n % width):
+            seed = (seed * <span class="num">3877.0</span> + <span class="num">29573.0</span>) % <span class="num">139968.0</span>
+            line[i] = chars[<span class="kwd">bb</span>(probs, seed / im)]
+
+        <span class="kwd">nprint</span>(line[:i+<span class="num">1</span>] + b<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)
+
+    <span class="kwa">return</span> seed
+
+<span class="kwa">def</span> <span class="kwd">main</span>():
+    n = <span class="kwb">int</span>(sys.argv[<span class="num">1</span>])
+    nprint = sys.stdout.<span class="kwb">buffer</span>.write
+    <span class="kwd">nprint</span>(b<span class="str">'&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">'</span>)
+    <span class="kwd">repeat_fasta</span>(alu, n * <span class="num">2</span>)
+
+    <span class="slc"># We need to keep track of the state of 'seed' so we pass it in, and return</span>
+    <span class="slc"># it back so our output can pass the diff test</span>
+    <span class="kwd">nprint</span>(b<span class="str">'&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">'</span>)
+    seed=<span class="kwd">random_fasta</span>(iub, n * <span class="num">3</span>, seed=<span class="num">42.0</span>)
+
+    <span class="kwd">nprint</span>(b<span class="str">'&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">'</span>)
+    <span class="kwd">random_fasta</span>(homosapiens, n * <span class="num">5</span>, seed)
+
+<span class="kwa">if</span> __name__ == <span class="str">&quot;__main__&quot;</span>:
+    <span class="kwd">main</span>()

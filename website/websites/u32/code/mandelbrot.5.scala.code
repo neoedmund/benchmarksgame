@@ -1,0 +1,82 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   original contributed by Isaac Gouy</span>
+<span class="com">   made to use single array and parallelized by Stephen Marsh</span>
+<span class="com">   converted to Scala 2.8 by Rex Kerr</span>
+<span class="com">   made to use parallel collections and removed synchronized blocks by Steve Vickers</span>
+<span class="com">*/</span>
+<span class="kwa">import</span> java.io.BufferedOutputStream
+
+<span class="kwa">object</span> mandelbrot {
+	<span class="kwa">var</span> size: Int = <span class="num">0</span>
+	<span class="kwa">var</span> bytesPerRow: Int = <span class="num">0</span>
+	<span class="kwa">var</span> nextRow = <span class="num">0</span>
+	<span class="kwa">val</span> limitSquared = <span class="num">4.0</span>
+	<span class="kwa">val</span> max = <span class="num">50</span>
+
+	<span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) {
+		size = <span class="kwd">args</span>(<span class="num">0</span>).toInt
+		bytesPerRow = (size+<span class="num">7</span>)/<span class="num">8</span> <span class="slc">// ceiling of (size / 8)</span>
+
+		<span class="kwd">println</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">&quot;</span> + size + <span class="str">&quot; &quot;</span> + size)
+		<span class="kwa">val</span> w = <span class="kwa">new</span> <span class="kwd">BufferedOutputStream</span>(System.out)
+
+		(<span class="num">0</span> until size).par.<span class="kwd">map</span> (CalculateRow.apply).zipWithIndex.toVector.<span class="kwd">sortBy</span> (_._2) foreach {
+			<span class="kwa">case</span> (bitmap, y) =&gt;
+
+			w.<span class="kwd">write</span>(bitmap)
+			}
+
+		w.close
+	}
+
+	<span class="kwa">object</span> CalculateRow {
+		<span class="kwa">def</span> <span class="kwd">apply</span> (y : Int) : Array[Byte] = {
+			<span class="kwa">val</span> bitmap = <span class="kwa">new</span> Array[Byte] (bytesPerRow);
+			<span class="kwa">var</span> bits = <span class="num">0</span>
+			<span class="kwa">var</span> bitnum = <span class="num">0</span>
+			<span class="kwa">var</span> x = <span class="num">0</span>
+			<span class="kwa">var</span> aindex = <span class="num">0</span>
+
+			<span class="kwa">while</span> (x &lt; size) {
+
+				<span class="kwa">val</span> cr = <span class="num">2.0</span> * x / size - <span class="num">1.5</span>
+				<span class="kwa">val</span> ci = <span class="num">2.0</span> * y / size - <span class="num">1.0</span>
+
+				<span class="kwa">var</span> zr, tr, zi, ti = <span class="num">0.0</span>
+
+				<span class="kwa">var</span> j = max
+				<span class="kwa">do</span> {
+					zi = <span class="num">2.0</span> * zr * zi + ci
+					zr = tr - ti + cr
+					ti = zi*zi
+					tr = zr*zr
+
+					j = j - <span class="num">1</span>
+				} <span class="kwa">while</span> (!(tr + ti &gt; limitSquared) &amp;&amp; j &gt; <span class="num">0</span>)
+
+				bits = bits &lt;&lt; <span class="num">1</span>
+				<span class="kwa">if</span> (!(tr + ti &gt; limitSquared)) bits += <span class="num">1</span>
+				bitnum += <span class="num">1</span>
+
+				<span class="kwa">if</span> (x == size - <span class="num">1</span>) {
+					bits = bits &lt;&lt; (<span class="num">8</span> - bitnum)
+					bitnum = <span class="num">8</span>
+				}
+
+				<span class="kwa">if</span> (bitnum == <span class="num">8</span>) {
+					<span class="kwd">bitmap</span>(aindex) = bits.toByte
+					aindex += <span class="num">1</span>
+					bits = <span class="num">0</span>
+					bitnum = <span class="num">0</span>
+				}
+
+				x += <span class="num">1</span>
+			}
+
+			bitmap;
+		}
+	}
+}
+
+<span class="slc">// vim: set ts=4 sw=4 noet:</span>

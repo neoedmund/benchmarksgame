@@ -1,0 +1,58 @@
+#lang racket/base
+
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;; Derived from the Chicken variant by Sven Hartrumpf</span>
+<span class="slc">;;; contributed by Eli Barzilay</span>
+
+(<span class="kwa">require</span> racket/cmdline racket/require (<span class="kwa">for-syntax</span> racket/base)
+         (<span class="kwa">filtered-in</span> (<span class="kwa">lambda</span> (<span class="kwa">name</span>) (<span class="kwa">regexp-replace</span> #rx<span class="str">&quot;unsafe-&quot;</span> name <span class="str">&quot;&quot;</span>))
+                      racket/unsafe/ops))
+
+(<span class="kwa">struct</span> *leaf (<span class="kwa">val</span>))
+(<span class="kwa">struct</span> *node *leaf (<span class="kwa">left</span> right))
+
+(<span class="kwa">define-syntax</span> leaf  (<span class="kwa">make-rename-transformer</span> #'*leaf))
+(<span class="kwa">define-syntax</span> leaf? (<span class="kwa">make-rename-transformer</span> #'*leaf?))
+(<span class="kwa">define-syntax</span> node  (<span class="kwa">make-rename-transformer</span> #'*node))
+(<span class="kwa">define-syntax</span> node? (<span class="kwa">make-rename-transformer</span> #'*node?))
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">leaf-val</span> l)   (<span class="kwa">struct-ref</span> l <span class="num">0</span>))
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">node-left</span> n)  (<span class="kwa">struct-ref</span> n <span class="num">1</span>))
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">node-right</span> n) (<span class="kwa">struct-ref</span> n <span class="num">2</span>))
+
+(<span class="kwa">define</span> (<span class="kwa">make</span> item d)
+  (<span class="kwa">if</span> (<span class="kwa">fx</span>= d <span class="num">0</span>)
+    (<span class="kwa">leaf</span> item)
+    (<span class="kwa">let</span> ([item2 (<span class="kwa">fx</span>* item <span class="num">2</span>)] [d2 (<span class="kwa">fx-</span> d <span class="num">1</span>)])
+      (<span class="kwa">node</span> item (<span class="kwa">make</span> (<span class="kwa">fx-</span> item2 <span class="num">1</span>) d2) (<span class="kwa">make</span> item2 d2)))))
+
+(<span class="kwa">define</span> (<span class="kwa">check</span> t)
+  (<span class="kwa">let</span> loop ([t t] [acc <span class="num">0</span>])
+    (<span class="kwa">let</span> ([acc (<span class="kwa">fx</span>+ (<span class="kwa">leaf-val</span> t) acc)])
+      (<span class="kwa">if</span> (<span class="kwa">node</span>? t)
+        (<span class="kwa">loop</span> (<span class="kwa">node-left</span> t)
+              (<span class="kwa">fx-</span> acc (<span class="kwa">loop</span> (<span class="kwa">node-right</span> t) <span class="num">0</span>)))
+        acc))))
+
+(<span class="kwa">define</span> min-depth <span class="num">4</span>)
+
+(<span class="kwa">define</span> (<span class="kwa">main</span> n)
+  (<span class="kwa">let</span> ([max-depth (<span class="kwa">max</span> (+ min-depth <span class="num">2</span>) n)])
+    (<span class="kwa">let</span> ([stretch-depth (+ max-depth <span class="num">1</span>)])
+      (<span class="kwa">printf</span> <span class="str">&quot;stretch tree of depth ~a</span><span class="esc">\t</span> <span class="str">check: ~a</span><span class="esc">\n</span><span class="str">&quot;</span>
+              stretch-depth
+              (<span class="kwa">check</span> (<span class="kwa">make</span> <span class="num">0</span> stretch-depth))))
+    (<span class="kwa">let</span> ([long-lived-tree (<span class="kwa">make</span> <span class="num">0</span> max-depth)])
+      (<span class="kwa">for</span> ([d (<span class="kwa">in-range</span> <span class="num">4</span> (+ max-depth <span class="num">1</span>) <span class="num">2</span>)])
+        (<span class="kwa">let</span> ([iterations (<span class="kwa">expt</span> <span class="num">2</span> (+ (<span class="kwa">-</span> max-depth d) min-depth))])
+          (<span class="kwa">printf</span> <span class="str">&quot;~a</span><span class="esc">\t</span> <span class="str">trees of depth ~a</span><span class="esc">\t</span> <span class="str">check: ~a</span><span class="esc">\n</span><span class="str">&quot;</span>
+                  (* <span class="num">2</span> iterations)
+                  d
+                  (<span class="kwa">for</span>/fold ([c <span class="num">0</span>]) ([i (<span class="kwa">in-range</span> iterations)])
+                    (<span class="kwa">fx</span>+ c (<span class="kwa">fx</span>+ (<span class="kwa">check</span> (<span class="kwa">make</span> i d))
+                                (<span class="kwa">check</span> (<span class="kwa">make</span> (<span class="kwa">fx-</span> <span class="num">0</span> i) d))))))))
+      (<span class="kwa">printf</span> <span class="str">&quot;long lived tree of depth ~a</span><span class="esc">\t</span> <span class="str">check: ~a</span><span class="esc">\n</span><span class="str">&quot;</span>
+              max-depth
+              (<span class="kwa">check</span> long-lived-tree)))))
+
+(<span class="kwa">command-line</span> #:args (<span class="kwa">n</span>) (<span class="kwa">main</span> (<span class="kwa">string-</span>&gt;number n)))

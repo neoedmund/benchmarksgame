@@ -1,0 +1,70 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">  contributed by Isaac Gouy</span>
+<span class="com">  modified and updated for 2.8 by Rex Kerr</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> java.io._
+
+<span class="kwa">object</span> regexdna {
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) {
+
+    <span class="kwa">var</span> sequence = <span class="kwd">readFully</span>()
+    <span class="kwa">val</span> initialLength = sequence.length
+
+    <span class="kwa">def</span> <span class="kwd">matching</span>(s: String) = java.util.regex.Pattern.<span class="kwd">compile</span>(s).<span class="kwd">matcher</span>(sequence)
+
+    <span class="slc">// remove FASTA sequence descriptions and new-lines</span>
+    sequence = <span class="kwd">matching</span>(<span class="str">&quot;&gt;.*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;</span>).<span class="kwd">replaceAll</span>(<span class="str">&quot;&quot;</span>)
+    <span class="kwa">val</span> codeLength = sequence.length
+
+    <span class="slc">// regex match</span>
+    <span class="kwd">Array</span>(
+      <span class="str">&quot;agggtaaa|tttaccct&quot;</span>,
+      <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+      <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+      <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+      <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+      <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+      <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+      <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+      <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>
+    ).<span class="kwd">map</span>(v =&gt; {
+      <span class="kwa">var</span> count = <span class="num">0</span>
+      <span class="kwa">val</span> m = <span class="kwd">matching</span>(v)
+      <span class="kwa">while</span> (m.<span class="kwd">find</span>()) count += <span class="num">1</span>
+      <span class="kwd">println</span>(v + <span class="str">&quot; &quot;</span> + count)
+    })
+
+    <span class="slc">// regex substitution</span>
+    <span class="kwd">Array</span>(
+      (<span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>),
+      (<span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>),
+      (<span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>),
+      (<span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>),
+      (<span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>),
+      (<span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>),
+      (<span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>),
+      (<span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>),
+      (<span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>),
+      (<span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>),
+      (<span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>)
+    ).<span class="kwd">foreach</span>(iub =&gt; sequence = <span class="kwd">matching</span>(iub._1).<span class="kwd">replaceAll</span>(iub._2) )
+
+    <span class="kwd">println</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span> + initialLength + <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span> + codeLength + <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span> + sequence.length)
+  }
+
+  <span class="kwa">def</span> <span class="kwd">readFully</span>() = {
+    <span class="kwa">val</span> block = <span class="kwa">new</span> Array[Char](<span class="num">10240</span>)
+    <span class="kwa">val</span> buffer = <span class="kwa">new</span> StringBuffer
+    <span class="kwa">val</span> r = <span class="kwa">new</span> <span class="kwd">InputStreamReader</span>(System.<span class="kwa">in</span>)
+
+    Iterator.
+      <span class="kwd">continually</span>(r.<span class="kwd">read</span>(block)).
+      <span class="kwd">takeWhile</span>(_ &gt; -<span class="num">1</span>).
+      <span class="kwd">foreach</span>(n =&gt; buffer.<span class="kwd">append</span>(block,<span class="num">0</span>,n))
+
+   r.close
+   buffer.toString
+  }
+}

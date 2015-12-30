@@ -1,0 +1,184 @@
+&lt;?hh
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Wing-Chung Leung</span>
+<span class="com">   modified by Isaac Gouy</span>
+<span class="com">   modified by anon</span>
+<span class="com">   modified by Ludovic Urbain</span>
+<span class="com">   PHP as HHVM/Hack by Isaac Gouy</span>
+<span class="com"> */</span>
+
+<span class="kwd">ob_implicit_flush</span>(<span class="num">1</span>);
+<span class="kwd">ob_start</span>(NULL, <span class="num">4096</span>);
+
+$last = <span class="num">42.0</span>;
+<span class="kwa">function</span> <span class="kwd">gen_random</span>(&amp;$last, &amp;$randoms, $max = <span class="num">1.0</span>, $ia = <span class="num">3877.0</span>, $ic = <span class="num">29573.0</span>, $im = <span class="num">139968.0</span>) {<span class="slc">//2187 *67</span>
+   <span class="kwa">foreach</span>($randoms <span class="kwa">as</span> &amp;$r) {
+      $r = ($last = ($last * $ia + $ic) % $im) * $max / $im ; <span class="slc">// at this point this is responsible for 50% of the CPU time. *may* be an area to address, but how ?</span>
+   }
+}
+
+
+<span class="com">/* Generate and write FASTA format */</span>
+
+<span class="kwa">function</span> <span class="kwd">makeRandomFasta2</span>($n) {
+   $width = <span class="num">60</span>;
+   $lines = (<span class="kwb">int</span>) ($n / $width);
+   $pick = <span class="str">&quot;&quot;</span>;
+   $randoms = <span class="kwd">array_fill</span>(<span class="num">0</span>, $width, <span class="num">0.0</span>);
+   <span class="kwa">global</span> $last;
+
+   <span class="slc">// full lines</span>
+   <span class="kwa">for</span> ($i = <span class="num">0</span>; $i &lt; $lines; ++$i) {
+      $pick = <span class="str">&quot;&quot;</span>;
+      <span class="kwd">gen_random</span>($last, $randoms);
+      $j = <span class="num">0</span>;
+      <span class="kwa">foreach</span> ($randoms <span class="kwa">as</span> $r) {
+         <span class="kwa">if</span>($r&lt;<span class="num">0.302954942668</span>){
+            $pick.=<span class="str">'a'</span>;
+         }<span class="kwa">elseif</span>($r&lt;<span class="num">0.5009432431601</span>){
+            $pick.=<span class="str">'c'</span>;
+         }<span class="kwa">elseif</span>($r&lt;<span class="num">0.6984905497992</span>){
+            $pick.=<span class="str">'g'</span>;
+         }<span class="kwa">else</span>{
+            $pick.=<span class="str">'t'</span>;
+         }
+      }
+      <span class="kwa">echo</span> $pick.<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+   }
+
+   <span class="slc">// last, partial line</span>
+   $w = $n % $width;
+   <span class="kwa">if</span> ($w !== <span class="num">0</span>) {
+      $pick = <span class="str">&quot;&quot;</span>;
+      $randoms = <span class="kwd">array_fill</span>(<span class="num">0</span>, $w, <span class="num">0.0</span>);
+      <span class="kwd">gen_random</span>($last, $randoms);
+      $j = <span class="num">0</span>;
+      <span class="kwa">foreach</span> ($randoms <span class="kwa">as</span> $r) {
+         <span class="kwa">if</span>($r&lt;<span class="num">0.302954942668</span>){
+            $pick.=<span class="str">'a'</span>;
+         }<span class="kwa">elseif</span>($r&lt;<span class="num">0.5009432431601</span>){
+            $pick.=<span class="str">'c'</span>;
+         }<span class="kwa">elseif</span>($r&lt;<span class="num">0.6984905497992</span>){
+            $pick.=<span class="str">'g'</span>;
+         }<span class="kwa">else</span>{
+            $pick.=<span class="str">'t'</span>;
+         }
+      }
+      <span class="kwa">echo</span> $pick.<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+   }
+}
+
+
+<span class="kwa">function</span> <span class="kwd">makeRandomFasta3</span>(&amp;$genelist, $n) {
+   $width = <span class="num">60</span>;
+   $lines = (<span class="kwb">int</span>) ($n / $width);
+   $pick = <span class="str">&quot;&quot;</span>;
+   $randoms = <span class="kwd">array_fill</span>(<span class="num">0</span>, $width, <span class="num">0.0</span>);
+   <span class="kwa">global</span> $last;
+   <span class="slc">// full lines</span>
+   <span class="kwa">for</span> ($i = <span class="num">0</span>; $i &lt; $lines; ++$i) {
+      $pick = <span class="str">&quot;&quot;</span>;
+      <span class="kwd">gen_random</span>($last, $randoms);
+      $j = <span class="num">0</span>;
+      <span class="kwa">foreach</span> ($randoms <span class="kwa">as</span> $r) {
+         $pick.=$genelist[(<span class="kwb">int</span>)($r*<span class="num">100</span>)];
+      }
+      <span class="kwa">echo</span> $pick.<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+   }
+   <span class="slc">// last, partial line</span>
+   $w = $n % $width;
+   <span class="kwa">if</span> ($w !== <span class="num">0</span>) {
+      $pick = <span class="str">&quot;&quot;</span>;
+      $randoms = <span class="kwd">array_fill</span>(<span class="num">0</span>, $w, <span class="num">0.0</span>);
+      <span class="kwd">gen_random</span>($last, $randoms);
+      $j = <span class="num">0</span>;
+     <span class="kwa">foreach</span> ($randoms <span class="kwa">as</span> $r) {
+        $pick.=$genelist[(<span class="kwb">int</span>)($r*<span class="num">100</span>)];
+     }
+     <span class="kwa">echo</span> $pick.<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+   }
+}
+
+
+<span class="kwa">function</span> <span class="kwd">makeRepeatFasta</span>($s, $n) {
+   $i = <span class="num">0</span>; $sLength = <span class="kwd">strlen</span>($s); $lineLength = <span class="num">60</span>;
+   <span class="kwa">while</span> ($n &gt; <span class="num">0</span>) {
+      <span class="kwa">if</span> ($n &lt; $lineLength) $lineLength = $n;
+      <span class="kwa">if</span> ($i + $lineLength &lt; $sLength){
+         <span class="kwa">echo</span> <span class="kwd">substr</span>($s,$i,$lineLength).<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+         $i += $lineLength;
+      } <span class="kwa">else</span> {
+         <span class="kwa">echo</span> <span class="kwd">substr</span>($s,$i);
+         $i = $lineLength - ($sLength - $i);
+         <span class="kwa">echo</span> <span class="kwd">substr</span>($s,<span class="num">0</span>,$i).<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+      }
+      $n -= $lineLength;
+   }
+}
+
+
+<span class="com">/* Main -- define alphabets, make 3 fragments */</span>
+
+$iub=<span class="kwa">array</span>(
+   <span class="str">'a'</span> =&gt; <span class="num">0.27</span>,
+   <span class="str">'c'</span> =&gt; <span class="num">0.12</span>,
+   <span class="str">'g'</span> =&gt; <span class="num">0.12</span>,
+   <span class="str">'t'</span> =&gt; <span class="num">0.27</span>,
+
+   <span class="str">'B'</span> =&gt; <span class="num">0.02</span>,
+   <span class="str">'D'</span> =&gt; <span class="num">0.02</span>,
+   <span class="str">'H'</span> =&gt; <span class="num">0.02</span>,
+   <span class="str">'K'</span> =&gt; <span class="num">0.02</span>,
+   <span class="str">'M'</span> =&gt; <span class="num">0.02</span>,
+   <span class="str">'N'</span> =&gt; <span class="num">0.02</span>,
+   <span class="str">'R'</span> =&gt; <span class="num">0.02</span>,
+   <span class="str">'S'</span> =&gt; <span class="num">0.02</span>,
+   <span class="str">'V'</span> =&gt; <span class="num">0.02</span>,
+   <span class="str">'W'</span> =&gt; <span class="num">0.02</span>,
+   <span class="str">'Y'</span> =&gt; <span class="num">0.02</span>
+);
+
+<span class="kwa">function</span> <span class="kwd">buildDafuqPercentArray</span>($arr){
+   $i=<span class="num">0</span>;
+   $r=<span class="kwa">array</span>();
+   <span class="kwa">foreach</span>($arr <span class="kwa">as</span> $k =&gt; $v){
+      <span class="kwa">for</span>($j=<span class="num">0</span>;$j&lt;$v*<span class="num">100</span>;$j++){
+         $r[]=$k;
+      }
+   }
+   <span class="kwa">return</span> $r;
+}
+
+$homosapiens = <span class="kwa">array</span>(
+   <span class="str">'a'</span> =&gt; <span class="num">0.3029549426680</span>,
+   <span class="str">'c'</span> =&gt; <span class="num">0.1979883004921</span>,
+   <span class="str">'g'</span> =&gt; <span class="num">0.1975473066391</span>,
+   <span class="str">'t'</span> =&gt; <span class="num">0.3015094502008</span>
+);
+
+$alu =
+   <span class="str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG'</span> .
+   <span class="str">'GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA'</span> .
+   <span class="str">'CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT'</span> .
+   <span class="str">'ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA'</span> .
+   <span class="str">'GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG'</span> .
+   <span class="str">'AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC'</span> .
+   <span class="str">'AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span>;
+
+$n = <span class="num">1000</span>;
+
+<span class="kwa">if</span> ($_SERVER[<span class="str">'argc'</span>] &gt; <span class="num">1</span>) $n = $_SERVER[<span class="str">'argv'</span>][<span class="num">1</span>];
+
+$iub2=<span class="kwd">buildDafuqPercentArray</span>($iub);
+
+<span class="kwa">echo</span> <span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>;
+<span class="kwd">makeRepeatFasta</span>($alu, $n*<span class="num">2</span>);
+
+<span class="kwa">echo</span> <span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>;
+<span class="kwd">makeRandomFasta3</span>($iub2, $n*<span class="num">3</span>);
+
+<span class="kwa">echo</span> <span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>;
+<span class="kwd">makeRandomFasta2</span>($n*<span class="num">5</span>);
+

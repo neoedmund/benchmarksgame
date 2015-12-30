@@ -1,0 +1,28 @@
+
+Wed, 20 May 2015 00:06:41 GMT
+
+MAKE:
+mv meteor.scala meteor.scala
+mv: ‘meteor.scala’ and ‘meteor.scala’ are the same file
+/home/dunham/benchmarksgame/nanobench/makefiles/u64.programs.Makefile:596: recipe for target 'meteor.scala_run' failed
+make: [meteor.scala_run] Error 1 (ignored)
+/usr/local/src/scala-2.11.6/bin/scalac -optimise -target:jvm-1.8 meteor.scala
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+meteor.scala:296: error: value first is not a member of Array[String]
+          args.first.toInt
+               ^
+one error found
+/home/dunham/benchmarksgame/nanobench/makefiles/u64.programs.Makefile:596: recipe for target 'meteor.scala_run' failed
+make: [meteor.scala_run] Error 1 (ignored)
+4.20s to complete and log all make actions
+
+COMMAND LINE:
+ /usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -Xbootclasspath/a:/usr/local/src/scala-2.11.6/lib/scala-library.jar:/usr/local/src/scala-2.11.6/lib/akka-actors.jar:/usr/local/src/scala-2.11.6/lib/typesafe-config.jar meteor 2098
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Error: Could not find or load main class meteor

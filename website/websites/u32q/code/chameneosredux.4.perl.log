@@ -1,0 +1,36 @@
+
+Sun, 15 Mar 2015 07:39:11 GMT
+
+COMMAND LINE:
+/usr/local/src/perl-5.20.2/bin/perl chameneosredux.perl-4.perl 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+ blue red yellow
+3593186 zero
+4003669 zero
+4403145 zero
+ one two zero zero zero zero zero zero
+
+ blue red yellow red yellow blue red yellow red blue
+1207653 zero
+1196398 zero
+1185449 zero
+1207035 zero
+1197485 zero
+1196886 zero
+1197771 zero
+1207776 zero
+1195977 zero
+1207570 zero
+ one two zero zero zero zero zero zero
+

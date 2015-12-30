@@ -1,0 +1,114 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># Contributed by Andrew Rodland</span>
+
+<span class="kwa">use</span> strict;
+<span class="kwa">use</span> IO::Select;
+
+<span class="kwc">our</span> (<span class="kwb">$n</span>, <span class="kwb">$size_of_float</span>, <span class="kwb">$threads</span>, <span class="kwb">&#64;ranges</span>, <span class="kwb">$begin</span>, <span class="kwb">$end</span>);
+
+<span class="kwa">sub</span> eval_A {
+  <span class="kwa">use</span> integer;
+  <span class="kwc">my</span> <span class="kwb">$div</span> = ( (<span class="kwb">$_</span>[<span class="num">0</span>] + <span class="kwb">$_</span>[<span class="num">1</span>]) * (<span class="kwb">$_</span>[<span class="num">0</span>] + <span class="kwb">$_</span>[<span class="num">1</span>] + <span class="num">1</span>) / <span class="num">2</span>) + <span class="kwb">$_</span>[<span class="num">0</span>] + <span class="num">1</span>;
+  <span class="kwa">no</span> integer;
+  <span class="num">1</span> / <span class="kwb">$div</span>;
+}
+
+<span class="kwa">sub</span> multiplyAv {
+  <span class="kwa">return</span> <span class="kwc">map</span> {
+    <span class="kwc">my</span> (<span class="kwb">$i</span>, <span class="kwb">$sum</span>) = (<span class="kwb">$_</span>);
+    <span class="kwb">$sum</span> += eval_A(<span class="kwb">$i</span>, <span class="kwb">$_</span>) * <span class="kwb">$_</span>[<span class="kwb">$_</span>] <span class="kwa">for</span> <span class="num">0</span> .. <span class="kwb">$#_</span>;
+    <span class="kwb">$sum</span>;
+  } <span class="kwb">$begin</span> .. <span class="kwb">$end</span>;
+}
+
+<span class="kwa">sub</span> multiplyAtv {
+  <span class="kwa">return</span> <span class="kwc">map</span> {
+    <span class="kwc">my</span> (<span class="kwb">$i</span>, <span class="kwb">$sum</span>) = (<span class="kwb">$_</span>);
+    <span class="kwb">$sum</span> += eval_A(<span class="kwb">$_</span>, <span class="kwb">$i</span>) * <span class="kwb">$_</span>[<span class="kwb">$_</span>] <span class="kwa">for</span> <span class="num">0</span> .. <span class="kwb">$#_</span>;
+    <span class="kwb">$sum</span>;
+  } <span class="kwb">$begin</span> .. <span class="kwb">$end</span>;
+}
+
+<span class="kwa">sub</span> do_parallel {
+  <span class="kwc">my</span> <span class="kwb">$func</span> = <span class="kwc">shift</span>;
+
+  <span class="kwc">my</span> <span class="kwb">&#64;out</span>;
+  <span class="kwc">my</span> (<span class="kwb">&#64;fd</span>, <span class="kwb">&#64;ptr</span>, <span class="kwb">%fh2proc</span>);
+  <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$proc</span> (<span class="num">0</span> .. <span class="kwb">$threads</span> - <span class="num">1</span>) {
+    (<span class="kwb">$begin</span>, <span class="kwb">$end</span>) = &#64;{ <span class="kwb">$ranges</span>[<span class="kwb">$proc</span>] };
+    <span class="kwc">my</span> <span class="kwb">$pid</span> = <span class="kwc">open</span> <span class="kwb">$fd</span>[<span class="kwb">$proc</span>], <span class="str">&quot;-|&quot;</span>;
+    <span class="kwa">if</span> (<span class="kwb">$pid</span> == <span class="num">0</span>) {
+      <span class="kwc">print pack</span> <span class="str">&quot;F*&quot;</span>, <span class="kwb">$func</span>-&gt;( <span class="kwb">&#64;_</span> );
+      <span class="kwa">exit</span> <span class="num">0</span>;
+    } <span class="kwa">else</span> {
+      <span class="kwb">$fh2proc</span>{ <span class="kwb">$fd</span>[<span class="kwb">$proc</span>] } = <span class="kwb">$proc</span>;
+      <span class="kwb">$ptr</span>[<span class="kwb">$proc</span>] = <span class="kwb">$begin</span>;
+    }
+  }
+
+  <span class="kwc">my</span> <span class="kwb">$select</span> = IO::Select-&gt;<span class="kwd">new</span>(<span class="kwb">&#64;fd</span>);
+
+  <span class="kwa">while</span> (<span class="kwb">$select</span>-&gt;<span class="kwd">count</span>) {
+    <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$fh</span> (<span class="kwb">$select</span>-&gt;<span class="kwd">can_read</span>) {
+      <span class="kwc">my</span> <span class="kwb">$proc</span> = <span class="kwb">$fh2proc</span>{<span class="kwb">$fh</span>};
+      <span class="kwa">while</span> (<span class="kwc">read</span> <span class="kwb">$fh</span>, <span class="kwc">my</span> <span class="kwb">$data</span>, <span class="kwb">$size_of_float</span>) {
+        <span class="kwb">$out</span>[ <span class="kwb">$ptr</span>[<span class="kwb">$proc</span>] ++ ] = <span class="kwc">unpack</span> <span class="str">&quot;F&quot;</span>, <span class="kwb">$data</span>;
+      }
+      <span class="kwb">$select</span>-&gt;<span class="kwd">remove</span>(<span class="kwb">$fh</span>) <span class="kwa">if</span> <span class="kwc">eof</span>(<span class="kwb">$fh</span>);
+    }
+  }
+
+  <span class="kwa">return</span> <span class="kwb">&#64;out</span>;
+}
+
+<span class="kwa">sub</span> multiplyAtAv {
+  <span class="kwc">my</span> <span class="kwb">&#64;array</span> = do_parallel(\&amp;multiplyAv, <span class="kwb">&#64;_</span>);
+  <span class="kwa">return</span> do_parallel(\&amp;multiplyAtv, <span class="kwb">&#64;array</span>);
+}
+
+<span class="kwa">sub</span> num_cpus {
+  <span class="kwc">open my</span> <span class="kwb">$fh</span>, <span class="str">'&lt;/proc/cpuinfo'</span> <span class="kwc">or</span> <span class="kwa">return</span>;
+  <span class="kwc">my</span> <span class="kwb">$cpus</span>;
+  <span class="kwa">while</span> (&lt;<span class="kwb">$fh</span>&gt;) {
+    <span class="kwb">$cpus</span> ++ <span class="kwa">if</span> <span class="kwd">/^processor\s+:/</span>;
+  }
+  <span class="kwa">return</span> <span class="kwb">$cpus</span>;
+}
+
+<span class="kwa">sub</span> init {
+  <span class="kwb">$size_of_float</span> = <span class="kwc">length pack</span> <span class="str">&quot;F&quot;</span>, <span class="num">0</span>;
+
+  <span class="kwb">$n</span> = <span class="kwb">&#64;ARGV</span> ? <span class="kwb">$ARGV</span>[<span class="num">0</span>] : <span class="num">500</span>;
+  <span class="kwb">$threads</span> = num_cpus() || <span class="num">1</span>;
+
+  <span class="kwa">if</span> (<span class="kwb">$threads</span> &gt; <span class="kwb">$n</span>) {
+    <span class="kwb">$threads</span> = <span class="kwb">$n</span>;
+  }
+
+  <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$i</span> (<span class="num">0</span> .. <span class="kwb">$threads</span> - <span class="num">1</span>) {
+    <span class="kwa">use</span> integer;
+    <span class="kwb">$ranges</span>[<span class="kwb">$i</span>][<span class="num">0</span>] = <span class="kwb">$n</span> * <span class="kwb">$i</span> / <span class="kwb">$threads</span>;
+    <span class="kwb">$ranges</span>[<span class="kwb">$i</span>][<span class="num">1</span>] = <span class="kwb">$n</span> * (<span class="kwb">$i</span> + <span class="num">1</span>) / <span class="kwb">$threads</span> - <span class="num">1</span>;
+    <span class="kwa">no</span> integer;
+  }
+}
+
+init();
+
+<span class="kwc">my</span> <span class="kwb">&#64;u</span> = (<span class="num">1</span>) x <span class="kwb">$n</span>;
+<span class="kwc">my</span> <span class="kwb">&#64;v</span>;
+<span class="kwa">for</span> (<span class="num">0</span> .. <span class="num">9</span>) {
+  <span class="kwb">&#64;v</span> = multiplyAtAv( <span class="kwb">&#64;u</span> );
+  <span class="kwb">&#64;u</span> = multiplyAtAv( <span class="kwb">&#64;v</span> );
+}
+
+<span class="kwc">my</span> (<span class="kwb">$vBv</span>, <span class="kwb">$vv</span>);
+<span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$i</span> (<span class="num">0</span> .. <span class="kwb">$#u</span>) {
+  <span class="kwb">$vBv</span> += <span class="kwb">$u</span>[<span class="kwb">$i</span>] * <span class="kwb">$v</span>[<span class="kwb">$i</span>];
+  <span class="kwb">$vv</span> += <span class="kwb">$v</span>[<span class="kwb">$i</span>] ** <span class="num">2</span>;
+}
+
+<span class="kwc">printf</span>( <span class="str">&quot;</span><span class="ipl">%0</span><span class="str">.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwc">sqrt</span>( <span class="kwb">$vBv</span> / <span class="kwb">$vv</span> ) );
+

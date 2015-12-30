@@ -1,0 +1,18 @@
+
+Wed, 01 Jul 2015 00:29:23 GMT
+
+MAKE:
+mv fannkuchredux.clojure-2.clojure fannkuchredux.clj
+/usr/local/src/jdk1.8.0_45/bin/java -Dclojure.compile.path=. -cp .:/usr/local/src/clojure/clojure-1.7.0.jar: clojure.lang.Compile fannkuchredux
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Compiling fannkuchredux to .
+1.96s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts -Xmx16m -cp .:/usr/local/src/clojure/clojure-1.7.0.jar: fannkuchredux 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

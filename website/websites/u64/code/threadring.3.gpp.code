@@ -1,0 +1,171 @@
+<span class="com">/*</span>
+<span class="com">* The Computer Language Benchmarks Game</span>
+<span class="com">* http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">* Based on C contribution by Premysl Hruby</span>
+<span class="com">* Contributed by The Anh Tran</span>
+<span class="com">*/</span>
+
+<span class="com">/*</span>
+<span class="com">   This program will create 503 OS threads.</span>
+<span class="com">   Those threads will wait inside boost::asio::io_service.run() queue,</span>
+<span class="com">   if there is task in this queue, a thread will be dispatch to process it.</span>
+<span class="com">   Each task is a token passing run.</span>
+<span class="com"></span>
+<span class="com">   asio::io_service:</span>
+<span class="com">      On Win:      NtIOCompletionPort</span>
+<span class="com">      On Linux:   kqueue</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;sched.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+
+<span class="ppc">#include &lt;boost/scoped_ptr.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/asio.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/lexical_cast.hpp&gt;</span>
+<span class="kwa">using namespace</span> boost;
+
+
+<span class="kwb">enum</span> 
+{   
+   THREAD_COUNT   = <span class="num">503</span>,
+   STACK_SIZE      = <span class="num">4</span>*<span class="num">1024</span>
+};
+
+
+<span class="slc">// pthread handle</span>
+pthread_t         threadid[THREAD_COUNT];
+<span class="slc">// custom stack space</span>
+<span class="kwb">char</span>            stacks   [THREAD_COUNT][STACK_SIZE];
+
+
+<span class="slc">// Task queue:</span>
+scoped_ptr&lt;asio::io_service&gt; iosv;
+
+
+<span class="slc">// how many times remain to pass the token</span>
+<span class="kwb">int</span> token;
+
+<span class="slc">// Rule 4: &quot;pass the token from thread to thread N times&quot;</span>
+<span class="slc">// Any (real OS) thread can pick up the task inside asio::io_service.</span>
+<span class="slc">// In order to satisfy benchmark rule, this struct encapsulates a &quot;faked&quot; thread </span>
+<span class="slc">// that handle each token passing run. </span>
+<span class="slc">// The real thread impersonates a faked thread, and passes token to next faked thread.</span>
+<span class="kwb">struct</span> LogicalThread
+{
+   <span class="kwb">int</span> my_id;
+   <span class="kwb">int</span> next_id;
+   
+   <span class="kwb">void</span> <span class="kwc">operator</span>()() <span class="kwb">const</span>;
+};
+LogicalThread   threads[THREAD_COUNT];
+
+
+<span class="kwb">void</span> 
+LogicalThread::<span class="kwc">operator</span>()() <span class="kwb">const</span>
+{
+   <span class="kwa">if</span> (token &gt; <span class="num">0</span>)
+   {
+      --token;
+      <span class="slc">// pass token to next</span>
+      iosv-&gt;<span class="kwd">post</span>( threads[next_id] );
+   }
+   <span class="kwa">else</span>
+      <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\n</span><span class="str">&quot;</span>, my_id);   <span class="slc">// done, print who is the final</span>
+}
+
+
+<span class="kwb">static</span>
+<span class="kwb">void</span>* 
+<span class="kwd">thread_func</span>( <span class="kwb">void</span>* )
+{
+   <span class="slc">// gather at task queue, waiting for job</span>
+   <span class="slc">// this run() func will return when queue is empty</span>
+   iosv-&gt;<span class="kwd">run</span>();   
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+
+<span class="kwb">static</span>
+<span class="kwb">void</span>
+<span class="kwd">SetSingleCPU</span>()
+{
+   cpu_set_t   aff_set;
+   <span class="kwd">CPU_ZERO</span>(&amp;aff_set);
+   
+   <span class="kwd">sched_getaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(aff_set), &amp;aff_set);
+   
+   <span class="kwb">int</span> cpu_aff = <span class="num">0</span>, cpu_count = <span class="num">0</span>;
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">64</span>; ++i)
+   {
+      <span class="kwa">if</span> (<span class="kwd">CPU_ISSET</span>(i, &amp;aff_set))
+      {
+         cpu_aff = i;
+         ++cpu_count;
+      }
+   }
+
+   <span class="kwa">if</span> (cpu_count &gt; <span class="num">1</span>)
+   {
+      <span class="kwd">CPU_ZERO</span>(&amp;aff_set);
+      <span class="kwd">CPU_SET</span>(cpu_aff, &amp;aff_set);
+      <span class="kwd">sched_setaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(aff_set), &amp;aff_set);
+   }
+}
+
+
+<span class="kwb">int</span> 
+<span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>** args)
+{
+   <span class="slc">// set process affinity to 1 cpu,</span>
+   <span class="slc">// to avoid spreading thread context on all CPUs</span>
+   <span class="kwd">SetSingleCPU</span>();
+   
+   <span class="slc">// create task queue</span>
+   iosv.<span class="kwd">reset</span>( <span class="kwa">new</span> asio::io_service );
+
+   <span class="slc">// parse input</span>
+   <span class="kwa">if</span> (argc &gt;= <span class="num">2</span>)
+      token = lexical_cast&lt;<span class="kwb">int</span>&gt;(args[<span class="num">1</span>]);
+   <span class="kwa">else</span>
+      token = <span class="num">1000</span>;
+
+
+   <span class="slc">// Rule 2: &quot;thread 503 should be linked to thread 1, forming an unbroken ring&quot;</span>
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; THREAD_COUNT; i++) 
+   {
+      threads[i].my_id = i +<span class="num">1</span>;
+      threads[i].next_id = i +<span class="num">1</span>;
+   }
+   threads[THREAD_COUNT -<span class="num">1</span>].next_id = <span class="num">0</span>;
+
+
+   <span class="slc">// Rule 3: &quot;pass a token to thread 1&quot;</span>
+   <span class="slc">// post first task to queue, so that task queue is not empty</span>
+   <span class="slc">// this task will be handled by &quot;thread 0&quot;</span>
+   iosv-&gt;<span class="kwd">post</span>( threads[<span class="num">0</span>] );
+   
+
+   <span class="slc">// Rule 1: &quot;create 503 linked threads (named 1 to 503)&quot;</span>
+   <span class="slc">// cannot use boost::thread here, b/c creating 503 threads with default </span>
+   <span class="slc">// stack size will overflow process's working set</span>
+   {
+      pthread_attr_t stack_attr;
+      <span class="kwd">pthread_attr_init</span>( &amp;stack_attr );
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; THREAD_COUNT; i++) 
+      {
+         <span class="slc">// manually set stack space &amp; stack size for each thread </span>
+         <span class="slc">// to reduce virtual memory cost</span>
+         <span class="kwd">pthread_attr_setstack</span>( &amp;stack_attr, &amp;stacks[i], STACK_SIZE );
+
+         <span class="slc">// create thread using customized stack space</span>
+         <span class="kwd">pthread_create</span>( &amp;threadid[i], &amp;stack_attr, &amp;thread_func, <span class="num">0</span> );
+      }
+   }
+   
+   <span class="slc">// waiting</span>
+   iosv-&gt;<span class="kwd">run</span>();
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+

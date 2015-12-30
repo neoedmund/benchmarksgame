@@ -1,0 +1,268 @@
+<span class="slc">--</span>
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">--   Sterling Clover's translation of Tim Hochberg's Clean implementation</span>
+
+<span class="kwd">module</span> Main <span class="kwd">where</span>
+<span class="kwd">import</span> System.Environment
+<span class="kwd">import</span> Data.Bits
+<span class="kwd">import</span> Data.List <span class="kwd">hiding</span> (permutations)
+<span class="kwd">import</span> Data.<span class="kwb">Array</span>.IArray
+<span class="kwd">import</span> Data.<span class="kwb">Array</span>.Unboxed
+<span class="kwd">import</span> Control.Arrow
+
+<span class="slc">--- The Board ---</span>
+n_elem = <span class="num">5</span>
+n_col = <span class="num">5</span>
+n_row = <span class="num">10</span>
+
+m_top :: Mask
+m_top = <span class="num">0x1F</span>
+
+cells :: [Cell]
+cells = [<span class="num">0</span>.<span class="num">.49</span>]
+
+colors :: [Color]
+colors = [<span class="num">0</span>.<span class="num">.9</span>]
+
+cellAt x y = x + n_col * y
+coordOf i = <span class="kwc">snd</span> &amp;&amp;&amp; <span class="kwc">fst</span> $ i `<span class="kwc">quotRem</span>` n_col
+isValid x y = <span class="num">0</span> &lt;= x &amp;&amp; x &lt; n_col &amp;&amp; <span class="num">0</span> &lt;= y &amp;&amp; y &lt; n_row
+
+<span class="slc">--- Piece Operations ---</span>
+<span class="kwd">data</span> Direction = E | SE | SW | W | NW | NE <span class="kwd">deriving</span> (Enum, Eq, Ord)
+<span class="kwd">type</span> Piece = [Direction]
+<span class="kwd">type</span> CellCoord = (<span class="kwb">Int</span>, <span class="kwb">Int</span>)
+<span class="kwd">type</span> Mask = <span class="kwb">Int</span>; <span class="kwd">type</span> Color = <span class="kwb">Int</span>; <span class="kwd">type</span> Row = <span class="kwb">Int</span>;
+<span class="kwd">type</span> Col = <span class="kwb">Int</span>; <span class="kwd">type</span> Tag = <span class="kwb">Int</span>; <span class="kwd">type</span> Cell = <span class="kwb">Int</span>
+<span class="kwd">type</span> Solution = [Mask]
+
+pieces :: <span class="kwb">Array Int</span> Piece
+pieces = <span class="kwa">array</span> (<span class="num">0</span>,<span class="num">9</span>) $ <span class="kwc">zip</span> [<span class="num">0</span>.<span class="num">.9</span>] $
+         [[E,  E,  E,  SE],
+	  [SE, SW, W,  SW],
+	  [W,  W,  SW, SE],
+	  [E,  E,  SW, SE],
+	  [NW, W,  NW, SE, SW],
+	  [E,  E,  NE, W],
+	  [NW, NE, NE, W],
+	  [NE, SE, E,  NE],
+	  [SE, SE, E,  SE],
+	  [E,  NW, NW, NW]]
+
+permutations :: Piece -&gt; [Piece]
+permutations p = <span class="kwc">take</span> <span class="num">12</span> (perms p)
+    <span class="kwd">where</span>
+      perms p = p:(<span class="kwc">flip</span> p) : perms (rotate p)
+      rotate piece = <span class="kwc">map</span> r piece
+          <span class="kwd">where</span> r E  = NE
+                r NE = NW
+                r NW = W
+                r W  = SW
+                r SW = SE
+                r SE = E
+      <span class="kwc">flip</span> piece = <span class="kwc">map</span> f piece
+          <span class="kwd">where</span> f E  = W
+                f NE = NW
+                f NW = NE
+                f W  = E
+                f SW = SE
+                f SE = SW
+
+<span class="slc">--- Mask Operations ----</span>
+untag :: Mask -&gt; Mask
+untag mask   = mask .&amp;. <span class="num">0x1ffffff</span>
+
+retag :: Mask -&gt; Tag -&gt; Mask
+retag mask n = untag mask .|. n `shiftL` <span class="num">25</span>
+
+tagof :: Mask -&gt; Tag
+tagof mask   = mask `shiftR` <span class="num">25</span>
+
+tag :: Mask -&gt; Tag -&gt; Mask
+tag   mask n = mask .|. n `shiftL` <span class="num">25</span>
+
+count1s :: Mask -&gt; <span class="kwb">Int</span>
+count1s i 
+    | i == <span class="num">0</span> = <span class="num">0</span>
+    | i .&amp;. <span class="num">1</span> == <span class="num">1</span> = <span class="num">1</span> + count1s (i `shiftR` <span class="num">1</span>)
+    | <span class="kwc">otherwise</span> = count1s (i `shiftR` <span class="num">1</span>)
+
+first0 :: Mask -&gt; <span class="kwb">Int</span>
+first0 i 
+    | i .&amp;. <span class="num">1</span> == <span class="num">0</span> = <span class="num">0</span>
+    | <span class="kwc">otherwise</span> = <span class="num">1</span> + first0 (i `shiftR` <span class="num">1</span>)
+
+<span class="slc">--- Making the Bitmasks ---</span>
+mod2 x = x .&amp;. <span class="num">1</span>
+packSize a b = a*<span class="num">5</span>+b
+unpackSize n = <span class="kwc">quotRem</span> n <span class="num">5</span>
+
+move :: Direction -&gt; CellCoord -&gt; CellCoord
+move E  (x, y) = (x+<span class="num">1</span>, y)
+move W  (x, y) = (x-<span class="num">1</span>, y)
+move NE (x, y) = (x+(mod2 y),   y-<span class="num">1</span>)
+move NW (x, y) = (x+(mod2 y)-<span class="num">1</span>, y-<span class="num">1</span>)
+move SE (x, y) = (x+(mod2 y),   y+<span class="num">1</span>)
+move SW (x, y) = (x+(mod2 y)-<span class="num">1</span>, y+<span class="num">1</span>)
+
+pieceBounds :: Piece -&gt; <span class="kwb">Bool</span> -&gt; (<span class="kwb">Int</span>, <span class="kwb">Int</span>, <span class="kwb">Int</span>, <span class="kwb">Int</span>)
+pieceBounds piece isodd = bnds piece <span class="num">0</span> y0 <span class="num">0</span> y0 <span class="num">0</span> y0
+  <span class="kwd">where</span>
+    y0 | isodd = <span class="num">1</span> | <span class="kwc">otherwise</span> = <span class="num">0</span>
+    bnds [] _ _ xmin ymin xmax ymax = (xmin, ymin, xmax, ymax)
+    bnds (d:rest) x y xmin ymin xmax ymax =
+        bnds rest x' y' (<span class="kwc">min</span> x' xmin) (<span class="kwc">min</span> y' ymin) (<span class="kwc">max</span> x' xmax) (<span class="kwc">max</span> y' ymax)
+            <span class="kwd">where</span> (x', y') = move d (x, y)
+
+pieceMask :: Piece -&gt; (Mask, Mask)
+pieceMask piece 
+    | <span class="kwa">odd</span> y1    = (tag (msk piece x2 y2 <span class="num">0</span>) (packSize w2 h2),
+                   tag (msk piece x1 (y1+<span class="num">1</span>) <span class="num">0</span> `shiftR` n_col) (packSize w1 h1))
+    | <span class="kwc">otherwise</span> = (tag (msk piece x1 y1 <span class="num">0</span>) (packSize w1 h1),
+                   tag (msk piece x2 (y2+<span class="num">1</span>) <span class="num">0</span> `shiftR` n_col) (packSize w2 h2))
+    <span class="kwd">where</span>
+      (xmin, ymin, xmax, ymax) = pieceBounds piece <span class="kwa">False</span>
+      (x1, y1) = (-xmin, -ymin)
+      w1 = xmax - xmin
+      h1 = ymax - ymin
+      (xmin', ymin', xmax', ymax') = pieceBounds piece <span class="kwa">True</span>
+      (x2, y2) = (-xmin', (-ymin')+<span class="num">1</span>)
+      w2 = xmax' - xmin'
+      h2 = ymax' - ymin'
+      msk :: Piece -&gt; Col -&gt; Row -&gt; Mask -&gt; Mask
+      msk [] x y m = m `setBit` cellAt x y
+      msk (d:rest) x y m = msk rest x' y' (m `setBit` cellAt x y)
+          <span class="kwd">where</span> (x', y') = move d (x, y)
+
+templatesForColor :: Color -&gt; ([Mask], [Mask])
+templatesForColor c = (<span class="kwc">unzip</span> . <span class="kwc">map</span> pieceMask) perms
+    <span class="kwd">where</span> perms | c == <span class="num">5</span> = <span class="kwc">take</span> <span class="num">6</span> ps | <span class="kwc">otherwise</span> = ps
+          ps = permutations $ pieces ! c
+
+<span class="slc">--- Looking for Islands ---</span>
+noLineIslands :: Mask -&gt; Cell -&gt; Cell -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">Bool</span>
+noLineIslands mask start stop step
+    | (fnd testBit . fnd ((<span class="kwc">not</span> .) . testBit) . fnd testBit)  start &gt; stop  = <span class="kwa">True</span>
+    | <span class="kwc">otherwise</span> = <span class="kwa">False</span>
+  <span class="kwd">where</span>
+    fnd test !x
+        | x &gt;= <span class="num">25</span>     = <span class="num">25</span>
+        | test mask x = x
+        | <span class="kwc">otherwise</span>   = fnd test (x+step)
+
+noLeftIslands :: Mask -&gt; <span class="kwb">Bool</span>
+noLeftIslands  mask  = noLineIslands mask <span class="num">0 20 5</span>
+noRightIslands mask  = noLineIslands mask <span class="num">4 24 5</span>
+
+noIslands :: Mask -&gt; <span class="kwb">Bool</span>
+noIslands board = noisles board (count1s board)
+
+noisles :: Mask -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">Bool</span>
+noisles _ <span class="num">30</span> = <span class="kwa">True</span>
+noisles board ones
+    | (ones' - ones) `<span class="kwc">rem</span>` n_elem /= <span class="num">0</span> = <span class="kwa">False</span>
+    | <span class="kwc">otherwise</span> = noisles board' ones'
+    <span class="kwd">where</span> board' = fill board (coordOf (first0 board))
+          ones' = count1s board'
+
+fill :: Mask -&gt; CellCoord -&gt; Mask
+fill m cc&#64;(x, y)
+    | x &lt; <span class="num">0</span> || x &gt;= n_col = m
+    | y &lt; <span class="num">0</span> || y &gt;= <span class="num">6</span>     = m
+    | testBit m i = m
+    | <span class="kwc">otherwise</span> = <span class="kwc">foldl</span> (\m d -&gt; fill m (move d cc)) (setBit m i)
+                  [E, NE, NW, W, SW, SE]
+    <span class="kwd">where</span> i = cellAt x y
+
+<span class="slc">--- More Mask Generation ---</span>
+masksForColor :: Color -&gt; [(Row, Mask)]
+masksForColor c = <span class="kwc">concatMap</span> atCell cells
+  <span class="kwd">where</span>
+    (evens, odds) = templatesForColor c
+    atCell n
+        | <span class="kwa">even</span> y = [(y, retag (m `shiftL` x) c) | m &lt;- evens , isok m x y]
+        | <span class="kwa">odd</span>  y = [(y, retag (m `shiftL` x) c) | m &lt;- odds  , isok m x y]
+        <span class="kwd">where</span> (x, y) = coordOf n
+
+isok :: Mask -&gt; Row -&gt; Col -&gt; <span class="kwb">Bool</span>
+isok mask x y =
+    isValid (x+width) (y+height) &amp;&amp;
+            <span class="kwd">case</span> (y == <span class="num">0</span>, y+height==<span class="num">9</span>) <span class="kwd">of</span>
+              (<span class="kwa">False</span>, <span class="kwa">False</span>) -&gt; noLeftIslands mask' &amp;&amp; noRightIslands mask'
+              (<span class="kwa">False</span>, <span class="kwa">True</span>)  -&gt; noIslands (mask' `shiftL` (n_col * (y - <span class="num">4</span>)))
+              (<span class="kwa">True</span>, _ ) -&gt; noIslands mask'
+    <span class="kwd">where</span> (width, height) = unpackSize (tagof mask)
+          mask' = untag mask `shiftL` x
+
+masksAtCell :: <span class="kwb">Array</span> (Row,Col) (<span class="kwb">Array</span> Color [Mask])
+masksAtCell = trps $ <span class="kwc">map</span> (masksAt cells . masksForColor) colors
+
+masksAt :: [<span class="kwb">Int</span>] -&gt; [(Row,Mask)]-&gt; [[Mask]]
+masksAt [] _ = []
+masksAt (n:ns) !masks = <span class="kwc">map snd</span> t : masksAt ns f
+    <span class="kwd">where</span>
+      (t, f) = <span class="kwc">partition</span> test masks
+      test (r, m) = n' &gt;= <span class="num">0</span> &amp;&amp; n' &lt; <span class="num">25</span> &amp;&amp;  m `testBit` n'
+          <span class="kwd">where</span> n' = n - (n_col * r)
+
+trps :: [[[Mask]]] -&gt; <span class="kwb">Array</span> (Row, Col) (<span class="kwb">Array</span> Color [Mask])
+trps !a = <span class="kwa">array</span> ((<span class="num">0</span>,<span class="num">0</span>),(<span class="num">9</span>,<span class="num">4</span>)) $ <span class="kwc">concatMap</span> (<span class="kwc">uncurry</span> (<span class="kwc">map</span> . first . (,))) $
+          <span class="kwc">zip</span> [<span class="num">0</span>.<span class="num">.9</span>] [copy !! y | y &lt;- [<span class="num">1</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>,<span class="num">5</span>,<span class="num">6</span>]]
+    <span class="kwd">where</span>
+      copy = [ [(x,copy' (cellAt x y)) | x &lt;- [<span class="num">0</span>..n_col-<span class="num">1</span>]] |
+               y &lt;- [<span class="num">1</span>,<span class="num">2</span>,<span class="num">5</span>,<span class="num">6</span>,<span class="num">7</span>,<span class="num">8</span>,<span class="num">9</span>]]
+      copy' cell = <span class="kwa">array</span> (<span class="num">0</span>,<span class="num">9</span>) $ <span class="kwc">map</span> (\clr -&gt; (clr,a !! clr !! cell)) colors
+
+<span class="slc">--- Formatting ---</span>
+format :: <span class="kwb">Bool</span> -&gt; <span class="kwb">String</span> -&gt; <span class="kwb">String</span>
+format _ [] = <span class="str">&quot;&quot;</span>
+format isodd chars | isodd = <span class="str">&quot; &quot;</span> ++ str | <span class="kwc">otherwise</span> = str
+        <span class="kwd">where</span>
+          (cur, rest) = <span class="kwc">splitAt</span> <span class="num">5</span> chars
+          str =  <span class="kwc">intersperse</span> ' ' cur ++ <span class="str">&quot;</span> <span class="esc">\n</span><span class="str">&quot;</span> ++ format (<span class="kwc">not</span> isodd) rest
+
+toString :: Solution -&gt; <span class="kwb">String</span>
+toString !masks = <span class="kwc">map</span> color cells
+    <span class="kwd">where</span>
+      masksWithRows = withRows <span class="num">0 0</span> (<span class="kwc">reverse</span> masks)
+      withRows _ _ [] = []
+      withRows board r (m:rest) = (r', m) : withRows board' r' rest
+          <span class="kwd">where</span> delta = first0 board `<span class="kwc">quot</span>` n_col
+                board' = board `shiftR`  (delta * n_col) .|. untag m
+                r' = r+delta
+      color n = <span class="kwc">maybe</span> '.' ((<span class="str">&quot;0123456789&quot;</span> !!) . tagof . <span class="kwc">snd</span>)
+                (<span class="kwc">find</span> matches masksWithRows)
+          <span class="kwd">where</span>
+            matches (r, m)
+              | n' &lt; <span class="num">0</span> || n' &gt; <span class="num">30</span>  = <span class="kwa">False</span>
+              | <span class="kwc">otherwise</span>  = (untag m) `testBit` n'
+              <span class="kwd">where</span> n' = n - (n_col * r)
+
+<span class="slc">--- Generate the solutions ---</span>
+firstZero :: UArray <span class="kwb">Int Int</span>
+firstZero = <span class="kwa">array</span> (<span class="num">0</span>,<span class="num">31</span>) $ <span class="kwc">zip</span> [<span class="num">0</span>.<span class="num">.31</span>]
+            [<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">2</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">3</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">2</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">4</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">2</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">3</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">2</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">5</span>]
+
+solutions :: [<span class="kwb">String</span>]
+solutions = solveCell <span class="num">0</span> colors <span class="num">0</span> [] []
+
+solveCell :: Row -&gt; [Color] -&gt; Mask -&gt; Solution -&gt; [<span class="kwb">String</span>] -&gt; [<span class="kwb">String</span>]
+solveCell _ [] board soln results = <span class="kwd">let</span> s = toString soln
+                                    <span class="kwd">in</span>  s:(<span class="kwc">reverse</span> s):results 
+solveCell !row !todo !board !soln results
+    | top/=m_top = <span class="kwc">foldr</span> solveMask results
+                   [(m, c) | c &lt;- todo, m  &lt;- masks ! c,  board .&amp;. m == <span class="num">0</span>]
+    | <span class="kwc">otherwise</span>  = solveCell (row+<span class="num">1</span>) todo (board `shiftR` n_col) soln results
+    <span class="kwd">where</span> top = board .&amp;. m_top
+          masks = masksAtCell ! (row, (firstZero ! top) )
+          solveMask (!m,!c) results =
+              solveCell row (<span class="kwc">delete</span> c todo) (untag m .|. board) (m:soln) results
+
+main = <span class="kwd">do</span>
+    n &lt;- <span class="kwc">return</span>.<span class="kwc">read</span>.<span class="kwc">head</span> =&lt;&lt; <span class="kwc">getArgs</span>
+    <span class="kwd">let</span> nsolutions = <span class="kwc">take</span> n solutions
+    <span class="kwc">putStrLn</span> $ (<span class="kwc">show</span> $ <span class="kwa">length</span> nsolutions) ++ <span class="str">&quot; solutions found</span><span class="esc">\n</span><span class="str">&quot;</span>
+    <span class="kwc">putStrLn</span> . format <span class="kwa">False</span> . <span class="kwc">minimum</span> $ nsolutions
+    <span class="kwc">putStrLn</span> . format <span class="kwa">False</span> . <span class="kwc">maximum</span> $ nsolutions

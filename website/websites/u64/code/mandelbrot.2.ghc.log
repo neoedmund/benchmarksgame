@@ -1,0 +1,15 @@
+
+Mon, 21 Sep 2015 20:33:13 GMT
+
+MAKE:
+mv mandelbrot.ghc-2.ghc mandelbrot.ghc-2.hs
+/usr/local/src/ghc-7.10.2/bin/ghc --make -fllvm -O2 -XBangPatterns -rtsopts  mandelbrot.ghc-2.hs -o mandelbrot.ghc-2.ghc_run
+[1 of 1] Compiling Main             ( mandelbrot.ghc-2.hs, mandelbrot.ghc-2.o )
+Linking mandelbrot.ghc-2.ghc_run ...
+rm mandelbrot.ghc-2.hs
+1.51s to complete and log all make actions
+
+COMMAND LINE:
+./mandelbrot.ghc-2.ghc_run  16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN

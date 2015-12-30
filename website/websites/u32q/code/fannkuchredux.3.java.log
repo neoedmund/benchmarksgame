@@ -1,0 +1,17 @@
+
+Mon, 18 May 2015 22:31:57 GMT
+
+MAKE:
+mv fannkuchredux.java-3.java fannkuchredux.java
+/usr/local/src/jdk1.8.0_45/bin/javac fannkuchredux.java
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+0.78s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java  -server -XX:+TieredCompilation -XX:+AggressiveOpts fannkuchredux 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

@@ -1,0 +1,9 @@
+
+Thu, 03 Dec 2015 22:47:18 GMT
+
+COMMAND LINE:
+/usr/local/src/php-7.0.0/bin/php -n  nbody.php-3.php 50000000
+
+PROGRAM OUTPUT:
+-0.169075164
+-0.169059907

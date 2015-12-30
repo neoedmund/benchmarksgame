@@ -1,0 +1,189 @@
+&lt;?hh
+
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Stuart Carnie</span>
+<span class="com">   converted from C++ version by Branimir Maksimovic</span>
+<span class="com">*/</span>
+
+<span class="kwd">define</span>(<span class="str">'PI'</span>, <span class="num">3.141592653589793</span>);
+<span class="kwd">define</span>(<span class="str">'SOLAR_MASS'</span>, <span class="num">4.0</span> * PI * PI);
+<span class="kwd">define</span>(<span class="str">'DAYS_PER_YEAR'</span>, <span class="num">365.24</span>);
+
+<span class="kwa">class</span> Body {
+    <span class="kwa">public</span> <span class="kwb">float</span> $x, $y, $z, $vx, $vy, $vz, $mass;
+
+    <span class="kwa">public static function</span> <span class="kwd">jupiter</span>():Body {
+        <span class="kwa">static</span> $p;
+        <span class="kwa">if</span> (!<span class="kwa">isset</span>($p)) {
+            $p = <span class="kwa">new</span> Body;
+            $p-&gt;x = <span class="num">4.84143144246472090e+00</span>;
+            $p-&gt;y = -<span class="num">1.16032004402742839e+00</span>;
+            $p-&gt;z = -<span class="num">1.03622044471123109e-01</span>;
+            $p-&gt;vx = <span class="num">1.66007664274403694e-03</span> * DAYS_PER_YEAR;
+            $p-&gt;vy = <span class="num">7.69901118419740425e-03</span> * DAYS_PER_YEAR;
+            $p-&gt;vz = -<span class="num">6.90460016972063023e-05</span> * DAYS_PER_YEAR;
+            $p-&gt;mass = <span class="num">9.54791938424326609e-04</span> * SOLAR_MASS; 
+        }
+        <span class="kwa">return</span> $p;
+    }
+
+    <span class="kwa">public static function</span> <span class="kwd">saturn</span>():Body {
+        <span class="kwa">static</span> $p;
+        <span class="kwa">if</span> (!<span class="kwa">isset</span>($p)) {
+            $p = <span class="kwa">new</span> Body;
+            $p-&gt;x = <span class="num">8.34336671824457987e+00</span>;
+            $p-&gt;y = <span class="num">4.12479856412430479e+00</span>;
+            $p-&gt;z = -<span class="num">4.03523417114321381e-01</span>;
+            $p-&gt;vx = -<span class="num">2.76742510726862411e-03</span> * DAYS_PER_YEAR;
+            $p-&gt;vy = <span class="num">4.99852801234917238e-03</span> * DAYS_PER_YEAR;
+            $p-&gt;vz = <span class="num">2.30417297573763929e-05</span> * DAYS_PER_YEAR;
+            $p-&gt;mass = <span class="num">2.85885980666130812e-04</span> * SOLAR_MASS;
+        }
+        <span class="kwa">return</span> $p;
+    }
+
+    <span class="kwa">public static function</span> <span class="kwd">uranus</span>():Body {
+        <span class="kwa">static</span> $p;
+        <span class="kwa">if</span> (!<span class="kwa">isset</span>($p)) {
+            $p = <span class="kwa">new</span> Body;
+            $p-&gt;x = <span class="num">1.28943695621391310e+01</span>;
+            $p-&gt;y = -<span class="num">1.51111514016986312e+01</span>;
+            $p-&gt;z = -<span class="num">2.23307578892655734e-01</span>;
+            $p-&gt;vx = <span class="num">2.96460137564761618e-03</span> * DAYS_PER_YEAR;
+            $p-&gt;vy = <span class="num">2.37847173959480950e-03</span> * DAYS_PER_YEAR;
+            $p-&gt;vz = -<span class="num">2.96589568540237556e-05</span> * DAYS_PER_YEAR;
+            $p-&gt;mass = <span class="num">4.36624404335156298e-05</span> * SOLAR_MASS;
+        }
+        <span class="kwa">return</span> $p;
+    }
+
+    <span class="kwa">public static function</span> <span class="kwd">neptune</span>():Body {
+        <span class="kwa">static</span> $p;
+        <span class="kwa">if</span> (!<span class="kwa">isset</span>($p)) {
+            $p = <span class="kwa">new</span> Body;
+            $p-&gt;x = <span class="num">1.53796971148509165e+01</span>;
+            $p-&gt;y = -<span class="num">2.59193146099879641e+01</span>;
+            $p-&gt;z = <span class="num">1.79258772950371181e-01</span>;
+            $p-&gt;vx = <span class="num">2.68067772490389322e-03</span> * DAYS_PER_YEAR;
+            $p-&gt;vy = <span class="num">1.62824170038242295e-03</span> * DAYS_PER_YEAR;
+            $p-&gt;vz = -<span class="num">9.51592254519715870e-05</span> * DAYS_PER_YEAR;
+            $p-&gt;mass = <span class="num">5.15138902046611451e-05</span> * SOLAR_MASS;
+        }
+        <span class="kwa">return</span> $p;
+    }
+
+    <span class="kwa">public static function</span> <span class="kwd">sun</span>():Body {
+        <span class="kwa">static</span> $p;
+        <span class="kwa">if</span> (!<span class="kwa">isset</span>($p)) {
+            $p = <span class="kwa">new</span> Body;
+            $p-&gt;x = <span class="num">0.0</span>;
+            $p-&gt;y = <span class="num">0.0</span>;
+            $p-&gt;z = <span class="num">0.0</span>;
+            $p-&gt;vx = <span class="num">0.0</span>;
+            $p-&gt;vy = <span class="num">0.0</span>;
+            $p-&gt;vz =<span class="num">0.0</span>;
+            $p-&gt;mass = SOLAR_MASS;
+        }
+        <span class="kwa">return</span> $p;
+    }
+
+
+    <span class="kwa">public function</span> <span class="kwd">offsetMomentum</span>(<span class="kwb">float</span> $px, <span class="kwb">float</span> $py, <span class="kwb">float</span> $pz):void {
+        $this-&gt;vx = -$px / SOLAR_MASS;
+        $this-&gt;vy = -$py / SOLAR_MASS;
+        $this-&gt;vz = -$pz / SOLAR_MASS;
+    }
+}
+
+<span class="kwa">class</span> NBodySystem {
+
+    <span class="kwa">private</span> Vector&lt;Body&gt; $bodies;
+
+    <span class="kwa">function</span> <span class="kwd">__construct</span>() {
+        $this-&gt;bodies = Vector&lt;Body&gt; {
+            Body::<span class="kwd">sun</span>(),
+            Body::<span class="kwd">jupiter</span>(),
+            Body::<span class="kwd">saturn</span>(),
+            Body::<span class="kwd">uranus</span>(),
+            Body::<span class="kwd">neptune</span>()
+        };
+
+        $px = <span class="num">0.0</span>; $py = <span class="num">0.0</span>; $pz = <span class="num">0.0</span>;
+        <span class="kwa">foreach</span> ($this-&gt;bodies <span class="kwa">as</span> $body) {
+            $px += $body-&gt;vx * $body-&gt;mass;
+            $py += $body-&gt;vy * $body-&gt;mass;
+            $pz += $body-&gt;vz * $body-&gt;mass;
+        }
+        $this-&gt;bodies[<span class="num">0</span>]-&gt;<span class="kwd">offsetMomentum</span>($px, $py, $pz);
+    }
+
+    <span class="kwa">public function</span> <span class="kwd">advance</span>(<span class="kwb">float</span> $dt):void {
+        $bodies = $this-&gt;bodies-&gt;<span class="kwd">count</span>();
+        
+        <span class="kwa">for</span> ($i=<span class="num">0</span>; $i&lt;$bodies; ++$i) {
+            $iBody = $this-&gt;bodies[$i];
+            <span class="kwa">for</span> ($j=$i+<span class="num">1</span>; $j&lt;$bodies; ++$j) {
+                $jBody = $this-&gt;bodies[$j];
+
+                $dx = $iBody-&gt;x - $jBody-&gt;x;
+                $dy = $iBody-&gt;y - $jBody-&gt;y;
+                $dz = $iBody-&gt;z - $jBody-&gt;z;
+                $distance = \<span class="kwd">sqrt</span>($dx*$dx + $dy*$dy + $dz*$dz);
+                $mag = $dt / ($distance * $distance * $distance);
+                $iBody-&gt;vx -= $dx * $jBody-&gt;mass * $mag;
+                $iBody-&gt;vy -= $dy * $jBody-&gt;mass * $mag;
+                $iBody-&gt;vz -= $dz * $jBody-&gt;mass * $mag;
+
+                $jBody-&gt;vx += $dx * $iBody-&gt;mass * $mag;
+                $jBody-&gt;vy += $dy * $iBody-&gt;mass * $mag;
+                $jBody-&gt;vz += $dz * $iBody-&gt;mass * $mag;
+            }
+        }
+        <span class="kwa">for</span> ($i=<span class="num">0</span>; $i&lt;$bodies; ++$i) {
+            $body = $this-&gt;bodies[$i];
+            $body-&gt;x += $dt * $body-&gt;vx;
+            $body-&gt;y += $dt * $body-&gt;vy;
+            $body-&gt;z += $dt * $body-&gt;vz;
+        }
+    }
+
+    <span class="kwa">public function</span> <span class="kwd">energy</span>():<span class="kwb">float</span> {
+        $e = <span class="num">0.0</span>;
+
+        $bodies = $this-&gt;bodies-&gt;<span class="kwd">count</span>();
+        <span class="kwa">for</span> ($i=<span class="num">0</span>; $i&lt;$bodies; ++$i) {
+            $body = $this-&gt;bodies[$i];
+
+            $e += <span class="num">0.5</span> * $body-&gt;mass *
+                ($body-&gt;vx * $body-&gt;vx
+                 + $body-&gt;vy * $body-&gt;vy
+                 + $body-&gt;vz * $body-&gt;vz);
+
+            <span class="kwa">for</span> ($j=$i+<span class="num">1</span>; $j&lt;$bodies; ++$j) {
+                $jBody = $this-&gt;bodies[$j];
+                
+                $dx = $body-&gt;x - $jBody-&gt;x;
+                $dy = $body-&gt;y - $jBody-&gt;y;
+                $dz = $body-&gt;z - $jBody-&gt;z;
+
+                $distance = \<span class="kwd">sqrt</span>($dx*$dx + $dy*$dy + $dz*$dz);
+                $e -= ($body-&gt;mass * $jBody-&gt;mass) / $distance;
+            }
+        }
+        <span class="kwa">return</span> $e;
+    }
+}
+
+$n = $argv[<span class="num">1</span>] + <span class="num">1</span>;
+
+$bodies = <span class="kwa">new</span> NBodySystem;
+
+<span class="kwd">printf</span>(<span class="str">&quot;%.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, $bodies-&gt;<span class="kwd">energy</span>());
+
+<span class="kwa">while</span> (--$n) {
+    $bodies-&gt;<span class="kwd">advance</span>(<span class="num">0.01</span>);
+}
+
+<span class="kwd">printf</span>(<span class="str">&quot;%.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, $bodies-&gt;<span class="kwd">energy</span>());

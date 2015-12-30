@@ -1,0 +1,122 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Isaac Gouy</span>
+<span class="com"> * modified by Antti Lankila for generics</span>
+<span class="com"> */</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.IO;
+<span class="kwa">using</span> System.Collections.Generic;
+<span class="kwa">using</span> System.Text;
+
+<span class="kwa">public class</span> program {
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(<span class="kwb">string</span>[] args) {
+	<span class="kwb">string</span> line;
+	StreamReader source = <span class="kwa">new</span> <span class="kwd">StreamReader</span>(Console.<span class="kwd">OpenStandardInput</span>());
+	StringBuilder input = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>();
+
+	<span class="kwa">while</span> ( (line = source.<span class="kwd">ReadLine</span>() ) != <span class="kwa">null</span> ) {
+	    <span class="kwa">if</span> (line[<span class="num">0</span>] == <span class="str">'&gt;'</span> &amp;&amp; line.<span class="kwd">Substring</span>(<span class="num">1</span>, <span class="num">5</span>) == <span class="str">&quot;THREE&quot;</span>)
+		<span class="kwa">break</span>;
+	}
+	 
+	<span class="kwa">while</span> ( (line = source.<span class="kwd">ReadLine</span>()) != <span class="kwa">null</span> ) {
+            <span class="kwb">char</span> c = line[<span class="num">0</span>];
+            <span class="kwa">if</span> (c == <span class="str">'&gt;'</span>)
+               <span class="kwa">break</span>;
+            <span class="kwa">if</span> (c != <span class="str">';'</span>)
+               input.<span class="kwd">Append</span>(line.<span class="kwd">ToUpper</span>());
+	}
+
+	KNucleotide kn = <span class="kwa">new</span> <span class="kwd">KNucleotide</span>(input.<span class="kwd">ToString</span>());
+        input = <span class="kwa">null</span>;
+	kn.<span class="kwd">WriteFrequencies</span>(<span class="num">1</span>);
+	kn.<span class="kwd">WriteFrequencies</span>(<span class="num">2</span>);
+
+	kn.<span class="kwd">WriteCount</span>(<span class="str">&quot;GGT&quot;</span>);
+	kn.<span class="kwd">WriteCount</span>(<span class="str">&quot;GGTA&quot;</span>);
+	kn.<span class="kwd">WriteCount</span>(<span class="str">&quot;GGTATT&quot;</span>);
+	kn.<span class="kwd">WriteCount</span>(<span class="str">&quot;GGTATTTTAATT&quot;</span>);
+	kn.<span class="kwd">WriteCount</span>(<span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>);
+    }
+}
+
+<span class="kwa">public class</span> KNucleotide {
+    <span class="com">/* freq[foo] ++ implies a get and a set. */</span>
+    <span class="kwa">internal class</span> Value {
+	<span class="kwa">internal</span> <span class="kwb">int</span> v;
+
+	<span class="kwa">internal</span> <span class="kwd">Value</span>(<span class="kwb">int</span> v)
+	{
+	    <span class="kwa">this</span>.v = v;
+	}
+    }
+
+    <span class="kwa">private</span> Dictionary&lt;<span class="kwb">string</span>, Value&gt; frequencies = <span class="kwa">new</span> Dictionary&lt;<span class="kwb">string</span>, Value&gt;();
+    <span class="kwa">private</span> <span class="kwb">string</span> sequence;
+
+    <span class="kwa">public</span> <span class="kwd">KNucleotide</span>(<span class="kwb">string</span> s)
+    {
+	sequence = s;
+    }
+
+    <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">WriteFrequencies</span>(<span class="kwb">int</span> nucleotideLength) {
+	<span class="kwd">GenerateFrequencies</span>(nucleotideLength);
+
+	List&lt;KeyValuePair&lt;<span class="kwb">string</span>, Value&gt;&gt; items = <span class="kwa">new</span> List&lt;KeyValuePair&lt;<span class="kwb">string</span>, Value&gt;&gt;(frequencies);
+	items.<span class="kwd">Sort</span>(SortByFrequencyAndCode);
+
+	<span class="kwb">int</span> sum = sequence.Length - nucleotideLength + <span class="num">1</span>;
+	<span class="kwa">foreach</span> (KeyValuePair&lt;<span class="kwb">string</span>, Value&gt; each <span class="kwa">in</span> items) {
+	    <span class="kwb">double</span> percent = each.Value.v * <span class="num">100.0</span> / sum;
+	    Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="ipl">{0}</span> <span class="str">{1:f3}&quot;</span>, each.Key, percent);
+	}
+	Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;&quot;</span>);
+    }
+
+    <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">WriteCount</span>(<span class="kwb">string</span> nucleotideFragment) {
+	<span class="kwd">GenerateFrequencies</span>(nucleotideFragment.Length);
+
+	<span class="kwb">int</span> count = <span class="num">0</span>;
+	<span class="kwa">if</span> (frequencies.<span class="kwd">ContainsKey</span>(nucleotideFragment))
+	    count = frequencies[nucleotideFragment].v;
+	Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="ipl">{0}</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">{1}</span><span class="str">&quot;</span>, count, nucleotideFragment);
+    }
+
+    <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">GenerateFrequencies</span>(<span class="kwb">int</span> length) {
+	frequencies.<span class="kwd">Clear</span>();
+	<span class="kwa">for</span> (<span class="kwb">int</span> frame = <span class="num">0</span>; frame &lt; length; frame++)
+	    <span class="kwd">KFrequency</span>(frame, length);
+    }
+
+    <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">KFrequency</span>(<span class="kwb">int</span> readingFrame, <span class="kwb">int</span> k) {
+	<span class="kwb">int</span> n = sequence.Length - k + <span class="num">1</span>;
+	<span class="com">/* string.Substring is a malloc monster :( */</span>
+	<span class="kwa">if</span> (k &gt; <span class="num">6</span>) {
+	    <span class="kwa">for</span> (<span class="kwb">int</span> i = readingFrame; i &lt; n; i += k) {
+		<span class="kwb">string</span> knucleo = sequence.<span class="kwd">Substring</span>(i, k);
+		<span class="kwa">if</span> (frequencies.<span class="kwd">ContainsKey</span>(knucleo))
+		    frequencies[knucleo].v ++;
+		<span class="kwa">else</span>
+		    frequencies[knucleo] = <span class="kwa">new</span> <span class="kwd">Value</span>(<span class="num">1</span>);
+	    }
+	} <span class="kwa">else</span> {
+	    <span class="kwa">for</span> (<span class="kwb">int</span> i = readingFrame; i &lt; n; i += k) {
+		<span class="kwb">string</span> knucleo = sequence.<span class="kwd">Substring</span>(i, k);
+		<span class="kwa">try</span> {
+		    frequencies[knucleo].v ++;
+		}
+		<span class="kwa">catch</span> (KeyNotFoundException) {
+		    frequencies[knucleo] = <span class="kwa">new</span> <span class="kwd">Value</span>(<span class="num">1</span>);
+		}
+	    }
+	}
+    }
+
+    <span class="kwb">int</span> <span class="kwd">SortByFrequencyAndCode</span>(KeyValuePair&lt;<span class="kwb">string</span>, Value&gt; item1, KeyValuePair&lt;<span class="kwb">string</span>, Value&gt; item2) {
+	<span class="kwb">int</span> comparison = item2.Value.v.<span class="kwd">CompareTo</span>(item1.Value.v);
+	<span class="kwa">if</span> (comparison == <span class="num">0</span>) <span class="kwa">return</span> item1.Key.<span class="kwd">CompareTo</span>(item2.Key);
+	<span class="kwa">else return</span> comparison;
+    }
+}

@@ -1,0 +1,124 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">--  Contributed by Francois Fabien (22 mai 2011)</span>
+<span class="slc">--</span>
+<span class="slc">-- Os threads are Ada tasks. Transfer of control is done synchronously by an</span>
+<span class="slc">-- array of semaphores using a predefined Ada package.</span>
+<span class="slc">-- The token is a global data that needs no protection since only one</span>
+<span class="slc">-- thread at a time will use it.</span>
+<span class="slc">--</span>
+<span class="slc">--  compile with:</span>
+<span class="slc">--    gnatchop threadring.gnat</span>
+<span class="slc">--    gnatmake -O3 -gnatn -gnatp -march=native threadring.adb</span>
+<span class="slc">-----------------------------------------------------------------------------</span>
+<span class="kwa">pragma</span> Suppress (All_Checks); <span class="slc">-- go for speed not safety</span>
+<span class="slc">--</span>
+<span class="slc">-- pragmas used for optimization of the run-time. (fairly close to Ravenscar)</span>
+<span class="slc">-- restrictions listed by gnatbind</span>
+<span class="kwa">pragma</span> Restrictions (Simple_Barriers);
+<span class="kwa">pragma</span> Restrictions (No_Abort_Statements);
+<span class="kwa">pragma</span> Restrictions (No_Asynchronous_Control);
+<span class="kwa">pragma</span> Restrictions (No_Calendar);
+<span class="kwa">pragma</span> Restrictions (No_Delay);
+<span class="kwa">pragma</span> Restrictions (No_Dynamic_Attachment);
+<span class="kwa">pragma</span> Restrictions (No_Dynamic_Priorities);
+<span class="kwa">pragma</span> Restrictions (No_Entry_Queue);
+<span class="kwa">pragma</span> Restrictions (No_Exception_Registration);
+<span class="kwa">pragma</span> Restrictions (No_Initialize_Scalars);
+<span class="kwa">pragma</span> Restrictions (No_Local_Protected_Objects);
+<span class="kwa">pragma</span> Restrictions (No_Protected_Type_Allocators);
+<span class="kwa">pragma</span> Restrictions (No_Protected_Types);
+<span class="kwa">pragma</span> Restrictions (No_Relative_Delay);
+<span class="kwa">pragma</span> Restrictions (No_Requeue_Statements);
+<span class="kwa">pragma</span> Restrictions (No_Select_Statements);
+<span class="kwa">pragma</span> Restrictions (No_Streams);
+<span class="kwa">pragma</span> Restrictions (No_Task_Allocators);
+<span class="kwa">pragma</span> Restrictions (No_Task_Attributes_Package);
+<span class="kwa">pragma</span> Restrictions (No_Task_Hierarchy);
+<span class="kwa">pragma</span> Restrictions (No_Task_Termination);
+<span class="kwa">pragma</span> Restrictions (No_Terminate_Alternatives);
+<span class="kwa">pragma</span> Restrictions (Static_Priorities);
+<span class="kwa">pragma</span> Restrictions (Static_Storage_Size);
+<span class="kwa">pragma</span> Restrictions (Immediate_Reclamation);
+<span class="kwa">pragma</span> Restrictions (Max_Protected_Entries =&gt; <span class="num">0</span>);
+<span class="kwa">pragma</span> Restrictions (Max_Select_Alternatives =&gt; <span class="num">0</span>);
+<span class="kwa">pragma</span> Restrictions (Max_Task_Entries =&gt; <span class="num">1</span>);
+<span class="kwa">pragma</span> Restrictions (Max_Tasks =&gt; <span class="num">503</span>);
+<span class="kwa">pragma</span> Restrictions (Max_Asynchronous_Select_Nesting =&gt; <span class="num">0</span>);
+
+<span class="kwa">with</span> Ada.Command_Line, Ada.Synchronous_Task_Control, Interfaces;
+<span class="kwa">with</span> Threadring_Pool;
+<span class="kwa">use</span>  Ada, Interfaces, Ada.Command_Line, Threadring_Pool;
+
+<span class="kwa">pragma</span> Elaborate_All (Threadring_Pool);
+
+<span class="kwa">procedure</span> Threadring <span class="kwa">is</span>
+
+<span class="kwa">begin</span>
+   <span class="kwa">if</span> Argument_Count &gt; <span class="num">0</span> <span class="kwa">then</span>
+      Token := Integer_32<span class="kwd">'Value</span> (Argument (<span class="num">1</span>));
+   <span class="kwa">end if</span>;
+   Synchronous_Task_Control.Set_True (Semaphores (Ring_Index<span class="kwd">'First</span>));
+
+<span class="kwa">end</span> Threadring;
+<span class="slc">-----</span>
+<span class="kwa">with</span> Ada.Synchronous_Task_Control, Interfaces;
+<span class="kwa">use</span>  Ada.Synchronous_Task_Control, Interfaces;
+
+<span class="kwa">package</span> Threadring_Pool <span class="kwa">is</span>
+
+   Ring_Size : <span class="kwa">constant</span> := <span class="num">503</span>;
+   <span class="kwa">type</span> Ring_Index <span class="kwa">is mod</span> Ring_Size;<span class="slc">-- 0 to 502</span>
+
+   Semaphores : <span class="kwa">array</span> (Ring_Index) <span class="kwa">of</span> Suspension_Object;
+
+   <span class="kwa">task type</span> Thread <span class="kwa">is</span>
+      <span class="kwa">entry</span> Initialize (Identifier : <span class="kwa">in</span> Ring_Index);
+   <span class="kwa">end</span> Thread;
+
+   Threads : <span class="kwa">array</span> (Ring_Index) <span class="kwa">of</span> Thread;
+
+   Token : Integer_32 := <span class="num">2</span> * Ring_Size - <span class="num">1</span>; <span class="slc">--default value for testing</span>
+
+<span class="kwa">end</span> Threadring_Pool;
+<span class="slc">------</span>
+<span class="kwa">with</span> Ada.Text_IO; <span class="kwa">use</span> Ada.Text_IO;
+
+<span class="kwa">package body</span> Threadring_Pool <span class="kwa">is</span>
+
+   <span class="kwa">package</span> Int16_IO <span class="kwa">is new</span> Integer_IO (Integer_16);
+
+   <span class="kwa">task body</span> Thread <span class="kwa">is</span>
+      ID, Next : Ring_Index;
+   <span class="kwa">begin</span>
+      <span class="kwa">accept</span> Initialize (Identifier : <span class="kwa">in</span> Ring_Index) <span class="kwa">do</span>
+         ID   := Identifier;
+         Next := ID + <span class="num">1</span>;
+         Set_False (Semaphores (ID));
+      <span class="kwa">end</span> Initialize;
+
+      <span class="kwa">loop</span>
+         Suspend_Until_True (Semaphores (ID));
+         <span class="kwa">if</span> Token &gt; <span class="num">0</span> <span class="kwa">then</span>
+            Token := Token - <span class="num">1</span>;
+            Set_False (Semaphores (ID));
+            Set_True (Semaphores (Next));
+         <span class="kwa">else</span>
+            <span class="kwa">exit</span>;
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+
+      <span class="kwa">if</span> Token = <span class="num">0</span> <span class="kwa">then</span>
+         Int16_IO.Put (Integer_16 (ID) + <span class="num">1</span>, Width =&gt; <span class="num">0</span>);
+         New_Line;
+         Token := -<span class="num">1</span>;
+      <span class="kwa">end if</span>;
+      Set_True (Semaphores (Next));
+   <span class="kwa">end</span> Thread;
+
+<span class="kwa">begin</span>
+   <span class="kwa">for</span> T <span class="kwa">in</span> Threads<span class="kwd">'Range</span> <span class="kwa">loop</span>
+      Threads (T).Initialize (Identifier =&gt; T);
+   <span class="kwa">end loop</span>;
+<span class="kwa">end</span> Threadring_Pool;

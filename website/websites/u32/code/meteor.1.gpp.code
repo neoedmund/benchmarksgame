@@ -1,0 +1,591 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">//  http://benchmarksgame.alioth.debian.org</span>
+<span class="slc">//  contributed by Kevin Barnes</span>
+
+<span class="ppc">#include &lt;memory.h&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;ctime&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;vector&gt;</span>
+<span class="ppc">#include &lt;string&gt;</span>
+<span class="ppc">#include &lt;set&gt;</span>
+
+<span class="kwa">using namespace</span> std;
+
+<span class="ppc">#define WEST 0</span>
+<span class="ppc">#define EAST 1</span>
+<span class="ppc">#define SW 2</span>
+<span class="ppc">#define SE 3</span>
+<span class="ppc">#define NW 4</span>
+<span class="ppc">#define NE 5</span>
+
+<span class="ppc">#define BIT ((long long)1)</span>
+
+<span class="slc">// constant masks</span>
+<span class="kwb">const long long</span> row_mask = (<span class="kwb">long long</span>)<span class="num">31</span>;
+<span class="kwb">const long long</span> full_mask = (BIT &lt;&lt; <span class="num">50</span>) - <span class="num">1</span>;
+<span class="kwb">const long long</span> row_masks[] = { row_mask, row_mask &lt;&lt; <span class="num">5</span>, row_mask &lt;&lt; <span class="num">10</span>, row_mask &lt;&lt; <span class="num">15</span>, row_mask &lt;&lt; <span class="num">20</span>, row_mask &lt;&lt; <span class="num">25</span>, row_mask &lt;&lt; <span class="num">30</span>,
+row_mask &lt;&lt; <span class="num">35</span>, row_mask &lt;&lt; <span class="num">40</span>, row_mask &lt;&lt; <span class="num">45</span> };
+<span class="kwb">const long long</span> all_even_rows = row_masks[<span class="num">0</span>] | row_masks[<span class="num">2</span>] | row_masks[<span class="num">4</span>] | row_masks[<span class="num">6</span>] | row_masks[<span class="num">8</span>];
+<span class="kwb">const long long</span> all_odd_rows = row_masks[<span class="num">1</span>] | row_masks[<span class="num">3</span>] | row_masks[<span class="num">5</span>] | row_masks[<span class="num">7</span>] | row_masks[<span class="num">9</span>];
+<span class="kwb">const long long</span> all_rows[<span class="num">2</span>] = { all_even_rows, all_odd_rows };
+
+<span class="kwb">const long long</span> even_left_edges = BIT | (BIT &lt;&lt; <span class="num">10</span>) | (BIT &lt;&lt; <span class="num">20</span>) | (BIT &lt;&lt; <span class="num">30</span> | (BIT &lt;&lt; <span class="num">40</span>));
+<span class="kwb">const long long</span> odd_left_edges = (BIT &lt;&lt; <span class="num">5</span>) | (BIT &lt;&lt; <span class="num">15</span>) | (BIT &lt;&lt; <span class="num">25</span>) | (BIT &lt;&lt; <span class="num">35</span>) | (BIT &lt;&lt; <span class="num">45</span>);
+<span class="kwb">const long long</span> left_edges = even_left_edges | odd_left_edges;
+<span class="kwb">const long long</span> even_right_edges = even_left_edges &lt;&lt; <span class="num">4</span>;
+<span class="kwb">const long long</span> odd_right_edges = odd_left_edges &lt;&lt; <span class="num">4</span>;
+<span class="kwb">const long long</span> right_edges = left_edges &lt;&lt; <span class="num">4</span>;
+<span class="kwb">const long long</span> top_edge = row_masks[<span class="num">0</span>];
+<span class="kwb">const long long</span> bottom_edge = row_masks[<span class="num">9</span>];
+
+<span class="kwb">const long long</span> illegal_move_masks[<span class="num">6</span>] = {
+   left_edges, right_edges,
+   bottom_edge | even_left_edges, bottom_edge | odd_right_edges,
+   top_edge | even_left_edges, top_edge | odd_right_edges };
+
+<span class="slc">// mapping and bit manipulation</span>
+<span class="kwc">inline</span> <span class="kwb">int</span> <span class="kwd">location_of</span>( <span class="kwb">int</span> row, <span class="kwb">int</span> col) { <span class="kwa">return</span> row * <span class="num">5</span> + col; }
+<span class="kwc">inline</span> <span class="kwb">int</span> <span class="kwd">row_of</span>( <span class="kwb">int</span> location) { <span class="kwa">return</span> location / <span class="num">5</span>; }
+<span class="kwc">inline</span> <span class="kwb">int</span> <span class="kwd">col_of</span>( <span class="kwb">int</span> location) { <span class="kwa">return</span> location % <span class="num">5</span>; }
+<span class="kwc">inline</span> <span class="kwb">long long</span> <span class="kwd">get_bit</span>( <span class="kwb">long long</span> value, <span class="kwb">int</span> pos) { <span class="kwa">return</span> value &amp; (BIT &lt;&lt; pos); }
+<span class="kwc">inline</span> <span class="kwb">long long</span> <span class="kwd">get_bit</span>( <span class="kwb">long long</span> value, <span class="kwb">int</span> row, <span class="kwb">int</span> col) { <span class="kwa">return</span> value &amp; (BIT &lt;&lt; <span class="kwd">location_of</span>(row, col)); }
+<span class="kwc">inline</span> <span class="kwb">long long</span> <span class="kwd">has_bit</span>( <span class="kwb">long long</span> value, <span class="kwb">int</span> pos) { <span class="kwa">return</span> <span class="kwd">get_bit</span>(value, pos) ? <span class="kwa">true</span> : <span class="kwa">false</span>; }
+<span class="kwc">inline</span> <span class="kwb">long long</span> <span class="kwd">has_bit</span>( <span class="kwb">long long</span> value, <span class="kwb">int</span> row, <span class="kwb">int</span> col) { <span class="kwa">return</span> <span class="kwd">get_bit</span>(value, row, col) ? <span class="kwa">true</span> : <span class="kwa">false</span>;  }
+<span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">set_bit</span>( <span class="kwb">long long</span> &amp;value, <span class="kwb">int</span> pos) { value |= (BIT &lt;&lt; pos); }
+<span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">set_bit</span>( <span class="kwb">long long</span> &amp;value, <span class="kwb">int</span> row, <span class="kwb">int</span> col) { value |= (BIT &lt;&lt; <span class="kwd">location_of</span>(row, col)); }
+<span class="kwc">inline</span> <span class="kwb">int</span> <span class="kwd">get_row</span>( <span class="kwb">long long</span> mask, <span class="kwb">int</span> row) { <span class="kwa">return</span> (<span class="kwb">int</span>)((mask &gt;&gt; (row * <span class="num">5</span>)) &amp; row_mask); }
+
+<span class="kwc">inline</span> <span class="kwb">long long</span> <span class="kwd">shift_east</span>( <span class="kwb">const long long</span> mask) { <span class="kwa">return</span> mask &lt;&lt; <span class="num">1</span>; }
+<span class="kwc">inline</span> <span class="kwb">long long</span> <span class="kwd">shift_west</span>( <span class="kwb">const long long</span> mask) { <span class="kwa">return</span> mask &gt;&gt; <span class="num">1</span>; }
+<span class="kwc">inline</span> <span class="kwb">long long</span> <span class="kwd">shift_nw</span>( <span class="kwb">const long long</span> mask) { <span class="kwa">return</span> ((mask &amp; all_even_rows) &gt;&gt; <span class="num">6</span>) | ((mask &amp; all_odd_rows) &gt;&gt; <span class="num">5</span>); }
+<span class="kwc">inline</span> <span class="kwb">long long</span> <span class="kwd">shift_ne</span>( <span class="kwb">const long long</span> mask) { <span class="kwa">return</span> ((mask &amp; all_even_rows) &gt;&gt; <span class="num">5</span>) | ((mask &amp; all_odd_rows) &gt;&gt; <span class="num">4</span>); }
+<span class="kwc">inline</span> <span class="kwb">long long</span> <span class="kwd">shift_sw</span>( <span class="kwb">const long long</span> mask) { <span class="kwa">return</span> ((mask &amp; all_even_rows) &lt;&lt; <span class="num">4</span>) | ((mask &amp; all_odd_rows) &lt;&lt; <span class="num">5</span>); }
+<span class="kwc">inline</span> <span class="kwb">long long</span> <span class="kwd">shift_se</span>( <span class="kwb">const long long</span> mask) { <span class="kwa">return</span> ((mask &amp; all_even_rows) &lt;&lt; <span class="num">5</span>) | ((mask &amp; all_odd_rows) &lt;&lt; <span class="num">6</span>); }
+<span class="kwc">inline</span> <span class="kwb">long long</span> <span class="kwd">shift_mask</span>( <span class="kwb">int</span> direction, <span class="kwb">const long long</span> mask) {
+   <span class="kwa">switch</span> (direction) {
+  <span class="kwa">case</span> WEST: <span class="kwa">return</span> <span class="kwd">shift_west</span>(mask);
+  <span class="kwa">case</span> EAST: <span class="kwa">return</span> <span class="kwd">shift_east</span>(mask);
+  <span class="kwa">case</span> SW: <span class="kwa">return</span> <span class="kwd">shift_sw</span>(mask);
+  <span class="kwa">case</span> SE: <span class="kwa">return</span> <span class="kwd">shift_se</span>(mask);
+  <span class="kwa">case</span> NW: <span class="kwa">return</span> <span class="kwd">shift_nw</span>(mask);
+   }
+   <span class="kwa">return</span> <span class="kwd">shift_ne</span>(mask);
+}
+
+
+<span class="kwb">char const</span>* dir_texts[] =       {<span class="str">&quot;WEST&quot;</span>,<span class="str">&quot;EAST&quot;</span>,<span class="str">&quot;SW&quot;</span>,  <span class="str">&quot;SE&quot;</span>,  <span class="str">&quot;NW&quot;</span>,  <span class="str">&quot;NE&quot;</span>  };
+<span class="kwb">int</span> rotation_adder[<span class="num">2</span>][<span class="num">6</span>] = {
+   { -<span class="num">1</span>,    <span class="num">1</span>,     <span class="num">4</span>,     <span class="num">5</span>,     -<span class="num">6</span>,    -<span class="num">5</span>   },
+   { -<span class="num">1</span>,    <span class="num">1</span>,     <span class="num">5</span>,     <span class="num">6</span>,     -<span class="num">5</span>,    -<span class="num">4</span>   } };
+
+<span class="kwb">int</span> flip_transform[<span class="num">6</span>] =    { WEST,  EAST,  NW,    NE,    SW,    SE   };
+<span class="kwb">int</span> rotate_transform[<span class="num">6</span>] =  { NW,    SE,    WEST,  SW,    NE,    EAST };
+<span class="kwb">int</span> opposite_transform[<span class="num">6</span>] ={ EAST,  WEST,  NE,    NW,    SE,    SW   };
+
+<span class="kwb">int</span> two_row_mask = <span class="num">1024</span>-<span class="num">1</span>;
+<span class="kwb">int</span> bit_counts[<span class="num">32</span>];
+<span class="kwb">int</span> first_bits[<span class="num">32</span>];
+
+
+<span class="kwc">typedef</span> <span class="kwb">struct</span> MaskInfo {
+   <span class="kwb">bool</span> is_legal[<span class="num">2</span>];
+   <span class="kwb">int</span> start;
+
+   <span class="kwd">MaskInfo</span>() { is_legal[<span class="num">0</span>] = is_legal[<span class="num">1</span>] = <span class="kwa">true</span>; }
+   <span class="slc">// bool piece_allowed[10];</span>
+};
+
+MaskInfo big_map[<span class="num">1024</span>];
+
+<span class="kwb">long long</span> <span class="kwd">flood_fill_actual</span>( <span class="kwb">long long</span> &amp;mask, <span class="kwb">const int</span> pos) {
+   <span class="kwd">set_bit</span>(mask, pos);
+   <span class="kwa">if</span> (pos % <span class="num">5</span> &amp;&amp; !<span class="kwd">has_bit</span>( mask, pos - <span class="num">1</span>)) <span class="kwd">flood_fill_actual</span>( mask, pos - <span class="num">1</span>);
+   <span class="kwa">if</span> (pos % <span class="num">5</span> &lt; <span class="num">4</span> &amp;&amp; !<span class="kwd">has_bit</span>( mask, pos + <span class="num">1</span>)) <span class="kwd">flood_fill_actual</span>( mask, pos + <span class="num">1</span>);
+   <span class="kwa">if</span> (pos &gt;= <span class="num">5</span>) {
+      <span class="kwa">if</span> (!<span class="kwd">has_bit</span>( mask, pos - <span class="num">5</span>)) <span class="kwd">flood_fill_actual</span>( mask, pos - <span class="num">5</span>);
+      <span class="kwa">if</span> (pos / <span class="num">10</span> &lt; <span class="num">5</span>) {
+         <span class="kwa">if</span> (pos % <span class="num">5</span> &amp;&amp; !<span class="kwd">has_bit</span>( mask, mask, pos - <span class="num">6</span>)) <span class="kwd">flood_fill_actual</span>( mask, pos - <span class="num">6</span>);
+      } <span class="kwa">else</span> {
+         <span class="kwa">if</span> (pos % <span class="num">5</span> &lt; <span class="num">4</span> &amp;&amp; !<span class="kwd">has_bit</span>( mask, mask, pos - <span class="num">4</span>)) <span class="kwd">flood_fill_actual</span>( mask, pos - <span class="num">4</span>);
+      }
+   }
+   <span class="kwa">if</span> (pos &lt; <span class="num">45</span>) {
+      <span class="kwa">if</span> (!<span class="kwd">has_bit</span>( mask, pos + <span class="num">5</span>)) <span class="kwd">flood_fill_actual</span>( mask, pos + <span class="num">5</span>);
+      <span class="kwa">if</span> (pos / <span class="num">10</span> &lt; <span class="num">5</span>) {
+         <span class="kwa">if</span> (pos % <span class="num">5</span> &amp;&amp; !<span class="kwd">has_bit</span>( mask, pos + <span class="num">4</span>)) <span class="kwd">flood_fill_actual</span>( mask, pos + <span class="num">4</span>);
+      } <span class="kwa">else</span> {
+         <span class="kwa">if</span> (pos % <span class="num">5</span> &lt; <span class="num">4</span> &amp;&amp; !<span class="kwd">has_bit</span>( mask, pos + <span class="num">6</span>)) <span class="kwd">flood_fill_actual</span>( mask, pos + <span class="num">6</span>);
+      }
+   }
+   <span class="kwa">return</span> mask;
+}
+
+<span class="kwb">long long</span> <span class="kwd">flood_fill_down</span>( <span class="kwb">long long</span> mask, <span class="kwb">int</span> row, <span class="kwb">int</span> col) {
+   <span class="kwa">if</span> (row &amp; row_masks[row]) {
+      <span class="kwd">flood_fill_actual</span>( mask, <span class="kwd">location_of</span>(row, col));
+      <span class="kwa">return</span> mask;
+   }
+
+   <span class="kwa">while</span> (row &lt; <span class="num">10</span> &amp;&amp; !(mask &amp; row_masks[row])) {
+      mask |= row_masks[row];
+      row++;
+   }
+
+   <span class="kwa">if</span> (row &lt; <span class="num">10</span>) <span class="kwa">for</span> (<span class="kwb">int</span> i = row * <span class="num">5</span>; i &lt; (row + <span class="num">1</span>) * <span class="num">5</span>; i++) {
+      <span class="kwa">if</span> (!<span class="kwd">has_bit</span>( mask, i)) <span class="kwd">flood_fill_actual</span>( mask, i);
+   }
+   <span class="kwa">return</span> mask;
+}
+
+<span class="kwb">long long</span> <span class="kwd">flood_fill_up</span>( <span class="kwb">long long</span> mask, <span class="kwb">int</span> row, <span class="kwb">int</span> col) {
+   <span class="kwa">if</span> (row &amp; row_masks[row]) {
+      <span class="kwd">flood_fill_actual</span>( mask, <span class="kwd">location_of</span>(row, col));
+      <span class="kwa">return</span> mask;
+   }
+
+   <span class="kwa">while</span> (row &gt;= <span class="num">0</span> &amp;&amp; !(mask &amp; row_masks[row])) {
+      mask |= row_masks[row];
+      row--;
+   }
+
+   <span class="kwa">if</span> (row &gt;= <span class="num">0</span>) <span class="kwa">for</span> (<span class="kwb">int</span> i = row * <span class="num">5</span>; i &lt; (row + <span class="num">1</span>) * <span class="num">5</span>; i++) {
+      <span class="kwa">if</span> (!<span class="kwd">has_bit</span>( mask, i)) <span class="kwd">flood_fill_actual</span>( mask, i);
+   }
+   <span class="kwa">return</span> mask;
+}
+
+<span class="kwc">typedef</span> <span class="kwb">struct</span> MaskData {
+   <span class="kwb">long long</span> mask[<span class="num">2</span>];
+   <span class="kwb">int</span> height;
+   <span class="kwb">int</span> min_col[<span class="num">2</span>];
+   <span class="kwb">int</span> max_col[<span class="num">2</span>];
+
+   <span class="kwd">MaskData</span>() {
+      mask[<span class="num">0</span>] = <span class="num">0</span>;
+      mask[<span class="num">1</span>] = <span class="num">0</span>;
+      height = <span class="num">0</span>;
+      min_col[<span class="num">0</span>] = <span class="num">0</span>;
+      min_col[<span class="num">1</span>] = <span class="num">0</span>;
+      max_col[<span class="num">0</span>] = <span class="num">0</span>;
+      max_col[<span class="num">1</span>] = <span class="num">0</span>;
+   }
+};
+
+<span class="kwc">typedef</span> <span class="kwb">struct</span> RotationData {
+   <span class="kwb">int</span> mask;
+   <span class="kwb">int</span> iMask;
+   <span class="kwb">int</span> cMask;
+   <span class="kwb">int</span> row;
+   <span class="kwb">int</span> positions[<span class="num">5</span>];
+   <span class="kwb">int</span> number;
+};
+
+<span class="kwb">void</span> <span class="kwd">print_mask</span>( <span class="kwb">long long</span> mask) {
+   <span class="kwa">for</span> (<span class="kwb">int</span> row = <span class="num">0</span>; row &lt; <span class="num">10</span>; row++) {
+      <span class="kwa">if</span> (row % <span class="num">2</span>) cout &lt;&lt; <span class="str">&quot; &quot;</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> col = <span class="num">0</span>; col &lt; <span class="num">5</span>; col++) {
+         cout &lt;&lt; (<span class="kwd">get_bit</span>( mask, row, col)?<span class="str">&quot;1&quot;</span>:<span class="str">&quot;0&quot;</span>) &lt;&lt; <span class="str">&quot; &quot;</span>;
+      }
+      cout &lt;&lt; <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+   }
+   cout &lt;&lt; <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+}
+
+<span class="kwc">class</span> LList {
+<span class="kwc">public</span>:
+   LList *next;
+   <span class="kwd">LList</span>() { next = NULL; }
+};
+
+<span class="kwb">struct</span> RotationSet {
+   <span class="kwb">int</span> size;
+   RotationData rotations[<span class="num">12</span>];
+
+   <span class="kwd">RotationSet</span>() { size = <span class="num">0</span>; }
+
+   <span class="kwb">void</span> <span class="kwd">add</span>( RotationData &amp;data) { rotations[ size] = data; size++; }
+};
+
+<span class="kwc">class</span> PieceData : <span class="kwc">public</span> LList {
+<span class="kwc">private</span>:
+   <span class="kwb">void</span> <span class="kwd">transform</span>( <span class="kwb">const int</span> matrix [], vector&lt;<span class="kwb">int</span>&gt; &amp;list ) {
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; list.<span class="kwd">size</span>(); i++) {
+         list[i] = matrix[list[i]];
+      }
+   }
+
+   <span class="kwb">int</span> <span class="kwd">get_offset</span>( vector&lt;<span class="kwb">int</span>&gt; &amp;directions ) {
+      <span class="kwb">int</span> offset = <span class="num">0</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; directions.<span class="kwd">size</span>(); i++) {
+         <span class="kwa">if</span> (directions[i] == SW || directions[i] == NW || directions[i] == WEST) offset++;
+         <span class="kwa">if</span> (directions[i] == NW || directions[i] == NE) offset += <span class="num">5</span>;
+      }
+      <span class="kwa">return</span> offset;
+   }
+
+   MaskData <span class="kwd">mask_for_directions</span>( vector&lt;<span class="kwb">int</span>&gt; &amp;directions) {
+      MaskData data;
+
+      <span class="kwb">long long</span> mask = <span class="num">0</span>;
+      <span class="kwb">int</span> start_offset = <span class="kwd">get_offset</span>( directions);
+      <span class="kwb">int</span> location = start_offset;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; directions.<span class="kwd">size</span>(); i++) {
+         <span class="kwd">set_bit</span>( mask, location);
+         <span class="kwb">int</span> addition = rotation_adder[ (location / <span class="num">5</span>) % <span class="num">2</span> ][ directions[i] ];
+         <span class="slc">//             int row = location / 5;</span>
+         <span class="slc">//             int other_row = (location + addition) / 5;</span>
+         <span class="slc">//             char * error = NULL;</span>
+         <span class="slc">//             if ((directions[i] == SW || directions[i] == SE) &amp;&amp; other_row != row + 1) error = &quot;ERROR moving down!&quot;;</span>
+         <span class="slc">//             if ((directions[i] == NW || directions[i] == NE) &amp;&amp; other_row != row - 1) error =  &quot;ERROR moving up!&quot;;</span>
+         <span class="slc">//             if ((directions[i] == EAST || directions[i] == WEST) &amp;&amp;row != other_row) error = &quot;ERROR moving to the side!&quot;;</span>
+         <span class="slc">//             if (error != NULL) {</span>
+         <span class="slc">//               int opposite = opposite_transform[directions[i]];</span>
+         <span class="slc">//               if (illegal_move_masks[opposite] &amp; mask) {</span>
+         <span class="slc">//                  cout &lt;&lt; error &lt;&lt; &quot; directions = &quot;;</span>
+         <span class="slc">//                  for (int j = 0; j &lt; directions.size(); j++) cout &lt;&lt; dir_texts[directions[j]] &lt;&lt; &quot; &quot;;</span>
+         <span class="slc">//                  cout &lt;&lt; &quot; [[[ current direction = &quot; &lt;&lt; dir_texts[directions[i]] &lt;&lt; &quot;]]]&quot; &lt;&lt; &quot; opposite unavailable: &quot; &lt;&lt; dir_texts[opposite] &lt;&lt; &quot;\n&quot;;</span>
+         <span class="slc">//                  cout &lt;&lt; &quot;row = &quot; &lt;&lt; row &lt;&lt; &quot;, other row = &quot; &lt;&lt; other_row &lt;&lt;&quot;\n&quot;;</span>
+         <span class="slc">//                  print_mask( mask);</span>
+         <span class="slc">//               } else {</span>
+         <span class="slc">//                  addition = 0;</span>
+         <span class="slc">//                  mask = shift_mask( opposite, mask);</span>
+         <span class="slc">//               }</span>
+         <span class="slc">//             }</span>
+         location += addition;
+      }
+      <span class="kwd">set_bit</span>( mask, location);
+
+      <span class="kwa">while</span> (!(mask &amp; top_edge)) {
+         <span class="kwa">if</span> (illegal_move_masks[NW] &amp; mask) {
+            <span class="kwa">if</span> (illegal_move_masks[NE] &amp; mask) cout &lt;&lt; <span class="str">&quot;ERROR SHIFTING UPWARD</span><span class="esc">\n</span><span class="str">&quot;</span>;
+            <span class="kwa">else</span> mask = <span class="kwd">shift_ne</span>(mask);
+         } <span class="kwa">else</span> mask = <span class="kwd">shift_nw</span>(mask);
+      }
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> row = <span class="num">0</span>; mask &amp; row_masks[row]; row++) data.height++;
+      <span class="kwa">while</span> (!(mask &amp; right_edges)) mask = <span class="kwd">shift_east</span>(mask);
+      <span class="kwa">for</span> (<span class="kwb">int</span> col_on = <span class="num">0</span>; !<span class="kwd">has_bit</span>(mask, <span class="num">0</span>, col_on); col_on++) data.max_col[<span class="num">0</span>]++;
+      <span class="kwa">while</span> (!(mask &amp; left_edges)) mask = <span class="kwd">shift_west</span>(mask);
+      <span class="kwa">for</span> (<span class="kwb">int</span> col_on = <span class="num">0</span>; !<span class="kwd">has_bit</span>(mask, <span class="num">0</span>, col_on); col_on++) data.min_col[<span class="num">0</span>]++;
+      data.mask[<span class="num">0</span>] = mask &gt;&gt; data.min_col[<span class="num">0</span>];
+
+      <span class="kwa">if</span> (mask &amp; illegal_move_masks[SE]) {
+         cout &lt;&lt; <span class="str">&quot;ERROR SHIFTING DOWNWARD</span><span class="esc">\n</span><span class="str">&quot;</span>;
+      } <span class="kwa">else</span> {
+         mask = <span class="kwd">shift_se</span>( mask);
+         <span class="kwa">while</span> (!(mask &amp; right_edges)) mask = <span class="kwd">shift_east</span>(mask);
+         <span class="kwa">for</span> (<span class="kwb">int</span> col_on = <span class="num">0</span>; !<span class="kwd">get_bit</span>(mask, <span class="num">1</span>, col_on); col_on++) data.max_col[<span class="num">1</span>]++;
+         <span class="kwa">while</span> (!(mask &amp; left_edges)) mask = <span class="kwd">shift_west</span>(mask);
+         <span class="kwa">for</span> (<span class="kwb">int</span> col_on = <span class="num">0</span>; !<span class="kwd">get_bit</span>(mask, <span class="num">1</span>, col_on); col_on++) data.min_col[<span class="num">1</span>]++;
+         data.mask[<span class="num">1</span>] = mask &gt;&gt; (data.min_col[<span class="num">1</span>] + <span class="num">5</span>);
+      }
+
+      <span class="slc">//cout &lt;&lt; &quot;\nDIRECTIONS: &quot; &lt;&lt; directions[0] &lt;&lt; directions[1] &lt;&lt; directions[2] &lt;&lt; directions[3] &lt;&lt; &quot; [&quot; &lt;&lt; start_offset &lt;&lt; &quot;]\n&quot;;</span>
+      <span class="slc">//cout &lt;&lt; &quot;height = &quot; &lt;&lt; data.height &lt;&lt; &quot;, min[0] = &quot; &lt;&lt; data.min_col[0] &lt;&lt; &quot;, max[0] = &quot; &lt;&lt; data.max_col[0] &lt;&lt;</span>
+      <span class="slc">//   &quot;, min[1] = &quot; &lt;&lt; data.min_col[1] &lt;&lt; &quot;, max[1] = &quot; &lt;&lt; data.max_col[1] &lt;&lt; &quot;\n&quot;;</span>
+      <span class="slc">//print_mask( data.mask[1]);</span>
+      <span class="slc">//exit(0);</span>
+
+      <span class="kwa">return</span> data;
+   }
+
+   <span class="kwb">void</span> <span class="kwd">compute_rotation_positions</span>( <span class="kwb">long long</span> board, RotationData &amp;rotation) {
+      <span class="kwb">int</span> pos = rotation.row * <span class="num">5</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> num = <span class="num">0</span>; num &lt; <span class="num">5</span>; pos++) {
+         <span class="kwa">if</span> (<span class="kwd">has_bit</span>(board, pos)) {
+            rotation.positions[num] = pos;
+            num++;
+         }
+      }
+   }
+
+   <span class="kwb">void</span> <span class="kwd">add_rotation</span>( <span class="kwb">long long</span> mask, <span class="kwb">int</span> row, <span class="kwb">int</span> col) {
+      RotationData rotation;
+      rotation.row = row;
+      rotation.mask = (<span class="kwb">int</span>)(mask &gt;&gt; (<span class="num">5</span> * row));
+      rotation.number = number;
+      <span class="kwb">long long</span> board = <span class="num">0</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; row; i++) board |= row_masks[i];
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; col; i++) <span class="kwd">set_bit</span>( board, row, i);
+      board |= mask;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">4</span>; i &gt;= <span class="num">0</span>; i--) {
+         <span class="kwa">if</span> (!<span class="kwd">has_bit</span>( board, <span class="num">9</span>, i)) {
+            board = <span class="kwd">flood_fill_up</span>( board, <span class="num">9</span>, i);
+            <span class="kwa">break</span>;
+         }
+      }
+      <span class="kwa">if</span> (board == full_mask) {
+         rotation.iMask = rotation.mask;
+         rotation.cMask = <span class="num">0</span>;
+      } <span class="kwa">else</span> {
+         <span class="kwb">int</span> count = <span class="num">0</span>;
+         <span class="kwb">long long</span> cMask = <span class="num">0</span>;
+         <span class="kwa">for</span> (<span class="kwb">int</span> pos = <span class="kwd">location_of</span>(row, col); pos &lt; <span class="num">50</span>; pos++) {
+            <span class="kwa">if</span> (!<span class="kwd">has_bit</span>(board,pos)) {
+               <span class="kwd">set_bit</span>(cMask, pos);
+               count++;
+            }
+            <span class="kwa">if</span> (count &gt;= <span class="num">5</span>) {
+               cMask = <span class="num">0</span>;
+               <span class="kwa">break</span>;
+            }
+         }
+         rotation.cMask = (<span class="kwb">int</span>)(cMask &gt;&gt; (<span class="num">5</span> * row));
+         rotation.iMask = rotation.mask | rotation.cMask;
+      }
+
+      <span class="kwd">compute_rotation_positions</span>( mask, rotation);
+      rotation_sets[row][col].<span class="kwd">add</span>( rotation);
+   }
+
+   <span class="kwb">void</span> <span class="kwd">build_piece</span>( vector&lt;<span class="kwb">int</span>&gt; &amp;directions) {
+      vector&lt;MaskData&gt; base_masks;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">2</span>; i++) {
+         <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; <span class="num">6</span>; j++) {
+            base_masks.<span class="kwd">push_back</span>(<span class="kwd">mask_for_directions</span>(directions));
+            <span class="kwd">transform</span>( rotate_transform, directions);
+         }
+         <span class="kwd">transform</span>( flip_transform, directions);
+      }
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> mask_on = <span class="num">0</span>; mask_on &lt; base_masks.<span class="kwd">size</span>(); mask_on++) {
+         MaskData data = base_masks[mask_on];
+         <span class="kwa">for</span> (<span class="kwb">int</span> row = <span class="num">0</span>; row &lt;= (<span class="num">10</span> - data.height); row++) {
+            <span class="kwa">for</span> (<span class="kwb">int</span> col = data.min_col[row % <span class="num">2</span>]; col &lt;= data.max_col[row % <span class="num">2</span>]; col++) {
+               <span class="kwb">long long</span> mask = data.mask[row % <span class="num">2</span>] &lt;&lt; (row * <span class="num">5</span> + col);
+               <span class="kwb">long long</span> board = mask;
+               <span class="kwa">if</span> ( row &gt;= <span class="num">3</span>) board = <span class="kwd">flood_fill_down</span>( board, <span class="num">0</span>, <span class="num">0</span>);
+               <span class="kwa">else</span> board = <span class="kwd">flood_fill_up</span>( board, <span class="num">9</span>, <span class="num">4</span>);
+               <span class="kwa">if</span> (board == full_mask) {
+                  <span class="kwd">add_rotation</span>( mask, row, col);
+               } <span class="kwa">else</span> {
+                  <span class="kwb">int</span> count = <span class="num">0</span>;
+                  <span class="kwa">for</span> (<span class="kwb">int</span> t = <span class="num">0</span>; t &lt; <span class="num">10</span>; t++) count += bit_counts[ (<span class="kwb">int</span>)((board &gt;&gt; (t * <span class="num">5</span>)) &amp; row_masks[<span class="num">0</span>])];
+                  <span class="kwa">if</span> (count % <span class="num">5</span> == <span class="num">0</span>) {
+                     <span class="kwd">add_rotation</span>( mask, row, col);
+                  }
+               }
+            }
+         }
+      }
+   }
+
+<span class="kwc">public</span>:
+   <span class="kwb">int</span> number;
+   RotationSet rotation_sets[<span class="num">10</span>][<span class="num">5</span>];
+
+   <span class="kwd">PieceData</span>( <span class="kwb">int</span> d1, <span class="kwb">int</span> d2, <span class="kwb">int</span> d3, <span class="kwb">int</span> d4, <span class="kwb">int</span> piece_number ) : <span class="kwd">LList</span>()  {
+      number = piece_number;
+      vector&lt;<span class="kwb">int</span>&gt; directions;
+      directions.<span class="kwd">push_back</span>(d1);
+      directions.<span class="kwd">push_back</span>(d2);
+      directions.<span class="kwd">push_back</span>(d3);
+      directions.<span class="kwd">push_back</span>(d4);
+      <span class="kwd">build_piece</span>( directions);
+   }
+
+   <span class="kwd">PieceData</span>( <span class="kwb">int</span> d1, <span class="kwb">int</span> d2, <span class="kwb">int</span> d3, <span class="kwb">int</span> d4, <span class="kwb">int</span> d5, <span class="kwb">int</span> piece_number ) : <span class="kwd">LList</span>() {
+      number = piece_number;
+      vector&lt;<span class="kwb">int</span>&gt; directions;
+      directions.<span class="kwd">push_back</span>(d1);
+      directions.<span class="kwd">push_back</span>(d2);
+      directions.<span class="kwd">push_back</span>(d3);
+      directions.<span class="kwd">push_back</span>(d4);
+      directions.<span class="kwd">push_back</span>(d5);
+      <span class="kwd">build_piece</span>( directions);
+   }
+};
+
+<span class="slc">// GOLBAL VARIABLES MUH-HA-HA-HA</span>
+LList *head;
+LList *tail;
+
+<span class="kwb">int</span> num_placed = <span class="num">0</span>;
+<span class="kwb">int</span> num_found = <span class="num">0</span>;
+<span class="kwb">int</span> num_to_find = <span class="num">0</span>;
+<span class="kwb">int</span> tries[<span class="num">10</span>] = { <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span> };
+RotationData *active_rotations[<span class="num">10</span>];
+set&lt;string&gt; found_boards;
+
+<span class="kwb">void</span> <span class="kwd">create_piece_maps</span>() {
+   tail = head = <span class="kwa">new</span> <span class="kwd">PieceData</span>( NW, NE, EAST, EAST,  <span class="num">2</span>);
+   tail-&gt;next = <span class="kwa">new</span> <span class="kwd">PieceData</span>( NE, SE, EAST, NE,  <span class="num">7</span>);
+   tail = tail-&gt;next;
+   tail-&gt;next = <span class="kwa">new</span> <span class="kwd">PieceData</span>( NE, EAST, NE, NW,  <span class="num">1</span>);
+   tail = tail-&gt;next;
+   tail-&gt;next = <span class="kwa">new</span> <span class="kwd">PieceData</span>( EAST, SW, SW, SE,  <span class="num">6</span>);
+   tail = tail-&gt;next;
+   tail-&gt;next = <span class="kwa">new</span> <span class="kwd">PieceData</span>( EAST, NE, SE, NE,  <span class="num">5</span>);
+   tail = tail-&gt;next;
+   tail-&gt;next = <span class="kwa">new</span> <span class="kwd">PieceData</span>( EAST, EAST, EAST, SE,  <span class="num">0</span>);
+   tail = tail-&gt;next;
+   tail-&gt;next = <span class="kwa">new</span> <span class="kwd">PieceData</span>( NE, NW, SE, EAST, SE,  <span class="num">4</span>);
+   tail = tail-&gt;next;
+   tail-&gt;next = <span class="kwa">new</span> <span class="kwd">PieceData</span>( SE, SE, SE, WEST,  <span class="num">9</span>);
+   tail = tail-&gt;next;
+   tail-&gt;next = <span class="kwa">new</span> <span class="kwd">PieceData</span>( SE, SE, EAST, SE,  <span class="num">8</span>);
+   tail = tail-&gt;next;
+   tail-&gt;next = <span class="kwa">new</span> <span class="kwd">PieceData</span>( EAST, EAST, SW, SE,  <span class="num">3</span>);
+   tail = tail-&gt;next;
+}
+
+<span class="kwb">void</span> <span class="kwd">print_board</span>( string board_string) {
+   <span class="kwa">for</span> (<span class="kwb">int</span> row = <span class="num">0</span>; row &lt; <span class="num">10</span>; row++) {
+      <span class="kwa">if</span> (row % <span class="num">2</span>) cout &lt;&lt; <span class="str">&quot; &quot;</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> col = <span class="num">0</span>; col &lt; <span class="num">5</span>; col++) cout &lt;&lt; board_string[row * <span class="num">5</span> + col] &lt;&lt; <span class="str">&quot; &quot;</span>;
+      cout &lt;&lt; <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+   }
+   cout &lt;&lt; <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+}
+
+<span class="kwb">void</span> <span class="kwd">print_results</span>() {
+   cout &lt;&lt; num_found &lt;&lt; <span class="str">&quot; solutions found</span><span class="esc">\n\n</span><span class="str">&quot;</span>;
+   <span class="kwd">print_board</span>( *found_boards.<span class="kwd">begin</span>());
+   <span class="kwd">print_board</span>( *found_boards.<span class="kwd">rbegin</span>());
+}
+
+<span class="kwb">void</span> <span class="kwd">add_board_string</span>( <span class="kwb">const char</span> * board_string) {
+   string s = board_string;
+   <span class="kwa">if</span> (found_boards.<span class="kwd">count</span>(s) == <span class="num">0</span>) {
+      found_boards.<span class="kwd">insert</span>(s);
+      num_found++;
+      <span class="kwa">if</span> (num_to_find == num_found) {
+         <span class="kwd">print_results</span>();
+         <span class="kwd">exit</span>(<span class="num">0</span>);
+      }
+   }
+}
+
+
+<span class="kwb">void</span> <span class="kwd">board_found</span>() {
+   <span class="kwb">char</span> board_string[<span class="num">51</span>];
+   <span class="kwd">memset</span>(board_string,<span class="str">'x'</span>,<span class="num">51</span>);
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">10</span>; i++) {
+      <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; <span class="num">5</span>; j++) {
+         board_string[active_rotations[i]-&gt;positions[j]] = <span class="str">'0'</span> + active_rotations[i]-&gt;number;
+      }
+   }
+   board_string[<span class="num">50</span>] = <span class="num">0</span>;
+   <span class="kwd">add_board_string</span>( board_string);
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">25</span>; i++) { <span class="kwb">char</span> c = board_string[i]; board_string[i] = board_string[<span class="num">49</span> - i]; board_string[<span class="num">49</span>-i] = c; }
+   <span class="kwd">add_board_string</span>( board_string);
+}
+
+<span class="kwb">void</span> <span class="kwd">find</span>( <span class="kwb">int</span> row, <span class="kwb">int</span> board) {
+   <span class="kwa">while</span> ((board &amp; <span class="num">31</span>) == <span class="num">31</span>) {
+      row++;
+      board &gt;&gt;= <span class="num">5</span>;
+   }
+   MaskInfo &amp;info = big_map[board &amp; two_row_mask];
+   <span class="kwa">if</span> (!info.is_legal[row % <span class="num">2</span>]) <span class="kwa">return</span>;
+   <span class="kwb">int</span> col = info.start;
+
+
+   PieceData *start = (PieceData *)head;
+   <span class="kwa">do</span> {
+      PieceData *piece = (PieceData *)head;
+      head = piece-&gt;next;
+      piece-&gt;next = NULL;
+      RotationSet *rotations = &amp;(piece-&gt;rotation_sets[row][col]);
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = rotations-&gt;size-<span class="num">1</span>; i &gt;= <span class="num">0</span>; i--) {
+         <span class="slc">//tries[num_placed]++;</span>
+         RotationData *rotation = &amp;rotations-&gt;rotations[i];
+         <span class="kwa">if</span> ((board &amp; rotation-&gt;iMask) == rotation-&gt;cMask) {
+            <span class="kwa">if</span> (num_placed == <span class="num">9</span>) {
+               active_rotations[num_placed] = rotation;
+               <span class="kwd">board_found</span>();
+            } <span class="kwa">else</span> {
+               active_rotations[num_placed] = rotation;
+               num_placed++;
+               <span class="kwd">find</span>( row, board | rotation-&gt;mask);
+               num_placed--;
+            }
+         }
+      }
+      <span class="kwa">if</span> (head == NULL) head = piece;
+      <span class="kwa">else</span> tail-&gt;next = piece;
+      tail = piece;
+   } <span class="kwa">while</span> (start != head);
+}
+
+<span class="kwb">void</span> <span class="kwd">find_all</span>() {
+   num_found = <span class="num">0</span>;
+   num_placed = <span class="num">1</span>;
+   found_boards.<span class="kwd">clear</span>();
+   PieceData *start = (PieceData *)head;
+   <span class="kwa">for</span> (<span class="kwb">int</span> odd = <span class="num">0</span>; odd &lt; <span class="num">2</span>; odd++) {
+      <span class="kwa">do</span> {
+         PieceData *piece = (PieceData *)head;
+         head = piece-&gt;next;
+         piece-&gt;next = NULL;
+         <span class="kwa">if</span> (head != start) {
+            RotationSet *rotations = &amp;(piece-&gt;rotation_sets[<span class="num">0</span>][<span class="num">0</span>]);
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = rotations-&gt;size-<span class="num">1</span>; i &gt;= <span class="num">0</span>; i--) {
+               <span class="kwa">if</span> (i % <span class="num">2</span> == odd) {
+                  RotationData *rotation = &amp;rotations-&gt;rotations[i];
+                  active_rotations[<span class="num">0</span>] = rotation;
+                  <span class="kwd">find</span>( <span class="num">0</span>, rotation-&gt;mask);
+               }
+            }
+         }
+         <span class="kwa">if</span> (head == NULL) head = piece;
+         <span class="kwa">else</span> tail-&gt;next = piece;
+         tail = piece;
+      } <span class="kwa">while</span> (start != head);
+   }
+}
+
+
+<span class="kwb">void</span> <span class="kwd">create_utlity_maps</span>() {
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">32</span>; i++) {
+      bit_counts[i] = <span class="num">0</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; <span class="num">5</span>; j++) <span class="kwa">if</span> ((<span class="num">1</span> &lt;&lt; j) &amp; i) bit_counts[i]++;
+      <span class="kwa">for</span> (first_bits[i] = <span class="num">0</span>; (<span class="num">1</span> &lt;&lt; first_bits[i]) &amp; i; first_bits[i]++);
+   }
+
+   <span class="slc">// build starts</span>
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">1024</span>; i++) big_map[i].start = first_bits[i &amp; <span class="num">31</span>];
+
+   <span class="slc">// build legality</span>
+   <span class="kwb">int</span> legal_count = <span class="num">0</span>;
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">1024</span>; i++) {
+      <span class="kwa">for</span> (<span class="kwb">int</span> odd = <span class="num">0</span>; odd &lt; <span class="num">2</span>; odd++) {
+         <span class="kwb">int</span> legal = <span class="num">2</span>;
+         <span class="kwb">int</span> bit = <span class="num">1</span>;
+         <span class="kwa">while</span> (legal &amp;&amp; bit &lt; <span class="num">32</span>) {
+            <span class="kwa">if</span> (i &amp; bit) {
+               <span class="kwa">if</span> (legal == <span class="num">2</span> &amp;&amp; bit &gt; <span class="num">1</span> &amp;&amp; ((bit &gt;&gt; <span class="num">1</span>) &amp; i) == <span class="num">0</span>) legal = <span class="num">0</span>;
+               <span class="kwa">else</span> legal = <span class="num">2</span>;
+            } <span class="kwa">else if</span> (legal == <span class="num">2</span>) {
+               <span class="kwa">if</span> (((bit &lt;&lt; <span class="num">5</span>) &amp; i) == <span class="num">0</span>) legal = <span class="num">1</span>;
+               <span class="kwa">else</span> {
+                  <span class="kwa">if</span> (odd) {
+                     <span class="kwa">if</span> ( (bit &lt; <span class="num">16</span>) &amp;&amp; (((bit &lt;&lt; <span class="num">6</span>) &amp; i) == <span class="num">0</span>)) legal = <span class="num">1</span>;
+                  } <span class="kwa">else</span> {
+                     <span class="kwa">if</span> ( (bit &gt; <span class="num">1</span>) &amp;&amp; (((bit &lt;&lt; <span class="num">4</span>) &amp; i) == <span class="num">0</span>)) legal = <span class="num">1</span>;
+                  }
+               }
+            }
+            bit &lt;&lt;= <span class="num">1</span>;
+         }
+         <span class="kwa">if</span> (legal == <span class="num">2</span> &amp;&amp; ((bit &gt;&gt; <span class="num">1</span>) &amp; i) == <span class="num">0</span>) legal = <span class="num">0</span>;
+         big_map[i].is_legal[odd] = legal ? <span class="kwa">true</span> : <span class="kwa">false</span>;
+         <span class="kwa">if</span> (legal) legal_count++;
+      }
+   }
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span> (<span class="kwb">int</span> argc, <span class="kwb">char</span> * <span class="kwb">const</span> argv[]) {
+   num_to_find = <span class="num">2098</span>;
+   <span class="kwa">if</span> (argc &gt; <span class="num">1</span>) <span class="kwd">sscanf</span>(argv[<span class="num">1</span>],<span class="str">&quot;%d&quot;</span>, &amp;num_to_find);
+
+   <span class="kwd">create_piece_maps</span>();
+   <span class="kwd">create_utlity_maps</span>();
+   <span class="kwd">find_all</span>();
+   <span class="kwd">print_results</span>();
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+

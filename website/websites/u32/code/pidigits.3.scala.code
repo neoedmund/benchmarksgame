@@ -1,0 +1,36 @@
+<span class="com">/* </span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Rex Kerr</span>
+<span class="com"> * based on version by John Nilsson as modified by Geoff Reedy</span>
+<span class="com">*/</span>
+
+<span class="kwa">object</span> pidigits {
+  <span class="kwa">type</span> I = BigInt
+  <span class="kwa">import</span> BigInt._
+    
+  <span class="kwa">class</span> <span class="kwd">LFT</span>(q:I, r:I, t:I) {
+    <span class="kwa">def</span> <span class="kwd">compose</span>(k: Int) = <span class="kwa">new</span> <span class="kwd">LFT</span>(q*k, (q*(<span class="num">4</span>*k+<span class="num">2</span>))+(r*(<span class="num">2</span>*k+<span class="num">1</span>)), t*(<span class="num">2</span>*k+<span class="num">1</span>))
+    <span class="kwa">def</span> extract = {
+      <span class="kwa">val</span> (y,rem) = (q*<span class="num">3</span> + r) /% t
+      <span class="kwa">if</span>((rem + q) &lt; t) <span class="kwd">Some</span>(y.intValue) <span class="kwa">else</span> None
+    }
+    <span class="kwa">def</span> <span class="kwd">next</span>(y: Int) = <span class="kwa">new</span> <span class="kwd">LFT</span>(q*<span class="num">10</span>, (r-(t*y))*<span class="num">10</span>, t)
+  }
+
+  <span class="kwa">def</span> pi_digits = {
+    <span class="kwa">def</span> <span class="kwd">digits</span>(z: LFT, k: Int): Stream[Int] = z extract match {
+      <span class="kwa">case</span> <span class="kwd">Some</span>(y) =&gt; Stream.<span class="kwd">cons</span>(y,<span class="kwd">digits</span>(z next y,k))
+      <span class="kwa">case</span> None    =&gt; <span class="kwd">digits</span>(z compose k,k+<span class="num">1</span>)
+    }
+    <span class="kwd">digits</span>(<span class="kwa">new</span> <span class="kwd">LFT</span>(<span class="num">1</span>,<span class="num">0</span>,<span class="num">1</span>),<span class="num">1</span>)
+  }
+
+  <span class="kwa">def</span> by[T](s: Stream[T], n: Int): Stream[Stream[T]] =
+    <span class="kwa">if</span> (s.isEmpty) Stream.empty
+    <span class="kwa">else</span> Stream.<span class="kwd">cons</span>(s take n, <span class="kwd">by</span>(s drop n, n))
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]): Unit =
+    <span class="kwa">for</span> ((d,n) &lt;- <span class="kwd">by</span>(pi_digits take <span class="kwd">args</span>(<span class="num">0</span>).toInt, <span class="num">10</span>).zipWithIndex)
+      <span class="kwd">printf</span>(<span class="str">&quot;%-10s</span><span class="esc">\t</span><span class="str">:%d</span><span class="esc">\n</span><span class="str">&quot;</span>,d.mkString,<span class="num">10</span>*n+d.length)
+}

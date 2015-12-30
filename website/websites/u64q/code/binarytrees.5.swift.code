@@ -1,0 +1,121 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Alex Bustin</span>
+<span class="com">*/</span>
+
+
+<span class="kwa">import</span> CoreFoundation
+<span class="kwa">import</span> Glibc
+
+<span class="kwa">struct</span> TreeNode {
+   <span class="kwa">let</span> item:<span class="kwb">Int</span>
+   <span class="kwa">let left</span>,<span class="kwa">right</span>:UnsafeMutablePointer&lt;TreeNode&gt;
+   
+   <span class="kwa">func</span> <span class="kwd">check</span>() -&gt; <span class="kwb">Int</span> {
+      <span class="kwa">if left</span> != <span class="kwa">nil</span> {
+         <span class="kwa">return</span> item + <span class="kwa">left</span>.memory.<span class="kwd">check</span>() - <span class="kwa">right</span>.memory.<span class="kwd">check</span>()
+      } <span class="kwa">else</span> {
+         <span class="kwa">return</span> item
+      }
+   }
+}
+
+<span class="kwa">func</span> <span class="kwd">bottomUpTree</span>(item:<span class="kwb">Int</span>, _ depth: <span class="kwb">Int</span>, _ node:UnsafeMutablePointer&lt;TreeNode&gt;, _ pool:COpaquePointer) {
+   
+   <span class="kwa">if</span> depth &gt; <span class="num">0</span> {
+      <span class="kwa">let</span> i = item*<span class="num">2</span>
+      <span class="kwa">let</span> d = depth-<span class="num">1</span>
+      <span class="kwa">let</span> l = UnsafeMutablePointer&lt;TreeNode&gt;.<span class="kwa">init</span>(<span class="kwd">apr_palloc</span>(pool,<span class="kwd">sizeof</span>(TreeNode)))
+      <span class="kwa">let</span> r = UnsafeMutablePointer&lt;TreeNode&gt;.<span class="kwa">init</span>(<span class="kwd">apr_palloc</span>(pool,<span class="kwd">sizeof</span>(TreeNode)))
+      node.memory = <span class="kwd">TreeNode</span>(item:item, <span class="kwa">left</span>:l, <span class="kwa">right</span>:r)
+      <span class="kwd">bottomUpTree</span>(i-<span class="num">1</span>, d, l, pool)
+      <span class="kwd">bottomUpTree</span>(i, d, r, pool)
+   } <span class="kwa">else</span> {
+      node.memory = <span class="kwd">TreeNode</span>(item:item, <span class="kwa">left</span>:<span class="kwa">nil</span>, <span class="kwa">right</span>:<span class="kwa">nil</span>)
+   }
+   
+}
+
+<span class="kwa">struct</span> WorkerData {
+   <span class="kwa">var</span> pid: pthread_t
+   <span class="kwa">var</span> check, iterations, depth:<span class="kwb">Int</span>
+}
+
+<span class="kwa">func</span> <span class="kwd">worker_thread</span>(tdata:UnsafeMutablePointer&lt;Void&gt;) -&gt; UnsafeMutablePointer&lt;Void&gt; {
+
+   <span class="kwa">let</span> data = UnsafeMutablePointer&lt;WorkerData&gt;(tdata)
+   <span class="kwa">let</span> iterations = data.memory.iterations
+   <span class="kwa">let</span> depth = data.memory.depth
+   <span class="kwa">var</span> check = <span class="num">0</span>
+     
+   <span class="kwa">var</span> pool = <span class="kwd">COpaquePointer</span>()
+   <span class="kwd">apr_pool_create_unmanaged_ex</span>(&amp;pool,<span class="kwa">nil</span>,<span class="kwa">nil</span>)
+
+   <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..&lt;iterations {
+      <span class="kwa">var</span> l = UnsafeMutablePointer&lt;TreeNode&gt;.<span class="kwa">init</span>(<span class="kwd">apr_palloc</span>(pool,<span class="kwd">sizeof</span>(TreeNode)))
+      <span class="kwd">bottomUpTree</span>(i,depth,l,pool)
+      check += l.memory.<span class="kwd">check</span>();
+      
+      <span class="kwd">apr_pool_clear</span>(pool)
+      l = UnsafeMutablePointer&lt;TreeNode&gt;.<span class="kwa">init</span>(<span class="kwd">apr_palloc</span>(pool,<span class="kwd">sizeof</span>(TreeNode)))
+      <span class="kwd">bottomUpTree</span>(-i,depth,l,pool)
+      check += l.memory.<span class="kwd">check</span>();
+   }
+   
+   <span class="kwd">apr_pool_destroy</span>(pool)
+   data.memory.check = check
+   <span class="kwa">return nil</span>
+}
+
+
+<span class="kwa">let</span> n: <span class="kwb">Int</span> = <span class="kwb">Int</span>(Process.arguments[<span class="num">1</span>])!
+<span class="kwa">let</span> minDepth = <span class="num">4</span>
+<span class="kwa">let</span> maxDepth = n
+<span class="kwa">let</span> stretchDepth = n + <span class="num">1</span>
+<span class="kwa">let</span> size = (maxDepth-minDepth)/<span class="num">2</span> + <span class="num">1</span> 
+<span class="kwa">var</span> workers_head = UnsafeMutablePointer&lt;WorkerData&gt;.<span class="kwd">alloc</span>(size);
+
+<span class="kwd">apr_initialize</span>()
+<span class="kwa">var</span> pool1 = <span class="kwd">COpaquePointer</span>()
+<span class="kwd">apr_pool_create_unmanaged_ex</span>(&amp;pool1,<span class="kwa">nil</span>,<span class="kwa">nil</span>)
+
+<span class="kwa">var</span> root = UnsafeMutablePointer&lt;TreeNode&gt;.<span class="kwa">init</span>(<span class="kwd">apr_palloc</span>(pool1,<span class="kwd">sizeof</span>(TreeNode)))
+<span class="kwd">bottomUpTree</span>(<span class="num">0</span>,stretchDepth, root, pool1)
+<span class="kwa">let</span> check = root.memory.<span class="kwd">check</span>()
+<span class="kwd">print</span>(<span class="str">&quot;stretch tree of depth \(stretchDepth)</span><span class="esc">\t</span> <span class="str">check: \(check)&quot;</span>)
+ 
+<span class="kwd">apr_pool_clear</span>(pool1)
+
+root = UnsafeMutablePointer&lt;TreeNode&gt;.<span class="kwa">init</span>(<span class="kwd">apr_palloc</span>(pool1,<span class="kwd">sizeof</span>(TreeNode)))
+<span class="kwd">bottomUpTree</span>(<span class="num">0</span>,maxDepth,root,pool1)
+
+<span class="kwa">var</span> depth = minDepth
+<span class="kwa">var</span> worker = workers_head
+
+<span class="kwa">while</span> depth &lt;= maxDepth {
+
+   worker.memory = <span class="kwd">WorkerData</span>(
+      <span class="kwc">pid</span>:<span class="num">0</span>,
+      <span class="kwc">check</span>:<span class="num">0</span>,
+      <span class="kwc">iterations</span>: <span class="num">1</span> &lt;&lt; (maxDepth - depth + minDepth),
+      <span class="kwc">depth</span>:depth
+   )
+
+   <span class="kwd">pthread_create</span>(&amp;worker.memory.pid, <span class="kwa">nil</span>, worker_thread, worker)
+   depth += <span class="num">2</span>
+   worker += <span class="num">1</span>
+}
+
+
+<span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..&lt;size {
+   <span class="kwa">let</span> worker = workers_head + i
+   <span class="kwd">pthread_join</span>(worker.memory.pid,<span class="kwa">nil</span>)
+   <span class="kwd">print</span>(<span class="str">&quot;\(worker.memory.iterations*2)</span><span class="esc">\t</span> <span class="str">trees of depth \(worker.memory.depth)</span><span class="esc">\t</span> <span class="str">check: \(worker.memory.check)&quot;</span>)
+}
+
+<span class="kwd">print</span>(<span class="str">&quot;long lived tree of depth \(maxDepth)</span><span class="esc">\t</span> <span class="str">check: \(root.memory.check())&quot;</span>)
+
+<span class="kwd">apr_pool_destroy</span>(pool1)
+<span class="kwd">apr_terminate</span>()
+

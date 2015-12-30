@@ -1,0 +1,71 @@
+<span class="com">&quot;* The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">    adapted from a program by Paolo Bonzini</span>
+<span class="com">    contributed by Isaac Gouy </span>
+<span class="com">    modified by Carlo Teixeira *&quot;</span>!
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+
+<span class="kwb">threadring2</span>
+   <span class="kwd">| done |</span>
+   (<span class="kwa">self</span> <span class="kwb">threadRing:</span> (done :<span class="kwb">=</span> <span class="kwc">Semaphore</span> new)) <span class="kwb">takeToken:</span> <span class="kwa">self</span> arg.
+   done wait.
+   ^<span class="str">''</span>!
+
+<span class="kwb">threadRing:</span> aSemaphore
+   <span class="kwd">| first last |</span>
+   <span class="num">503</span> <span class="kwb">to:</span> <span class="num">1</span> <span class="kwb">by: -</span><span class="num">1</span> <span class="kwb">do:</span> [<span class="kwd">:i</span>|
+      first :<span class="kwb">=</span> <span class="kwc">Thread</span> <span class="kwb">named:</span> i <span class="kwb">next:</span> first <span class="kwb">done:</span> aSemaphore.
+      last isNil <span class="kwb">ifTrue:</span> [ last:<span class="kwb">=</span>first. ].
+   ].
+   last <span class="kwb">nextThread:</span> first.
+   ^first! !
+
+
+<span class="kwc">Object</span> <span class="kwb">subclass:</span> <span class="kwd">#Thread</span>
+   <span class="kwb">instanceVariableNames:</span> <span class="str">'name nextThread token semaphore done '</span>
+   <span class="kwb">classVariableNames:</span> <span class="str">''</span>
+   <span class="kwb">poolDictionaries:</span> <span class="str">''</span>
+   <span class="kwb">category:</span> <span class="str">'BenchmarksGame'</span>!
+
+<span class="kwc">Thread</span> class
+   <span class="kwb">instanceVariableNames:</span> <span class="str">''</span>!
+
+
+!<span class="kwc">Thread</span> class <span class="kwb">methodsFor:</span> <span class="str">'instance creation'</span>!
+
+<span class="kwb">named:</span> anInteger <span class="kwb">next:</span> aThread <span class="kwb">done:</span> aSemaphore
+   ^<span class="kwa">self</span> new <span class="kwb">name:</span> anInteger; <span class="kwb">nextThread:</span> aThread; <span class="kwb">done:</span> aSemaphore; fork !
+
+<span class="kwb">new</span>
+   ^<span class="kwa">self</span> basicNew <span class="kwb">semaphore:</span> <span class="kwc">Semaphore</span> new ! !
+
+
+!<span class="kwc">Thread</span> <span class="kwb">methodsFor:</span> <span class="str">'accessing'</span>!
+
+<span class="kwb">done:</span> aSemaphore
+   done :<span class="kwb">=</span> aSemaphore !
+
+<span class="kwb">fork</span>
+   [ <span class="kwa">self</span> run ] <span class="kwb">forkAt:</span> <span class="kwc">Processor</span> userBackgroundPriority.!
+
+<span class="kwb">name:</span> anInteger
+   name :<span class="kwb">=</span> anInteger !
+
+<span class="kwb">nextThread:</span> aThread
+   nextThread :<span class="kwb">=</span> aThread !
+
+<span class="kwb">run</span>
+   [semaphore wait.
+   <span class="num">0</span><span class="kwb">==</span>token] <span class="kwb">whileFalse:</span> [nextThread <span class="kwb">takeToken:</span> token <span class="kwb">-</span> <span class="num">1</span>].
+   name <span class="kwb">printOn:</span> <span class="kwc">Tests</span> stdout.
+   <span class="kwc">Tests</span> stdout cr.
+   done signal!
+
+<span class="kwb">semaphore:</span> aSemaphore
+   semaphore :<span class="kwb">=</span> aSemaphore !
+
+<span class="kwb">takeToken:</span> x
+   token :<span class="kwb">=</span> x.
+   semaphore signal ! !

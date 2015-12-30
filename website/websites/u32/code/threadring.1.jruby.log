@@ -1,0 +1,14 @@
+
+Thu, 27 Aug 2015 04:24:29 GMT
+
+MAKE:
+mv threadring.jruby threadring.rb
+0.01s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jruby-9.0.0.0/bin/jruby -X+C --server  threadring.rb 50000000
+
+PROGRAM OUTPUT:
+292
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

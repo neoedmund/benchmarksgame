@@ -1,0 +1,30 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; contributed by Kenneth Jonsson</span>
+
+(ns threadring (:gen-class))
+
+(<span class="kwa">defn</span> pass-token [ slot value ]
+    (<span class="kwc">when</span> (zero? value)
+        (println (:id slot))
+        (System/exit <span class="num">0</span>))
+    (send (:next slot) pass-token (dec value))
+    slot)
+
+(<span class="kwa">defn</span> create-ring-and-start [ _ ring-sz initial-value ]
+    <span class="slc">; &quot;send&quot; will be defered until the state of the current agent has</span>
+    <span class="slc">; been set to the state returned by this function</span>
+    (send *agent* pass-token initial-value)
+    <span class="slc">; create a ring of &quot;ring-sz&quot; agents linked via &quot;:next&quot;</span>
+    { :id <span class="num">1</span>
+      :next (reduce (<span class="kwa">fn</span> [ next-slot id ]
+                        (agent { :next next-slot :id id }))
+                        *agent*
+                        (<span class="kwd">range</span> ring-sz <span class="num">1</span> -<span class="num">1</span>)) })
+
+(<span class="kwa">defn</span> -main [ &amp; args ]
+    (send (agent nil)
+          create-ring-and-start
+	  <span class="num">503</span>
+          (<span class="kwc">if</span> (empty? args) <span class="num">1000</span> (Integer/parseInt (<span class="kwd">first</span> args)))))

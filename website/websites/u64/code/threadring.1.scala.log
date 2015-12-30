@@ -1,0 +1,21 @@
+
+Mon, 14 Sep 2015 18:47:26 GMT
+
+MAKE:
+mv threadring.scala threadring.scala
+mv: ‘threadring.scala’ and ‘threadring.scala’ are the same file
+/home/dunham/benchmarksgame/nanobench/makefiles/u64.programs.Makefile:596: recipe for target 'threadring.scala_run' failed
+make: [threadring.scala_run] Error 1 (ignored)
+/usr/local/src/scala-2.11.6/bin/scalac -optimise -target:jvm-1.8 threadring.scala
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+warning: there was one deprecation warning; re-run with -deprecation for details
+one warning found
+5.66s to complete and log all make actions
+
+COMMAND LINE:
+ /usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -Xbootclasspath/a:/usr/local/src/scala-2.11.6/lib/scala-library.jar:/usr/local/src/scala-2.11.6/lib/scala-actors-2.11.0.jar:/usr/local/src/scala-2.11.6/lib/akka-actor_2.11-2.3.4.jar:/usr/local/src/scala-2.11.6/lib/config-1.2.1.jar threadring 50000000
+
+PROGRAM OUTPUT:
+292
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

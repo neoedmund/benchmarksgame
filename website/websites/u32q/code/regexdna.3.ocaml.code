@@ -1,0 +1,73 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Christophe TROESTLER</span>
+<span class="com"> * Parallelized by Jon Harrop</span>
+<span class="com"> * Modified by Mauricio Fernandez</span>
+<span class="com"> *)</span>
+
+<span class="kwa">open</span> <span class="kwd">Printf</span>
+
+<span class="com">(* semi-standard function for process-based parallelism *)</span>
+<span class="kwa">let</span> invoke (f : 'a -&gt; 'b) x : <span class="kwb">unit</span> -&gt; 'b =
+  <span class="kwa">let</span> input, output = <span class="kwc">Unix</span>.pipe() <span class="kwa">in</span>
+  <span class="kwa">match</span> <span class="kwc">Unix</span>.fork() <span class="kwa">with</span>
+  | -<span class="num">1</span> -&gt; <span class="kwc">Unix</span>.close input; <span class="kwc">Unix</span>.close output; (<span class="kwa">let</span> v = f x <span class="kwa">in fun</span> () -&gt; v)
+  | <span class="num">0</span> -&gt;
+      <span class="kwc">Unix</span>.close input;
+      <span class="kwa">let</span> output = <span class="kwc">Unix</span>.out_channel_of_descr output <span class="kwa">in</span>
+        <span class="kwc">Marshal</span>.to_channel output (<span class="kwa">try</span> `<span class="kwd">Res</span>(f x) <span class="kwa">with</span> e -&gt; `<span class="kwd">Exn</span> e) [];
+        close_out output;
+        exit <span class="num">0</span>
+  | pid -&gt;
+      <span class="kwc">Unix</span>.close output;
+      <span class="kwa">let</span> input = <span class="kwc">Unix</span>.in_channel_of_descr input <span class="kwa">in fun</span> () -&gt;
+        <span class="kwa">let</span> v = <span class="kwc">Marshal</span>.from_channel input <span class="kwa">in</span>
+        ignore (<span class="kwc">Unix</span>.waitpid [] pid);
+        close_in input;
+        <span class="kwa">match</span> v <span class="kwa">with</span> `<span class="kwd">Res</span> x -&gt; x | `<span class="kwd">Exn</span> e -&gt; raise e
+
+<span class="kwa">let</span> variants = [<span class="str">&quot;agggtaaa</span><span class="esc">\\</span><span class="str">|tttaccct&quot;</span>;          <span class="str">&quot;[cgt]gggtaaa</span><span class="esc">\\</span><span class="str">|tttaccc[acg]&quot;</span>;
+                <span class="str">&quot;a[act]ggtaaa</span><span class="esc">\\</span><span class="str">|tttacc[agt]t&quot;</span>;  <span class="str">&quot;ag[act]gtaaa</span><span class="esc">\\</span><span class="str">|tttac[agt]ct&quot;</span>;
+                <span class="str">&quot;agg[act]taaa</span><span class="esc">\\</span><span class="str">|ttta[agt]cct&quot;</span>;  <span class="str">&quot;aggg[acg]aaa</span><span class="esc">\\</span><span class="str">|ttt[cgt]ccct&quot;</span>;
+                <span class="str">&quot;agggt[cgt]aa</span><span class="esc">\\</span><span class="str">|tt[acg]accct&quot;</span>;  <span class="str">&quot;agggta[cgt]a</span><span class="esc">\\</span><span class="str">|t[acg]taccct&quot;</span>;
+                <span class="str">&quot;agggtaa[cgt]</span><span class="esc">\\</span><span class="str">|[acg]ttaccct&quot;</span>]
+
+<span class="com">(* Remove the &quot;\\&quot; which is mandatory in OCaml regex. *)</span>
+<span class="kwa">let</span> re_bs = <span class="kwc">Str</span>.regexp_string <span class="str">&quot;</span><span class="esc">\\</span><span class="str">&quot;</span>
+<span class="kwa">let</span> to_string = <span class="kwc">Str</span>.global_replace re_bs <span class="str">&quot;&quot;</span>
+
+<span class="kwa">let</span> subst = [<span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>; <span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>;   <span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>; <span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>;
+             <span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>;   <span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>; <span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>;   <span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>;
+             <span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>; <span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>;     <span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>]
+
+<span class="com">(* Read all of a redirected FASTA format file from stdin. *)</span>
+<span class="kwa">let</span> file_data, file_length =
+  <span class="kwa">let</span> b = <span class="kwc">Buffer</span>.create <span class="num">0xFFFF</span> <span class="kwa">and</span> s = <span class="kwc">String</span>.create <span class="num">0xFFF</span> <span class="kwa">and</span> r = <span class="kwb">ref</span> <span class="num">1</span> <span class="kwa">in</span>
+  <span class="kwa">while</span> !r &gt; <span class="num">0</span> <span class="kwa">do</span>
+    r := input stdin s <span class="num">0 0xFFF</span>;   <span class="kwc">Buffer</span>.add_substring b s <span class="num">0</span> !r
+  <span class="kwa">done</span>;
+  <span class="kwc">Buffer</span>.contents b, <span class="kwc">Buffer</span>.length b
+
+<span class="com">(* Remove FASTA sequence descriptions and all linefeed characters.  *)</span>
+<span class="kwa">let</span> dna = <span class="kwc">Str</span>.global_replace (<span class="kwc">Str</span>.regexp <span class="str">&quot;^&gt;.*$</span><span class="esc">\\</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;</span>) <span class="str">&quot;&quot;</span> file_data
+<span class="kwa">let</span> code_length = <span class="kwc">String</span>.length dna
+
+<span class="com">(* Count matches of [re]. *)</span>
+<span class="kwa">let</span> count re s =
+  <span class="kwa">let</span> re = <span class="kwc">Str</span>.regexp_case_fold re <span class="kwa">and</span> i = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">and</span> n = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+  <span class="kwa">try</span>
+    <span class="kwa">while true do</span> i := <span class="num">1</span> + <span class="kwc">Str</span>.search_forward re s !i; incr n <span class="kwa">done</span>; <span class="kwa">assert false</span>
+  <span class="kwa">with</span> <span class="kwd">Not_found</span> -&gt; !n
+
+
+<span class="kwa">let</span> () =
+  <span class="kwc">List</span>.iter (<span class="kwa">fun</span> f -&gt; print_endline(f()))
+    (<span class="kwc">List</span>.map
+       (invoke
+	  (<span class="kwa">fun</span> re -&gt; sprintf <span class="str">&quot;</span><span class="ipl">%s %i</span><span class="str">&quot;</span> (to_string re) (count re dna)))
+       variants);
+  <span class="kwa">let</span> b = <span class="kwb">ref</span> dna <span class="kwa">in</span>
+  <span class="kwc">List</span>.iter (<span class="kwa">fun</span> (re, s) -&gt;
+               b := <span class="kwc">Str</span>.global_replace (<span class="kwc">Str</span>.regexp_case_fold re) s !b) subst;
+  printf <span class="str">&quot;</span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> file_length code_length (<span class="kwc">String</span>.length !b)

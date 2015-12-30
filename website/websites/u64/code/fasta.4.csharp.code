@@ -1,0 +1,197 @@
+﻿<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Serge Smith</span>
+<span class="com">*/</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.Collections.Generic;
+<span class="kwa">using</span> System.IO;
+<span class="kwa">using</span> System.Linq;
+<span class="kwa">using</span> System.Text;
+<span class="kwa">using</span> System.Threading.Tasks;
+
+<span class="kwa">class</span> Fasta
+{
+  <span class="kwb">const int</span> LineLength = <span class="num">60</span>;
+
+  <span class="kwb">const int</span> IM = <span class="num">139968</span>;
+  <span class="kwb">const int</span> IA = <span class="num">3877</span>;
+  <span class="kwb">const int</span> IC = <span class="num">29573</span>;
+  <span class="kwa">static</span> <span class="kwb">int</span> seed = <span class="num">42</span>;
+
+  <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(<span class="kwb">string</span>[] args)
+  {
+    <span class="kwb">int</span> n = args.Length &gt; <span class="num">0</span> ? Int32.<span class="kwd">Parse</span>(args[<span class="num">0</span>]) : <span class="num">1000</span>;
+
+    <span class="kwd">MakeCumulative</span>(IUB);
+    <span class="kwd">MakeCumulative</span>(HomoSapiens);
+
+    <span class="kwa">using</span> (var s = Console.<span class="kwd">OpenStandardOutput</span>())
+    {
+      <span class="kwd">MakeRepeatFasta</span>(<span class="str">&quot;ONE&quot;</span>, <span class="str">&quot;Homo sapiens alu&quot;</span>, Encoding.ASCII.<span class="kwd">GetBytes</span>(ALU), n * <span class="num">2</span>, s);
+      <span class="kwd">MakeRandomFasta</span>(<span class="str">&quot;TWO&quot;</span>, <span class="str">&quot;IUB ambiguity codes&quot;</span>, IUB, n * <span class="num">3</span>, s);
+      <span class="kwd">MakeRandomFasta</span>(<span class="str">&quot;THREE&quot;</span>, <span class="str">&quot;Homo sapiens frequency&quot;</span>, HomoSapiens, n * <span class="num">5</span>, s);
+    }
+
+  }
+  <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">MakeRandomFasta</span>(<span class="kwb">string</span> id, <span class="kwb">string</span> desc, Frequency[] a, <span class="kwb">int</span> n, Stream s)
+  {
+    <span class="kwb">byte</span>[] descStr = Encoding.ASCII.<span class="kwd">GetBytes</span>(<span class="str">&quot;&gt;&quot;</span> + id + <span class="str">&quot; &quot;</span> + desc + <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+    s.<span class="kwd">Write</span>(descStr, <span class="num">0</span>, descStr.Length);
+
+    var res = <span class="kwd">RandomSequence</span>(n, LineLength * <span class="num">40</span>)        
+      .<span class="kwd">AsParallel</span>()
+      .<span class="kwd">AsOrdered</span>()
+      .<span class="kwd">Select</span>(rnd =&gt;
+        {
+          var resLength = (rnd.Length / LineLength) * (LineLength + <span class="num">1</span>);
+          <span class="kwa">if</span> (rnd.Length % LineLength != <span class="num">0</span>)
+          {
+            resLength += rnd.Length % LineLength + <span class="num">1</span>;
+          }
+
+          var buf = <span class="kwa">new</span> <span class="kwb">byte</span>[resLength];
+          var index = <span class="num">0</span>;
+          <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; rnd.Length; i += LineLength)
+          {
+            var len = Math.<span class="kwd">Min</span>(LineLength, rnd.Length - i);
+            <span class="kwa">for</span> (var j = <span class="num">0</span>; j &lt; len; ++j)
+              buf[index++] = <span class="kwd">SelectRandom</span>(a, rnd[i + j]);
+            buf[index++] = (<span class="kwb">byte</span>)<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+          }
+          <span class="kwa">return</span> buf;
+        })
+      .<span class="kwd">AsSequential</span>();
+    ;
+    <span class="kwa">foreach</span> (var r <span class="kwa">in</span> res)
+      s.<span class="kwd">Write</span>(r, <span class="num">0</span>, r.Length);
+
+  }
+  <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">MakeRepeatFasta</span>(<span class="kwb">string</span> id, <span class="kwb">string</span> desc, <span class="kwb">byte</span>[] alu, <span class="kwb">int</span> n, Stream s)
+  {
+    var index = <span class="num">0</span>;
+    <span class="kwb">int</span> m = <span class="num">0</span>;
+    <span class="kwb">int</span> k = <span class="num">0</span>;
+    <span class="kwb">int</span> kn = alu.Length;
+    var buf = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">1024</span>];
+
+    <span class="kwb">byte</span>[] descStr = Encoding.ASCII.<span class="kwd">GetBytes</span>(<span class="str">&quot;&gt;&quot;</span> + id + <span class="str">&quot; &quot;</span> + desc + <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+    s.<span class="kwd">Write</span>(descStr, <span class="num">0</span>, descStr.Length);
+
+    <span class="kwa">while</span> (n &gt; <span class="num">0</span>)
+    {
+      m = n &lt; LineLength ? n : LineLength;
+
+      <span class="kwa">if</span> (buf.Length - index &lt; m)
+      {
+        s.<span class="kwd">Write</span>(buf, <span class="num">0</span>, index);
+        index = <span class="num">0</span>;
+      }
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; m; i++)
+      {
+        <span class="kwa">if</span> (k == kn)
+          k = <span class="num">0</span>;
+
+        buf[index++] = alu[k];
+        k++;
+      }
+
+      buf[index++] = (<span class="kwb">byte</span>)<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+      n -= LineLength;
+    }
+
+    <span class="kwa">if</span> (index != <span class="num">0</span>)
+      s.<span class="kwd">Write</span>(buf, <span class="num">0</span>, index);
+  }
+  <span class="kwa">static</span> <span class="kwb">byte</span> <span class="kwd">SelectRandom</span>(Frequency[] a, <span class="kwb">int</span> _r)
+  {
+    <span class="slc">//double r = random();</span>
+    <span class="kwb">double</span> r = _r * <span class="num">1.0</span> / IM;
+
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; a.Length; i++)
+      <span class="kwa">if</span> (r &lt; a[i].p)
+        <span class="kwa">return</span> a[i].c;
+
+    <span class="kwa">return</span> a[a.Length - <span class="num">1</span>].c;
+  }
+
+  <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">MakeCumulative</span>(Frequency[] a)
+  {
+    <span class="kwb">double</span> cp = <span class="num">0.0</span>;
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; a.Length; i++)
+    {
+      cp += a[i].p;
+      a[i].p = cp;
+    }
+  }
+
+  <span class="kwa">static</span> <span class="kwb">string</span> ALU =
+    <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span> +
+    <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span> +
+    <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span> +
+    <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span> +
+    <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span> +
+    <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span> +
+    <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+  <span class="kwa">class</span> Frequency
+  {
+    <span class="kwa">public readonly</span> <span class="kwb">byte</span> c;
+    <span class="kwa">public</span> <span class="kwb">double</span> p;
+
+    <span class="kwa">public</span> <span class="kwd">Frequency</span>(<span class="kwb">char</span> c, <span class="kwb">double</span> p)
+    {
+      <span class="kwa">this</span>.c = (<span class="kwb">byte</span>)c;
+      <span class="kwa">this</span>.p = p;
+    }
+  }
+
+  <span class="kwa">static</span> Frequency[] IUB = {
+	<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'a'</span>, <span class="num">0.27</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'c'</span>, <span class="num">0.12</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'g'</span>, <span class="num">0.12</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'t'</span>, <span class="num">0.27</span>)
+
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'B'</span>, <span class="num">0.02</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'D'</span>, <span class="num">0.02</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'H'</span>, <span class="num">0.02</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'K'</span>, <span class="num">0.02</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'M'</span>, <span class="num">0.02</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'N'</span>, <span class="num">0.02</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'R'</span>, <span class="num">0.02</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'S'</span>, <span class="num">0.02</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'V'</span>, <span class="num">0.02</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'W'</span>, <span class="num">0.02</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'Y'</span>, <span class="num">0.02</span>)
+};
+
+  <span class="kwa">static</span> Frequency[] HomoSapiens = {
+	<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'a'</span>, <span class="num">0.3029549426680</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'c'</span>, <span class="num">0.1979883004921</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'g'</span>, <span class="num">0.1975473066391</span>)
+		,<span class="kwa">new</span> <span class="kwd">Frequency</span> (<span class="str">'t'</span>, <span class="num">0.3015094502008</span>)
+};
+
+
+  <span class="kwa">static</span> <span class="kwb">int</span>[] <span class="kwd">random</span>(<span class="kwb">int</span> count)
+  {
+    <span class="kwb">int</span>[] result = <span class="kwa">new</span> <span class="kwb">int</span>[count];
+    <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; result.Length; ++i)
+    {
+      seed = (seed * IA + IC) % IM;
+      result[i] = seed;
+    }
+    <span class="kwa">return</span> result;
+  }
+  <span class="kwa">static</span> IEnumerable&lt;<span class="kwb">int</span>[]&gt; <span class="kwd">RandomSequence</span>(<span class="kwb">int</span> count, <span class="kwb">int</span> len = <span class="num">1024</span>)
+  {
+    <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; count; i += len)
+    {
+      var rnd = <span class="kwd">random</span>(Math.<span class="kwd">Min</span>(len, count - i));
+      <span class="kwa">yield return</span> rnd;
+    }
+  }
+
+}

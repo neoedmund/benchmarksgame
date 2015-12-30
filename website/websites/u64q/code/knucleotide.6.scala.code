@@ -1,0 +1,133 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   Based partially on the version by The Anh Tran</span>
+<span class="com">   Based on bit encoding idea of C++ contribution of Andrew Moon</span>
+<span class="com">   Contributed by Mark Hammons</span>
+<span class="com">   Updated for 2.10.0 by Mark Hammons</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> akka.actor.ActorSystem
+<span class="kwa">import</span> annotation.tailrec
+<span class="kwa">import</span> java.util.HashMap
+<span class="kwa">import</span> java.io.{InputStreamReader, BufferedReader}
+
+<span class="kwa">import</span> concurrent.{Await, ExecutionContext, Future}
+<span class="kwa">import</span> concurrent.duration.Duration
+
+
+<span class="kwa">object</span> knucleotide <span class="kwa">extends</span> App {
+
+  <span class="kwa">val as</span> = ActorSystem.<span class="kwd">create</span>(<span class="str">&quot;futures&quot;</span>)
+
+  implicit <span class="kwa">val</span> ec: ExecutionContext = <span class="kwa">as</span>.dispatcher
+
+  <span class="kwa">val</span> reader = <span class="kwa">new</span> <span class="kwd">BufferedReader</span>(<span class="kwa">new</span> <span class="kwd">InputStreamReader</span>(System.<span class="kwa">in</span>,  <span class="str">&quot;US-ASCII&quot;</span>), <span class="num">8</span>*<span class="num">1024</span>*<span class="num">1024</span>)
+
+  <span class="kwa">var</span> buffer = <span class="str">&quot;lola&quot;</span>
+
+  <span class="kwa">while</span>(buffer != null &amp;&amp; (<span class="kwd">buffer</span>(<span class="num">0</span>) != <span class="str">'&gt;'</span> || <span class="kwd">buffer</span>(<span class="num">2</span>) != <span class="str">'H'</span>))
+    buffer = reader.<span class="kwd">readLine</span>();
+
+  <span class="kwa">type</span> mapSeqType = List[(Future[NucleoHashMap],(String,Int))]
+
+  <span class="kwa">val</span> digestibleSeq:mapSeqType = <span class="kwd">List</span>(<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>,<span class="num">6</span>,<span class="num">12</span>,<span class="num">18</span>).<span class="kwd">map</span>(frame =&gt; <span class="kwd">Future</span>(<span class="kwa">new</span> <span class="kwd">NucleoHashMap</span>(frame)) -&gt; (<span class="str">&quot;&quot;</span>,frame))
+
+  <span class="kwc">&#64;tailrec</span>
+  <span class="kwa">def</span> <span class="kwd">digester</span>(maps: mapSeqType, length: Int = <span class="num">0</span>): (mapSeqType,Int) = {
+    <span class="kwa">var in</span> = <span class="kwa">new</span> StringBuilder
+
+    <span class="kwa">while</span>(reader.<span class="kwd">ready</span>() &amp;&amp; <span class="kwa">in</span>.length &lt; <span class="num">500000</span>)
+      <span class="kwa">in</span>.<span class="kwd">append</span>(reader.<span class="kwd">readLine</span>())
+
+    <span class="kwa">val</span> input = <span class="kwa">in</span>.stripLineEnd.toLowerCase
+
+    <span class="kwa">val</span> f = maps.<span class="kwd">map</span>(x =&gt; Await.<span class="kwd">result</span>(x._1, Duration.Inf) -&gt; x._2)
+
+    <span class="kwa">def</span> <span class="kwd">getRemainder</span>(str: String, frame: Int) = str.<span class="kwd">substring</span>(str.length - (frame-<span class="num">1</span>))
+    <span class="kwa">val</span> res = <span class="kwa">for</span>((map,(remainder,frame)) &lt;- f) <span class="kwa">yield</span>
+      Future{
+        <span class="kwa">val in</span> = remainder + input
+        map.<span class="kwd">process</span>(<span class="kwa">in</span>)
+        map
+      } -&gt; (<span class="kwd">getRemainder</span>(remainder+input,frame),frame)
+
+
+    <span class="kwa">if</span>(reader.ready) <span class="kwd">digester</span>(res,input.length + length)
+    <span class="kwa">else</span> (res,(input.length + length))
+  }
+
+  <span class="kwa">val</span> (retList,length) = <span class="kwd">digester</span>(digestibleSeq)
+
+  <span class="kwa">val</span> maps = retList.<span class="kwd">map</span>(r =&gt; Await.<span class="kwd">result</span>(r._1, Duration.Inf))
+
+  <span class="kwa">def</span> <span class="kwd">lookup</span>(str: String): Int = {
+    <span class="kwa">val</span> l = str.length
+    <span class="kwa">val</span> map = maps.<span class="kwd">find</span>(_.frame == l).<span class="kwd">getOrElse</span>(<span class="kwa">throw new</span> <span class="kwd">Exception</span>(<span class="str">&quot;no keys of length &quot;</span> + l))
+    <span class="kwd">map</span>(str)
+  }
+
+  <span class="kwa">val</span> componentList = <span class="kwd">List</span>(<span class="str">&quot;a&quot;</span>,<span class="str">&quot;t&quot;</span>,<span class="str">&quot;c&quot;</span>,<span class="str">&quot;g&quot;</span>)
+  <span class="kwa">val</span> singles = <span class="kwa">for</span>(i &lt;- componentList)
+    <span class="kwa">yield</span> (i).toUpperCase -&gt; (<span class="kwd">lookup</span>(i)/length.toDouble * <span class="num">100</span>)
+
+  <span class="kwa">val</span> doubles = <span class="kwa">for</span>(i &lt;- componentList; j &lt;- componentList)
+    <span class="kwa">yield</span> (i+j).toUpperCase -&gt; (<span class="kwd">lookup</span>(i+j)/length.toDouble * <span class="num">100</span>)
+
+  singles.<span class="kwd">sortWith</span>(_._2 &gt; _._2).<span class="kwd">foreach</span>(a =&gt; {<span class="kwd">printf</span>(<span class="str">&quot;%s %.3f</span><span class="esc">\n</span><span class="str">&quot;</span>,a._1,a._2);})
+  <span class="kwd">println</span>(<span class="str">&quot;&quot;</span>)
+  doubles.<span class="kwd">sortWith</span>(_._2 &gt; _._2).<span class="kwd">foreach</span>(a =&gt; {<span class="kwd">printf</span>(<span class="str">&quot;%s %.3f</span><span class="esc">\n</span><span class="str">&quot;</span>,a._1,a._2);})
+
+  <span class="kwd">println</span>(<span class="str">&quot;&quot;</span>)
+
+  <span class="kwd">List</span>(<span class="str">&quot;GGT&quot;</span>,<span class="str">&quot;GGTA&quot;</span>,<span class="str">&quot;GGTATT&quot;</span>, <span class="str">&quot;GGTATTTTAATT&quot;</span>, <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>).<span class="kwd">foreach</span>(
+    s =&gt; <span class="kwd">println</span>(<span class="kwd">lookup</span>(s.toLowerCase) + <span class="str">&quot;</span><span class="esc">\t</span><span class="str">&quot;</span> + s)
+  )
+
+  <span class="kwa">as</span>.<span class="kwd">shutdown</span>()
+}
+
+<span class="kwa">class</span> <span class="kwd">NucleoHashMap</span>(<span class="kwa">val</span> frame: Int)(implicit ec: ExecutionContext) {
+  <span class="kwa">class</span> BabyHash[K] <span class="kwa">extends</span> HashMap[K,Count] {
+  <span class="kwc">&#64;inline</span> <span class="kwa">final def</span> <span class="kwd">apply</span>(key: K): Count = {
+      <span class="kwa">val</span> r = <span class="kwa">this</span>.<span class="kwd">get</span>(key)
+      <span class="kwa">if</span>(r != null)
+        r
+      <span class="kwa">else</span> {
+        <span class="kwa">val</span> c = <span class="kwa">new</span> Count
+        <span class="kwd">put</span>(key,c)
+        c
+      }
+    }
+  }
+
+  <span class="kwa">val</span> maps = <span class="kwa">for</span>(i &lt;- <span class="num">0</span> until frame)
+    <span class="kwa">yield new</span> BabyHash[String] -&gt; i
+
+  <span class="kwa">def</span> <span class="kwd">process</span>(str: String) {
+    <span class="kwc">&#64;inline</span>
+    <span class="kwa">def</span> <span class="kwd">addStrings</span>(map: BabyHash[String], str: String) {
+      <span class="kwa">var</span> offset = <span class="num">0</span>
+      <span class="kwa">var</span> frmoffset = offset + frame
+      <span class="kwa">while</span>(str.length &gt;= frmoffset) {
+        <span class="kwd">map</span>(str.<span class="kwd">substring</span>(offset,frmoffset)) += <span class="num">1</span>
+        offset += frame
+        frmoffset += frame
+      }
+    }
+
+    maps.<span class="kwd">map</span>(x =&gt; Future{<span class="kwd">addStrings</span>(x._1,str.<span class="kwd">substring</span>(x._2))}).<span class="kwd">map</span>(Await.<span class="kwd">result</span>(_, Duration.Inf))
+  }
+
+  <span class="kwa">def</span> <span class="kwd">apply</span>(str: String):Int = {
+    maps.<span class="kwd">foldLeft</span>(<span class="num">0</span>)((z,map) =&gt; map.<span class="kwd">_1</span>(str)+z)
+  }
+}
+
+<span class="kwa">class</span> Count {
+  <span class="kwa">var</span> count = <span class="num">0</span>
+
+  <span class="kwc">&#64;inline</span> <span class="kwa">final def</span> +=(v: Int) {count += v}
+
+  <span class="kwc">&#64;inline</span> <span class="kwa">final def</span> +(v: Int) = count + v
+}
+ 

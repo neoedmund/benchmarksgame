@@ -1,0 +1,53 @@
+<span class="com">&quot;* The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">    contributed by Paolo Bonzini *&quot;</span>!
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">mandelbrot2:</span> extent <span class="kwb">to:</span> output
+   <span class="kwd">| limit2 m bits zr zi cr ci i tr stepr stepi |</span>
+   limit2 :<span class="kwb">=</span> <span class="num">4.0</span>d0.
+   m :<span class="kwb">=</span> <span class="num">50</span>.
+
+   stepr :<span class="kwb">=</span> <span class="num">2.0</span>d0 <span class="kwb">/</span> extent.
+   stepi :<span class="kwb">=</span> <span class="num">2.0</span>d0 <span class="kwb">/</span> extent.
+
+   <span class="num">0</span> <span class="kwb">to:</span> extent <span class="kwb">-</span> <span class="num">1</span> <span class="kwb">do:</span> [ <span class="kwd">:y</span> |
+       bits :<span class="kwb">=</span> <span class="num">0</span>.
+       ci :<span class="kwb">=</span> stepi <span class="kwb">*</span> y asFloat <span class="kwb">-</span> <span class="num">1.0</span>d0.
+       <span class="num">0</span> <span class="kwb">to:</span> extent <span class="kwb">-</span> <span class="num">1</span> <span class="kwb">do:</span> [ <span class="kwd">:x</span> |
+           cr :<span class="kwb">=</span> stepr <span class="kwb">*</span> x asFloat <span class="kwb">-</span> <span class="num">1.5</span>d0.
+           zr :<span class="kwb">=</span> cr. zi :<span class="kwb">=</span> ci.
+
+           bits :<span class="kwb">=</span> bits <span class="kwb">bitShift:</span> <span class="num">1</span>.
+           i :<span class="kwb">=</span> <span class="num">1</span>.  
+           [
+               tr :<span class="kwb">=</span> (zr<span class="kwb">*</span>zr) <span class="kwb">-</span> (zi<span class="kwb">*</span>zi) <span class="kwb">+</span> cr.
+               zi :<span class="kwb">=</span> <span class="num">2.0</span>d0 <span class="kwb">*</span> zr <span class="kwb">*</span> zi <span class="kwb">+</span> ci.
+               zr :<span class="kwb">=</span> tr.
+               (zr<span class="kwb">*</span>zr) <span class="kwb">+</span> (zi<span class="kwb">*</span>zi) &lt; limit2 <span class="kwb">and:</span> [ (i :<span class="kwb">=</span> i <span class="kwb">+</span> <span class="num">1</span>) &lt; m ]
+           ] whileTrue.
+
+           i <span class="kwb">=</span> m <span class="kwb">ifTrue:</span> [ bits :<span class="kwb">=</span> bits <span class="kwb">+</span> <span class="num">1</span> ].
+           (x <span class="kwb">bitAnd:</span> <span class="num">7</span>) <span class="kwb">==</span> <span class="num">7</span> <span class="kwb">ifTrue:</span> [
+               output <span class="kwb">nextPut:</span> bits.
+               bits :<span class="kwb">=</span> <span class="num">0</span>.
+           ]
+       ]. 
+       (extent <span class="kwb">bitAnd:</span> <span class="num">7</span>) <span class="kwb">==</span> <span class="num">0</span> <span class="kwb">ifFalse:</span> [
+           bits :<span class="kwb">=</span> bits <span class="kwb">bitShift:</span> <span class="num">8</span> <span class="kwb">-</span> (extent <span class="kwb">bitAnd:</span> <span class="num">7</span>).
+           output <span class="kwb">nextPut:</span> bits.
+       ]
+   ]! !
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmark scripts'</span>!
+<span class="kwb">mandelbrot2</span>
+   <span class="kwd">| n output |</span>
+   n :<span class="kwb">=</span> <span class="kwa">self</span> arg.
+   (output :<span class="kwb">=</span> <span class="kwa">self</span> stdout)
+      <span class="kwb">nextPutAll:</span> <span class="str">'P4'</span>; nl; <span class="kwb">print:</span> n; space; <span class="kwb">print:</span> n; nl;
+      binary.
+
+   <span class="kwa">self</span> <span class="kwb">mandelbrot2:</span> n <span class="kwb">to:</span> output.
+   ^<span class="str">''</span>! !
+

@@ -1,0 +1,52 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc"># transliterated from Mike Pall's Lua program</span>
+<span class="slc"># contributed by Mario Pernici</span>
+<span class="slc"># Modified by Christopher Sean Forgeron</span>
+
+<span class="slc"># CSF - Use xmpz, it does in-place updates of integers, which is faster than mpz</span>
+<span class="kwa">from</span> gmpy2 <span class="kwa">import</span> xmpz, f_divmod
+<span class="kwa">import</span> sys
+
+<span class="kwa">def</span> <span class="kwd">main</span>():
+  <span class="slc"># CSF - Use gmpy2's divmod instead of the Python built-in, it's slightly faster</span>
+  <span class="kwb">divmod</span> = f_divmod
+
+  bprint = sys.stdout.<span class="kwb">buffer</span>.write
+  N = <span class="kwd">xmpz</span>(<span class="kwb">int</span>(sys.argv[<span class="num">1</span>]))
+
+  <span class="slc"># CSF - Used by bprint below to save a few usec off each print</span>
+  line = <span class="str">'{:010d}</span><span class="esc">\t</span><span class="str">:{}</span><span class="esc">\n</span><span class="str">'</span>.format
+
+  <span class="slc"># CSF - Not very PEP friendly, but the runtime on this benchmark is low, and</span>
+  <span class="slc"># this is faster than multiple single line assignments</span>
+  n, a, d, t, u, i, k, ns, k1 = <span class="kwb">map</span>(xmpz,
+ (<span class="num">1</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>,  <span class="num">0</span>,  <span class="num">1</span>))
+
+  <span class="kwa">while True</span>:
+    k += <span class="num">1</span>
+    t = n&lt;&lt;<span class="num">1</span>
+    n *= k
+    a += t
+
+    k1 += <span class="num">2</span>
+    a *= k1
+    d *= k1
+    <span class="kwa">if</span> a &gt;= n:
+      t, u = <span class="kwb">divmod</span>(n * <span class="num">3</span> + a, d)
+      u += n
+      <span class="kwa">if</span> d &gt; u:
+        ns = ns * <span class="num">10</span> + t
+        i += <span class="num">1</span>
+        <span class="kwa">if not</span> i % <span class="num">10</span>:  <span class="slc"># CSF - faster way of saying if i % 10 == 0</span>
+          <span class="kwd">bprint</span>(<span class="kwd">line</span>(ns, i).<span class="kwd">encode</span>())
+          ns = <span class="num">0</span>
+          <span class="kwa">if</span> i &gt;= N:
+             <span class="kwa">break</span>
+        a -= d * t
+        a *= <span class="num">10</span>
+        n *= <span class="num">10</span>
+
+<span class="kwa">if</span> __name__ == <span class="str">'__main__'</span>:
+  <span class="kwd">main</span>()

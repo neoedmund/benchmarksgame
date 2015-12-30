@@ -1,0 +1,45 @@
+<span class="com">/* The Computer Language Benchmarks Game </span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/   </span>
+<span class="com"></span>
+<span class="com">   Contributed by John Nilsson </span>
+<span class="com">   Major performance improvement by Geoff Reedy  </span>
+<span class="com">*/</span>
+
+<span class="kwa">object</span> pidigits {
+    <span class="kwa">type</span> I = BigInt
+    <span class="kwa">import</span> BigInt._
+    <span class="kwa">val</span> <span class="kwd">List</span>(_0,_1,_10) = List[I](<span class="num">0</span>,<span class="num">1</span>,<span class="num">10</span>)
+  
+    <span class="kwa">class</span> <span class="kwd">LFT</span>(<span class="kwa">val</span> q:I, <span class="kwa">val</span> r:I, <span class="kwa">val</span> t:I) {
+        <span class="kwa">def</span> <span class="kwd">compose</span>(o:LFT) = <span class="kwa">new</span> <span class="kwd">LFT</span>(q * o.q, (q * o.r) + (r * o.t), t * o.t)
+        <span class="kwa">def</span> extractDigit = {
+            <span class="kwa">val</span> (y,rem) = (<span class="num">3</span>*q + r) /% t
+            <span class="kwa">if</span>((rem + q) &lt; t) <span class="kwd">Some</span>(y) <span class="kwa">else</span> None
+        }
+        <span class="kwa">def</span> <span class="kwd">next</span>(y:I) = <span class="kwa">new</span> <span class="kwd">LFT</span>(_10*q, _10*(r-(y*t)), t)
+        <span class="kwa">def</span> reduce = {
+            <span class="kwa">val</span> d = (q&gt;&gt;q.lowestSetBit).<span class="kwd">gcd</span>(r).<span class="kwd">gcd</span>(t)
+            <span class="kwa">new</span> <span class="kwd">LFT</span>(q/d,r/d,t/d)
+        }
+    }
+
+    <span class="kwa">def</span> pi_digits = {
+        <span class="kwa">def</span> _lfts = Stream from <span class="num">1</span> map { k =&gt; <span class="kwa">new</span> <span class="kwd">LFT</span>(k, k * <span class="num">4</span> + <span class="num">2</span>, k * <span class="num">2</span> + <span class="num">1</span>) }
+        <span class="kwa">def</span> <span class="kwd">_pi_digits</span>(z:LFT, lfts:Stream[LFT],n:Int): Stream[(Int,I)] = {
+            <span class="kwa">val</span> _z = <span class="kwa">if</span>(lfts.head.q % <span class="num">5000</span> == <span class="num">0</span>) z reduce <span class="kwa">else</span> z
+            _z extractDigit match {
+                <span class="kwa">case</span> <span class="kwd">Some</span>(y) =&gt; Stream.<span class="kwd">cons</span>((n,y),<span class="kwd">_pi_digits</span>(_z next y, lfts,n+<span class="num">1</span>))
+                <span class="kwa">case</span> None    =&gt; <span class="kwd">_pi_digits</span>(_z compose lfts.head, lfts.tail,n)
+            }
+        }
+        <span class="kwd">_pi_digits</span>(<span class="kwa">new</span> <span class="kwd">LFT</span>(_1,_0,_1),_lfts,<span class="num">1</span>)
+    }
+  
+    <span class="kwa">def</span> by[T](s: Stream[T], n: Int): Stream[Stream[T]] =
+        <span class="kwa">if</span>(s.isEmpty) Stream.empty
+        <span class="kwa">else</span> Stream.<span class="kwd">cons</span>(s take n, <span class="kwd">by</span>(s drop n, n))
+
+    <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]): Unit =
+        <span class="kwa">for</span> (d &lt;- <span class="kwd">by</span>(pi_digits take <span class="kwd">args</span>(<span class="num">0</span>).toInt, <span class="num">10</span>))
+            <span class="kwd">println</span>(<span class="str">&quot;%-10s</span><span class="esc">\t</span><span class="str">:%d&quot;</span>.<span class="kwd">format</span>(d.<span class="kwd">map</span>(_._2).<span class="kwd">mkString</span>(<span class="str">&quot;&quot;</span>),d.last._1))
+}

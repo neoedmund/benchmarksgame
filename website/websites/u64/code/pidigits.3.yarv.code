@@ -1,0 +1,38 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org</span>
+
+<span class="slc"># transliterated from Mario Pernici's Python program</span>
+<span class="slc"># contributed by Rick Branson</span>
+
+N = (<span class="kwc">ARGV</span>[<span class="num">0</span>] || <span class="num">100</span><span class="opt">)</span>.to_i
+
+i = k = ns = <span class="num">0</span>
+k1 = <span class="num">1</span>
+n,a,d,t,u = [<span class="num">1</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">0</span>]
+
+<span class="kwa">loop do</span>
+  k += <span class="num">1</span>
+  t = n<span class="str">&lt;&lt;1</span>
+<span class="str">  n *= k</span>
+<span class="str">  a += t</span>
+<span class="str">  k1 += 2</span>
+<span class="str">  a *= k1</span>
+<span class="str">  d *= k1</span>
+<span class="str">  if a &gt;= n</span>
+<span class="str">    t,u = (n*3 +a)</span>.<span class="kwd">divmod</span>(d<span class="opt">)</span>
+    u += n
+    <span class="kwa">if</span> d &gt; u
+      ns = ns*<span class="num">10</span> + t
+      i += <span class="num">1</span>
+      <span class="kwa">if</span> i % <span class="num">10</span> == <span class="num">0</span>
+        puts <span class="str">&quot;</span><span class="ipl">#{ns.to_s.rjust(10, '0')}</span><span class="str"></span><span class="esc">\t</span><span class="str">:</span><span class="ipl">#{i.to_s}</span><span class="str">&quot;</span>
+        ns = <span class="num">0</span>
+      <span class="kwa">end</span>
+      <span class="kwa">break if</span> i &gt;= N
+   
+      a -= d*t
+      a *= <span class="num">10</span>
+      n *= <span class="num">10</span>
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>

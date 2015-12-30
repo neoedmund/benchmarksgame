@@ -1,0 +1,296 @@
+<span class="slc">;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; ported from Scala #2</span>
+<span class="slc">;; contributed by Alex Miller</span>
+
+(ns knucleotide
+  (:gen-class)
+  (:require [clojure.string :as s])
+  (:import [java.util.concurrent Executors Future]
+           [java.io InputStream]
+           [clojure.lang Numbers]
+           [java.nio.channels Channels ReadableByteChannel]
+           [java.nio ByteBuffer]))
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* true)
+
+(definterface IDnaHash
+  (add [^long key ^long count])
+  (^long get [^long key])
+  (^void printSorted []))
+
+(definterface IBits
+  (add2 [^long b])
+  (addLots [bs])
+  (addToHash [h ^long n ^long offset])
+  (^long getSize []))
+
+(deftype Bits [^ints data <span class="slc">;; array of ints, each of which has 16 2-bit slots</span>
+               ^:unsynchronized-mutable ^long size <span class="slc">;; number of bits in Bits</span>
+               ^:unsynchronized-mutable ^long index <span class="slc">;; write index in data</span>
+               ^:unsynchronized-mutable ^long n] <span class="slc">;; bit offset to write at current index</span>
+  IBits
+  (add2 [_ b]
+    (<span class="kwc">let</span> [data ^ints data]
+      (set! size (inc size))
+      (<span class="kwc">when</span> (&gt; n <span class="num">30</span>)
+        (set! index (inc index))
+        (set! n <span class="num">0</span>))
+      (aset data index (bit-or (aget ^ints data index)
+                               (Numbers/shiftLeftInt (bit-and b <span class="num">0x3</span>) n)))
+      (set! n (+ n <span class="num">2</span>))
+      nil))
+  (addLots [this bs]
+    (<span class="kwc">let</span> [data ^ints data
+          bs ^Bits bs]
+      (<span class="kwc">if</span> (or (= n <span class="num">0</span>) (&gt; n <span class="num">30</span>))
+        (do
+          (<span class="kwc">when</span> (&gt; n <span class="num">30</span>)
+            (set! index (inc index))
+            (set! n <span class="num">0</span>))
+          (System/arraycopy ^ints (.-data bs) <span class="num">0</span> data index (.-index bs))
+          (set! index (+ index (.-index bs)))
+          (<span class="kwc">when</span> (and (&gt; index <span class="num">0</span>) (= n <span class="num">0</span>))
+            (set! index (dec index))
+            (set! n <span class="num">32</span>)))
+        (do
+          (<span class="kwb">loop</span> [i <span class="num">0</span>]
+            (<span class="kwc">when</span> (&lt; i (.-index bs))
+              (<span class="kwc">let</span> [j (aget ^ints (.-data bs) i)]
+                (aset data index (bit-or (aget data index) (Numbers/shiftLeftInt j n)))
+                (set! index (inc index))
+                (aset data index (bit-or (aget data index) (Numbers/unsignedShiftRightInt j (- <span class="num">32</span> n))))
+                (<span class="kwb">recur</span> (inc i)))))))
+      (set! size (+ size (* <span class="num">16</span> ^long (.-index bs))))
+      (<span class="kwc">let</span> [bsn (.-n bs)]
+        (<span class="kwc">when</span> (&gt; bsn <span class="num">0</span>)
+          (<span class="kwb">loop</span> [n bsn
+                 i (aget ^ints (.-data bs) (.-index bs))]
+            (<span class="kwc">when</span> (&gt; n <span class="num">0</span>)
+              (.add2 this i)
+              (<span class="kwb">recur</span> (long (- n <span class="num">2</span>))
+                     (long (Numbers/unsignedShiftRightInt i <span class="num">2</span>)))))))
+      nil))
+  (addToHash [_ h n offset]
+    (<span class="kwc">let</span> [data ^ints data
+          mask (dec (bit-shift-left <span class="num">1</span> (* n <span class="num">2</span>)))]
+      (<span class="kwb">loop</span> [i (rem offset <span class="num">16</span>)
+             j (quot offset <span class="num">16</span>)
+             h ^IDnaHash h]
+        (<span class="kwc">if</span> (&lt;= (+ (* j <span class="num">16</span>) i n) size)
+          (<span class="kwc">if</span> (&lt;= (+ i n) <span class="num">16</span>)
+            (<span class="kwc">let</span> [l (bit-and (unsigned-bit-shift-right (aget data j) (* <span class="num">2</span> i)) mask)
+                  newi (+ i n)]
+              (<span class="kwc">if</span> (&gt;= newi <span class="num">16</span>)
+                (<span class="kwb">recur</span> (- newi <span class="num">16</span>) (inc j) (.add h l <span class="num">1</span>))
+                (<span class="kwb">recur</span> newi j (.add h l <span class="num">1</span>))))
+            (<span class="kwc">let</span> [l (bit-and (bit-or (Numbers/unsignedShiftRightInt (aget data j) (int (* <span class="num">2</span> i)))
+                                     (bit-shift-left (aget data (inc j)) (* <span class="num">2</span> (- <span class="num">16</span> i))))
+                             mask)
+                  newj (inc j)
+                  newi (+ i (- n <span class="num">16</span>))]
+              (<span class="kwc">if</span> (&gt;= newi <span class="num">16</span>)
+                (<span class="kwb">recur</span> (- newi <span class="num">16</span>) (inc newj) (.add h l <span class="num">1</span>))
+                (<span class="kwb">recur</span> newi newj (.add h l <span class="num">1</span>)))))
+          h))))
+  (getSize [_] size))
+
+(<span class="kwa">def</span> table (<span class="kwc">let</span> [arr (long-array <span class="num">256</span>)]
+             (<span class="kwb">loop</span> [i <span class="num">0</span>]
+               (<span class="kwc">if</span> (&lt; i <span class="num">256</span>)
+                 (do
+                   (aset arr i (<span class="kwc">case</span> i
+                                 (<span class="num">97 65</span>) <span class="num">0</span>
+                                 (<span class="num">116 84</span>) <span class="num">1</span>
+                                 (<span class="num">103 71</span>) <span class="num">2</span>
+                                 (<span class="num">99 67</span>) <span class="num">3</span>
+                                 -<span class="num">1</span>))
+                   (<span class="kwb">recur</span> (inc i)))
+                 arr))))
+
+(<span class="kwa">defn</span> r ^long [^ReadableByteChannel ch ^ByteBuffer d]
+  (.clear d)
+  (.read ch d))
+
+(<span class="kwa">defn</span> add-all [bitsv]
+  (<span class="kwc">let</span> [total-size (inc ^long (/ ^long (reduce (<span class="kwa">fn</span> ^long [a b] (+ ^long a ^long (.getSize ^IBits b))) <span class="num">0</span> bitsv) <span class="num">16</span>))
+        all ^IBits (-&gt;Bits (int-array total-size) <span class="num">0 0 0</span>)]
+    (<span class="kwb">doseq</span> [^IBits bits bitsv :<span class="kwc">when</span> (pos? (.getSize bits))]
+      (.addLots all bits))
+    all))
+
+(<span class="kwa">defn</span> readb [^ReadableByteChannel ch ^ByteBuffer data ^long n ^long i]
+  (<span class="kwc">let</span> [table ^longs table]
+    (<span class="kwb">loop</span> [i i
+           n n
+           bits (-&gt;Bits (int-array (inc (quot (- n i) <span class="num">4</span>))) <span class="num">0 0 0</span>)
+           bitsv []]
+      (<span class="kwc">if</span> (&lt; i n)
+        (<span class="kwc">let</span> [b (long (.get data i))]
+          (<span class="kwc">when</span> (false? (= b (long <span class="num">10</span>))) <span class="slc">;; if not newline</span>
+            (.add2 ^IBits bits (aget table (bit-and b <span class="num">0xFF</span>))))
+          (<span class="kwb">recur</span> (inc i) n bits bitsv))
+        (<span class="kwc">if</span> (&lt;= n <span class="num">0</span>)
+          (add-all bitsv)
+          (<span class="kwc">let</span> [n (r ch data)]
+            (<span class="kwb">recur</span> <span class="num">0</span> (long n) (-&gt;Bits (int-array (inc (quot n <span class="num">4</span>))) <span class="num">0 0 0</span>) (conj bitsv bits))))))))
+
+(<span class="kwa">defn</span> skip [^ReadableByteChannel ch ^ByteBuffer data ^long n ^long i]
+  (<span class="kwb">loop</span> [i i
+         n n]
+    (<span class="kwc">if</span> (&lt; i n)
+      (<span class="kwc">if</span> (= (long (.get data i)) <span class="num">10</span>) <span class="slc">;; \newline</span>
+        (<span class="kwc">if</span> (= (inc i) n)
+          (readb ch data (r ch data) <span class="num">0</span>)
+          (readb ch data n i))
+        (<span class="kwb">recur</span> (inc i) n))
+      (<span class="kwb">recur</span> <span class="num">0</span> (r ch data)))))
+
+(<span class="kwa">defn</span> loadf [^String target]
+  (<span class="kwc">let</span> [ch ^ReadableByteChannel (Channels/newChannel System/in)
+        tb ^bytes (.getBytes target)
+        tlen (long (alength tb))
+        tl ^longs (long-array (inc tlen)) <span class="slc">;; pad by 1 space for match termination     </span>
+        data ^ByteBuffer (ByteBuffer/allocateDirect <span class="num">1048576</span>) <span class="slc">;; 1024 * 1024</span>
+        n (long (r ch data))]
+    (<span class="kwb">doseq</span> [i (<span class="kwd">range</span> tlen)]
+      (aset tl i (long (aget tb i))))
+    (<span class="kwb">loop</span> [i (long <span class="num">0</span>)
+           need (long <span class="num">0</span>)
+           match (long (aget tl <span class="num">0</span>))
+           n (long n)]
+
+      (<span class="kwc">if</span> (&lt; i n)
+        (<span class="kwc">if</span> (&lt; need tlen)
+          (<span class="kwc">if</span> (= (long (.get data i)) match)            
+            (<span class="kwb">recur</span> (inc i) (inc need) (aget tl (inc need)) n)
+            (<span class="kwb">recur</span> (inc i) <span class="num">0</span> (long (aget tl <span class="num">0</span>)) n))
+          (<span class="kwc">if</span> (= (inc i) n)
+            (skip ch data (r ch data) <span class="num">0</span>)
+            (skip ch data n i)))
+        (<span class="kwb">recur</span> <span class="num">0</span> need match (r ch data))))))
+
+(<span class="kwa">defmacro</span> hc [l size]
+  `(bit-and (+ ~l (bit-shift-right ~l <span class="num">17</span>)) (dec ~size)))
+
+(<span class="kwa">defmacro</span> nx [i size]
+  `(bit-and (inc ~i) (dec ~size)))
+
+(<span class="kwa">def</span> ^:constant decode [<span class="str">&quot;A&quot;</span> <span class="str">&quot;T&quot;</span> <span class="str">&quot;G&quot;</span> <span class="str">&quot;C&quot;</span>])
+(<span class="kwa">defn</span> l2s [^long l ^long n]
+  (<span class="kwc">if</span> (&lt;= n <span class="num">0</span>)
+    <span class="str">&quot;&quot;</span>
+    (str (decode (bit-and l <span class="num">0x3</span>)) (l2s (unsigned-bit-shift-right l <span class="num">2</span>) (dec n)))))
+
+(deftype DnaHash [^long z
+                  ^long size
+                  ^:unsynchronized-mutable ^long n
+                  ^longs keys
+                  ^longs counters]
+  IDnaHash
+  (add [this key count]
+    (<span class="kwc">let</span> [size size
+          keys ^longs keys
+          counters ^longs counters
+          index (int (hc key size))]
+      (cond
+       <span class="slc">;; new key</span>
+       (= (aget counters index) <span class="num">0</span>)
+       (do
+         (aset keys index key)
+         (aset counters index count)
+         (set! n (inc n))
+         this)
+
+       <span class="slc">;; existing key</span>
+       (= (aget keys index) key)
+       (do
+         (aset counters index (+ (aget counters index) count))
+         this)
+
+       <span class="slc">;; rehash</span>
+       (&gt; (* <span class="num">6</span> n) size)
+       (<span class="kwc">let</span> [newsize (* size <span class="num">64</span>)
+             newhash (DnaHash. z newsize <span class="num">0</span> (long-array newsize) (long-array newsize))]
+         (<span class="kwb">loop</span> [i <span class="num">0</span>]
+           (<span class="kwc">if</span> (&lt; i size)
+             (<span class="kwc">let</span> [ci (aget counters i)]
+               (<span class="kwc">when</span> (&gt; ci <span class="num">0</span>)
+                 (.add newhash (aget keys i) ci))
+               (<span class="kwb">recur</span> (inc i)))
+             (do
+               (.add newhash key <span class="num">1</span>)
+               newhash))))
+
+       true
+       (<span class="kwb">loop</span> [i (nx index size)]
+         (<span class="kwc">let</span> [ii (int i)]
+           (<span class="kwc">if</span> (or (= <span class="num">0</span> (aget counters ii))
+                   (= key (aget keys ii)))
+             (<span class="kwc">if</span> (= (aget counters i) <span class="num">0</span>)
+               (do
+                 (aset keys ii key)
+                 (aset counters ii count)
+                 (set! n (inc n))
+                 this)
+               (do
+                 (aset counters ii (+ (aget counters ii) count))
+                 this))
+             (<span class="kwb">recur</span> (nx i size))))))))
+  (get [_ key]
+    (<span class="kwb">loop</span> [i (hc key size)]
+      (<span class="kwc">if</span> (and (pos? (aget counters i)) (not= key (aget keys i)))
+        (<span class="kwb">recur</span> i)
+        (aget counters i))))
+  (printSorted [this]
+    (<span class="kwc">let</span> [tcounts (long (<span class="kwb">loop</span> [idx <span class="num">0</span> acc <span class="num">0</span>]
+                          (<span class="kwc">if</span> (&lt; idx (alength counters))
+                            (<span class="kwb">recur</span> (inc idx) (+ acc (aget counters idx)))
+                            acc)))
+          factor (/ <span class="num">100.0</span> tcounts)
+          freqs (<span class="kwb">loop</span> [i <span class="num">0</span>
+                       acc (transient [])]
+                  (<span class="kwc">if</span> (&lt; i (alength counters))
+                    (<span class="kwc">let</span> [c (* factor (aget counters i))
+                          k (l2s (aget keys i) z)]
+                      (<span class="kwb">recur</span> (inc i) (<span class="kwc">if</span> (&gt; c <span class="num">0</span>) (conj! acc [c k]) acc)))
+                    (persistent! acc)))
+          s (<span class="kwd">reverse</span> (<span class="kwd">sort</span> freqs))]
+      (<span class="kwb">doseq</span> [[freq label] s]
+        (printf <span class="str">&quot;%s %.3f</span><span class="esc">\n</span><span class="str">&quot;</span> label freq))
+      (println))))
+
+(<span class="kwa">defn</span> prints [^IDnaHash d ^String s]
+  (<span class="kwc">let</span> [bs (.getBytes s)
+        mapped (<span class="kwd">map</span> (<span class="kwa">fn</span> [^long b] (aget ^longs table (bit-and b <span class="num">0xFF</span>))) bs)
+        k (reduce (<span class="kwa">fn</span> [^long acc ^long b] (+ (* <span class="num">4</span> acc) b)) <span class="num">0</span> (<span class="kwd">reverse</span> mapped))]
+    (format <span class="str">&quot;%d</span><span class="esc">\t</span><span class="str">%s&quot;</span> (.get d k) s)))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [sizes [<span class="num">1 2 3 4 6 12 18</span>]
+        sequence <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>
+        data ^IBits (loadf <span class="str">&quot;&gt;THREE&quot;</span>)
+        tasks (doall
+               (<span class="kwd">map</span> (<span class="kwa">fn</span> [^long n]
+                      (<span class="kwa">fn</span> []
+                        (<span class="kwb">loop</span> [h (DnaHash. n <span class="num">512 0</span> (long-array <span class="num">512</span>) (long-array <span class="num">512</span>))
+                               i <span class="num">0</span>]
+                          (<span class="kwc">if</span> (&lt; i n)
+                            (<span class="kwb">recur</span> (.addToHash data h n i) (inc i))
+                            h))))
+                    sizes))        
+        processors (.. Runtime getRuntime availableProcessors)
+        pool (Executors/newFixedThreadPool processors)
+        [f1 f2 :as futures] (.invokeAll pool tasks)]
+    (.printSorted ^DnaHash &#64;f1)
+    (.printSorted ^DnaHash &#64;f2)
+
+    (<span class="kwb">loop</span> [[f &amp; fs] (<span class="kwd">drop</span> <span class="num">2</span> futures)
+           [s &amp; ss] (<span class="kwd">drop</span> <span class="num">2</span> sizes)]
+      (<span class="kwc">when</span> f
+        (println (prints &#64;f (subs sequence <span class="num">0</span> s)))
+        (<span class="kwb">recur</span> fs ss)))
+    (.shutdown pool)
+    (shutdown-agents)))

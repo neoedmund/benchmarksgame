@@ -1,0 +1,53 @@
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; contributed by Witali Kusnezow 2008-12-02</span>
+
+(<span class="kwa">defparameter</span> *mutex* (<span class="kwa">sb-thread</span>:make-mutex :name <span class="str">&quot;lock&quot;</span>))
+
+(<span class="kwa">defconstant</span>  +threads+ <span class="num">503</span>)
+(<span class="kwa">defparameter</span> *counter* <span class="num">0</span>)
+(<span class="kwa">defparameter</span> *current* <span class="num">0</span>)
+(<span class="kwa">defparameter</span> *main-queue* (<span class="kwa">sb-thread</span>:make-waitqueue))
+(<span class="kwa">defparameter</span> *queues*
+  (<span class="kwa">make-array</span> +threads+
+              :initial-contents
+              (<span class="kwa">loop</span> for i of-type fixnum below +threads+
+                 collect (<span class="kwa">sb-thread</span>:make-waitqueue))))
+
+(<span class="kwa">declaim</span> (<span class="kwa">type</span> fixnum *counter* *current*))
+
+(<span class="kwa">defun</span> thread-body ()
+  (<span class="kwa">sb-thread</span>:with-mutex (*mutex* :wait-p t)
+    (<span class="kwa">let</span> ((<span class="kwa">number</span> *current*)
+          (<span class="kwa">next</span> (<span class="kwa">incf</span> *current*)))
+      (<span class="kwa">declare</span> (<span class="kwa">fixnum</span> number next))
+      (<span class="kwa">if</span> (= next +threads+) (<span class="kwa">setq</span> next <span class="num">0</span>))
+      (<span class="kwa">loop</span>
+         with (<span class="kwa">curr_queue</span> next_queue) =
+           (<span class="kwa">list</span> (<span class="kwa">svref</span> *queues* number) (<span class="kwa">svref</span> *queues* next))
+         do (<span class="kwa">sb-thread</span>:condition-wait curr_queue *mutex*)
+         until (<span class="kwa">zerop</span> *counter*)
+         do (<span class="kwa">decf</span> *counter*)  (<span class="kwa">sb-thread</span>:condition-notify next_queue)
+         finally (<span class="kwa">format</span> t <span class="str">&quot;~d~%&quot;</span> (<span class="kwa">1</span>+ number))
+           (<span class="kwa">sb-thread</span>:condition-notify *main-queue*)))))
+
+(<span class="kwa">defun</span> start (<span class="kwa">n</span>)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum n))
+  (<span class="kwa">setq</span> *counter* n *current* <span class="num">0</span>)
+  (<span class="kwa">let</span> ((<span class="kwa">threads</span>
+         (<span class="kwa">loop</span>
+            for i of-type fixnum below +threads+
+            collect (<span class="kwa">sb-thread</span>:make-thread #'thread-body))))
+    (<span class="kwa">sb-thread</span>:condition-notify (<span class="kwa">svref</span> *queues* <span class="num">0</span>))
+    (<span class="kwa">sb-thread</span>:with-mutex (*mutex* :wait-p t)
+      (<span class="kwa">sb-thread</span>:condition-wait *main-queue* *mutex*))
+    (<span class="kwa">dolist</span> (<span class="kwa">i</span> threads)
+      (<span class="kwa">handler-case</span> (<span class="kwa">sb-thread</span>:terminate-thread i)
+        (<span class="kwa">sb-thread</span>:interrupt-thread-error () nil)))))
+
+(<span class="kwa">defun</span> main ()
+  (<span class="kwa">let</span> ((<span class="kwa">n</span> (<span class="kwa">parse-integer</span> (<span class="kwa">or</span> (<span class="kwa">car</span> (<span class="kwa">last</span> #+sbcl sb-ext:*posix-argv*
+                                         #+cmu  extensions:*command-line-strings*
+                                         #+gcl  si::*command-args*)) <span class="str">&quot;1&quot;</span>))))
+    (<span class="kwa">start</span> n)))

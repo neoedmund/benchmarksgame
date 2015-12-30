@@ -1,0 +1,8 @@
+
+Sun, 27 Dec 2015 01:09:39 GMT
+
+COMMAND LINE:
+/usr/local/src/ruby/bin/ruby -W0 threadring.yarv 50000000
+
+PROGRAM OUTPUT:
+292

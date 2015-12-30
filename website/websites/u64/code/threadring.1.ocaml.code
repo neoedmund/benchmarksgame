@@ -1,0 +1,24 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   Contributed by Charles Martin. *)</span>
+
+<span class="kwa">let</span> size = <span class="num">503</span>
+
+<span class="kwa">let</span> n = int_of_string <span class="kwc">Sys</span>.argv.(<span class="num">1</span>)
+
+<span class="kwa">let</span> run id ichan ochan =
+  <span class="kwa">let rec</span> loop () =
+    <span class="kwa">let</span> token = <span class="kwc">Event</span>.sync (<span class="kwc">Event</span>.receive ichan) <span class="kwa">in</span>
+    <span class="kwa">if</span> token = n <span class="kwa">then</span> (print_int id; print_newline (); exit <span class="num">0</span>)
+    <span class="kwa">else</span> (<span class="kwc">Event</span>.sync (<span class="kwc">Event</span>.send ochan (token + <span class="num">1</span>)); loop ())
+  <span class="kwa">in</span> <span class="kwc">Thread</span>.create loop ()
+
+<span class="kwa">let</span> () =
+  <span class="kwa">let</span> channels =
+    <span class="kwc">Array</span>.init size
+      (<span class="kwa">fun</span> _ -&gt; <span class="kwc">Event</span>.new_channel ()) <span class="kwa">in</span>
+  <span class="kwa">let</span> threads =
+    <span class="kwc">Array</span>.init size
+      (<span class="kwa">fun</span> i -&gt; run (i + <span class="num">1</span>) channels.(i) channels.((i + <span class="num">1</span>) <span class="kwa">mod</span> size)) <span class="kwa">in</span>
+  <span class="kwc">Event</span>.sync (<span class="kwc">Event</span>.send channels.(<span class="num">0</span>) <span class="num">0</span>);
+  <span class="kwc">Thread</span>.join threads.(<span class="num">0</span>)

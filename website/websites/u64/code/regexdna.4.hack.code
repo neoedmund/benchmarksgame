@@ -1,0 +1,108 @@
+&lt;?hh
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Danny Sauer</span>
+<span class="com">   modified by Josh Goldfoot</span>
+<span class="com">   modified by Sergey Khripunov</span>
+<span class="com">   modified by Craig Russell</span>
+<span class="com">   PHP as HHVM/Hack by Isaac Gouy</span>
+<span class="com">*/</span>
+
+$tok = <span class="kwd">ftok</span>(__FILE__, <span class="kwd">chr</span>(<span class="kwd">time</span>() &amp; <span class="num">255</span>));
+$queue = <span class="kwd">msg_get_queue</span>($tok);
+
+$variants = <span class="kwa">array</span>(
+    <span class="str">'agggtaaa|tttaccct'</span>,
+    <span class="str">'[cgt]gggtaaa|tttaccc[acg]'</span>,
+    <span class="str">'a[act]ggtaaa|tttacc[agt]t'</span>,
+    <span class="str">'ag[act]gtaaa|tttac[agt]ct'</span>,
+    <span class="str">'agg[act]taaa|ttta[agt]cct'</span>,
+    <span class="str">'aggg[acg]aaa|ttt[cgt]ccct'</span>,
+    <span class="str">'agggt[cgt]aa|tt[acg]accct'</span>,
+    <span class="str">'agggta[cgt]a|t[acg]taccct'</span>,
+    <span class="str">'agggtaa[cgt]|[acg]ttaccct'</span>,
+);
+
+<span class="slc">// IUB replacement parallel arrays</span>
+$IUB = <span class="kwa">array</span>(
+   <span class="str">'/B/S'</span>,
+   <span class="str">'/D/S'</span>,
+   <span class="str">'/H/S'</span>,
+   <span class="str">'/K/S'</span>,
+   <span class="str">'/M/S'</span>,
+   <span class="str">'/N/S'</span>,
+   <span class="str">'/R/S'</span>,
+   <span class="str">'/S/S'</span>,
+   <span class="str">'/V/S'</span>,
+   <span class="str">'/W/S'</span>,
+   <span class="str">'/Y/S'</span>
+);
+$IUBnew = <span class="kwa">array</span>(
+   <span class="str">'(c|g|t)'</span>,
+   <span class="str">'(a|g|t)'</span>,
+   <span class="str">'(a|c|t)'</span>,
+   <span class="str">'(g|t)'</span>,
+   <span class="str">'(a|c)'</span>,
+   <span class="str">'(a|c|g|t)'</span>,
+   <span class="str">'(a|g)'</span>,
+   <span class="str">'(c|g)'</span>,
+   <span class="str">'(a|c|g)'</span>,
+   <span class="str">'(a|t)'</span>,
+   <span class="str">'(c|t)'</span>
+);
+
+<span class="slc">// read in file</span>
+$contents = <span class="kwd">file_get_contents</span>(<span class="str">'php://stdin'</span>);
+$initialLength = <span class="kwd">strlen</span>($contents);
+
+<span class="slc">// remove things</span>
+$contents = <span class="kwd">preg_replace</span>(<span class="str">'/^&gt;.*$|</span><span class="esc">\n</span><span class="str">/mS'</span>, <span class="str">''</span>, $contents);
+$codeLength = <span class="kwd">strlen</span>($contents);
+
+<span class="slc">// do regexp counts</span>
+$messages = <span class="kwd">array_flip</span>($variants);
+$chunks = <span class="kwd">str_split</span>($contents, <span class="kwd">ceil</span>(<span class="kwd">strlen</span>($contents) / <span class="num">4</span>));
+$workers = $results = <span class="kwa">array</span>();
+<span class="kwa">foreach</span> ($variants <span class="kwa">as</span> $key =&gt; $regex){
+   <span class="kwa">if</span>($key == <span class="num">0</span> || $key == <span class="num">2</span> || $key == <span class="num">4</span> || $key == <span class="num">6</span>) {
+      <span class="kwa">if</span>($pid = <span class="kwd">pcntl_fork</span>()) $workers[] = $pid;
+  }
+   <span class="kwa">if</span>($pid &amp;&amp; $key &gt; <span class="num">7</span>) {
+      $messages[$regex] =
+         <span class="kwd">preg_match_all</span>(<span class="str">'/'</span> . $regex . <span class="str">'/iS'</span>, $contents, $discard);
+   }
+   <span class="kwa">else if</span>(!$pid) {
+      $results[] = $regex . <span class="str">','</span> . 
+         <span class="kwd">preg_match_all</span>(<span class="str">'/'</span> . $regex . <span class="str">'/iS'</span>, $contents, $discard);
+      <span class="kwa">if</span>($key == <span class="num">1</span> || $key == <span class="num">3</span> || $key == <span class="num">5</span> || $key == <span class="num">7</span>) {
+         $results[] = <span class="kwd">strlen</span>(<span class="kwd">preg_replace</span>($IUB, $IUBnew, $chunks[(<span class="kwb">int</span>)($key / <span class="num">2</span>)]));
+         <span class="kwd">msg_send</span>($queue, <span class="num">2</span>, <span class="kwd">implode</span>(<span class="str">';'</span>, $results), false, false, $errno);
+         <span class="kwa">exit</span>;
+	  }
+   }
+}
+
+<span class="slc">// receive and output the counts</span>
+$contentLength = <span class="num">0</span>;
+<span class="kwa">foreach</span>($workers <span class="kwa">as</span> $worker) {
+   <span class="kwd">pcntl_waitpid</span>($worker, $status);
+   <span class="kwd">msg_receive</span>($queue, <span class="num">2</span>, $msgtype, <span class="num">4096</span>, $message, false);
+   $message = <span class="kwd">explode</span>(<span class="str">';'</span>, $message);
+   <span class="kwa">foreach</span>($message <span class="kwa">as</span> $key =&gt; $line) {
+      <span class="kwa">if</span>($key == <span class="num">2</span>)
+         $contentLength += $line;
+      <span class="kwa">else</span> {
+         $tmp = <span class="kwd">explode</span>(<span class="str">','</span>, $line, <span class="num">2</span>);
+         $messages[$tmp[<span class="num">0</span>]] = $tmp[<span class="num">1</span>];
+      }
+   }
+}
+<span class="kwa">foreach</span>($messages <span class="kwa">as</span> $regex =&gt; $count) {
+   <span class="kwa">echo</span> $regex, <span class="str">' '</span>, $count, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+}
+
+<span class="kwa">echo</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>,
+      $initialLength, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>,
+      $codeLength, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>,
+      $contentLength, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;

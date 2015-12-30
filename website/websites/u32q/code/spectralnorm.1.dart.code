@@ -1,0 +1,63 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by Jos Hirth</span>
+<span class="slc">// based on the JavaScript version by Ian Osgood with modifications by Isaac Gouy</span>
+
+<span class="kwc">import</span> <span class="str">'dart:math'</span> <span class="kwc">as</span> Math;
+<span class="kwc">import</span> <span class="str">'dart:typed_data'</span>;
+
+<span class="kwb">double</span> A(<span class="kwb">int</span> i, <span class="kwb">int</span> j) {
+  <span class="kwb">int</span> div = ((i + j) * (i + j + <span class="num">1</span>) &gt;&gt; <span class="num">1</span>) + i + <span class="num">1</span>;
+  <span class="kwa">return</span> <span class="num">1.0</span> / div;
+}
+
+<span class="kwa">void</span> Au(Float64List u, Float64List w) {
+  <span class="kwb">int</span> len = u.length;
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; len; ++i) {
+    <span class="kwb">double</span> t = <span class="num">0.0</span>;
+    <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; len; ++j) {
+      t += A(i, j) * u[j];
+    }
+    w[i] = t;
+  }
+}
+
+<span class="kwa">void</span> Atu(Float64List w, Float64List v) {
+  <span class="kwb">int</span> len = w.length;
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; len; ++i) {
+    <span class="kwb">double</span> t = <span class="num">0.0</span>;
+    <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; len; ++j) {
+      t += A(j, i) * w[j];
+    }
+    v[i] = t;
+  }
+}
+
+<span class="kwa">void</span> AtAu(Float64List u, Float64List v, Float64List w) {
+  Au(u, w);
+  Atu(w, v);
+}
+
+<span class="kwb">double</span> spectralNorm(n) {
+  <span class="kwa">var</span> u = <span class="kwa">new</span> Float64List(n)..fillRange(<span class="num">0</span>, n, <span class="num">1.0</span>),
+      v = <span class="kwa">new</span> Float64List(n),
+      w = <span class="kwa">new</span> Float64List(n),
+      vv = <span class="num">0.0</span>,
+      vBv = <span class="num">0.0</span>;
+
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">10</span>; ++i) {
+    AtAu(u, v, w);
+    AtAu(v, u, w);
+  }
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; n; ++i) {
+    vBv += u[i] * v[i];
+    vv  += v[i] * v[i];
+  }
+  <span class="kwa">return</span> Math.sqrt(vBv / vv);
+}
+
+<span class="kwa">void</span> main(args) {
+  <span class="kwb">int</span> n = args.length &gt; <span class="num">0</span> ? <span class="kwb">int</span>.parse(args[<span class="num">0</span>]) : <span class="num">100</span>;
+  print(spectralNorm(n).toStringAsFixed(<span class="num">9</span>));
+}

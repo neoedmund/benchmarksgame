@@ -1,0 +1,68 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by jose fco. gonzalez</span>
+<span class="slc"># optimized &amp; parallelized by Rick Branson</span>
+<span class="slc"># optimized &amp; parallelized by Aaron Tavistock</span>
+
+<span class="kwa">def</span> <span class="kwd">count_pattern_matches</span>(seq, matchers<span class="opt">)</span>
+  threads = []
+  results = {}
+  matchers.each <span class="kwa">do</span> |matcher|
+    threads &lt;&lt; Thread.new <span class="kwa">do</span>
+      read, write = IO.pipe
+      Process.fork <span class="kwa">do</span>
+        read.close
+        count = <span class="num">0</span>
+        seq.<span class="kwd">scan</span>( Regexp.<span class="kwd">new</span>(matcher<span class="opt">) )</span> { count += 1 }
+        write.<span class="kwd">print</span>(count<span class="opt">)</span>
+      <span class="kwa">end</span>
+      Process.wait
+      write.close
+      results[matcher] = read.read.to_i
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+  threads.each { |t| t.join }
+  results
+<span class="kwa">end</span>
+
+seq = <span class="kwc">STDIN</span>.read
+origin_len = seq.size
+
+seq.gsub!(<span class="kwc">/&gt;[^\n]+\n|\n/</span>,<span class="str">''</span><span class="opt">)</span>
+clean_len = seq.size
+
+matchers = [
+  <span class="str">'agggtaaa|tttaccct'</span>,
+  <span class="str">'[cgt]gggtaaa|tttaccc[acg]'</span>,
+  <span class="str">'a[act]ggtaaa|tttacc[agt]t'</span>,
+  <span class="str">'ag[act]gtaaa|tttac[agt]ct'</span>,
+  <span class="str">'agg[act]taaa|ttta[agt]cct'</span>,
+  <span class="str">'aggg[acg]aaa|ttt[cgt]ccct'</span>,
+  <span class="str">'agggt[cgt]aa|tt[acg]accct'</span>,
+  <span class="str">'agggta[cgt]a|t[acg]taccct'</span>,
+  <span class="str">'agggtaa[cgt]|[acg]ttaccct'</span>
+]
+
+match_counts = <span class="kwd">count_pattern_matches</span>(seq, matchers<span class="opt">)</span>
+
+replacements = {
+  <span class="str">'B'</span> =&gt; <span class="str">'(c|g|t)</span><span class="str">',</span>
+<span class="str">  '</span>D<span class="str">' =&gt; '</span>(a|g|t<span class="opt">)</span><span class="str">',</span>
+<span class="str">  '</span>H<span class="str">' =&gt; '</span>(a|c|t<span class="opt">)</span><span class="str">',</span>
+<span class="str">  '</span>K<span class="str">' =&gt; '</span>(g|t<span class="opt">)</span><span class="str">',</span>
+<span class="str">  '</span>M<span class="str">' =&gt; '</span>(a|c<span class="opt">)</span><span class="str">',</span>
+<span class="str">  '</span>N<span class="str">' =&gt; '</span>(a|c|g|t<span class="opt">)</span><span class="str">',</span>
+<span class="str">  '</span>R<span class="str">' =&gt; '</span>(a|g<span class="opt">)</span><span class="str">',</span>
+<span class="str">  '</span>S<span class="str">' =&gt; '</span>(c|t<span class="opt">)</span><span class="str">',</span>
+<span class="str">  '</span>V<span class="str">' =&gt; '</span>(a|c|g<span class="opt">)</span><span class="str">',</span>
+<span class="str">  '</span>W<span class="str">' =&gt; '</span>(a|t<span class="opt">)</span><span class="str">',</span>
+<span class="str">  '</span>Y<span class="str">' =&gt; '</span>(c|t<span class="opt">)</span><span class="str">'</span>
+<span class="str">}</span>
+<span class="str"></span>
+<span class="str">seq.gsub!(/[BDHKMNRSVWY]/, replacements)</span>
+
+matchers.each <span class="kwa">do</span> |matcher|
+  print <span class="str">&quot;</span><span class="ipl">#{matcher}</span> <span class="str"></span><span class="ipl">#{match_counts[matcher]}</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>
+<span class="kwa">end</span>
+print <span class="str">&quot;</span><span class="esc">\n</span><span class="str"></span><span class="ipl">#{origin_len}</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">#{clean_len}</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">#{seq.size}</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>

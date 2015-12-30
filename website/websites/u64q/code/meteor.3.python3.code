@@ -1,0 +1,143 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by Daniel Nanz, 2008-08-21</span>
+<span class="slc"># 2to3</span>
+
+<span class="kwa">import</span> sys
+<span class="kwa">from</span> bisect <span class="kwa">import</span> bisect
+
+w, h = <span class="num">5</span>, <span class="num">10</span>
+dir_no = <span class="num">6</span>
+S, E = w * h, <span class="num">2</span>
+SE = S + (E / <span class="num">2</span>)
+SW = SE - E
+W, NW, NE = -E, -SE, -SW
+
+
+<span class="kwa">def</span> <span class="kwd">rotate</span>(ido, rd={E: NE, NE: NW, NW: W, W: SW, SW: SE, SE: E}):
+    <span class="kwa">return</span> [rd[o] <span class="kwa">for</span> o <span class="kwa">in</span> ido]
+
+<span class="kwa">def</span> <span class="kwd">flip</span>(ido, fd={E: E, NE: SE, NW: SW, W: W, SW: NW, SE: NE}):
+    <span class="kwa">return</span> [fd[o] <span class="kwa">for</span> o <span class="kwa">in</span> ido]
+
+
+<span class="kwa">def</span> <span class="kwd">permute</span>(ido, r_ido, rotate=rotate, flip=flip):
+
+    ps = [ido]
+    <span class="kwa">for</span> r <span class="kwa">in</span> <span class="kwb">range</span>(dir_no - <span class="num">1</span>):
+        ps.<span class="kwd">append</span>(<span class="kwd">rotate</span>(ps[-<span class="num">1</span>]))
+        <span class="kwa">if</span> ido == r_ido:                 <span class="slc"># C2-symmetry</span>
+            ps = ps[<span class="num">0</span>:dir_no//<span class="num">2</span>]
+    <span class="kwa">for</span> pp <span class="kwa">in</span> ps[:]:
+        ps.<span class="kwd">append</span>(<span class="kwd">flip</span>(pp))
+    <span class="kwa">return</span> ps
+
+
+<span class="kwa">def</span> <span class="kwd">convert</span>(ido):
+    <span class="str">'''incremental direction offsets -&gt; &quot;coordinate offsets&quot; '''</span>
+    out = [<span class="num">0</span>]
+    <span class="kwa">for</span> o <span class="kwa">in</span> ido:
+        out.<span class="kwd">append</span>(out[-<span class="num">1</span>] + o)
+    <span class="kwa">return</span> <span class="kwb">list</span>(<span class="kwb">set</span>(out))
+
+
+<span class="kwa">def</span> <span class="kwd">get_footprints</span>(board, cti, pieces):
+
+    fps = [[[] <span class="kwa">for</span> p <span class="kwa">in</span> <span class="kwb">range</span>(<span class="kwb">len</span>(pieces))] <span class="kwa">for</span> ci <span class="kwa">in</span> <span class="kwb">range</span>(<span class="kwb">len</span>(board))]
+    <span class="kwa">for</span> c <span class="kwa">in</span> board:
+        <span class="kwa">for</span> pi, p <span class="kwa">in</span> <span class="kwb">enumerate</span>(pieces):
+            <span class="kwa">for</span> pp <span class="kwa">in</span> p:
+                fp = <span class="kwb">frozenset</span>(cti[c + o] <span class="kwa">for</span> o <span class="kwa">in</span> pp <span class="kwa">if</span> (c + o) <span class="kwa">in</span> cti)
+                <span class="kwa">if</span> <span class="kwb">len</span>(fp) == <span class="num">5</span>:
+                    fps[<span class="kwb">min</span>(fp)][pi].<span class="kwd">append</span>(fp)
+    <span class="kwa">return</span> fps
+
+
+<span class="kwa">def</span> <span class="kwd">get_senh</span>(board, cti):
+    <span class="str">'''-&gt; south-east neighborhood'''</span>
+    se_nh = []
+    nh = [E, SW, SE]
+    <span class="kwa">for</span> c <span class="kwa">in</span> board:
+        se_nh.<span class="kwd">append</span>(<span class="kwb">frozenset</span>(cti[c + o] <span class="kwa">for</span> o <span class="kwa">in</span> nh <span class="kwa">if</span> (c + o) <span class="kwa">in</span> cti))
+    <span class="kwa">return</span> se_nh
+
+
+<span class="kwa">def</span> <span class="kwd">get_puzzle</span>(w=w, h=h):
+
+    board = [E*x + S*y + (y%<span class="num">2</span>) <span class="kwa">for</span> y <span class="kwa">in</span> <span class="kwb">range</span>(h) <span class="kwa">for</span> x <span class="kwa">in</span> <span class="kwb">range</span>(w)]
+    cti = <span class="kwb">dict</span>((board[i], i) <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(<span class="kwb">len</span>(board)))
+
+    idos = [[E, E, E, SE],         <span class="slc"># incremental direction offsets</span>
+            [SE, SW, W, SW],
+            [W, W, SW, SE],
+            [E, E, SW, SE],
+            [NW, W, NW, SE, SW],
+            [E, E, NE, W],
+            [NW, NE, NE, W],
+            [NE, SE, E, NE],
+            [SE, SE, E, SE],
+            [E, NW, NW, NW]]
+
+    perms = (<span class="kwd">permute</span>(p, idos[<span class="num">3</span>]) <span class="kwa">for</span> p <span class="kwa">in</span> idos)    <span class="slc"># restrict piece 4</span>
+    pieces = [[<span class="kwd">convert</span>(pp) <span class="kwa">for</span> pp <span class="kwa">in</span> p] <span class="kwa">for</span> p <span class="kwa">in</span> perms]
+    <span class="kwa">return</span> (board, cti, pieces)
+
+
+<span class="kwa">def</span> <span class="kwd">print_board</span>(board, w=w, h=h):
+
+    <span class="kwa">for</span> y <span class="kwa">in</span> <span class="kwb">range</span>(h):
+        <span class="kwa">for</span> x <span class="kwa">in</span> <span class="kwb">range</span>(w):
+            <span class="kwa">print</span>(board[x + y * w], end=<span class="str">' '</span>)
+        <span class="kwa">print</span>(<span class="str">''</span>)
+        <span class="kwa">if</span> y % <span class="num">2</span> == <span class="num">0</span>:
+            <span class="kwa">print</span>(<span class="str">''</span>, end=<span class="str">' '</span>)
+    <span class="kwa">print</span>()
+
+
+board, cti, pieces = <span class="kwd">get_puzzle</span>()
+fps = <span class="kwd">get_footprints</span>(board, cti, pieces)
+se_nh = <span class="kwd">get_senh</span>(board, cti)
+
+
+<span class="kwa">def</span> <span class="kwd">solve</span>(n, i_min, free, curr_board, pieces_left, solutions,
+          fps=fps, se_nh=se_nh, bisect=bisect):
+
+    fp_i_cands = fps[i_min]
+    <span class="kwa">for</span> p <span class="kwa">in</span> pieces_left:
+        fp_cands = fp_i_cands[p]
+        <span class="kwa">for</span> fp <span class="kwa">in</span> fp_cands:
+            <span class="kwa">if</span> fp &lt;= free:
+                n_curr_board = curr_board[:]
+                <span class="kwa">for</span> ci <span class="kwa">in</span> fp:
+                    n_curr_board[ci] = p
+                <span class="kwa">if</span> <span class="kwb">len</span>(pieces_left) &gt; <span class="num">1</span>:
+                    n_free = free - fp
+                    n_i_min = <span class="kwb">min</span>(n_free)
+                    <span class="kwa">if</span> <span class="kwb">len</span>(n_free &amp; se_nh[n_i_min]) &gt; <span class="num">0</span>:
+                        n_pieces_left = pieces_left[:]
+                        n_pieces_left.<span class="kwd">remove</span>(p)
+                        <span class="kwd">solve</span>(n, n_i_min, n_free, n_curr_board,
+                              n_pieces_left, solutions)
+                <span class="kwa">else</span>:
+                    s = <span class="str">''</span>.<span class="kwd">join</span>(<span class="kwb">map</span>(<span class="kwb">str</span>, n_curr_board))
+                    solutions.<span class="kwd">insert</span>(<span class="kwd">bisect</span>(solutions, s), s)
+                    rs = s[::-<span class="num">1</span>]
+                    solutions.<span class="kwd">insert</span>(<span class="kwd">bisect</span>(solutions, rs), rs)
+                    <span class="kwa">if</span> <span class="kwb">len</span>(solutions) &gt;= n:
+                        <span class="kwa">return</span>
+        <span class="kwa">if</span> <span class="kwb">len</span>(solutions) &gt;= n:
+            <span class="kwa">return</span>
+    <span class="kwa">return</span>
+
+<span class="kwa">def</span> <span class="kwd">main</span>(n):
+
+    free = <span class="kwb">frozenset</span>(<span class="kwb">range</span>(<span class="kwb">len</span>(board)))
+    curr_board = [-<span class="num">1</span>] * <span class="kwb">len</span>(board)
+    pieces_left = <span class="kwb">list</span>(<span class="kwb">range</span>(<span class="kwb">len</span>(pieces)))
+    solutions = []
+    <span class="kwd">solve</span>(n, <span class="num">0</span>, free, curr_board, pieces_left, solutions)
+    <span class="kwa">print</span>(<span class="kwb">len</span>(solutions),  <span class="str">'solutions found</span><span class="esc">\n</span><span class="str">'</span>)
+    <span class="kwa">for</span> i <span class="kwa">in</span> (<span class="num">0</span>, -<span class="num">1</span>): <span class="kwd">print_board</span>(solutions[i])
+
+<span class="kwd">main</span>(<span class="kwb">int</span>(sys.argv[<span class="num">1</span>]))

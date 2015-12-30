@@ -1,0 +1,198 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Isaac Gouy </span>
+<span class="com"></span>
+<span class="com">   Transliterated from Smalltalk program</span>
+<span class="com">*/</span>
+
+<span class="slc">/// &lt;reference path=&quot;/usr/local/src/typescript/node.d.ts&quot; /&gt;</span>
+
+
+<span class="kwa">class</span> PlanetarySystem {
+   <span class="kwa">private</span> bodies: Body[]
+
+   <span class="kwb">constructor</span>(){
+      <span class="kwa">this</span>.bodies = [
+         Body.<span class="kwd">Sun</span>(),		
+         Body.<span class="kwd">Jupiter</span>(),
+         Body.<span class="kwd">Saturn</span>(),
+         Body.<span class="kwd">Uranus</span>(),
+         Body.<span class="kwd">Neptune</span>()
+      ]
+
+      <span class="slc">// How to use reduce?</span>
+      <span class="kwa">let</span> total : [<span class="kwb">number</span>,<span class="kwb">number</span>,<span class="kwb">number</span>] = [<span class="num">0.0</span>,<span class="num">0.0</span>,<span class="num">0.0</span>]	
+      <span class="kwa">this</span>.bodies.<span class="kwd">forEach</span>(each =&gt; {
+         total = each.<span class="kwd">addMomentumTo</span>(total)
+      })
+      <span class="kwa">this</span>.bodies[<span class="num">0</span>].<span class="kwd">offsetMomentum</span>(total)
+   }
+
+   <span class="kwd">after</span>(dt: <span class="kwb">number</span>) {
+      <span class="kwa">const</span> size = <span class="kwa">this</span>.bodies.length
+      <span class="kwa">this</span>.bodies.<span class="kwd">forEach</span>((each,i) =&gt; {
+         <span class="kwa">for</span> (<span class="kwa">let</span> j=i+<span class="num">1</span>; j &lt; size; j++) {	
+            each.<span class="kwd">setVelocitiesAfter</span>(dt,<span class="kwa">this</span>.bodies[j])
+         }
+      })
+      <span class="kwa">this</span>.bodies.<span class="kwd">forEach</span>(each =&gt; {			
+         each.<span class="kwd">setPositionAfter</span>(dt)
+      })
+   }
+
+   <span class="kwd">energy</span>(): <span class="kwb">number</span> {
+      <span class="kwa">let</span> e = <span class="num">0.0</span>
+      <span class="kwa">const</span> size = <span class="kwa">this</span>.bodies.length
+      <span class="kwa">this</span>.bodies.<span class="kwd">forEach</span>((each,i) =&gt; {
+         e += each.<span class="kwd">kineticEnergy</span>()
+         <span class="kwa">for</span> (<span class="kwa">let</span> j=i+<span class="num">1</span>; j &lt; size; j++) {	
+            e -= each.<span class="kwd">potentialEnergyWith</span>(<span class="kwa">this</span>.bodies[j])
+         }
+      })
+      <span class="kwa">return</span> e
+   }
+}
+
+
+<span class="kwa">class</span> Body {
+   <span class="kwa">private static</span> PI = <span class="num">3.141592653589793</span>
+   <span class="kwa">private static</span> SOLAR_MASS = <span class="num">4</span> * Body.PI * Body.PI
+   <span class="kwa">private static</span> DAYS_PER_YEAR = <span class="num">365.24</span>
+
+   <span class="kwb">constructor</span>(
+      <span class="kwa">private</span> x: <span class="kwb">number</span>, 
+      <span class="kwa">private</span> y: <span class="kwb">number</span>, 
+      <span class="kwa">private</span> z: <span class="kwb">number</span>, 
+      <span class="kwa">private</span> vx: <span class="kwb">number</span>,
+      <span class="kwa">private</span> vy: <span class="kwb">number</span>, 
+      <span class="kwa">private</span> vz: <span class="kwb">number</span>,
+      <span class="kwa">private</span> m: <span class="kwb">number</span>
+   ) { }
+
+   <span class="kwd">mass</span>(): <span class="kwb">number</span> {
+      <span class="kwa">return this</span>.m
+   }
+
+   <span class="kwa">static</span> <span class="kwd">Jupiter</span>(){
+      <span class="kwa">return new</span> <span class="kwd">Body</span>(
+         <span class="num">4.84143144246472090e+00</span>,
+         -<span class="num">1.16032004402742839e+00</span>,
+         -<span class="num">1.03622044471123109e-01</span>,
+         <span class="num">1.66007664274403694e-03</span> * Body.DAYS_PER_YEAR,
+         <span class="num">7.69901118419740425e-03</span> * Body.DAYS_PER_YEAR,
+         -<span class="num">6.90460016972063023e-05</span> * Body.DAYS_PER_YEAR,
+         <span class="num">9.54791938424326609e-04</span> * Body.SOLAR_MASS
+      )
+   }
+
+   <span class="kwa">static</span> <span class="kwd">Saturn</span>(){
+      <span class="kwa">return new</span> <span class="kwd">Body</span>(
+         <span class="num">8.34336671824457987e+00</span>,
+         <span class="num">4.12479856412430479e+00</span>,
+         -<span class="num">4.03523417114321381e-01</span>,
+         -<span class="num">2.76742510726862411e-03</span> * Body.DAYS_PER_YEAR,
+         <span class="num">4.99852801234917238e-03</span> * Body.DAYS_PER_YEAR,
+         <span class="num">2.30417297573763929e-05</span> * Body.DAYS_PER_YEAR,
+         <span class="num">2.85885980666130812e-04</span> * Body.SOLAR_MASS
+      )
+   }
+
+   <span class="kwa">static</span> <span class="kwd">Uranus</span>(){
+      <span class="kwa">return new</span> <span class="kwd">Body</span>(
+         <span class="num">1.28943695621391310e+01</span>,
+         -<span class="num">1.51111514016986312e+01</span>,
+         -<span class="num">2.23307578892655734e-01</span>,
+         <span class="num">2.96460137564761618e-03</span> * Body.DAYS_PER_YEAR,
+         <span class="num">2.37847173959480950e-03</span> * Body.DAYS_PER_YEAR,
+         -<span class="num">2.96589568540237556e-05</span> * Body.DAYS_PER_YEAR,
+         <span class="num">4.36624404335156298e-05</span> * Body.SOLAR_MASS
+      )
+   }
+
+   <span class="kwa">static</span> <span class="kwd">Neptune</span>(){
+      <span class="kwa">return new</span> <span class="kwd">Body</span>(
+         <span class="num">1.53796971148509165e+01</span>,
+         -<span class="num">2.59193146099879641e+01</span>,
+         <span class="num">1.79258772950371181e-01</span>,
+         <span class="num">2.68067772490389322e-03</span> * Body.DAYS_PER_YEAR,
+         <span class="num">1.62824170038242295e-03</span> * Body.DAYS_PER_YEAR,
+         -<span class="num">9.51592254519715870e-05</span> * Body.DAYS_PER_YEAR,
+         <span class="num">5.15138902046611451e-05</span> * Body.SOLAR_MASS
+      )
+   }
+
+   <span class="kwa">static</span> <span class="kwd">Sun</span>(){
+      <span class="kwa">return new</span> <span class="kwd">Body</span>(
+         <span class="num">0</span>,
+         <span class="num">0</span>,
+         <span class="num">0</span>,
+         <span class="num">0</span>,
+         <span class="num">0</span>,
+         <span class="num">0</span>,
+         Body.SOLAR_MASS
+      )
+   }
+
+
+   <span class="kwd">addMomentumTo</span>([x,y,z]: [<span class="kwb">number</span>,<span class="kwb">number</span>,<span class="kwb">number</span>]): [<span class="kwb">number</span>,<span class="kwb">number</span>,<span class="kwb">number</span>] {
+      <span class="kwa">return</span> [
+         x + <span class="kwa">this</span>.vx * <span class="kwa">this</span>.m, 
+         y + <span class="kwa">this</span>.vy * <span class="kwa">this</span>.m, 
+         z + <span class="kwa">this</span>.vz * <span class="kwa">this</span>.m 
+         ]
+   }
+
+   <span class="kwa">private</span> <span class="kwd">decreaseVelocity</span>(dx, dy, dz, m: <span class="kwb">number</span>) {
+      <span class="kwa">this</span>.vx -= dx * m
+      <span class="kwa">this</span>.vy -= dy * m
+      <span class="kwa">this</span>.vz -= dz * m
+   }
+
+   <span class="kwa">private</span> <span class="kwd">increaseVelocity</span>(dx, dy, dz, m : <span class="kwb">number</span>) {
+      <span class="kwa">this</span>.vx += dx * m
+      <span class="kwa">this</span>.vy += dy * m
+      <span class="kwa">this</span>.vz += dz * m
+   }
+
+   <span class="kwd">kineticEnergy</span>(): <span class="kwb">number</span> {
+      <span class="kwa">return</span> <span class="num">0.5</span> * <span class="kwa">this</span>.m * (<span class="kwa">this</span>.vx**<span class="num">2</span> + <span class="kwa">this</span>.vy**<span class="num">2</span> + <span class="kwa">this</span>.vz**<span class="num">2</span>)
+   }
+
+   <span class="kwd">offsetMomentum</span>([px,py,pz]: [<span class="kwb">number</span>,<span class="kwb">number</span>,<span class="kwb">number</span>]) {
+      <span class="kwa">this</span>.vx = -px / Body.SOLAR_MASS
+      <span class="kwa">this</span>.vy = -py / Body.SOLAR_MASS
+      <span class="kwa">this</span>.vz = -pz / Body.SOLAR_MASS  
+   }
+
+   <span class="kwd">potentialEnergyWith</span>(b: Body) {
+      <span class="kwa">const</span> [dx,dy,dz] = b.<span class="kwd">vectorTo</span>(<span class="kwa">this</span>.x,<span class="kwa">this</span>.y,<span class="kwa">this</span>.z)
+      <span class="kwa">const</span> distance = Math.<span class="kwd">sqrt</span>(dx**<span class="num">2</span> + dy**<span class="num">2</span> + dz**<span class="num">2</span>)
+      <span class="kwa">return this</span>.m * b.<span class="kwd">mass</span>() / distance
+   }
+
+   <span class="kwd">setPositionAfter</span>(dt: <span class="kwb">number</span>) {
+      <span class="kwa">this</span>.x += dt * <span class="kwa">this</span>.vx
+      <span class="kwa">this</span>.y += dt * <span class="kwa">this</span>.vy
+      <span class="kwa">this</span>.z += dt * <span class="kwa">this</span>.vz
+   }
+
+   <span class="kwd">setVelocitiesAfter</span>(dt: <span class="kwb">number</span>, b: Body) {
+      <span class="kwa">const</span> [dx,dy,dz] = b.<span class="kwd">vectorTo</span>(<span class="kwa">this</span>.x,<span class="kwa">this</span>.y,<span class="kwa">this</span>.z)
+      <span class="kwa">const</span> distance = Math.<span class="kwd">sqrt</span>(dx**<span class="num">2</span> + dy**<span class="num">2</span> + dz**<span class="num">2</span>)
+      <span class="kwa">const</span> mag = dt / distance**<span class="num">3</span>
+      <span class="kwa">this</span>.<span class="kwd">decreaseVelocity</span>(dx,dy,dz,b.<span class="kwd">mass</span>()*mag)
+      b.<span class="kwd">increaseVelocity</span>(dx,dy,dz,<span class="kwa">this</span>.m*mag)
+   }
+
+   <span class="kwa">private</span> <span class="kwd">vectorTo</span>(x,y,z : <span class="kwb">number</span>) {
+      <span class="kwa">return</span> [x-<span class="kwa">this</span>.x, y-<span class="kwa">this</span>.y, z-<span class="kwa">this</span>.z]
+   }
+}
+
+
+<span class="kwa">const</span> n = +process.argv[<span class="num">2</span>]
+<span class="kwa">const</span> system = <span class="kwa">new</span> <span class="kwd">PlanetarySystem</span>()
+console.<span class="kwd">log</span>(system.<span class="kwd">energy</span>().<span class="kwd">toFixed</span>(<span class="num">9</span>))
+<span class="kwa">for</span> (<span class="kwa">let</span> i=<span class="num">0</span>; i&lt;n; i++){ system.<span class="kwd">after</span>(<span class="num">0.01</span>) }
+console.<span class="kwd">log</span>(system.<span class="kwd">energy</span>().<span class="kwd">toFixed</span>(<span class="num">9</span>))
+

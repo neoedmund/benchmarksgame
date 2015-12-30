@@ -1,0 +1,15 @@
+
+Mon, 23 Mar 2015 05:05:56 GMT
+
+COMMAND LINE:
+/usr/local/src/ruby/bin/ruby threadring.yarv-2.yarv 500000
+
+UNEXPECTED OUTPUT 
+
+1c1
+< 20
+---
+> 19
+
+PROGRAM OUTPUT:
+20

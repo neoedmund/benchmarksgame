@@ -1,0 +1,227 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Contributed by Rex Kerr</span>
+<span class="com">   (inspired by the C++ version by Andrew Moon)</span>
+<span class="com">   Updated for Scala 2.10 by Mark Hammons</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> akka.actor.ActorSystem
+
+<span class="kwa">import</span> concurrent.{Await, ExecutionContext, Future}
+<span class="kwa">import</span> concurrent.duration.Duration
+
+
+<span class="kwa">import</span> java.io._
+
+<span class="kwa">object</span> knucleotide {
+  <span class="kwa">val</span> BlockSize = <span class="num">1024</span>*<span class="num">1024</span>
+
+  <span class="slc">// Iterators are not specialized so we need our own</span>
+  <span class="kwa">abstract class</span> LongIter {
+    <span class="kwa">def</span> hasNext: Boolean
+    <span class="kwa">def</span> next: Long
+    <span class="kwa">def</span> <span class="kwd">foreach</span>(f: Long =&gt; Unit) { <span class="kwa">while</span> (hasNext) <span class="kwd">f</span>(next) }
+  }
+
+  <span class="kwa">val</span> table = Array.tabulate[Byte](<span class="num">256</span>) {
+    <span class="kwa">case</span> <span class="str">'a'</span> | <span class="str">'A'</span> =&gt; <span class="num">0</span>
+    <span class="kwa">case</span> <span class="str">'t'</span> | <span class="str">'T'</span> =&gt; <span class="num">1</span>
+    <span class="kwa">case</span> <span class="str">'g'</span> | <span class="str">'G'</span> =&gt; <span class="num">2</span>
+    <span class="kwa">case</span> <span class="str">'c'</span> | <span class="str">'C'</span> =&gt; <span class="num">3</span>
+    <span class="kwa">case</span> <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> =&gt; -<span class="num">3</span>
+    <span class="kwa">case</span> <span class="str">'&gt;'</span> =&gt; -<span class="num">2</span>
+    <span class="kwa">case</span> _ =&gt; -<span class="num">1</span>
+  }
+
+  <span class="slc">// More efficient to store DNA sequence data as bits instead of bytes</span>
+  <span class="kwa">class</span> <span class="kwd">Bits</span>(<span class="kwa">val</span> data: Array[Int]) {
+    self =&gt;
+    <span class="kwa">var</span> size = <span class="num">0</span>
+    <span class="kwa">var</span> index = <span class="num">0</span>
+    <span class="kwa">var</span> n = <span class="num">0</span>
+
+    <span class="kwa">def</span> <span class="kwd">add2</span>(b: Byte) {
+      size += <span class="num">1</span>
+      <span class="kwa">if</span> (n&gt;<span class="num">30</span>) { index += <span class="num">1</span>; n = <span class="num">0</span> }
+      <span class="kwd">data</span>(index) |= (b&amp;<span class="num">0x3</span>)&lt;&lt;n
+      n += <span class="num">2</span>
+    }
+
+    <span class="kwa">def</span> <span class="kwd">addLots</span>(bs: Bits) {
+      <span class="kwa">if</span> (n==<span class="num">0</span> || n&gt;<span class="num">30</span>) {
+        <span class="kwa">if</span> (n&gt;<span class="num">30</span>) { index += <span class="num">1</span>; n = <span class="num">0</span> }
+        System.<span class="kwd">arraycopy</span>(bs.data,<span class="num">0</span>,data,index,bs.index)
+        index += bs.index
+        <span class="kwa">if</span> (index &gt; <span class="num">0</span> &amp;&amp; n == <span class="num">0</span>) { index -= <span class="num">1</span>; n = <span class="num">32</span> }
+      }
+      <span class="kwa">else</span> {
+        <span class="kwa">var</span> i = <span class="num">0</span>
+        <span class="kwa">while</span> (i &lt; bs.index) {
+          <span class="kwa">val</span> j = bs.<span class="kwd">data</span>(i)
+          <span class="kwd">data</span>(index) |= j &lt;&lt; n
+          index += <span class="num">1</span>
+          <span class="kwd">data</span>(index) |= j &gt;&gt;&gt; (<span class="num">32</span>-n)
+          i += <span class="num">1</span>
+        }
+        size
+      }
+      size += bs.index*<span class="num">16</span>
+      <span class="kwa">if</span> (bs.n != <span class="num">0</span>) {
+        <span class="kwa">var</span> n = bs.n
+        <span class="kwa">var</span> i = bs.<span class="kwd">data</span>(bs.index)
+        <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+          <span class="kwd">add2</span>( i.toByte )
+          i &gt;&gt;&gt;= <span class="num">2</span>
+          n -= <span class="num">2</span>
+        }
+      }
+    }
+
+    <span class="kwa">def</span> <span class="kwd">scan</span>(n: Int, offset: Int) = <span class="kwa">new</span> LongIter {
+      <span class="kwa">var</span> i = offset % <span class="num">16</span>
+      <span class="kwa">var</span> j = offset / <span class="num">16</span>
+      <span class="kwa">val</span> mask = (<span class="num">1L</span> &lt;&lt; (<span class="num">2</span>*n)) - <span class="num">1</span>
+      <span class="kwa">def</span> hasNext = j*<span class="num">16</span> + i + n &lt;= self.size
+      <span class="kwa">def</span> next = {
+        <span class="kwa">if</span> (i+n &lt;= <span class="num">16</span>) {
+          <span class="kwa">val</span> l = ((<span class="kwd">data</span>(j) &gt;&gt;&gt; (<span class="num">2</span>*i)) &amp; mask)
+          i += n
+          <span class="kwa">if</span> (i&gt;=<span class="num">16</span>) { j += <span class="num">1</span>; i -= <span class="num">16</span> }
+          l
+        }
+        <span class="kwa">else</span> {
+          <span class="kwa">val</span> l = (((<span class="kwd">data</span>(j) &gt;&gt;&gt; (<span class="num">2</span>*i))).toLong | (<span class="kwd">data</span>(j+<span class="num">1</span>).toLong &lt;&lt; <span class="num">2</span>*(<span class="num">16</span>-i))) &amp; mask
+          j += <span class="num">1</span>
+          i += n - <span class="num">16</span>
+          <span class="kwa">if</span> (i&gt;=<span class="num">16</span>) { j += <span class="num">1</span>; i -= <span class="num">16</span> }
+          l
+        }
+      }
+    }
+  }
+
+  <span class="slc">// Load a UTF-8 DNA file from standard in, picking out requested sequence</span>
+  <span class="kwa">def</span> <span class="kwd">load</span>(is: InputStream, target: Array[Byte]) = {
+    <span class="kwa">var</span> need = <span class="num">1</span>
+    <span class="kwa">var</span> found,nl,done = false
+    <span class="kwa">def</span> read: Bits = {
+      <span class="kwa">val</span> data = <span class="kwa">new</span> Array[Byte](BlockSize)
+      <span class="kwa">val</span> n = is.<span class="kwd">read</span>(data)
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwa">while</span> (i&lt;n &amp;&amp; need&lt;target.length) {
+        <span class="kwa">if</span> (<span class="kwd">data</span>(i)==<span class="kwd">target</span>(need)) need += <span class="num">1</span> <span class="kwa">else</span> need = <span class="num">0</span>
+        i += <span class="num">1</span>
+      }
+      <span class="kwa">if</span> (need &gt;= target.length &amp;&amp; !found) {
+        <span class="kwa">while</span> (i&lt;n &amp;&amp; <span class="kwd">data</span>(i)!=<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) i += <span class="num">1</span>
+        <span class="kwa">if</span> (i&lt;n) found = true
+      }
+      <span class="kwa">if</span> (found &amp;&amp; !done)
+      {
+        <span class="kwa">val</span> bits = <span class="kwa">new</span> <span class="kwd">Bits</span>(<span class="kwa">new</span> Array[Int](<span class="num">1</span>+((n-i)&gt;&gt;<span class="num">4</span>)))
+        <span class="kwa">while</span> (i &lt; n) {
+          <span class="kwa">val</span> x = <span class="kwd">table</span>(<span class="kwd">data</span>(i)&amp;<span class="num">0xFF</span>)
+          <span class="kwa">if</span> (x &gt;= <span class="num">0</span>) { bits.<span class="kwd">add2</span>(x); nl = false }
+          <span class="kwa">else if</span> (x == -<span class="num">3</span>) nl = true
+          <span class="kwa">else if</span> (nl &amp;&amp; x == -<span class="num">2</span>) { i = n; done = true }
+          i += <span class="num">1</span>
+        }
+        bits
+      }
+      <span class="kwa">else if</span> (n==BlockSize &amp;&amp; !done) read
+      <span class="kwa">else new</span> <span class="kwd">Bits</span>(<span class="kwa">new</span> Array[Int](<span class="num">0</span>))
+    }
+    <span class="kwa">val</span> data = Iterator.<span class="kwd">continually</span>(read).<span class="kwd">takeWhile</span>(_.size &gt; <span class="num">0</span>).toArray
+    <span class="kwa">val</span> all = <span class="kwa">new</span> <span class="kwd">Bits</span>(<span class="kwa">new</span> Array[Int](data.<span class="kwd">map</span>(_.size).sum/<span class="num">16</span>+<span class="num">1</span>))
+    data.<span class="kwd">foreach</span>(all.addLots)
+    all
+  }
+
+  <span class="slc">// Utility to go from binary to text representation</span>
+  <span class="kwa">val</span> decode = <span class="kwd">Map</span>(<span class="num">0L</span>-&gt;<span class="str">&quot;A&quot;</span>, <span class="num">1L</span>-&gt;<span class="str">&quot;T&quot;</span>, <span class="num">2L</span>-&gt;<span class="str">&quot;G&quot;</span>, <span class="num">3L</span>-&gt;<span class="str">&quot;C&quot;</span>)
+  <span class="kwa">def</span> <span class="kwd">l2s</span>(l: Long, n: Int): String = {
+    <span class="kwa">if</span> (n &lt;= <span class="num">0</span>) <span class="str">&quot;&quot;</span>
+    <span class="kwa">else</span> <span class="kwd">decode</span>(l&amp;<span class="num">0x3</span>) + <span class="kwd">l2s</span>(l&gt;&gt;&gt;<span class="num">2</span>, n-<span class="num">1</span>)
+  }
+
+  <span class="slc">// Custom counted hash set (neither Java nor Scala provides one)</span>
+  <span class="kwa">class</span> <span class="kwd">DnaHash</span>(z: Int) {
+    <span class="kwa">var</span> size = <span class="num">16</span>
+    <span class="kwa">var</span> n = <span class="num">0</span>
+    <span class="kwa">var</span> keys = <span class="kwa">new</span> Array[Long](size)
+    <span class="kwa">var</span> counts = <span class="kwa">new</span> Array[Int](size)
+    <span class="kwa">final def</span> <span class="kwd">hc</span>(l: Long) = (l.toInt + (l&gt;&gt;<span class="num">17</span>).toInt) &amp; (size-<span class="num">1</span>)
+    <span class="kwa">final def</span> <span class="kwd">nx</span>(i: Int) = (i+<span class="num">1</span>) &amp; (size - <span class="num">1</span>)
+    <span class="kwa">def</span> +=(key: Long, count: Int = <span class="num">1</span>) {
+      <span class="kwa">val</span> index = <span class="kwd">hc</span>(key)
+      <span class="kwa">if</span> (<span class="kwd">counts</span>(index) == <span class="num">0</span>) {
+        <span class="kwd">keys</span>(index) = key
+        <span class="kwd">counts</span>(index) = count
+        n += <span class="num">1</span>
+      }
+      <span class="kwa">else if</span> (<span class="kwd">keys</span>(index) == key) <span class="kwd">counts</span>(index) += count
+      <span class="kwa">else if</span> (<span class="num">6</span>*n &gt; size) {
+        <span class="kwa">val</span> (oldk, oldc, olds) = (keys, counts, size)
+        size *= <span class="num">2</span>
+        keys = <span class="kwa">new</span> Array[Long](size)
+        counts = <span class="kwa">new</span> Array[Int](size)
+        n = <span class="num">0</span>
+        <span class="kwa">var</span> i = <span class="num">0</span>
+        <span class="kwa">while</span> (i &lt; olds) {
+          <span class="kwa">if</span> (<span class="kwd">oldc</span>(i) &gt; <span class="num">0</span>) <span class="kwa">this</span> += (<span class="kwd">oldk</span>(i), <span class="kwd">oldc</span>(i))
+          i += <span class="num">1</span>
+        }
+        <span class="kwa">this</span> += key
+      }
+      <span class="kwa">else</span> {
+        <span class="kwa">var</span> i = <span class="kwd">nx</span>(index)
+        <span class="kwa">while</span> (<span class="kwd">counts</span>(i) != <span class="num">0</span> &amp;&amp; <span class="kwd">keys</span>(i) != key) i = <span class="kwd">nx</span>(i)
+        <span class="kwa">if</span> (<span class="kwd">counts</span>(i) == <span class="num">0</span>) {
+          <span class="kwd">keys</span>(i) = key
+          <span class="kwd">counts</span>(i) = count
+          n += <span class="num">1</span>
+        }
+        <span class="kwa">else</span> <span class="kwd">counts</span>(i) += count
+      }
+    }
+    <span class="kwa">def</span> <span class="kwd">apply</span>(key: Long) = {
+      <span class="kwa">var</span> i = <span class="kwd">hc</span>(key)
+      <span class="kwa">while</span> (<span class="kwd">counts</span>(i) &gt; <span class="num">0</span> &amp;&amp; <span class="kwd">keys</span>(i) != key) i = <span class="kwd">nx</span>(i)
+      <span class="kwd">counts</span>(i)
+    }
+    <span class="kwa">def</span> printSorted {
+      <span class="kwa">val</span> factor = <span class="num">100.0</span>/counts.sum
+      (counts.<span class="kwd">map</span>(_*factor) zip keys.<span class="kwd">map</span>(<span class="kwd">l2s</span>(_,z))).<span class="kwd">filter</span>(_._1 &gt; <span class="num">0</span>).<span class="kwd">sortWith</span>((a,b) =&gt;
+        a._1 &gt; b._1 || (a._1 == b._1 &amp;&amp; a._2 &lt; b._2)
+      ).foreach{ <span class="kwa">case</span> (freq, label) =&gt; <span class="kwd">printf</span>(<span class="str">&quot;%s %.3f</span><span class="esc">\n</span><span class="str">&quot;</span>,label,freq) }
+      println
+    }
+    <span class="kwa">def</span> <span class="kwd">print</span>(s: String) {
+      <span class="kwa">val</span> key = s.getBytes.<span class="kwd">map</span>(x =&gt; <span class="kwd">table</span>(x &amp; <span class="num">0xFF</span>).toLong).<span class="kwd">reduceRight</span>((l,r) =&gt; <span class="num">4</span>*r + l)
+      <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\t</span><span class="str">%s</span><span class="esc">\n</span><span class="str">&quot;</span>,<span class="kwa">this</span>(key),s)
+    }
+  }
+
+  <span class="slc">// Required function that adds data with offset to hash set</span>
+  <span class="kwa">def</span> <span class="kwd">addToHash</span>(data: Bits, hash: DnaHash, n: Int, offset: Int) = data.<span class="kwd">scan</span>(n,offset).<span class="kwd">foreach</span>(hash += _)
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) {
+    <span class="kwa">val as</span> = ActorSystem.<span class="kwd">create</span>(<span class="str">&quot;futures&quot;</span>)
+    implicit <span class="kwa">val</span> ec: ExecutionContext = <span class="kwa">as</span>.dispatcher
+    <span class="kwa">val</span> sizes = <span class="kwd">List</span>(<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>,<span class="num">6</span>,<span class="num">12</span>,<span class="num">18</span>)
+    <span class="kwa">val</span> sequence = <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>
+    <span class="kwa">val</span> data = <span class="kwd">load</span>(System.<span class="kwa">in</span>, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&gt;THREE&quot;</span>.getBytes)
+    <span class="kwa">val</span> answers = sizes.<span class="kwd">map</span>(n =&gt; n -&gt; Future {
+      <span class="kwa">val</span> h = <span class="kwa">new</span> <span class="kwd">DnaHash</span>(n)
+      <span class="kwa">for</span> (i &lt;- <span class="num">0</span> until n) <span class="kwd">addToHash</span>(data,h,n,i)
+      h
+    }).toMap
+    Await.<span class="kwd">result</span>(<span class="kwd">answers</span>(<span class="num">1</span>), Duration.Inf).printSorted
+    Await.<span class="kwd">result</span>(<span class="kwd">answers</span>(<span class="num">2</span>), Duration.Inf).printSorted
+    sizes.<span class="kwd">drop</span>(<span class="num">2</span>).<span class="kwd">foreach</span>(n =&gt; Await.<span class="kwd">result</span>(<span class="kwd">answers</span>(n), Duration.Inf).<span class="kwd">print</span>(sequence.<span class="kwd">substring</span>(<span class="num">0</span>,n)))
+
+    <span class="kwa">as</span>.<span class="kwd">shutdown</span>()
+  }
+}
+ 

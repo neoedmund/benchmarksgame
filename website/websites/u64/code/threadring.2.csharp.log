@@ -1,0 +1,16 @@
+
+Wed, 12 Aug 2015 21:20:46 GMT
+
+MAKE:
+mv threadring.csharp-2.csharp threadring.csharp-2.cs
+/usr/local/bin/mcs  -optimize+ -platform:x64 -out:threadring.csharp-2.csharp_run threadring.csharp-2.cs
+rm threadring.csharp-2.cs
+0.26s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/mono --llvm threadring.csharp-2.csharp_run 50000000
+
+TIMED OUT after 3600s
+
+
+PROGRAM OUTPUT:

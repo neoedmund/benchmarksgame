@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="index,follow,archive" />
+<meta name="description" content="Perl programs vs Python 3 programs (performance on 64-bit Ubuntu quad core)." />
+<title>Perl&nbsp;vs&nbsp;Python 3 (64-bit Ubuntu quad core) | Computer Language Benchmarks Game </title>
+<style><!--
+a{color:black;text-decoration:none}article{padding: 0 0 2.9em}article,div,header{margin:auto;width:92%}body{font:100% Droid Sans,Ubuntu,Verdana,sans-serif;margin:0;-webkit-text-size-adjust:100%}h1,h2,h3,nav li a{font-family:Ubuntu Mono,Consolas,Menlo,monospace}div,header{max-width:31em}h1{font-size:1.4em;font-weight:bold;margin:0;padding:.4em}h1,h1 a{color:white}h2,h3{margin:1.5em 0 0}h2{font-size:1.4em;font-weight:normal}h3{font-size:1.2em}li{display:inline-block}nav li{list-style-type:none}nav li a{display:block;font-size:1.2em;margin:.5em .5em 0;padding:.5em .5em .3em}nav ul{clear:left;margin:-0.3em 0 1.5em;text-align:center}p{color:#333;line-height:1.4;margin:.3em 0 0}p a{border-bottom:.15em dotted #aaa}
+#u64,#u64q{background-color:#c90016}#u32{background-color:#ffb515}#u32q{background-color:#ff6309}.best{font-weight:bold}.message{font-size:.8em}table{color:#333;margin:1.3em auto 0;text-align:right}tbody:after{content:"-";display:block;line-height:2.6em;visibility:hidden}tbody:last-child{text-align:left}td{border-bottom:.15em dotted #eee;padding:.7em 0 0 1em}td a,th a{display:block}td:first-child,th:first-child{text-align:left;padding-left:0}td:nth-child(6),th:nth-child(6){display:table-cell}th{font-weight:normal;padding:0 0 0 1em}
+@media only screen{th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5),th:nth-child(6),td:nth-child(6){display:none}}@media only screen and (min-width:28em){th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){display:table-cell}}@media only screen and (min-width:41em){th:nth-child(6),td:nth-child(6){display:table-cell}}@media only screen and (min-width:60em){article,footer,header{font-size:1.25em}}
+--></style>
+<link rel="shortcut icon" href="./favicon.ico">
+<header id="top">
+  <h1 id="u64q"><a href="http://benchmarksgame.alioth.debian.org/">The&nbsp;Computer&nbsp;Language<br>Benchmarks&nbsp;Game</a></h1>
+</header>
+<article>
+  <div>
+    <h2>Perl programs versus Python 3</h2>
+    <aside>
+      <p><a href="./measurements.php?lang=perl">all the Perl program measurements</a>
+    </aside>
+  </div>
+  <section>
+    <div>
+      <h3>by benchmark task performance</h3>
+    </div>
+    <table>
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=spectralnorm">spectral-norm</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=spectralnorm&amp;lang=perl&amp;id=4">Perl</a>
+        <td class="best">49.43
+        <td>9,540
+        <td>551
+        <td>190.77
+        <td class="message">96%&nbsp;96%&nbsp;99%&nbsp;96%
+      <tr>
+        <td><a href="./program.php?test=spectralnorm&amp;lang=python3&amp;id=5">Python&nbsp;3</a>
+        <td>250.12
+        <td>58,892
+        <td>437
+        <td>932.41
+        <td class="message">94%&nbsp;95%&nbsp;92%&nbsp;93%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=revcomp">reverse-complement</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=revcomp&amp;lang=perl&amp;id=3">Perl</a>
+        <td class="best">2.74
+        <td>375,760
+        <td>284
+        <td>2.74
+        <td class="message">1%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=revcomp&amp;lang=python3&amp;id=6">Python&nbsp;3</a>
+        <td>3.11
+        <td>266,972
+        <td>800
+        <td>4.56
+        <td class="message">20%&nbsp;99%&nbsp;2%&nbsp;29%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=knucleotide">k-nucleotide</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=knucleotide&amp;lang=perl&amp;id=4">Perl</a>
+        <td class="best">68.00
+        <td>1,067,916
+        <td>472
+        <td>221.43
+        <td class="message">69%&nbsp;68%&nbsp;97%&nbsp;92%
+      <tr>
+        <td><a href="./program.php?test=knucleotide&amp;lang=python3&amp;id=3">Python&nbsp;3</a>
+        <td>76.50
+        <td>162,004
+        <td>1937
+        <td>297.12
+        <td class="message">97%&nbsp;97%&nbsp;97%&nbsp;99%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=regexdna">regex-dna</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=regexdna&amp;lang=perl&amp;id=2">Perl</a>
+        <td class="best">9.70
+        <td>142,492
+        <td>527
+        <td>27.16
+        <td class="message">76%&nbsp;75%&nbsp;77%&nbsp;54%
+      <tr>
+        <td><a href="./program.php?test=regexdna&amp;lang=python3&amp;id=1">Python&nbsp;3</a>
+        <td>10.58
+        <td>266,312
+        <td>478
+        <td>23.44
+        <td class="message">49%&nbsp;39%&nbsp;68%&nbsp;68%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fasta">fasta</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fasta&amp;lang=perl&amp;id=1">Perl</a>
+        <td class="best">105.83
+        <td>52,320
+        <td>838
+        <td>105.80
+        <td class="message">1%&nbsp;1%&nbsp;0%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=fasta&amp;lang=python3&amp;id=3">Python&nbsp;3</a>
+        <td>111.44
+        <td>8,276
+        <td>977
+        <td>111.40
+        <td class="message">28%&nbsp;0%&nbsp;0%&nbsp;73%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fannkuchredux">fannkuch-redux</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fannkuchredux&amp;lang=perl&amp;id=2">Perl</a>
+        <td>577.70
+        <td>10,976
+        <td>565
+        <td>2,297.64
+        <td class="message">100%&nbsp;99%&nbsp;100%&nbsp;99%
+      <tr>
+        <td><a href="./program.php?test=fannkuchredux&amp;lang=python3&amp;id=4">Python&nbsp;3</a>
+        <td>567.35
+        <td>55,368
+        <td>944
+        <td>2,220.71
+        <td class="message">98%&nbsp;96%&nbsp;100%&nbsp;99%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=nbody">n-body</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=nbody&amp;lang=perl&amp;id=2">Perl</a>
+        <td>1,080.34
+        <td>3,452
+        <td>1401
+        <td>1,080.05
+        <td class="message">1%&nbsp;0%&nbsp;100%&nbsp;1%
+      <tr>
+        <td><a href="./program.php?test=nbody&amp;lang=python3&amp;id=1">Python&nbsp;3</a>
+        <td>923.74
+        <td>8,040
+        <td>1181
+        <td>923.49
+        <td class="message">44%&nbsp;13%&nbsp;0%&nbsp;44%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=binarytrees">binary-trees</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=binarytrees&amp;lang=perl&amp;id=3">Perl</a>
+        <td>238.05
+        <td>1,708,468
+        <td>706
+        <td>791.14
+        <td class="message">92%&nbsp;80%&nbsp;89%&nbsp;73%
+      <tr>
+        <td><a href="./program.php?test=binarytrees&amp;lang=python3&amp;id=1">Python&nbsp;3</a>
+        <td>152.06
+        <td>804,624
+        <td>596
+        <td>516.24
+        <td class="message">94%&nbsp;92%&nbsp;95%&nbsp;91%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=pidigits">pidigits</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=pidigits&amp;lang=perl&amp;id=4">Perl</a>
+        <td>3.48
+        <td>4,392
+        <td>261
+        <td>3.48
+        <td class="message">1%&nbsp;0%&nbsp;100%&nbsp;1%
+      <tr>
+        <td><a href="./program.php?test=pidigits&amp;lang=python3&amp;id=5">Python&nbsp;3</a>
+        <td>2.20
+        <td>10,248
+        <td>335
+        <td>2.20
+        <td class="message">1%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=mandelbrot">mandelbrot</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=mandelbrot&amp;lang=perl&amp;id=1">Perl</a>
+        <td>769.00
+        <td>43,400
+        <td>579
+        <td>3,071.86
+        <td class="message">100%&nbsp;100%&nbsp;100%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=mandelbrot&amp;lang=python3&amp;id=7">Python&nbsp;3</a>
+        <td>293.92
+        <td>55,392
+        <td>686
+        <td>1,171.64
+        <td class="message">100%&nbsp;100%&nbsp;100%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fastaredux">fasta-redux</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fastaredux&amp;lang=perl&amp;id=6">Perl</a>
+        <td>0.80
+        <td>3,456
+        <td>854
+        <td>0.79
+        <td class="message">4%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tr>
+        <td>&nbsp;
+        <td class="message">No&nbsp;program
+        <td class="message" colspan="4"><a href="./play.html">contribute your program</a>
+      <tbody>
+      <tr>
+        <td>Perl
+        <td colspan="5" class="message"><p>This is perl 5, version 20, subversion 2 (v5.20.2) built for x86_64-linux-thread-multi
+<p>Compile-time options: HAS_TIMES MULTIPLICITY PERLIO_LAYERS
+                        PERL_DONT_CREATE_GVSV
+                        PERL_HASH_FUNC_ONE_AT_A_TIME_HARD
+                        PERL_IMPLICIT_CONTEXT PERL_MALLOC_WRAP
+                        PERL_NEW_COPY_ON_WRITE PERL_PRESERVE_IVUV
+                        USE_64_BIT_ALL USE_64_BIT_INT USE_ITHREADS
+                        USE_LARGE_FILES USE_LOCALE USE_LOCALE_COLLATE
+                        USE_LOCALE_CTYPE USE_LOCALE_NUMERIC USE_PERLIO
+                        USE_PERL_ATOF USE_REENTRANT_API
+
+      <tr>
+        <td>Python&nbsp;3
+        <td colspan="5" class="message"><p>Python 3.5.0 (default, Sep 14 2015, 08:50:08) 
+[GCC 4.9.2] on linux
+
+      </table>
+      <nav>
+        <ul>
+          <li><a href="./compare.php?lang=perl&amp;lang2=php">vs PHP</a>
+          <li class="best">vs Python
+          <li><a href="./compare.php?lang=perl&amp;lang2=yarv">vs Ruby</a>
+        </ul>
+      </nav>
+  </section>
+</article>
+<script>
+window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+ga('create', 'UA-37137205-1', 'auto');
+ga('send', 'pageview');
+</script>
+<script async src='//www.google-analytics.com/analytics.js'></script>
+

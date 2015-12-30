@@ -1,0 +1,134 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by TeXitoi</span>
+
+#![allow(non_snake_case)]
+
+<span class="kwa">use</span> std::iter::repeat;
+<span class="kwa">use</span> std::thread;
+
+<span class="slc">// As std::simd::f64x2 etc. are unstable, we provide a similar interface,</span>
+<span class="slc">// expecting llvm to autovectorize its usage.</span>
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone)]
+<span class="kwa">struct</span> usizex2(usize, usize);
+<span class="kwa">impl</span> std::ops::Add <span class="kwa">for</span> usizex2 {
+    <span class="kwa">type</span> Output = <span class="kwa">Self</span>;
+    <span class="kwa">fn</span> add(<span class="kwa">self</span>, rhs: <span class="kwa">Self</span>) -&gt; <span class="kwa">Self</span> {
+        usizex2(<span class="kwa">self</span><span class="num">.0</span> + rhs<span class="num">.0</span>, <span class="kwa">self</span><span class="num">.1</span> + rhs<span class="num">.1</span>)
+    }
+}
+<span class="kwa">impl</span> std::ops::Mul <span class="kwa">for</span> usizex2 {
+    <span class="kwa">type</span> Output = <span class="kwa">Self</span>;
+    <span class="kwa">fn</span> mul(<span class="kwa">self</span>, rhs: <span class="kwa">Self</span>) -&gt; <span class="kwa">Self</span> {
+        usizex2(<span class="kwa">self</span><span class="num">.0</span> * rhs<span class="num">.0</span>, <span class="kwa">self</span><span class="num">.1</span> * rhs<span class="num">.1</span>)
+    }
+}
+<span class="kwa">impl</span> std::ops::Div <span class="kwa">for</span> usizex2 {
+    <span class="kwa">type</span> Output = <span class="kwa">Self</span>;
+    <span class="kwa">fn</span> div(<span class="kwa">self</span>, rhs: <span class="kwa">Self</span>) -&gt; <span class="kwa">Self</span> {
+        usizex2(<span class="kwa">self</span><span class="num">.0</span> / rhs<span class="num">.0</span>, <span class="kwa">self</span><span class="num">.1</span> / rhs<span class="num">.1</span>)
+    }
+}
+<span class="kwa">impl</span> From&lt;usizex2&gt; <span class="kwa">for</span> f64x2 {
+    <span class="kwa">fn</span> from(i: usizex2) -&gt; f64x2 {
+        f64x2(i<span class="num">.0</span> <span class="kwa">as</span> f64, i<span class="num">.1</span> <span class="kwa">as</span> f64)
+    }
+}
+
+#[allow(non_camel_case_types)]
+<span class="kwa">struct</span> f64x2(f64, f64);
+<span class="kwa">impl</span> std::ops::Add <span class="kwa">for</span> f64x2 {
+    <span class="kwa">type</span> Output = <span class="kwa">Self</span>;
+    <span class="kwa">fn</span> add(<span class="kwa">self</span>, rhs: <span class="kwa">Self</span>) -&gt; <span class="kwa">Self</span> {
+        f64x2(<span class="kwa">self</span><span class="num">.0</span> + rhs<span class="num">.0</span>, <span class="kwa">self</span><span class="num">.1</span> + rhs<span class="num">.1</span>)
+    }
+}
+<span class="kwa">impl</span> std::ops::Div <span class="kwa">for</span> f64x2 {
+    <span class="kwa">type</span> Output = <span class="kwa">Self</span>;
+    <span class="kwa">fn</span> div(<span class="kwa">self</span>, rhs: <span class="kwa">Self</span>) -&gt; <span class="kwa">Self</span> {
+        f64x2(<span class="kwa">self</span><span class="num">.0</span> / rhs<span class="num">.0</span>, <span class="kwa">self</span><span class="num">.1</span> / rhs<span class="num">.1</span>)
+    }
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> n = std::env::args_os().nth(<span class="num">1</span>)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">100</span>);
+    <span class="kwa">let</span> answer = spectralnorm(n);
+    println!(<span class="str">&quot;{:.9}&quot;</span>, answer);
+}
+
+<span class="kwa">fn</span> spectralnorm(n: usize) -&gt; f64 {
+    assert!(n % <span class="num">2</span> == <span class="num">0</span>, <span class="str">&quot;only even lengths are accepted&quot;</span>);
+    <span class="kwa">let mut</span> u = repeat(<span class="num">1.0</span>).take(n).collect::&lt;Vec&lt;_&gt;&gt;();
+    <span class="kwa">let mut</span> v = u.clone();
+    <span class="kwa">let mut</span> tmp = v.clone();
+    <span class="kwa">for</span> _ <span class="kwa">in</span> <span class="num">0</span>.<span class="num">.10</span> {
+        mult_AtAv(&amp;u, &amp;<span class="kwa">mut</span> v, &amp;<span class="kwa">mut</span> tmp);
+        mult_AtAv(&amp;v, &amp;<span class="kwa">mut</span> u, &amp;<span class="kwa">mut</span> tmp);
+    }
+    (dot(&amp;u, &amp;v) / dot(&amp;v, &amp;v)).sqrt()
+}
+
+<span class="kwa">fn</span> mult_AtAv(v: &amp;[f64], out: &amp;<span class="kwa">mut</span> [f64], tmp: &amp;<span class="kwa">mut</span> [f64]) {
+    mult_Av(v, tmp);
+    mult_Atv(tmp, out);
+}
+
+<span class="kwa">fn</span> mult_Av(v: &amp;[f64], out: &amp;<span class="kwa">mut</span> [f64]) {
+    parallel(out, |start, out| mult(v, out, start, Ax2));
+}
+
+<span class="kwa">fn</span> mult_Atv(v: &amp;[f64], out: &amp;<span class="kwa">mut</span> [f64]) {
+    parallel(out, |start, out| mult(v, out, start, |i, j| Ax2(j, i)));
+}
+
+<span class="kwa">fn</span> mult&lt;F&gt;(v: &amp;[f64], out: &amp;<span class="kwa">mut</span> [f64], start: usize, a: F)
+           <span class="kwa">where</span> F: Fn(usizex2, usizex2) -&gt; f64x2 {
+    <span class="kwa">for</span> (i, slot) <span class="kwa">in</span> out.iter_mut().enumerate().map(|(i, s)| (i + start, s)) {
+        <span class="kwa">let mut</span> sum = f64x2(<span class="num">0.0</span>, <span class="num">0.0</span>);
+        <span class="kwa">for</span> (j, chunk) <span class="kwa">in</span> v.chunks(<span class="num">2</span>).enumerate().map(|(j, s)| (<span class="num">2</span> * j, s)) {
+            <span class="kwa">let</span> top = f64x2(chunk[<span class="num">0</span>], chunk[<span class="num">1</span>]);
+            <span class="kwa">let</span> bot = a(usizex2(i, i), usizex2(j, j+<span class="num">1</span>));
+            sum = sum + top / bot;
+        }
+        <span class="kwa">let</span> f64x2(a, b) = sum;
+        *slot = a + b;
+    }
+}
+
+<span class="kwa">fn</span> Ax2(i: usizex2, j: usizex2) -&gt; f64x2 {
+    ((i + j) * (i + j + usizex2(<span class="num">1</span>, <span class="num">1</span>)) / usizex2(<span class="num">2</span>, <span class="num">2</span>) + i + usizex2(<span class="num">1</span>, <span class="num">1</span>)).into()
+}
+
+<span class="kwa">fn</span> dot(v: &amp;[f64], u: &amp;[f64]) -&gt; f64 {
+    v.iter().zip(u.iter()).map(|(a, b)| *a * *b).fold(<span class="num">0</span>., |acc, i| acc + i)
+}
+
+<span class="kwa">struct</span> Racy&lt;T&gt;(T);
+<span class="kwa">unsafe impl</span>&lt;T: '<span class="kwa">static</span>&gt; Send <span class="kwa">for</span> Racy&lt;T&gt; {}
+
+<span class="slc">// Executes a closure in parallel over the given mutable slice. The closure `f`</span>
+<span class="slc">// is run in parallel and yielded the starting index within `v` as well as a</span>
+<span class="slc">// sub-slice of `v`.</span>
+<span class="kwa">fn</span> parallel&lt;'a, T, F&gt;(v: &amp;<span class="kwa">mut</span> [T], <span class="kwa">ref</span> f: F)
+    <span class="kwa">where</span> T: '<span class="kwa">static</span> + Send + Sync,
+          F: Fn(usize, &amp;<span class="kwa">mut</span> [T]) + Sync {
+    <span class="kwa">let</span> size = v.len() / <span class="num">4</span> + <span class="num">1</span>;
+    <span class="kwa">let</span> jhs = v.chunks_mut(size).enumerate().map(|(i, chunk)| {
+        <span class="slc">// Need to convert `f` and `chunk` to something that can cross the task</span>
+        <span class="slc">// boundary.</span>
+        <span class="kwa">let</span> f = Racy(f <span class="kwa">as</span> *<span class="kwa">const</span> F <span class="kwa">as</span> *<span class="kwa">const</span> usize);
+        <span class="kwa">let</span> raw = Racy((&amp;<span class="kwa">mut</span> chunk[<span class="num">0</span>] <span class="kwa">as</span> *<span class="kwa">mut</span> T, chunk.len()));
+        thread::spawn(<span class="kwa">move</span>|| {
+            <span class="kwa">let</span> f = f<span class="num">.0</span> <span class="kwa">as</span> *<span class="kwa">const</span> F;
+            <span class="kwa">let</span> raw = raw<span class="num">.0</span>;
+            <span class="kwa">unsafe</span> { (*f)(i * size, std::slice::from_raw_parts_mut(raw<span class="num">.0</span>, raw<span class="num">.1</span>)) }
+        })
+    }).collect::&lt;Vec&lt;_&gt;&gt;();
+    <span class="kwa">for</span> jh <span class="kwa">in</span> jhs { jh.join().unwrap(); }
+}

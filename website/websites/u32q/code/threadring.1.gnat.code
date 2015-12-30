@@ -1,0 +1,86 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- contributed by Jim Rogers</span>
+
+<span class="kwa">with</span> Ada.Text_Io; <span class="kwa">use</span> Ada.Text_Io;
+<span class="kwa">with</span> Ada.Command_Line; <span class="kwa">use</span> Ada.Command_Line;
+<span class="kwa">with</span> Ada.Integer_Text_IO; <span class="kwa">use</span> Ada.Integer_Text_IO;
+
+<span class="kwa">procedure</span> ThreadRing <span class="kwa">is</span>
+   
+   <span class="kwa">protected</span> Flag <span class="kwa">is</span>
+      <span class="kwa">procedure</span> Set(Num : <span class="kwb">Positive</span>);
+      <span class="kwa">entry</span> Wait(Last : <span class="kwa">out</span> <span class="kwb">Positive</span>);
+   <span class="kwa">private</span>
+      Done : <span class="kwb">Boolean</span> := <span class="kwd">False</span>;
+      Id : <span class="kwb">Positive</span>;
+   <span class="kwa">end</span> Flag;
+   <span class="kwa">protected body</span> Flag <span class="kwa">is</span>
+      <span class="kwa">procedure</span> Set(Num : <span class="kwb">Positive</span>) <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Done := <span class="kwd">True</span>;
+         Id := Num;
+      <span class="kwa">end</span> Set;
+      <span class="kwa">entry</span> Wait(Last : <span class="kwa">out</span> <span class="kwb">Positive</span>) <span class="kwa">when</span> Done <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Last := Id;
+      <span class="kwa">end</span> Wait;
+   <span class="kwa">end</span> Flag;
+
+   <span class="kwa">type</span> Node;
+   <span class="kwa">type</span> Node_Access <span class="kwa">is access</span> Node;
+   
+   Ring : <span class="kwa">array</span>(<span class="num">1</span>.<span class="num">.503</span>) <span class="kwa">of</span> Node_Access;
+   
+   <span class="kwa">task type</span> Node(Id : <span class="kwb">Positive</span>) <span class="kwa">is</span>
+      <span class="kwa">entry</span> Start(Next : Node_Access);
+      <span class="kwa">entry</span> Put(Item : <span class="kwa">in</span> <span class="kwb">Natural</span>);
+      <span class="kwa">entry</span> Stop;
+   <span class="kwa">end</span> Node;
+   
+   <span class="kwa">task body</span> Node <span class="kwa">is</span>
+      Val : <span class="kwb">Natural</span>;
+      Next_Node : Node_Access;
+   <span class="kwa">begin</span>
+      <span class="kwa">accept</span> Start(Next : Node_Access) <span class="kwa">do</span>
+         Next_Node := Next;
+      <span class="kwa">end</span> Start;
+      
+      <span class="kwa">loop</span>
+         <span class="kwa">select</span>
+            <span class="kwa">accept</span> Put(Item : <span class="kwa">in</span> <span class="kwb">Natural</span>) <span class="kwa">do</span>
+               Val := Item;
+            <span class="kwa">end</span> Put;
+         <span class="kwa">or</span>
+            <span class="kwa">accept</span> Stop;
+            <span class="kwa">exit</span>;
+         <span class="kwa">end select</span>;
+         <span class="kwa">if</span> Val &gt; <span class="num">0</span> <span class="kwa">then</span>
+            Val := Val - <span class="num">1</span>;
+            Next_Node.Put(Val);
+         <span class="kwa">else</span>
+            Flag.Set(Id);
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Node;
+   
+   Num_Passes : <span class="kwb">Natural</span>;
+   Last_Node : <span class="kwb">Positive</span>;
+<span class="kwa">begin</span>
+   Num_Passes := <span class="kwb">Natural</span><span class="kwd">'Value</span>(Argument(<span class="num">1</span>));
+   <span class="kwa">for</span> I <span class="kwa">in</span> Ring<span class="kwd">'range</span> <span class="kwa">loop</span>
+      Ring(I) := <span class="kwa">new</span> Node(I);
+   <span class="kwa">end loop</span>;
+   Ring(Ring<span class="kwd">'Last</span>).Start(Ring(<span class="num">1</span>));
+   <span class="kwa">for</span> I <span class="kwa">in</span> Ring<span class="kwd">'First</span>..Ring<span class="kwd">'Last</span> - <span class="num">1</span> <span class="kwa">loop</span>
+      Ring(I).Start(Ring(I + <span class="num">1</span>));
+   <span class="kwa">end loop</span>;
+   Ring(<span class="num">1</span>).Put(Num_Passes);
+   Flag.Wait(Last_Node);
+   Put(Item =&gt; Last_Node, Width =&gt; <span class="num">1</span>);
+   New_Line;
+   <span class="kwa">for</span> I <span class="kwa">in</span> Ring<span class="kwd">'range</span> <span class="kwa">loop</span>
+      Ring(I).Stop;
+   <span class="kwa">end loop</span>;
+   
+<span class="kwa">end</span> ThreadRing;

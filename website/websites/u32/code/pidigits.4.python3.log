@@ -1,0 +1,19 @@
+
+Tue, 15 Sep 2015 07:11:06 GMT
+
+MAKE:
+mv pidigits.python3-4.python3 pidigits.python3-4.py
+0.01s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/Python-3.5.0/bin/python3.5 pidigits.python3-4.py 2000
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+Traceback (most recent call last):
+  File "pidigits.python3-4.py", line 10, in <module>
+    def get_pistring(n, pi=gmpy2.pi):
+AttributeError: module 'gmpy2' has no attribute 'pi'

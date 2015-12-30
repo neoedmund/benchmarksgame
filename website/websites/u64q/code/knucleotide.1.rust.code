@@ -1,0 +1,275 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by TeXitoi</span>
+
+<span class="kwa">use</span> std::slice;
+<span class="kwa">use</span> std::sync::Arc;
+<span class="kwa">use</span> std::thread;
+
+<span class="kwa">static</span> TABLE: [u8;<span class="num">4</span>] = [ 'A' <span class="kwa">as</span> u8, 'C' <span class="kwa">as</span> u8, 'G' <span class="kwa">as</span> u8, 'T' <span class="kwa">as</span> u8 ];
+<span class="kwa">static</span> TABLE_SIZE: usize = <span class="num">2</span> &lt;&lt; <span class="num">16</span>;
+
+<span class="kwa">static</span> OCCURRENCES: [&amp;'<span class="kwa">static</span> str;<span class="num">5</span>] = [
+    <span class="str">&quot;GGT&quot;</span>,
+    <span class="str">&quot;GGTA&quot;</span>,
+    <span class="str">&quot;GGTATT&quot;</span>,
+    <span class="str">&quot;GGTATTTTAATT&quot;</span>,
+    <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>,
+];
+
+<span class="slc">// Code implementation</span>
+
+#[derive(PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
+<span class="kwa">struct</span> Code(u64);
+
+<span class="kwa">impl</span> Code {
+    <span class="kwa">fn</span> hash(&amp;<span class="kwa">self</span>) -&gt; u64 {
+        <span class="kwa">let</span> Code(ret) = *<span class="kwa">self</span>;
+        <span class="kwa">return</span> ret;
+    }
+
+    <span class="kwa">fn</span> push_char(&amp;<span class="kwa">self</span>, c: u8) -&gt; Code {
+        Code((<span class="kwa">self</span>.hash() &lt;&lt; <span class="num">2</span>) + (pack_symbol(c) <span class="kwa">as</span> u64))
+    }
+
+    <span class="kwa">fn</span> rotate(&amp;<span class="kwa">self</span>, c: u8, frame: usize) -&gt; Code {
+        Code(<span class="kwa">self</span>.push_char(c).hash() &amp; ((<span class="num">1u64</span> &lt;&lt; (<span class="num">2</span> * frame)) - <span class="num">1</span>))
+    }
+
+    <span class="kwa">fn</span> pack(string: &amp;str) -&gt; Code {
+        string.bytes().fold(Code(<span class="num">0u64</span>), |a, b| a.push_char(b))
+    }
+
+    <span class="kwa">fn</span> unpack(&amp;<span class="kwa">self</span>, frame: usize) -&gt; String {
+        <span class="kwa">let mut</span> key = <span class="kwa">self</span>.hash();
+        <span class="kwa">let mut</span> result = Vec::new();
+        <span class="kwa">for</span> _ <span class="kwa">in</span> (<span class="num">0</span>..frame) {
+            result.push(unpack_symbol((key <span class="kwa">as</span> u8) &amp; <span class="num">3</span>));
+            key &gt;&gt;= <span class="num">2</span>;
+        }
+
+        result.reverse();
+        String::from_utf8(result).unwrap()
+    }
+}
+
+<span class="slc">// Hash table implementation</span>
+
+<span class="kwa">trait</span> TableCallback {
+    <span class="kwa">fn</span> f(&amp;<span class="kwa">self</span>, entry: &amp;<span class="kwa">mut</span> Entry);
+}
+
+<span class="kwa">struct</span> BumpCallback;
+
+<span class="kwa">impl</span> TableCallback <span class="kwa">for</span> BumpCallback {
+    <span class="kwa">fn</span> f(&amp;<span class="kwa">self</span>, entry: &amp;<span class="kwa">mut</span> Entry) {
+        entry.count += <span class="num">1</span>;
+    }
+}
+
+<span class="kwa">struct</span> PrintCallback(&amp;'<span class="kwa">static</span> str);
+
+<span class="kwa">impl</span> TableCallback <span class="kwa">for</span> PrintCallback {
+    <span class="kwa">fn</span> f(&amp;<span class="kwa">self</span>, entry: &amp;<span class="kwa">mut</span> Entry) {
+        <span class="kwa">let</span> PrintCallback(s) = *<span class="kwa">self</span>;
+        println!(<span class="str">&quot;{}</span><span class="esc">\t</span><span class="str">{}&quot;</span>, entry.count, s);
+    }
+}
+
+<span class="kwa">struct</span> Entry {
+    code: Code,
+    count: usize,
+    next: Option&lt;Box&lt;Entry&gt;&gt;,
+}
+
+<span class="kwa">struct</span> Table {
+    items: Vec&lt;Option&lt;Box&lt;Entry&gt;&gt;&gt;
+}
+
+<span class="kwa">struct</span> Items&lt;'a&gt; {
+    cur: Option&lt;&amp;'a Entry&gt;,
+    items: slice::Iter&lt;'a, Option&lt;Box&lt;Entry&gt;&gt;&gt;,
+}
+
+<span class="kwa">impl</span> Table {
+    <span class="kwa">fn</span> new() -&gt; Table {
+        Table {
+            items: (<span class="num">0</span>..TABLE_SIZE).map(|_| None).collect()
+        }
+    }
+
+    <span class="kwa">fn</span> search_remainder&lt;C:TableCallback&gt;(item: &amp;<span class="kwa">mut</span> Entry, key: Code, c: C) {
+        <span class="kwa">match</span> item.next {
+            None =&gt; {
+                <span class="kwa">let mut</span> entry = Box::new(Entry {
+                    code: key,
+                    count: <span class="num">0</span>,
+                    next: None,
+                });
+                c.f(&amp;<span class="kwa">mut</span> *entry);
+                item.next = Some(entry);
+            }
+            Some(<span class="kwa">ref mut</span> entry) =&gt; {
+                <span class="kwa">if</span> entry.code == key {
+                    c.f(&amp;<span class="kwa">mut</span> **entry);
+                    <span class="kwa">return</span>;
+                }
+
+                Table::search_remainder(&amp;<span class="kwa">mut</span> **entry, key, c)
+            }
+        }
+    }
+
+    <span class="kwa">fn</span> lookup&lt;C:TableCallback&gt;(&amp;<span class="kwa">mut self</span>, key: Code, c: C) {
+        <span class="kwa">let</span> index = key.hash() % (TABLE_SIZE <span class="kwa">as</span> u64);
+
+        {
+            <span class="kwa">if self</span>.items[index <span class="kwa">as</span> usize].is_none() {
+                <span class="kwa">let mut</span> entry = Box::new(Entry {
+                    code: key,
+                    count: <span class="num">0</span>,
+                    next: None,
+                });
+                c.f(&amp;<span class="kwa">mut</span> *entry);
+                <span class="kwa">self</span>.items[index <span class="kwa">as</span> usize] = Some(entry);
+                <span class="kwa">return</span>;
+            }
+        }
+
+        {
+            <span class="kwa">let</span> entry = <span class="kwa">self</span>.items[index <span class="kwa">as</span> usize].as_mut().unwrap();
+            <span class="kwa">if</span> entry.code == key {
+                c.f(&amp;<span class="kwa">mut</span> **entry);
+                <span class="kwa">return</span>;
+            }
+
+            Table::search_remainder(&amp;<span class="kwa">mut</span> **entry, key, c)
+        }
+    }
+
+    <span class="kwa">fn</span> iter(&amp;<span class="kwa">self</span>) -&gt; Items {
+        Items { cur: None, items: <span class="kwa">self</span>.items.iter() }
+    }
+}
+
+<span class="kwa">impl</span>&lt;'a&gt; Iterator <span class="kwa">for</span> Items&lt;'a&gt; {
+    <span class="kwa">type</span> Item = &amp;'a Entry;
+
+    <span class="kwa">fn</span> next(&amp;<span class="kwa">mut self</span>) -&gt; Option&lt;&amp;'a Entry&gt; {
+        <span class="kwa">let</span> ret = <span class="kwa">match self</span>.cur {
+            None =&gt; {
+                <span class="kwa">let</span> i;
+                <span class="kwa">loop</span> {
+                    <span class="kwa">match self</span>.items.next() {
+                        None =&gt; <span class="kwa">return</span> None,
+                        Some(&amp;None) =&gt; {}
+                        Some(&amp;Some(<span class="kwa">ref</span> a)) =&gt; { i = &amp;**a; <span class="kwa">break</span> }
+                    }
+                }
+                <span class="kwa">self</span>.cur = Some(&amp;*i);
+                &amp;*i
+            }
+            Some(c) =&gt; c
+        };
+        <span class="kwa">match</span> ret.next {
+            None =&gt; { <span class="kwa">self</span>.cur = None; }
+            Some(<span class="kwa">ref</span> next) =&gt; { <span class="kwa">self</span>.cur = Some(&amp;**next); }
+        }
+        <span class="kwa">return</span> Some(ret);
+    }
+}
+
+<span class="slc">// Main program</span>
+
+<span class="kwa">fn</span> pack_symbol(c: u8) -&gt; u8 {
+    <span class="kwa">match</span> c <span class="kwa">as</span> char {
+        'A' =&gt; <span class="num">0</span>,
+        'C' =&gt; <span class="num">1</span>,
+        'G' =&gt; <span class="num">2</span>,
+        'T' =&gt; <span class="num">3</span>,
+        _ =&gt; panic!(<span class="str">&quot;{}&quot;</span>, c <span class="kwa">as</span> char),
+    }
+}
+
+<span class="kwa">fn</span> unpack_symbol(c: u8) -&gt; u8 {
+    TABLE[c <span class="kwa">as</span> usize]
+}
+
+<span class="kwa">fn</span> generate_frequencies(<span class="kwa">mut</span> input: &amp;[u8], frame: usize) -&gt; Table {
+    <span class="kwa">let mut</span> frequencies = Table::new();
+    <span class="kwa">if</span> input.len() &lt; frame { <span class="kwa">return</span> frequencies; }
+    <span class="kwa">let mut</span> code = Code(<span class="num">0</span>);
+
+    <span class="slc">// Pull first frame.</span>
+    <span class="kwa">for</span> _ <span class="kwa">in</span> (<span class="num">0</span>..frame) {
+        code = code.push_char(input[<span class="num">0</span>]);
+        input = &amp;input[<span class="num">1</span>..];
+    }
+    frequencies.lookup(code, BumpCallback);
+
+    <span class="kwa">while</span> input.len() != <span class="num">0</span> &amp;&amp; input[<span class="num">0</span>] != ('&gt;' <span class="kwa">as</span> u8) {
+        code = code.rotate(input[<span class="num">0</span>], frame);
+        frequencies.lookup(code, BumpCallback);
+        input = &amp;input[<span class="num">1</span>..];
+    }
+    frequencies
+}
+
+<span class="kwa">fn</span> print_frequencies(frequencies: &amp;Table, frame: usize) {
+    <span class="kwa">let mut</span> vector = Vec::new();
+    <span class="kwa">for</span> entry <span class="kwa">in</span> frequencies.iter() {
+        vector.push((entry.count, entry.code));
+    }
+    vector.sort();
+
+    <span class="kwa">let mut</span> total_count = <span class="num">0</span>;
+    <span class="kwa">for</span> &amp;(count, _) <span class="kwa">in</span> vector.iter() {
+        total_count += count;
+    }
+
+    <span class="kwa">for</span> &amp;(count, key) <span class="kwa">in</span> vector.iter().rev() {
+        println!(<span class="str">&quot;{} {:.3}&quot;</span>,
+                 key.unpack(frame),
+                 (count <span class="kwa">as</span> f32 * <span class="num">100.0</span>) / (total_count <span class="kwa">as</span> f32));
+    }
+    println!(<span class="str">&quot;&quot;</span>);
+}
+
+<span class="kwa">fn</span> print_occurrences(frequencies: &amp;<span class="kwa">mut</span> Table, occurrence: &amp;'<span class="kwa">static</span> str) {
+    frequencies.lookup(Code::pack(occurrence), PrintCallback(occurrence))
+}
+
+<span class="kwa">fn</span> get_sequence&lt;R: std::io::BufRead&gt;(r: R, key: &amp;str) -&gt; Vec&lt;u8&gt; {
+    <span class="kwa">let mut</span> res = Vec::new();
+    <span class="kwa">for</span> l <span class="kwa">in</span> r.lines().map(|l| l.ok().unwrap())
+        .skip_while(|l| key != &amp;l[..key.len()]).skip(<span class="num">1</span>)
+    {
+        <span class="kwa">use</span> std::ascii::AsciiExt;
+        res.extend(l.trim().as_bytes().iter().map(|b| b.to_ascii_uppercase()));
+    }
+    res
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> stdin = std::io::stdin();
+    <span class="kwa">let</span> input = get_sequence(stdin.lock(), <span class="str">&quot;&gt;THREE&quot;</span>);
+    <span class="kwa">let</span> input = Arc::new(input);
+
+    <span class="kwa">let</span> nb_freqs: Vec&lt;_&gt; = (<span class="num">1u</span>size.<span class="num">.3</span>).map(|i| {
+        <span class="kwa">let</span> input = input.clone();
+        (i, thread::spawn(<span class="kwa">move</span>|| generate_frequencies(&amp;input, i)))
+    }).collect();
+    <span class="kwa">let</span> occ_freqs: Vec&lt;_&gt; = OCCURRENCES.iter().map(|&amp;occ| {
+        <span class="kwa">let</span> input = input.clone();
+        thread::spawn(<span class="kwa">move</span>|| generate_frequencies(&amp;input, occ.len()))
+    }).collect();
+
+    <span class="kwa">for</span> (i, freq) <span class="kwa">in</span> nb_freqs.into_iter() {
+        print_frequencies(&amp;freq.join().unwrap(), i);
+    }
+    <span class="kwa">for</span> (&amp;occ, freq) <span class="kwa">in</span> OCCURRENCES.iter().zip(occ_freqs.into_iter()) {
+        print_occurrences(&amp;<span class="kwa">mut</span> freq.join().unwrap(), occ);
+    }
+}

@@ -1,0 +1,105 @@
+#lang racket/base
+
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;;; contributed by Matthew Flatt</span>
+<span class="slc">;;; modified by HN</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; Uses Racket threads</span>
+
+(<span class="kwa">require</span> racket/cmdline
+         racket/match)
+
+(<span class="kwa">define</span> (<span class="kwa">change</span> c1 c2)
+  (<span class="kwa">case</span> c1
+    [(<span class="kwa">red</span>)
+     (<span class="kwa">case</span> c2 [(<span class="kwa">blue</span>) 'yellow] [(<span class="kwa">yellow</span>) 'blue] [else c1])]
+    [(<span class="kwa">yellow</span>)
+     (<span class="kwa">case</span> c2 [(<span class="kwa">blue</span>) 'red] [(<span class="kwa">red</span>) 'blue] [else c1])]
+    [(<span class="kwa">blue</span>)
+     (<span class="kwa">case</span> c2 [(<span class="kwa">yellow</span>) 'red] [(<span class="kwa">red</span>) 'yellow] [else c1])]))
+  
+(<span class="kwa">let</span> ([colors '(<span class="kwa">blue</span> red yellow)])
+  (<span class="kwa">for</span>* ([a colors][b colors])
+    (<span class="kwa">printf</span> <span class="str">&quot;~a + ~a -&gt; ~a</span><span class="esc">\n</span><span class="str">&quot;</span> a b (<span class="kwa">change</span> a b))))
+
+(<span class="kwa">define</span> (<span class="kwa">place</span> meeting-ch n custodian)
+  (<span class="kwa">parameterize</span> ([current-custodian custodian])
+    (<span class="kwa">thread</span>
+     (<span class="kwa">lambda</span> ()
+       (<span class="kwa">let</span> loop ([n n])
+         (<span class="kwa">if</span> (<span class="kwa">zero</span>? n)
+             <span class="slc">;; Fade all:</span>
+             (<span class="kwa">let</span> loop ()
+               (<span class="kwa">let</span> ([c (<span class="kwa">channel-get</span> meeting-ch)])
+                 (<span class="kwa">channel-put</span> (<span class="kwa">car</span> c) #f)
+                 (<span class="kwa">loop</span>)))
+             <span class="slc">;; Let two meet:</span>
+             (<span class="kwa">match-let</span> ([(<span class="kwa">cons</span> ch1 v1) (<span class="kwa">channel-get</span> meeting-ch)]
+                         [(<span class="kwa">cons</span> ch2 v2) (<span class="kwa">channel-get</span> meeting-ch)])
+               (<span class="kwa">channel-put</span> ch1 v2)
+               (<span class="kwa">channel-put</span> ch2 v1)
+               (<span class="kwa">loop</span> (<span class="kwa">sub1</span> n)))))))))
+
+(<span class="kwa">define</span> (<span class="kwa">creature</span> color meeting-ch result-ch custodian)
+  (<span class="kwa">parameterize</span> ([current-custodian custodian])
+    (<span class="kwa">thread</span> 
+     (<span class="kwa">lambda</span> ()
+       (<span class="kwa">let</span> ([ch (<span class="kwa">make-channel</span>)]
+             [name (<span class="kwa">gensym</span>)])
+         (<span class="kwa">let</span> loop ([color color][met <span class="num">0</span>][same <span class="num">0</span>])
+           (<span class="kwa">channel-put</span> meeting-ch (<span class="kwa">cons</span> ch (<span class="kwa">cons</span> color name)))
+           (<span class="kwa">match</span> (<span class="kwa">channel-get</span> ch)
+             [(<span class="kwa">cons</span> other-color other-name)
+              <span class="slc">;; Meet:</span>
+              (<span class="kwa">loop</span> (<span class="kwa">change</span> color other-color) 
+                    (<span class="kwa">add1</span> met)
+                    (+ same (<span class="kwa">if</span> (<span class="kwa">eq</span>? name other-name)
+                                <span class="num">1</span>
+                                <span class="num">0</span>)))]
+             [#f
+              <span class="slc">;; Done:</span>
+              (<span class="kwa">channel-put</span> result-ch (<span class="kwa">cons</span> met same))])))))))
+
+(<span class="kwa">define</span> (<span class="kwa">spell</span> n)
+  (<span class="kwa">for</span> ([i (<span class="kwa">number-</span>&gt;string n)])
+    (<span class="kwa">display</span> <span class="str">&quot; &quot;</span>)
+    (<span class="kwa">display</span> (<span class="kwa">hash-ref</span> digits i))))
+  
+(<span class="kwa">define</span> digits
+  #hash((#\<span class="num">0</span> . <span class="str">&quot;zero&quot;</span>)
+        (#\<span class="num">1</span> . <span class="str">&quot;one&quot;</span>)
+        (#\<span class="num">2</span> . <span class="str">&quot;two&quot;</span>)
+        (#\<span class="num">3</span> . <span class="str">&quot;three&quot;</span>)
+        (#\<span class="num">4</span> . <span class="str">&quot;four&quot;</span>)
+        (#\<span class="num">5</span> . <span class="str">&quot;five&quot;</span>)
+        (#\<span class="num">6</span> . <span class="str">&quot;six&quot;</span>)
+        (#\<span class="num">7</span> . <span class="str">&quot;seven&quot;</span>)
+        (#\<span class="num">8</span> . <span class="str">&quot;eight&quot;</span>)
+        (#\<span class="num">9</span> . <span class="str">&quot;nine&quot;</span>)))
+
+(<span class="kwa">define</span> (<span class="kwa">go</span> n inits)
+  (<span class="kwa">let</span> ([result-ch (<span class="kwa">make-channel</span>)]
+        [meeting-ch (<span class="kwa">make-channel</span>)]
+        [custodian (<span class="kwa">make-custodian</span>)])
+    (<span class="kwa">place</span> meeting-ch n custodian)
+    (<span class="kwa">newline</span>)
+    (<span class="kwa">for</span> ([init inits])
+      (<span class="kwa">printf</span> <span class="str">&quot; ~a&quot;</span> init)
+      (<span class="kwa">creature</span> init meeting-ch result-ch custodian))
+    (<span class="kwa">newline</span>)
+    (<span class="kwa">let</span> ([results (<span class="kwa">for</span>/list ([i inits])
+                     (<span class="kwa">channel-get</span> result-ch))])
+      (<span class="kwa">for</span> ([r results])
+        (<span class="kwa">display</span> (<span class="kwa">car</span> r))
+        (<span class="kwa">spell</span> (<span class="kwa">cdr</span> r))
+        (<span class="kwa">newline</span>))
+      (<span class="kwa">spell</span> (<span class="kwa">apply</span> + (<span class="kwa">map</span> car results)))
+      (<span class="kwa">newline</span>))
+    (<span class="kwa">custodian-shutdown-all</span> custodian)))
+
+(<span class="kwa">let</span> ([n (<span class="kwa">command-line</span> #:args (<span class="kwa">n</span>) (<span class="kwa">string-</span>&gt;number n))])
+  (<span class="kwa">go</span> n '(<span class="kwa">blue</span> red yellow))
+  (<span class="kwa">go</span> n '(<span class="kwa">blue</span> red yellow red yellow blue red yellow red blue))
+  (<span class="kwa">newline</span>))

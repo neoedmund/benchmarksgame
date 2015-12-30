@@ -1,0 +1,179 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com"> contributed by Clinton Begin</span>
+<span class="com"> based on submission by James McIlree, Matthieu Bentot, The Anh Tran and Andy Fingerhut</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.io.*;
+<span class="kwa">import</span> java.util.*;
+<span class="kwa">import</span> java.util.concurrent.*;
+
+<span class="kwa">public class</span> knucleotide {
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(<span class="kwa">final</span> String[] args) <span class="kwa">throws</span> Exception {
+   <span class="slc">// read full fullSequence</span>
+   <span class="kwa">final</span> BufferedReader <span class="kwa">in</span> = <span class="kwa">new</span> <span class="kwd">BufferedReader</span>(<span class="kwa">new</span> <span class="kwd">InputStreamReader</span>(System.<span class="kwa">in</span>));
+   <span class="kwd">scanPastHeader</span>(<span class="kwa">in</span>, <span class="str">&quot;&gt;THREE&quot;</span>);
+   <span class="kwa">final</span> <span class="kwb">byte</span>[] fullSequence = <span class="kwd">readRestIntoByteArray</span>(<span class="kwa">in</span>);
+
+   <span class="slc">// create tasks</span>
+   <span class="kwa">final</span> List&lt;Callable&lt;Map&lt;Integer, Nucleotide&gt;&gt;&gt; nucleotideMaps = <span class="kwd">buildCountTasks</span>(fullSequence);
+
+   <span class="slc">// execute tasks</span>
+   <span class="kwa">final</span> ExecutorService executor = <span class="kwa">new</span> <span class="kwd">ForkJoinPool</span>();
+   <span class="kwa">final</span> List&lt;Future&lt;Map&lt;Integer, Nucleotide&gt;&gt;&gt; futures = executor.<span class="kwd">invokeAll</span>(nucleotideMaps);
+   executor.<span class="kwd">shutdown</span>();
+
+   <span class="slc">// print frequencies</span>
+   <span class="kwa">final</span> StringBuilder out = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>();
+   <span class="kwd">printFrequencies</span>(out, fullSequence, futures.<span class="kwd">get</span>(<span class="num">0</span>).<span class="kwd">get</span>());
+   <span class="kwd">printFrequencies</span>(out, fullSequence, <span class="kwd">sumMaps</span>(futures.<span class="kwd">get</span>(<span class="num">1</span>).<span class="kwd">get</span>(), futures.<span class="kwd">get</span>(<span class="num">2</span>).<span class="kwd">get</span>()));
+
+   <span class="slc">// print counts</span>
+   <span class="kwa">final</span> String[] nucleotideFrequenciesToPrint = {<span class="str">&quot;ggt&quot;</span>, <span class="str">&quot;ggta&quot;</span>, <span class="str">&quot;ggtatt&quot;</span>, <span class="str">&quot;ggtattttaatt&quot;</span>, <span class="str">&quot;ggtattttaatttatagt&quot;</span>};
+   <span class="kwa">for</span> (<span class="kwa">final</span> String nucleotideSequence : nucleotideFrequenciesToPrint) {
+       <span class="kwd">printCount</span>(out, futures, nucleotideSequence);
+   }
+
+   System.out.<span class="kwd">print</span>(out.<span class="kwd">toString</span>());
+    }
+
+    <span class="kwa">private static</span> List&lt;Callable&lt;Map&lt;Integer, Nucleotide&gt;&gt;&gt; <span class="kwd">buildCountTasks</span>(<span class="kwa">final</span> <span class="kwb">byte</span>[] fullSequence) {
+   <span class="kwa">final</span> <span class="kwb">int</span>[] nucleotideLengths = {<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>, <span class="num">6</span>, <span class="num">12</span>, <span class="num">18</span>};
+   <span class="kwa">final</span> List&lt;Callable&lt;Map&lt;Integer, Nucleotide&gt;&gt;&gt; nucleotideMaps = <span class="kwa">new</span> LinkedList&lt;&gt;();
+   <span class="kwa">for</span> (<span class="kwa">final</span> <span class="kwb">int</span> nucleotideLength : nucleotideLengths) {
+       <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; nucleotideLength; i++) {
+      <span class="kwa">final</span> <span class="kwb">int</span> offset = i;
+      nucleotideMaps.<span class="kwd">add</span>(<span class="kwa">new</span> Callable&lt;Map&lt;Integer, Nucleotide&gt;&gt;() {
+          <span class="kwc">&#64;Override</span>
+          <span class="kwa">public</span> Map&lt;Integer, Nucleotide&gt; <span class="kwd">call</span>() <span class="kwa">throws</span> Exception {
+         <span class="kwa">return</span> <span class="kwd">countSequences</span>(fullSequence, nucleotideLength, offset);
+          }
+      });
+       }
+   }
+   <span class="kwa">return</span> nucleotideMaps;
+    }
+
+    <span class="kwa">private static</span> <span class="kwb">byte</span>[] <span class="kwd">readRestIntoByteArray</span>(<span class="kwa">final</span> BufferedReader <span class="kwa">in</span>) <span class="kwa">throws</span> IOException {
+   <span class="kwa">final</span> ByteArrayOutputStream baos = <span class="kwa">new</span> <span class="kwd">ByteArrayOutputStream</span>();
+   <span class="kwa">final</span> <span class="kwb">byte</span> bytes[] = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">256</span>];
+   String line;
+   <span class="kwa">while</span> ((line = <span class="kwa">in</span>.<span class="kwd">readLine</span>()) != null) {
+       <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; line.<span class="kwd">length</span>(); i++)
+      bytes[i] = (<span class="kwb">byte</span>) line.<span class="kwd">charAt</span>(i);
+       baos.<span class="kwd">write</span>(bytes, <span class="num">0</span>, line.<span class="kwd">length</span>());
+   }
+   <span class="kwa">return</span> baos.<span class="kwd">toByteArray</span>();
+    }
+
+    <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">scanPastHeader</span>(<span class="kwa">final</span> BufferedReader <span class="kwa">in</span>, <span class="kwa">final</span> String header) <span class="kwa">throws</span> IOException {
+   String line;
+   <span class="kwa">while</span> ((line = <span class="kwa">in</span>.<span class="kwd">readLine</span>()) != null) {
+       <span class="kwa">if</span> (line.<span class="kwd">startsWith</span>(header)) <span class="kwa">break</span>;
+   }
+    }
+
+    <span class="kwa">private static</span> Map&lt;Integer, Nucleotide&gt; <span class="kwd">countSequences</span>(<span class="kwa">final</span> <span class="kwb">byte</span>[] fullSequence, <span class="kwa">final</span> <span class="kwb">int</span> nucleotideLength, <span class="kwa">final</span> <span class="kwb">int</span> offset) {
+   <span class="kwa">final</span> Map&lt;Integer, Nucleotide&gt; nucleotideMap = <span class="kwa">new</span> HashMap&lt;&gt;();
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = offset; i &lt; fullSequence.length - nucleotideLength; i += nucleotideLength) {
+       <span class="kwa">final</span> <span class="kwb">int</span> hash = <span class="kwd">calculateHash</span>(fullSequence, i, nucleotideLength);
+       <span class="kwa">final</span> Nucleotide nucleotide = nucleotideMap.<span class="kwd">get</span>(hash);
+       <span class="kwa">if</span> (nucleotide == null) {
+      nucleotideMap.<span class="kwd">put</span>(hash, <span class="kwa">new</span> <span class="kwd">Nucleotide</span>(fullSequence, i, nucleotideLength));
+       } <span class="kwa">else</span> {
+      nucleotide.count++;
+       }
+   }
+   <span class="kwa">return</span> nucleotideMap;
+    }
+
+    <span class="kwa">private static</span> Map&lt;Integer, Nucleotide&gt; <span class="kwd">sumMaps</span>(<span class="kwa">final</span> Map&lt;Integer, Nucleotide&gt;... nucleotideMaps) {
+   <span class="kwa">final</span> Map&lt;Integer, Nucleotide&gt; totalNucleotideMap = <span class="kwa">new</span> HashMap&lt;&gt;();
+   <span class="kwa">for</span> (Map&lt;Integer, Nucleotide&gt; nucleotideMap : nucleotideMaps) {
+       <span class="kwa">for</span> (Map.Entry&lt;Integer, Nucleotide&gt; entry : nucleotideMap.<span class="kwd">entrySet</span>()) {
+      <span class="kwa">final</span> Nucleotide sum = totalNucleotideMap.<span class="kwd">get</span>(entry.<span class="kwd">getKey</span>());
+      <span class="kwa">if</span> (sum != null)
+          sum.count += entry.<span class="kwd">getValue</span>().count;
+      <span class="kwa">else</span>
+          totalNucleotideMap.<span class="kwd">put</span>(entry.<span class="kwd">getKey</span>(), entry.<span class="kwd">getValue</span>());
+       }
+   }
+   <span class="kwa">return</span> totalNucleotideMap;
+    }
+
+    <span class="kwa">private static</span> <span class="kwb">int</span> <span class="kwd">calculateHash</span>(<span class="kwa">final</span> <span class="kwb">byte</span>[] bytes, <span class="kwa">final</span> <span class="kwb">int</span> offset, <span class="kwa">final</span> <span class="kwb">int</span> length) {
+   <span class="kwb">int</span> hash = <span class="num">17</span>;
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; length; i++) {
+       hash = hash * <span class="num">23</span> + bytes[offset + i];
+   }
+   <span class="kwa">return</span> hash;
+    }
+
+    <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">printCount</span>(<span class="kwa">final</span> StringBuilder out, <span class="kwa">final</span> List&lt;Future&lt;Map&lt;Integer, Nucleotide&gt;&gt;&gt; nucleotideMapFutures, <span class="kwa">final</span> String nucleotideSequence) <span class="kwa">throws</span> Exception {
+   <span class="kwa">final</span> <span class="kwb">int</span> hash = <span class="kwd">calculateHash</span>(nucleotideSequence.<span class="kwd">getBytes</span>(), <span class="num">0</span>, nucleotideSequence.<span class="kwd">length</span>());
+   <span class="kwb">int</span> count = <span class="num">0</span>;
+   <span class="kwa">for</span> (Future&lt;Map&lt;Integer, Nucleotide&gt;&gt; future : nucleotideMapFutures) {
+       <span class="kwa">final</span> Nucleotide nucleotide = future.<span class="kwd">get</span>().<span class="kwd">get</span>(hash);
+       <span class="kwa">if</span> (nucleotide != null) count += nucleotide.count;
+   }
+   out.<span class="kwd">append</span>(count).<span class="kwd">append</span>(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">&quot;</span>).<span class="kwd">append</span>(nucleotideSequence.<span class="kwd">toUpperCase</span>()).<span class="kwd">append</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+    }
+
+    <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">printFrequencies</span>(<span class="kwa">final</span> StringBuilder out, <span class="kwa">final</span> <span class="kwb">byte</span>[] fullSequence, Map&lt;Integer, Nucleotide&gt; nucleotideMap) {
+   <span class="kwa">final</span> TreeSet&lt;Nucleotide&gt; nucleotides = <span class="kwa">new</span> TreeSet&lt;&gt;(nucleotideMap.<span class="kwd">values</span>());
+   <span class="kwa">for</span> (<span class="kwa">final</span> Nucleotide value : nucleotides) {
+       <span class="kwa">final</span> String sequenceString = value.<span class="kwd">toString</span>();
+       <span class="kwa">final</span> <span class="kwb">double</span> factor = <span class="num">100</span>d / (<span class="kwb">double</span>) (fullSequence.length - value.length + <span class="num">1</span>);
+       <span class="kwa">final</span> <span class="kwb">double</span> frequency = ((<span class="kwb">double</span>) value.count * factor);
+       <span class="kwa">final</span> String formatted = String.<span class="kwd">format</span>(<span class="str">&quot;%s %.3f&quot;</span>, sequenceString, frequency);
+       out.<span class="kwd">append</span>(formatted);
+       out.<span class="kwd">append</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+   }
+   out.<span class="kwd">append</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+    }
+
+    <span class="kwa">private static class</span> Nucleotide <span class="kwa">implements</span> Comparable&lt;Nucleotide&gt; {
+   <span class="kwa">private final</span> <span class="kwb">byte</span>[] fullSequence;
+   <span class="kwa">private final</span> <span class="kwb">int</span> offset;
+   <span class="kwa">private final</span> <span class="kwb">int</span> length;
+   <span class="kwa">private</span> <span class="kwb">int</span> count = <span class="num">1</span>;
+
+   <span class="kwa">private</span> <span class="kwd">Nucleotide</span>(<span class="kwa">final</span> <span class="kwb">byte</span>[] fullSequence, <span class="kwa">final</span> <span class="kwb">int</span> offset, <span class="kwa">final</span> <span class="kwb">int</span> length) {
+       <span class="kwa">this</span>.fullSequence = fullSequence;
+       <span class="kwa">this</span>.offset = offset;
+       <span class="kwa">this</span>.length = length;
+   }
+
+   <span class="kwa">public final</span> <span class="kwb">int</span> <span class="kwd">compareTo</span>(<span class="kwa">final</span> Nucleotide other) {
+       <span class="kwa">if</span> (other.count != count) {
+      <span class="slc">// For primary sort by count</span>
+      <span class="kwa">return</span> other.count - count;
+       } <span class="kwa">else</span> {
+      <span class="slc">// For secondary sort by bytes</span>
+      <span class="kwa">return</span> <span class="kwd">compareBytes</span>(<span class="kwa">this</span>, other);
+       }
+   }
+
+   <span class="kwa">private</span> <span class="kwb">int</span> <span class="kwd">compareBytes</span>(<span class="kwa">final</span> Nucleotide a, <span class="kwa">final</span> Nucleotide b) {
+       <span class="kwa">final</span> <span class="kwb">int</span> suma = <span class="kwd">sumBytes</span>(a);
+       <span class="kwa">final</span> <span class="kwb">int</span> sumb = <span class="kwd">sumBytes</span>(b);
+       <span class="kwa">return</span> suma &lt; sumb ? -<span class="num">1</span> : suma == sumb ? <span class="num">0</span> : <span class="num">1</span>;
+   }
+
+   <span class="kwa">private</span> <span class="kwb">int</span> <span class="kwd">sumBytes</span>(<span class="kwa">final</span> Nucleotide nucleotide) {
+       <span class="kwb">int</span> sum = <span class="num">0</span>;
+       <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; nucleotide.length; i++) {
+      sum += nucleotide.fullSequence[nucleotide.offset + i] * (nucleotide.length-i);
+       }
+       <span class="kwa">return</span> sum;
+   }
+
+   <span class="kwc">&#64;Override</span>
+   <span class="kwa">public</span> String <span class="kwd">toString</span>() {
+       <span class="kwa">return new</span> <span class="kwd">String</span>(fullSequence, offset, length).<span class="kwd">toUpperCase</span>();
+   }
+    }
+
+}

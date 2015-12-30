@@ -1,0 +1,138 @@
+<span class="slc">--</span>
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">-- contributed by Sergei Matusevich 2007</span>
+<span class="slc">-- modified by Tim Newsham</span>
+<span class="slc">-- modified by Stephen Blackheath 2009, v1.0</span>
+<span class="slc">-- mostly redone by Louis Wasserman, 2010</span>
+
+<span class="slc">-- Compile command: ghc --make -O2 -threaded regex.hs -o regex</span>
+<span class="slc">-- Run command:     ./regex +RTS -N4 -qm -qw -H250M       (quad core)</span>
+<span class="slc">--                  ./regex +RTS -H250M               (single core)</span>
+<span class="slc">-- </span>
+<span class="slc">-- Note for future reference: with GHC HEAD as of 6/13/10,</span>
+<span class="slc">-- works something like 3x as fast as GHC 6.12.1.  Reevaluate </span>
+<span class="slc">-- in future! -LW</span>
+
+
+<span class="kwd">import</span> Control.Concurrent
+<span class="kwd">import</span> Control.Parallel.Strategies
+<span class="kwd">import</span> Control.Monad
+<span class="kwd">import</span> GHC.Conc
+<span class="kwd">import</span> Foreign
+<span class="kwd">import</span> Text.Regex.PCRE
+<span class="kwd">import</span> Text.Regex.PCRE.ByteString          <span class="slc">-- requires haskell-regex-pcre-builtin</span>
+<span class="kwd">import qualified</span> Data.ByteString <span class="kwd">as</span> B
+<span class="kwd">import qualified</span> Data.ByteString.Internal <span class="kwd">as</span> BI
+<span class="kwd">import</span> Data.<span class="kwb">Array</span>.Base
+<span class="kwd">import</span> Data.List
+<span class="kwd">import</span> Data.Word
+<span class="kwd">import</span> Data.ByteString.Unsafe
+
+subs = [
+    (<span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>),
+    (<span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>),
+    (<span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>),
+    (<span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>),
+    (<span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>),
+    (<span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>),
+    (<span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>),
+    (<span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>),
+    (<span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>),
+    (<span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>),
+    (<span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>)]
+
+main = <span class="kwd">do</span>
+  file &lt;- B.<span class="kwc">getContents</span>
+  <span class="kwd">let</span> variants = <span class="kwc">map</span> (\ x -&gt; (x, makeRegex x)) [
+	<span class="str">&quot;agggtaaa|tttaccct&quot;</span>,
+	<span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+	<span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+	<span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+	<span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+	<span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+	<span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+	<span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+	<span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span> ]  :: [(<span class="kwb">String</span>, Regex)]
+  <span class="kwd">let</span> [s1,s2,s3] = <span class="kwc">map</span> (B.<span class="kwc">concat</span> . <span class="kwc">tail</span>) $
+                <span class="kwc">groupBy</span> notHeader $ B.<span class="kwa">split</span> (BI.c2w '<span class="esc">\n</span>') file
+      showVars :: (<span class="kwb">String</span>, Regex) -&gt; <span class="kwb">String</span>
+      showVars (rx,r) = <span class="kwd">let</span> m2 = match r s2; m3 = match r s3 :: <span class="kwb">Int</span> <span class="kwd">in</span>
+      	m2 `par` m3 `<span class="kwc">seq</span>` (rx ++ ' ' : <span class="kwc">show</span> (m2 + m3))
+      results = <span class="kwc">map</span> showVars variants ++ [
+                  <span class="str">&quot;&quot;</span>,
+                  <span class="kwc">show</span> $ B.<span class="kwa">length</span> file,
+                  <span class="kwc">show</span> $ B.<span class="kwa">length</span> s1 + B.<span class="kwa">length</span> s2 + B.<span class="kwa">length</span> s3]
+  store &lt;- newEmptyMVar
+  <span class="kwd">let</span> chunks = fragment <span class="num">20000</span> s2  <span class="slc">-- break into chunks to parallelize, which</span>
+                                 <span class="slc">-- is possible as our regexes are 1 char long</span>
+  s1 `<span class="kwc">seq</span>` s2 `<span class="kwc">seq</span>` s3 `<span class="kwc">seq</span>` (variants `using` parList (evalTuple2 r0 rseq)) `par` 
+  	forkIO (parallel (<span class="kwc">map</span> substituteAll chunks) &gt;&gt;= putMVar store)
+  	<span class="slc">-- do regex substitutions</span>
+  <span class="kwc">mapM_ putStrLn</span> (results `using` parList rdeepseq)
+  chunks' &lt;- takeMVar store
+  <span class="kwc">print</span> $ B.<span class="kwa">length</span> s1 + B.<span class="kwa">length</span> s3 + chunks'
+  <span class="kwd">where</span> notHeader _ s = B.<span class="kwc">null</span> s || B.<span class="kwc">head</span> s /= (BI.c2w '&gt;')
+
+<span class="slc">-- Drop in replacement for sequence</span>
+parallel :: [<span class="kwb">IO Int</span>] -&gt; <span class="kwb">IO Int</span>
+parallel actions = <span class="kwd">do</span>
+    vars &lt;- <span class="kwc">mapM</span> (\ action -&gt; <span class="kwd">do</span>
+        var &lt;- newEmptyMVar
+        forkIO $ <span class="kwd">do</span>
+            answer &lt;- action
+            putMVar var $! answer
+        <span class="kwc">return</span> var) actions
+    <span class="kwc">foldM</span> (\ !x v -&gt; <span class="kwc">liftM</span> (+x) (takeMVar v)) <span class="num">0</span> vars
+
+fragment :: <span class="kwb">Int</span> -&gt; B.ByteString -&gt; [B.ByteString]
+fragment chunkSize bs = <span class="kwd">if</span> B.<span class="kwc">null</span> bs <span class="kwd">then</span> [] <span class="kwd">else</span> 
+    <span class="kwd">case</span> B.<span class="kwc">splitAt</span> chunkSize bs <span class="kwd">of</span>
+    	(start, <span class="kwc">rem</span>) -&gt; start : fragment chunkSize <span class="kwc">rem</span>
+
+<span class="slc">-- Precompile regexes</span>
+subRegexes :: [(Regex, B.ByteString)]
+subRegexes = <span class="kwc">flip map</span> subs $ \(pattern, sub) -&gt;	
+    (makeRegex pattern :: Regex, B.pack (<span class="kwc">map</span> BI.c2w sub))
+
+extend :: B.ByteString -&gt; <span class="kwb">IO</span> B.ByteString
+extend src = <span class="kwd">do</span>
+	destFP &lt;- BI.mallocByteString (B.<span class="kwa">length</span> src * <span class="num">3</span>)
+	copyBS src destFP
+
+copyBS :: B.ByteString -&gt; ForeignPtr Word8 -&gt; <span class="kwb">IO</span> B.ByteString
+copyBS (BI.PS srcFP srcOff srcLen) destFP = withForeignPtr srcFP $ \ src0 -&gt;
+	withForeignPtr destFP $ \ dest0 -&gt; <span class="kwd">do</span>
+	  copyArray dest0 (src0 +! srcOff) srcLen
+	  <span class="kwc">return</span> (BI.PS destFP <span class="num">0</span> srcLen)
+
+substituteAll :: B.ByteString -&gt; <span class="kwb">IO Int</span>
+substituteAll !txt&#64;(BI.PS srcFP srcOff srcLen) = allocaArray (B.<span class="kwa">length</span> txt * <span class="num">3</span>) $ \ destP -&gt; <span class="kwd">do</span>
+    destFP &lt;- newForeignPtr_ destP
+    withForeignPtr srcFP $ \ srcP -&gt; copyArray destP (srcP `advancePtr` srcOff) srcLen
+    <span class="kwd">let</span> dest = BI.PS destFP <span class="num">0</span> srcLen
+    allocaArray (B.<span class="kwa">length</span> txt * <span class="num">3</span>) $ \ tmp -&gt; <span class="kwd">do</span>
+    	tmpF &lt;- newForeignPtr_ tmp
+    	<span class="kwc">foldM</span> (\ !n sub -&gt; <span class="kwd">do</span>
+       		n' &lt;- substitute_ tmp (BI.PS destFP <span class="num">0</span> n) sub 
+       		copyArray destP tmp n'
+       		<span class="kwc">return</span> n') srcLen subRegexes
+
+(+!) = advancePtr
+
+substitute_ :: Ptr Word8 -&gt; B.ByteString -&gt; (Regex, B.ByteString) -&gt; <span class="kwb">IO Int</span>
+substitute_ !p xs&#64;(BI.PS fp0 i0 l0) (regex, BI.PS fpSub iSub lSub) = 
+  withForeignPtr fp0 $ \ p00 -&gt; <span class="kwd">let</span> p0 = p00 +! i0 <span class="kwd">in</span> withForeignPtr fpSub $ \ pSub -&gt; <span class="kwd">do</span>
+	len &lt;- <span class="kwd">do</span>
+		<span class="kwd">let</span> go !i !j = <span class="kwd">do</span>
+		      match &lt;- execute regex (unsafeDrop i xs)
+		      <span class="kwd">case</span> match <span class="kwd">of</span>
+			Right (Just arr) -&gt; <span class="kwd">do</span>
+			    <span class="kwd">let</span> !(!off, !len) = arr `unsafeAt` <span class="num">0</span>
+			    copyArray (p +! j) (p0 +! i) off
+			    copyArray (p +! (j + off)) (pSub +! iSub) lSub
+			    go (i + off + len) (j + off + lSub)
+			_ -&gt; copyArray (p +! j) (p0 +! i) (l0 - i) &gt;&gt; <span class="kwc">return</span> (j + l0 - i)
+		go <span class="num">0 0</span>
+	<span class="kwc">return</span> len <span class="slc">-- destFP now points to the substituted string</span>

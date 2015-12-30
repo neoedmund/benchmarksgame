@@ -1,0 +1,37 @@
+
+Mon, 30 Nov 2015 00:40:21 GMT
+
+MAKE:
+mv nbody.fpascal nbody.pas
+/usr/local/src/fpc-3.0.0.i386-linux/bin/fpc -FuInclude/fpascal -XXs -Oppentiumm -Cppentiumm -O3 -Cfsse2 -CfSSE3 -oFPASCAL_RUN nbody.pas
+Free Pascal Compiler version 3.0.0 [2015/11/24] for i386
+Copyright (c) 1993-2015 by Florian Klaempfl and others
+Target OS: Linux for i386
+Compiling nbody.pas
+Linking FPASCAL_RUN
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/usr/bin/ld: warning: link.res contains output sections; did you forget -T?
+150 lines compiled, 0.2 sec
+mv FPASCAL_RUN nbody.fpascal_run
+rm nbody.pas
+0.21s to complete and log all make actions
+
+COMMAND LINE:
+./nbody.fpascal_run 50000000
+
+PROGRAM OUTPUT:
+-0.169075164
+-0.169059907

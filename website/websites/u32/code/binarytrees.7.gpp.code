@@ -1,0 +1,109 @@
+<span class="com">/* The Computer Language Benchmarks Game </span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Jon Harrop</span>
+<span class="com"> * Modified by Alex Mizrahi</span>
+<span class="com"> * Modified by Bruno Coutinho to use apr like the C version</span>
+<span class="com"> */</span>
+
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;sstream&gt;</span>
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+ 
+<span class="kwc">typedef</span> off_t off64_t;
+<span class="ppc">#include &lt;apr_pools.h&gt;</span>
+
+<span class="kwc">class</span> Node {
+<span class="kwc">public</span>:
+  <span class="kwc">inline</span> <span class="kwd">Node</span>(<span class="kwb">int</span> i2) : <span class="kwd">l</span>(<span class="num">0</span>), <span class="kwd">r</span>(<span class="num">0</span>), <span class="kwd">i</span>(i2) {}
+
+  <span class="kwc">inline</span> <span class="kwd">Node</span>(Node* __restrict__ l2, <span class="kwb">int</span> i2, Node* __restrict__ r2) 
+    :<span class="kwd">l</span>(l2)
+    ,<span class="kwd">r</span>(r2)
+    ,<span class="kwd">i</span>(i2) 
+    {}
+
+  <span class="kwc">inline</span> ~<span class="kwd">Node</span>() {}
+
+  <span class="kwb">int</span> <span class="kwd">check</span>() <span class="kwb">const</span> {
+    <span class="kwa">if</span> (l) <span class="kwa">return</span> l-&gt;<span class="kwd">check</span>() + i - r-&gt;<span class="kwd">check</span>(); 
+    <span class="kwa">else return</span> i;
+  }
+
+<span class="kwc">private</span>:
+  Node* __restrict__ l;
+  Node* __restrict__ r;
+  <span class="kwb">int</span> i;
+};
+
+Node* <span class="kwd">make</span>(<span class="kwb">int</span> i, <span class="kwb">int</span> depth, apr_pool_t* pool) {
+  Node* __restrict__ addr  = (Node*) <span class="kwd">apr_palloc</span>(pool, <span class="kwa">sizeof</span>(Node));
+  Node* __restrict__ left  = NULL;
+  Node* __restrict__ right = NULL;
+
+  <span class="kwa">if</span> (depth &gt; <span class="num">0</span>) {
+    left  = <span class="kwd">make</span> (<span class="num">2</span>*i-<span class="num">1</span>, depth - <span class="num">1</span>, pool);
+    right = <span class="kwd">make</span> (<span class="num">2</span>*i  , depth - <span class="num">1</span>, pool);
+  }   
+
+  Node* __restrict__ curr = <span class="kwa">new</span> (addr) <span class="kwd">Node</span>(left, i, right);
+  <span class="kwa">return</span> curr;
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[]) {
+  apr_pool_t* long_lived_pool = NULL;
+  <span class="kwb">int</span> min_depth = <span class="num">4</span>;
+  <span class="kwb">int</span> max_depth = std::<span class="kwd">max</span>(min_depth+<span class="num">2</span>,
+			 (argc == <span class="num">2</span> ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">10</span>));
+  <span class="kwb">int</span> stretch_depth = max_depth+<span class="num">1</span>;
+
+  <span class="kwd">apr_initialize</span>();
+  std::cout.<span class="kwd">sync_with_stdio</span>(<span class="kwa">false</span>);
+
+  {
+    apr_pool_t* store;
+    <span class="kwd">apr_pool_create</span>(&amp;store, NULL);
+
+    Node* c = <span class="kwd">make</span>(<span class="num">0</span>, stretch_depth, store);
+    std::cout &lt;&lt; <span class="str">&quot;stretch tree of depth &quot;</span> &lt;&lt; stretch_depth &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">&quot;</span>
+      &lt;&lt; <span class="str">&quot;check: &quot;</span> &lt;&lt; c-&gt;<span class="kwd">check</span>() &lt;&lt; std::endl;
+    <span class="kwd">apr_pool_destroy</span>(store);
+  }
+
+  std::string* output = <span class="kwa">new</span> std::string[max_depth +<span class="num">1</span>];
+<span class="ppc">#pragma omp parallel for schedule (dynamic)</span>
+  <span class="kwa">for</span> (<span class="kwb">int</span> d=min_depth; d&lt;=max_depth; d+=<span class="num">2</span>) {
+    <span class="kwb">int</span> iterations = <span class="num">1</span> &lt;&lt; (max_depth - d + min_depth);
+    apr_pool_t *store;
+    <span class="kwb">int</span> c = <span class="num">0</span>;
+
+    <span class="kwd">apr_pool_create</span> (&amp;store, NULL);
+    <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">1</span>; i&lt;=iterations; ++i) {
+      Node* __restrict__ a = <span class="kwd">make</span>(i, d, store);
+      Node* __restrict__ b = <span class="kwd">make</span>(-i, d, store);
+
+      c += a-&gt;<span class="kwd">check</span>() + b-&gt;<span class="kwd">check</span>();
+      <span class="kwd">apr_pool_clear</span>(store);
+    }
+    <span class="kwd">apr_pool_destroy</span>(store);
+    
+    <span class="slc">// each thread write to separate location</span>
+    std::stringstream ss;
+    ss &lt;&lt; (<span class="num">2</span> * iterations) &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">trees of depth &quot;</span>;
+    ss &lt;&lt; d &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> &lt;&lt; c &lt;&lt; std::endl;
+    output[d] = ss.<span class="kwd">str</span>();
+  }
+
+  <span class="slc">// print all results</span>
+  <span class="kwa">for</span> (<span class="kwb">int</span> d = min_depth; d &lt;= max_depth; d += <span class="num">2</span>)
+    std::cout &lt;&lt; output[d];
+  <span class="kwa">delete</span>[] output;
+
+  <span class="kwd">apr_pool_create</span>(&amp;long_lived_pool, NULL);
+  Node* long_lived_tree = <span class="kwd">make</span>(<span class="num">0</span>, max_depth, long_lived_pool);
+  std::cout &lt;&lt; <span class="str">&quot;long lived tree of depth &quot;</span> &lt;&lt; max_depth &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">&quot;</span>
+	    &lt;&lt; <span class="str">&quot;check: &quot;</span> &lt;&lt; (long_lived_tree-&gt;<span class="kwd">check</span>()) &lt;&lt; <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+  <span class="kwd">apr_pool_destroy</span>(long_lived_pool);
+
+  <span class="kwa">return</span> <span class="num">0</span>;
+}

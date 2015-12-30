@@ -1,0 +1,9 @@
+
+Mon, 23 Mar 2015 22:49:28 GMT
+
+COMMAND LINE:
+/usr/local/src/ruby/bin/ruby fannkuchredux.yarv 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

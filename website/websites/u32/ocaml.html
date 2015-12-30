@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="index,follow,archive" />
+<meta name="description" content="OCaml programs vs Haskell GHC programs (performance on 32-bit Ubuntu one core)." />
+<title>OCaml&nbsp;vs&nbsp;Haskell GHC (32-bit Ubuntu one core) | Computer Language Benchmarks Game </title>
+<style><!--
+a{color:black;text-decoration:none}article{padding: 0 0 2.9em}article,div,header{margin:auto;width:92%}body{font:100% Droid Sans,Ubuntu,Verdana,sans-serif;margin:0;-webkit-text-size-adjust:100%}h1,h2,h3,nav li a{font-family:Ubuntu Mono,Consolas,Menlo,monospace}div,header{max-width:31em}h1{font-size:1.4em;font-weight:bold;margin:0;padding:.4em}h1,h1 a{color:white}h2,h3{margin:1.5em 0 0}h2{font-size:1.4em;font-weight:normal}h3{font-size:1.2em}li{display:inline-block}nav li{list-style-type:none}nav li a{display:block;font-size:1.2em;margin:.5em .5em 0;padding:.5em .5em .3em}nav ul{clear:left;margin:-0.3em 0 1.5em;text-align:center}p{color:#333;line-height:1.4;margin:.3em 0 0}p a{border-bottom:.15em dotted #aaa}
+#u64,#u64q{background-color:#c90016}#u32{background-color:#ffb515}#u32q{background-color:#ff6309}.best{font-weight:bold}.message{font-size:.8em}table{color:#333;margin:1.3em auto 0;text-align:right}tbody:after{content:"-";display:block;line-height:2.6em;visibility:hidden}tbody:last-child{text-align:left}td{border-bottom:.15em dotted #eee;padding:.7em 0 0 1em}td a,th a{display:block}td:first-child,th:first-child{text-align:left;padding-left:0}td:nth-child(6),th:nth-child(6){display:table-cell}th{font-weight:normal;padding:0 0 0 1em}
+@media only screen{th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5),th:nth-child(6),td:nth-child(6){display:none}}@media only screen and (min-width:28em){th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){display:table-cell}}@media only screen and (min-width:41em){th:nth-child(6),td:nth-child(6){display:table-cell}}@media only screen and (min-width:60em){article,footer,header{font-size:1.25em}}
+--></style>
+<link rel="shortcut icon" href="./favicon.ico">
+<header id="top">
+  <h1 id="u32"><a href="http://benchmarksgame.alioth.debian.org/">The&nbsp;Computer&nbsp;Language<br>Benchmarks&nbsp;Game</a></h1>
+</header>
+<article>
+  <div>
+    <h2>OCaml programs versus Haskell GHC</h2>
+    <aside>
+      <p><a href="./measurements.php?lang=ocaml">all the OCaml program measurements</a>
+    </aside>
+  </div>
+  <section>
+    <div>
+      <h3>by benchmark task performance</h3>
+    </div>
+    <table>
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=regexdna">regex-dna</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=regexdna&amp;lang=ocaml&amp;id=2">OCaml</a>
+        <td class="best">1.64
+        <td>53,000
+        <td>615
+        <td>1.63
+        <td class="message">0%&nbsp;1%&nbsp;2%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=regexdna&amp;lang=ghc&amp;id=2">Haskell&nbsp;GHC</a>
+        <td>3.49
+        <td>38,092
+        <td>1518
+        <td>3.40
+        <td class="message">1%&nbsp;2%&nbsp;0%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=spectralnorm">spectral-norm</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=spectralnorm&amp;lang=ocaml&amp;id=2">OCaml</a>
+        <td class="best">18.86
+        <td>1,656
+        <td>377
+        <td>18.85
+        <td class="message">0%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=spectralnorm&amp;lang=ghc&amp;id=2">Haskell&nbsp;GHC</a>
+        <td>27.46
+        <td>4,980
+        <td>403
+        <td>27.45
+        <td class="message">0%&nbsp;1%&nbsp;0%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=knucleotide">k-nucleotide</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=knucleotide&amp;lang=ocaml&amp;id=1">OCaml</a>
+        <td class="best">5.69
+        <td>58,884
+        <td>870
+        <td>5.68
+        <td class="message">0%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=knucleotide&amp;lang=ghc&amp;id=2">Haskell&nbsp;GHC</a>
+        <td>7.05
+        <td>56,672
+        <td>1965
+        <td>7.04
+        <td class="message">0%&nbsp;1%&nbsp;0%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=pidigits">pidigits</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=pidigits&amp;lang=ocaml&amp;id=1">OCaml</a>
+        <td>3.84
+        <td>7,020
+        <td>560
+        <td>3.84
+        <td class="message">1%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=pidigits&amp;lang=ghc&amp;id=4">Haskell&nbsp;GHC</a>
+        <td>3.14
+        <td>7,312
+        <td>341
+        <td>3.14
+        <td class="message">0%&nbsp;2%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=revcomp">reverse-complement</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=revcomp&amp;lang=ocaml&amp;id=4">OCaml</a>
+        <td>1.78
+        <td>264,440
+        <td>2064
+        <td>1.78
+        <td class="message">1%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=revcomp&amp;lang=ghc&amp;id=3">Haskell&nbsp;GHC</a>
+        <td>1.29
+        <td>129,332
+        <td>999
+        <td>1.28
+        <td class="message">2%&nbsp;2%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fannkuchredux">fannkuch-redux</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fannkuchredux&amp;lang=ocaml&amp;id=2">OCaml</a>
+        <td>83.36
+        <td>604
+        <td>473
+        <td>83.34
+        <td class="message">0%&nbsp;1%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=fannkuchredux&amp;lang=ghc&amp;id=3">Haskell&nbsp;GHC</a>
+        <td>58.15
+        <td>3,500
+        <td>1153
+        <td>58.13
+        <td class="message">0%&nbsp;1%&nbsp;0%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=binarytrees">binary-trees</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=binarytrees&amp;lang=ocaml&amp;id=2">OCaml</a>
+        <td>33.65
+        <td>102,376
+        <td>784
+        <td>33.59
+        <td class="message">1%&nbsp;1%&nbsp;0%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=binarytrees&amp;lang=ghc&amp;id=1">Haskell&nbsp;GHC</a>
+        <td>18.54
+        <td>190,420
+        <td>521
+        <td>18.51
+        <td class="message">1%&nbsp;0%&nbsp;0%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=nbody">n-body</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=nbody&amp;lang=ocaml&amp;id=1">OCaml</a>
+        <td>75.23
+        <td>600
+        <td>1239
+        <td>75.21
+        <td class="message">1%&nbsp;0%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=nbody&amp;lang=ghc&amp;id=2">Haskell&nbsp;GHC</a>
+        <td>32.69
+        <td>3,624
+        <td>1874
+        <td>32.68
+        <td class="message">0%&nbsp;1%&nbsp;0%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fasta">fasta</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fasta&amp;lang=ocaml&amp;id=3">OCaml</a>
+        <td>12.06
+        <td>600
+        <td>1042
+        <td>12.05
+        <td class="message">0%&nbsp;0%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=fasta&amp;lang=ghc&amp;id=7">Haskell&nbsp;GHC</a>
+        <td>2.78
+        <td>4,668
+        <td>1550
+        <td>2.78
+        <td class="message">1%&nbsp;2%&nbsp;1%&nbsp;100%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=mandelbrot">mandelbrot</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=mandelbrot&amp;lang=ocaml&amp;id=1">OCaml</a>
+        <td>0.37
+        <td>556
+        <td>710
+        <td>0.23
+        <td class="message">0%&nbsp;3%&nbsp;5%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=mandelbrot&amp;lang=ghc&amp;id=2">Haskell&nbsp;GHC</a>
+        <td>&nbsp;
+        <td class="message">Bad&nbsp;Output
+        <td colspan="4">
+      <tbody>
+      <tr>
+        <th>fasta-redux
+        <th colspan="5">
+      <tr>
+        <td>&nbsp;
+        <td class="message">No&nbsp;programs
+        <td class="message" colspan="4"><a href="./play.html">contribute your programs</a>
+      <tbody>
+      <tr>
+        <td>OCaml
+        <td colspan="5" class="message"><p>The OCaml native-code compiler, version 4.02.1
+
+      <tr>
+        <td>Haskell&nbsp;GHC
+        <td colspan="5" class="message"><p>The Glorious Glasgow Haskell Compilation System, version 7.10.2
+
+      </table>
+      <nav>
+        <ul>
+          <li><a href="./compare.php?lang=ocaml&amp;lang2=gpp">vs C++</a>
+          <li><a href="./compare.php?lang=ocaml&amp;lang2=fsharp">vs F#</a>
+          <li class="best">vs Haskell
+          <li><a href="./compare.php?lang=ocaml&amp;lang2=java">vs Java</a>
+        </ul>
+      </nav>
+  </section>
+</article>
+<script>
+window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+ga('create', 'UA-37137205-1', 'auto');
+ga('send', 'pageview');
+</script>
+<script async src='//www.google-analytics.com/analytics.js'></script>
+

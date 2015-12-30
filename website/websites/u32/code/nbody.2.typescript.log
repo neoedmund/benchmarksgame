@@ -1,0 +1,14 @@
+
+Thu, 17 Dec 2015 23:20:16 GMT
+
+MAKE:
+mv nbody.typescript-2.typescript nbody.typescript-2.ts
+/usr/local/src/node-v5.1.0-linux-x86/bin/tsc -t ES5 nbody.typescript-2.ts
+1.94s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/node-v5.1.0-linux-x86/bin/node --use_strict nbody.typescript-2.js 50000000
+
+PROGRAM OUTPUT:
+-0.169075164
+-0.169059907

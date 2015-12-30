@@ -1,0 +1,63 @@
+&lt;? 
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">contributed by Isaac Gouy</span>
+<span class="com">modified by anon</span>
+<span class="com">*/</span>
+
+
+<span class="kwa">function</span> <span class="kwd">A</span>(&amp;$i, &amp;$j){
+   <span class="kwa">return</span> <span class="num">1.0</span> / ( ( ( ($i+$j) * ($i+$j+<span class="num">1</span>) ) &gt;&gt; <span class="num">1</span> ) + $i + <span class="num">1</span> );
+}
+
+<span class="kwa">function</span> <span class="kwd">Av</span>(&amp;$n,&amp;$v){
+   <span class="kwa">global</span> $_tpl;
+   $Av = $_tpl;
+   <span class="kwa">for</span> ($i = <span class="num">0</span>; $i &lt; $n; ++$i) {
+      $sum = <span class="num">0.0</span>;
+      <span class="kwa">foreach</span>($v <span class="kwa">as</span> $j=&gt;$v_j) {
+         $sum += <span class="kwd">A</span>($i,$j) * $v_j;
+      }
+      $Av[$i] = $sum;
+   }
+   <span class="kwa">return</span> $Av;
+}
+
+<span class="kwa">function</span> <span class="kwd">Atv</span>(&amp;$n,&amp;$v){
+   <span class="kwa">global</span> $_tpl;
+   $Atv = $_tpl;
+   <span class="kwa">for</span>($i = <span class="num">0</span>; $i &lt; $n; ++$i) {
+      $sum = <span class="num">0.0</span>;
+      <span class="kwa">foreach</span>($v <span class="kwa">as</span> $j=&gt;$v_j) {
+         $sum += <span class="kwd">A</span>($j,$i) * $v_j;
+      }
+      $Atv[$i] = $sum;
+   }
+   <span class="kwa">return</span> $Atv;
+}
+
+<span class="kwa">function</span> <span class="kwd">AtAv</span>(&amp;$n,&amp;$v){
+   $tmp = <span class="kwd">Av</span>($n,$v);
+   <span class="kwa">return</span> <span class="kwd">Atv</span>($n, $tmp);
+}
+
+$n = <span class="kwd">intval</span>(($argc == <span class="num">2</span>) ? $argv[<span class="num">1</span>] : <span class="num">1</span>);
+$u = <span class="kwd">array_fill</span>(<span class="num">0</span>, $n, <span class="num">1.0</span>);
+$_tpl = <span class="kwd">array_fill</span>(<span class="num">0</span>, $n, <span class="num">0.0</span>);
+
+<span class="kwa">for</span> ($i=<span class="num">0</span>; $i&lt;<span class="num">10</span>; $i++){
+   $v = <span class="kwd">AtAv</span>($n,$u);
+   $u = <span class="kwd">AtAv</span>($n,$v);
+}
+
+$vBv = <span class="num">0.0</span>;
+$vv = <span class="num">0.0</span>;
+$i = <span class="num">0</span>;
+<span class="kwa">foreach</span>($v <span class="kwa">as</span> $val) {
+   $vBv += $u[$i]*$val;
+   $vv += $val*$val;
+   ++$i;
+}
+<span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%0</span><span class="str">.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">sqrt</span>($vBv/$vv));
+

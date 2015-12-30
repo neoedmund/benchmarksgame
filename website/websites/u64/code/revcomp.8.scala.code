@@ -1,0 +1,81 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Erik Osheim</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.util.concurrent.ForkJoinPool
+<span class="kwa">import</span> java.util.concurrent.RecursiveAction
+
+<span class="kwa">import</span> scala.collection.mutable
+<span class="kwa">import</span> scala.annotation.tailrec
+
+<span class="kwa">final object</span> revcomp {
+  <span class="kwa">final val</span> pool: ForkJoinPool = <span class="kwa">new</span> <span class="kwd">ForkJoinPool</span>()
+  <span class="kwa">final val</span> bytes: Array[Byte] = <span class="kwa">new</span> Array[Byte](<span class="num">128</span>)
+
+  <span class="kwa">final def</span> <span class="kwd">init</span>() {
+    <span class="kwa">val</span> a = <span class="str">&quot;ACBDGHK</span><span class="esc">\n</span><span class="str">MNSRUTWVYacbdghkmnsrutwvy&quot;</span>
+    <span class="kwa">val</span> b = <span class="str">&quot;TGVHCDM</span><span class="esc">\n</span><span class="str">KNSYAAWBRTGVHCDMKNSYAAWBR&quot;</span>
+    <span class="kwa">var</span> i = <span class="num">0</span>
+    <span class="kwa">while</span> (i &lt; a.length) { <span class="kwd">bytes</span>(a.<span class="kwd">charAt</span>(i)) = b.<span class="kwd">charAt</span>(i).toByte; i += <span class="num">1</span> }
+  }
+
+  <span class="kwd">init</span>()
+
+  <span class="kwa">final case class</span> <span class="kwd">Reverse</span>(buf: Array[Byte], begin: Int, end: Int) <span class="kwa">extends</span> RecursiveAction {
+    <span class="kwa">final def</span> <span class="kwd">compute</span>() {
+      <span class="kwa">var</span> buf = <span class="kwa">this</span>.buf
+      <span class="kwa">var</span> begin = <span class="kwa">this</span>.begin
+      <span class="kwa">var</span> end = <span class="kwa">this</span>.end
+      <span class="kwa">while</span> (true) {
+        <span class="kwa">var</span> bb = <span class="kwd">buf</span>(begin)
+        <span class="kwa">if</span> (bb == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) { begin += <span class="num">1</span>; bb = <span class="kwd">buf</span>(begin) }
+        <span class="kwa">var</span> be = <span class="kwd">buf</span>(end)
+        <span class="kwa">if</span> (be == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) { end -= <span class="num">1</span>; be = <span class="kwd">buf</span>(end) }
+        <span class="kwa">if</span> (begin &gt; end) <span class="kwa">return</span> ()
+        <span class="kwd">buf</span>(begin) = be
+        begin += <span class="num">1</span>
+        <span class="kwd">buf</span>(end) = bb
+        end -= <span class="num">1</span>
+      }
+    }
+  }
+
+  <span class="kwc">&#64;inline &#64;tailrec</span> <span class="kwa">def</span> <span class="kwd">inner</span>(i: Int, len: Int, buf: Array[Byte]): Int = <span class="kwa">if</span> (i &lt; len) {
+    <span class="kwa">val</span> b = <span class="kwd">buf</span>(i)
+    <span class="kwa">if</span> (b != <span class="str">'&gt;'</span>) {
+      <span class="kwd">buf</span>(i) = <span class="kwd">bytes</span>(b)
+      <span class="kwd">inner</span>(i + <span class="num">1</span>, len, buf)
+    } <span class="kwa">else</span> {
+      i + <span class="num">1</span>
+    }
+  } <span class="kwa">else</span> {
+    i
+  }
+
+  <span class="kwa">final def</span> <span class="kwd">main</span>(args: Array[String]) {
+    <span class="kwa">val</span> len = System.<span class="kwa">in</span>.available
+    <span class="kwa">val</span> buf = <span class="kwa">new</span> Array[Byte](len)
+    System.<span class="kwa">in</span>.<span class="kwd">read</span>(buf)
+    <span class="kwa">val</span> tasks = mutable.ListBuffer.empty[Reverse]
+
+    <span class="kwa">var</span> i = <span class="num">0</span>
+    <span class="kwa">while</span> (i &lt; len) {
+      <span class="kwa">while</span> (<span class="kwd">buf</span>(i) != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) i += <span class="num">1</span>
+      <span class="kwa">val</span> j = <span class="kwd">inner</span>(i, len, buf)
+      <span class="kwa">val</span> task = <span class="kwa">new</span> <span class="kwd">Reverse</span>(buf, i, j - <span class="num">2</span>)
+      pool.<span class="kwd">execute</span>(task)
+      tasks.<span class="kwd">append</span>(task)
+      i = j + <span class="num">1</span>
+    }
+
+    <span class="kwa">var</span> last = <span class="num">0</span>
+    tasks.foreach { t =&gt;
+      t.<span class="kwd">join</span>()
+      System.out.<span class="kwd">write</span>(buf, last, t.end - last)
+      last = t.end
+    }
+    System.out.<span class="kwd">write</span>(buf, last, len - last)
+  }
+}

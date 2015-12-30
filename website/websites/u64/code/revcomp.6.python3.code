@@ -1,0 +1,74 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by Joerg Baumann</span>
+
+<span class="kwa">from</span> sys <span class="kwa">import</span> stdin, stdout
+<span class="kwa">from</span> os <span class="kwa">import</span> cpu_count
+
+reverse_translation = bytes.<span class="kwd">maketrans</span>(
+   b<span class="str">'ABCDGHKMNRSTUVWYabcdghkmnrstuvwy'</span>,
+   b<span class="str">'TVGHCDMKNYSAABWRTVGHCDMKNYSAABWR'</span>)
+
+<span class="kwa">def</span> <span class="kwd">reverse_complement</span>(header, sequence):
+   t = sequence.<span class="kwd">translate</span>(reverse_translation, b<span class="str">'</span><span class="esc">\n\r</span> <span class="str">'</span>)
+   output = <span class="kwd">bytearray</span>()
+   trailing_length = <span class="kwb">len</span>(t) % <span class="num">60</span>
+   <span class="kwa">if</span> trailing_length: output += b<span class="str">'</span><span class="esc">\n</span><span class="str">'</span> + t[:trailing_length]
+   <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(trailing_length, <span class="kwb">len</span>(t), <span class="num">60</span>):
+      output += b<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>+ t[i:i+<span class="num">60</span>]
+   <span class="kwa">return</span> header, output[::-<span class="num">1</span>]
+
+<span class="kwa">def</span> <span class="kwd">read_sequences</span>(<span class="kwb">file</span>):
+   <span class="kwa">for</span> line <span class="kwa">in</span> <span class="kwb">file</span>:
+      <span class="kwa">if</span> line[<span class="num">0</span>] == <span class="kwb">ord</span>(<span class="str">'&gt;'</span>):
+         header = line
+         sequence = <span class="kwd">bytearray</span>()
+         <span class="kwa">for</span> line <span class="kwa">in</span> <span class="kwb">file</span>:
+            <span class="kwa">if</span> line[<span class="num">0</span>] == <span class="kwb">ord</span>(<span class="str">'&gt;'</span>):
+               <span class="kwa">yield</span> header, sequence
+               header = line
+               sequence = <span class="kwd">bytearray</span>()
+            <span class="kwa">else</span>:
+               sequence += line
+         <span class="kwa">yield</span> header, sequence
+         <span class="kwa">break</span>
+
+<span class="kwa">def</span> <span class="kwd">reverse_and_print_task</span>(q, c, v):
+   <span class="kwa">while True</span>:
+      i = q.<span class="kwd">get</span>()
+      <span class="kwa">if</span> i == <span class="kwa">None</span>: <span class="kwa">break</span>
+      h, r = <span class="kwd">reverse_complement</span>(*data[i])
+      with c:
+         <span class="kwa">while</span> i != v.value:
+            c.<span class="kwd">wait</span>()
+      <span class="kwd">write</span>(h); <span class="kwd">write</span>(r); <span class="kwd">flush</span>()
+      with c:
+         v.value = i + <span class="num">1</span>
+         c.<span class="kwd">notify_all</span>()
+
+<span class="kwa">if</span> __name__==<span class="str">'__main__'</span> :
+   write = stdout.<span class="kwb">buffer</span>.write
+   flush = stdout.<span class="kwb">buffer</span>.flush
+
+   s = <span class="kwd">read_sequences</span>(stdin.<span class="kwb">buffer</span>)
+   data = <span class="kwd">next</span>(s)
+   <span class="kwa">if</span> <span class="kwd">cpu_count</span>() == <span class="num">1</span> <span class="kwa">or</span> <span class="kwb">len</span>(data[<span class="num">1</span>]) &lt; <span class="num">1000000</span>:
+      <span class="kwa">from</span> itertools <span class="kwa">import</span> starmap
+      <span class="kwa">def</span> <span class="kwd">merge</span>(v, g):
+         <span class="kwa">yield</span> v; <span class="kwa">yield from</span> g
+      <span class="kwa">for</span> h, r <span class="kwa">in</span> <span class="kwd">starmap</span>(reverse_complement, <span class="kwd">merge</span>(data, s)):
+         <span class="kwd">write</span>(h); <span class="kwd">write</span>(r)
+   <span class="kwa">else</span>:
+      <span class="kwa">from</span> multiprocessing <span class="kwa">import</span> Process, Queue, Value, Condition
+      <span class="kwa">from</span> ctypes <span class="kwa">import</span> c_int
+
+      data = [data] + <span class="kwb">list</span>(s)
+      q, c, v = (<span class="kwd">Queue</span>(), <span class="kwd">Condition</span>(), <span class="kwd">Value</span>(c_int, <span class="num">0</span>))
+      processes = [<span class="kwd">Process</span>(target=reverse_and_print_task, args=(q, c, v))
+         <span class="kwa">for</span> _ <span class="kwa">in</span> <span class="kwb">range</span>(<span class="kwb">min</span>(<span class="kwb">len</span>(data), <span class="kwd">cpu_count</span>()))]
+
+      <span class="kwa">for</span> p <span class="kwa">in</span> processes: p.<span class="kwd">start</span>()
+      <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(<span class="kwb">len</span>(data)): q.<span class="kwd">put</span>(i)
+      <span class="kwa">for</span> p <span class="kwa">in</span> processes: q.<span class="kwd">put</span>(<span class="kwa">None</span>)
+      <span class="kwa">for</span> p <span class="kwa">in</span> processes: p.<span class="kwd">join</span>()

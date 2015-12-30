@@ -1,0 +1,396 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Josh Goldfoot</span>
+<span class="com">   modified by Vincent Snijders</span>
+<span class="com">*)</span>
+
+<span class="com">{$mode objfpc}</span>
+
+<span class="kwa">program</span> knucleotide;
+
+<span class="com">(* simple_hash available from CVS *)</span>
+
+<span class="kwa">const</span>
+  ht_num_primes = <span class="num">28</span>;
+
+  ht_prime_list: <span class="kwa">array</span>[<span class="num">0</span> .. ht_num_primes-<span class="num">1</span>] <span class="kwa">of</span> dword =
+  ( <span class="num">53</span>,         <span class="num">97</span>,         <span class="num">193</span>,       <span class="num">389</span>,       <span class="num">769</span>,
+    <span class="num">1543</span>,       <span class="num">3079</span>,       <span class="num">6151</span>,      <span class="num">12289</span>,     <span class="num">24593</span>,
+    <span class="num">49157</span>,      <span class="num">98317</span>,      <span class="num">196613</span>,    <span class="num">393241</span>,    <span class="num">786433</span>,
+    <span class="num">1572869</span>,    <span class="num">3145739</span>,    <span class="num">6291469</span>,   <span class="num">12582917</span>,  <span class="num">25165843</span>,
+    <span class="num">50331653</span>,   <span class="num">100663319</span>,  <span class="num">201326611</span>, <span class="num">402653189</span>, <span class="num">805306457</span>,
+    <span class="num">1610612741</span>, <span class="num">3221225473</span>, <span class="num">4294967291</span> );
+
+<span class="kwa">type</span>
+  <span class="com">{ TNonFreePooledMemManager - a memory manager for records without freeing }</span>
+
+  PMemChunk = ^TMemChunk;
+  TMemChunk = <span class="kwa">record</span>
+    data: <span class="kwb">pointer</span>;
+    next: PMemChunk;
+  <span class="kwa">end</span>;
+
+  TNonFreePooledMemManager = <span class="kwa">class</span>
+  <span class="kwa">private</span>
+    FItemSize: <span class="kwb">integer</span>;
+    FItems: PMemChunk;
+    FCurItem: <span class="kwb">Pointer</span>;
+    FEndItem: <span class="kwb">Pointer</span>;
+    FCurSize: <span class="kwb">integer</span>;
+    <span class="kwa">procedure</span> Grow;
+  <span class="kwa">public</span>
+    <span class="kwa">property</span> ItemSize: <span class="kwb">integer</span> read FItemSize;
+    <span class="kwa">constructor</span> <span class="kwd">Create</span>(TheItemSize: <span class="kwb">integer</span>);
+    <span class="kwa">destructor</span> Destroy; <span class="kwa">override</span>;
+    <span class="kwa">function</span> NewItem: <span class="kwb">Pointer</span>; <span class="kwa">inline</span>;
+  <span class="kwa">end</span>;
+
+  <span class="com">{ THashTable }</span>
+
+  ht_ppnode = ^ht_pnode;
+  ht_pnode = ^ht_node;
+  ht_node = <span class="kwa">record</span>
+    val: <span class="kwb">integer</span>;
+    next: ht_pnode;
+    keydata: <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.0</span>] <span class="kwa">of</span> <span class="kwb">char</span>;
+  <span class="kwa">end</span>;
+
+  THashTable=<span class="kwa">class</span>
+  <span class="kwa">private</span>
+    FSize: dword;
+    FKeysize: dword;
+    FTbl: ht_ppnode;
+    FIter_index: dword;
+    FIter_next: ht_pnode;
+    FNodeMemManager: TNonFreePooledMemManager;
+  <span class="kwa">public</span>
+    <span class="kwa">constructor</span> <span class="kwd">Create</span>(size: dword; keysize: dword);
+    <span class="kwa">destructor</span> Destroy; <span class="kwa">override</span>;
+    <span class="kwa">function</span> <span class="kwd">Find</span>(key: pchar): ht_pnode;
+    <span class="kwa">function</span> <span class="kwd">FindNew</span>(key: pchar): ht_pnode;
+    <span class="kwa">function</span> First: ht_pnode;
+    <span class="kwa">function</span> Next: ht_pnode;
+  <span class="kwa">end</span>;
+
+<span class="com">{ TNonFreePooledMemManager }</span>
+
+<span class="kwa">procedure</span> TNonFreePooledMemManager.Grow;
+<span class="kwa">var</span>
+  memchunk: PMemChunk;
+<span class="kwa">begin</span>
+  <span class="kwc">if</span> FCurSize&lt;<span class="num">256</span>*<span class="num">1024</span> <span class="kwc">then</span>
+  <span class="slc">// each item has double the size of its predecessor</span>
+    <span class="kwd">inc</span>(FCurSize, FCurSize);
+  <span class="kwd">GetMem</span>(FCurItem,FCurSize);
+  <span class="kwd">FillChar</span>(FCurItem^, FCurSize, <span class="num">0</span>);
+  <span class="kwd">new</span>(MemChunk);
+  MemChunk^.next := FItems;
+  MemChunk^.Data := FCurItem;
+  FItems := MemChunk;
+  FEndItem := FCurItem;
+  <span class="kwd">Inc</span>(FEndItem, FCurSize);
+<span class="kwa">end</span>;
+
+<span class="kwa">constructor</span> TNonFreePooledMemManager.<span class="kwd">Create</span>(TheItemSize: <span class="kwb">integer</span>);
+<span class="kwa">begin</span>
+  FItemSize:=TheItemSize;
+  FCurSize:=FItemSize*<span class="num">4</span>; <span class="slc">// 4 items =&gt; the first item has 8 entries</span>
+<span class="kwa">end</span>;
+
+<span class="kwa">destructor</span> TNonFreePooledMemManager.Destroy;
+<span class="kwa">var</span>
+  p: PMemChunk;
+<span class="kwa">begin</span>
+  <span class="kwc">while</span> FItems&lt;&gt;<span class="kwa">nil</span> <span class="kwc">do</span> <span class="kwa">begin</span>
+    p := FItems;
+    FItems := Fitems^.next;
+    <span class="kwd">FreeMem</span>(p^.Data);
+    <span class="kwd">Dispose</span>(p);
+  <span class="kwa">end</span>;
+  <span class="kwa">inherited</span> Destroy;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> TNonFreePooledMemManager.NewItem: <span class="kwb">Pointer</span>; <span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  <span class="kwc">if</span> (FCurItem=FEndItem) <span class="kwc">then</span>
+   Grow;
+  Result:=FCurItem;
+  <span class="kwd">Inc</span>(FCurItem, FItemSize);
+<span class="kwa">end</span>;
+
+<span class="com">{ THashTable }</span>
+
+<span class="kwa">constructor</span> THashTable.<span class="kwd">Create</span>(size: dword; keysize: dword);
+<span class="kwa">var</span>
+  i: <span class="kwb">integer</span>;
+<span class="kwa">begin</span>
+  i := <span class="num">0</span>;
+  <span class="kwc">while</span> (i&lt;<span class="kwd">high</span>(ht_prime_list)) <span class="kwa">and</span> (size&gt;ht_prime_list[i]) <span class="kwc">do</span>
+    <span class="kwd">inc</span>(i);
+  FSize := ht_prime_list[i];
+  fkeysize := keysize;
+  ftbl := <span class="kwd">allocmem</span>(<span class="kwd">sizeof</span>(ht_pnode) * FSize);
+  fiter_index := <span class="num">0</span>;
+  fiter_next := <span class="kwa">nil</span>;
+  FNodeMemManager := TNonFreePooledMemManager.<span class="kwd">Create</span>(<span class="kwd">SizeOf</span>(ht_node)+FKeySize);
+<span class="kwa">end</span>;
+
+<span class="kwa">destructor</span> THashTable.Destroy;
+<span class="kwa">begin</span>
+  FNodeMemManager.Free;
+  <span class="kwd">freemem</span>(Ftbl);
+  <span class="kwa">inherited</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">ht_hashcode</span>(key: pchar; keysize: dword): dword; <span class="slc">//inline;</span>
+<span class="kwa">var</span>
+  val: dword;
+  i: <span class="kwb">integer</span>;
+<span class="kwa">begin</span>
+  val := <span class="num">0</span>;
+
+  <span class="kwc">for</span> i := <span class="num">0</span> <span class="kwc">to</span> Keysize -<span class="num">1</span> <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    val := val * <span class="num">4</span>;
+    <span class="kwd">inc</span>(val, <span class="kwd">dword</span>(<span class="kwb">byte</span>(key^) <span class="kwa">and</span> <span class="num">6</span>) <span class="kwa">shr</span> <span class="num">1</span>);
+    <span class="kwd">inc</span>(key);
+  <span class="kwa">end</span>;
+  result := val;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> THashTable.<span class="kwd">Find</span>(key: pchar): ht_pnode;
+<span class="kwa">var</span>
+  hash_code: dword;
+  node: ht_pnode;
+<span class="kwa">begin</span>
+  hash_code := <span class="kwd">ht_hashcode</span>(key, FKeySize) <span class="kwa">mod</span> FSize;
+  node := FTbl[hash_code];
+  <span class="kwc">while</span> node &lt;&gt; <span class="kwa">nil</span> <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    <span class="kwc">if</span> <span class="kwd">comparebyte</span>(key^, node^.keydata, FKeysize) = <span class="num">0</span> <span class="kwc">then</span>
+    <span class="kwa">begin</span>
+      result := node;
+      exit;
+    <span class="kwa">end</span>;
+    node := node^.next;
+  <span class="kwa">end</span>;
+  result := <span class="kwa">nil</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> THashTable.<span class="kwd">FindNew</span>(key: pchar): ht_pnode;
+<span class="kwa">var</span>
+  hash_code: <span class="kwb">integer</span>;
+  prev, node: ht_pnode;
+<span class="kwa">begin</span>
+  prev := <span class="kwa">nil</span>;
+  hash_code := <span class="kwd">ht_hashcode</span>(key, FKeysize) <span class="kwa">mod</span> FSize;
+  node := FTbl[hash_code];
+  <span class="kwc">while</span> node &lt;&gt; <span class="kwa">nil</span> <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    <span class="kwc">if</span> <span class="kwd">CompareByte</span>(key^, node^.keydata, FKeysize) = <span class="num">0</span> <span class="kwc">then</span>
+    <span class="kwa">begin</span>
+      result := node;
+      exit;
+    <span class="kwa">end</span>;
+    prev := node;
+    node := node^.next;
+  <span class="kwa">end</span>;
+  result := FNodeMemManager.NewItem;
+  <span class="kwd">move</span>(key^,Result^.keydata,FKeysize);
+  <span class="kwc">if</span> prev &lt;&gt; <span class="kwa">nil</span> <span class="kwc">then</span>
+  <span class="kwa">begin</span>
+    prev^.next := result;
+  <span class="kwa">end</span> <span class="kwc">else</span> <span class="kwa">begin</span>
+    FTbl[hash_code] := result;
+  <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="com">{</span>
+<span class="com">  Hash Table iterator data / functions</span>
+<span class="com">}</span>
+
+<span class="kwa">function</span> THashTable.First: ht_pnode;
+<span class="kwa">begin</span>
+  FIter_index := <span class="num">0</span>;
+  FIter_next := <span class="kwa">nil</span>;
+  result := next;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> THashTable.Next: ht_pnode;
+<span class="kwa">var</span>
+  index: dword;
+  node: ht_pnode;
+<span class="kwa">begin</span>
+  node := FIter_next;
+  <span class="kwc">if</span> node &lt;&gt; <span class="kwa">nil</span> <span class="kwc">then</span>
+  <span class="kwa">begin</span>
+    FIter_next := node^.next;
+    result := node;
+    exit;
+  <span class="kwa">end</span> <span class="kwc">else</span> <span class="kwa">begin</span>
+    <span class="kwc">while</span> FIter_index &lt; FSize <span class="kwc">do</span>
+    <span class="kwa">begin</span>
+      index := FIter_index;
+      <span class="kwd">inc</span>(FIter_index);
+      <span class="kwc">if</span> FTbl[index] &lt;&gt; <span class="kwa">nil</span> <span class="kwc">then</span>
+      <span class="kwa">begin</span>
+        FIter_next := FTbl[index]^.next;
+        result := FTbl[index];
+        exit;
+      <span class="kwa">end</span>;
+    <span class="kwa">end</span>;
+  <span class="kwa">end</span>;
+  result := <span class="kwa">nil</span>;
+<span class="kwa">end</span>;
+
+<span class="com">{==============================================================================}</span>
+
+<span class="kwa">type</span>
+   sorter      = <span class="kwa">record</span>
+		   sequence : ansistring;
+		   num	     : <span class="kwb">longint</span>;
+		 <span class="kwa">end</span>;
+   sorterArray = <span class="kwa">array of</span> sorter;
+
+<span class="kwa">function</span> <span class="kwd">hash_table_size</span> (fl : dword): dword;
+<span class="kwa">begin</span>
+  <span class="kwc">if</span> fl&lt;<span class="num">8</span> <span class="kwc">then</span>
+   hash_table_size := <span class="num">1</span> <span class="kwa">shl</span> (<span class="num">2</span> * fl)
+  <span class="kwc">else</span>
+   hash_table_size := <span class="num">$10000</span>;
+<span class="kwa">end</span>; <span class="com">{ hash_table_size }</span>
+
+<span class="kwa">function</span> <span class="kwd">generate_frequencies</span>(fl: <span class="kwb">integer</span>; buffer: PChar; buflen : <span class="kwb">longint</span>): THashTable;
+<span class="kwa">var</span>
+   reader : PChar;
+   i : <span class="kwb">longint</span>;
+<span class="kwa">begin</span>
+   <span class="kwc">if</span> fl &lt;= buflen <span class="kwc">then</span>
+   <span class="kwa">begin</span>
+      result := THashTable.<span class="kwd">Create</span>(<span class="kwd">hash_table_size</span> (fl), fl);
+      reader := buffer;
+      <span class="kwc">for</span> i := <span class="num">0</span> <span class="kwc">to</span> buflen-fl <span class="kwc">do</span>
+      <span class="kwa">begin</span>
+         <span class="kwd">inc</span>(Result.<span class="kwd">FindNew</span>(reader)^.val);
+         <span class="kwd">inc</span>(reader);
+      <span class="kwa">end</span>;
+   <span class="kwa">end</span> <span class="kwc">else</span>
+      result := <span class="kwa">nil</span>;
+<span class="kwa">end</span>; <span class="com">{ generate_frequencies }</span>
+
+<span class="kwa">procedure</span> <span class="kwd">sortArray</span>(<span class="kwa">var</span> s : sorterArray; size:<span class="kwb">longint</span>);
+<span class="kwa">var</span>
+   i,j : <span class="kwb">longint</span>;
+   tmp : sorter;
+<span class="kwa">begin</span>
+   <span class="kwc">for</span> i := <span class="num">0</span> <span class="kwc">to</span> size-<span class="num">2</span> <span class="kwc">do</span>
+      <span class="kwc">for</span> j := i+<span class="num">1</span> <span class="kwc">to</span> size-<span class="num">1</span> <span class="kwc">do</span>
+         <span class="kwc">if</span> s[i].num &lt; s[j].num <span class="kwc">then</span>
+	 <span class="kwa">begin</span>
+	    tmp := s[i];
+	    s[i] := s[j];
+	    s[j] := tmp;
+	 <span class="kwa">end</span>;
+<span class="kwa">end</span>; <span class="com">{ sortArray }</span>
+
+<span class="kwa">procedure</span> <span class="kwd">write_frequencies</span>(fl : <span class="kwb">integer</span>; buffer : PChar; buflen : <span class="kwb">longint</span>);
+<span class="kwa">var</span>
+  ht	   : THashTable;
+  i, size : <span class="kwb">longint</span>;
+  total   : <span class="kwb">real</span>;
+  nd	   : ht_pnode;
+  s	   : sorterArray;
+<span class="kwa">begin</span>
+  ht := <span class="kwd">generate_frequencies</span>(fl, buffer, buflen);
+  total := <span class="num">0</span>;
+  size := <span class="num">0</span>;
+  nd := ht.First;
+  <span class="kwc">while</span> (nd &lt;&gt; <span class="kwa">nil</span>) <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    total := total + nd^.val;
+    size := size + <span class="num">1</span>;
+    nd := ht.Next;
+  <span class="kwa">end</span>;
+  <span class="kwd">SetLength</span>(s, size);
+
+  nd := ht.First;
+  size := <span class="num">0</span>;
+  <span class="kwc">while</span> (nd &lt;&gt; <span class="kwa">nil</span>) <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    s[size].sequence := <span class="kwd">upcase</span>(<span class="kwd">pchar</span>(&#64;nd^.keydata));
+    s[size].num := nd^.val;
+    size := size + <span class="num">1</span>;
+    nd := ht.Next;
+  <span class="kwa">end</span>;
+
+  <span class="kwd">sortArray</span>(s, size);
+  <span class="kwc">for</span> i := <span class="num">0</span> <span class="kwc">to</span> size - <span class="num">1</span> <span class="kwc">do</span>
+    <span class="kwd">writeln</span>(s[i].sequence,<span class="str">' '</span>, (<span class="num">100</span> * (s[i].num / total)):<span class="num">3</span>:<span class="num">3</span>);
+  writeln;
+
+  ht.Free;
+<span class="kwa">end</span>; <span class="com">{ write_frequencies }</span>
+
+<span class="kwa">procedure</span> <span class="kwd">write_count</span>(searchFor : ansistring; buffer : PChar; buflen : <span class="kwb">longint</span>);
+<span class="kwa">var</span>
+   ht : THashTable;
+   nd : ht_pnode;
+<span class="kwa">begin</span>
+   ht := <span class="kwd">generate_frequencies</span> (<span class="kwd">length</span>(searchFor), buffer, buflen);
+   nd := ht.<span class="kwd">Find</span>(<span class="kwd">pchar</span>(searchFor));
+   <span class="kwc">if</span> (nd &lt;&gt; <span class="kwa">nil</span>) <span class="kwc">then</span>
+      <span class="kwd">write</span>(nd^.val)
+   <span class="kwc">else</span>
+      <span class="kwd">write</span>(<span class="num">0</span>);
+   searchfor := <span class="kwd">UpCase</span>(searchFor);
+   <span class="kwd">writeln</span>(<span class="esc">#9</span>, searchFor);
+
+   ht.Free;
+<span class="kwa">end</span>; <span class="com">{ write_count }</span>
+
+<span class="kwa">procedure</span> main;
+<span class="kwa">var</span>
+   buffer : PChar;
+   len, seqlen : <span class="kwb">longint</span>;
+   buffersize, bufferptr: <span class="kwb">longint</span>;
+   s : <span class="kwa">String</span>;
+<span class="kwa">begin</span>
+   seqlen := <span class="num">0</span>;
+   <span class="kwc">repeat</span>
+      <span class="kwd">readln</span>(s)
+   <span class="kwc">until</span> (s[<span class="num">1</span>] = <span class="str">'&gt;'</span>) <span class="kwa">and</span> (s[<span class="num">2</span>] = <span class="str">'T'</span>) <span class="kwa">and</span> (s[<span class="num">3</span>] = <span class="str">'H'</span>);
+   buffersize:=<span class="num">1024</span>;
+   buffer:=<span class="kwd">getmem</span>(buffersize);
+   bufferptr :=<span class="num">0</span>;
+   <span class="kwc">while</span> <span class="kwa">not</span> eof <span class="kwc">do</span> <span class="kwa">begin</span>
+     <span class="kwd">readln</span>(s);
+     <span class="kwc">if</span> (s[<span class="num">1</span>] &lt;&gt; <span class="str">'&gt;'</span>) <span class="kwa">and</span> (s[<span class="num">1</span>] &lt;&gt; <span class="str">';'</span>) <span class="kwc">then</span> <span class="kwa">begin</span>
+       len:=<span class="kwd">length</span>(s);
+       <span class="kwc">if</span> (bufferptr+len+<span class="num">1</span>)&gt;buffersize <span class="kwc">then</span>  <span class="kwa">begin</span>
+         <span class="kwd">inc</span>(buffersize,buffersize);
+         <span class="kwd">reallocmem</span>(buffer,buffersize);
+       <span class="kwa">end</span>;
+       <span class="kwd">move</span> (s[<span class="num">1</span>],buffer[bufferptr],len);
+       <span class="kwd">inc</span>(bufferptr,len);
+     <span class="kwa">end</span>;
+   <span class="kwa">end</span>;
+   buffer[bufferptr] := <span class="esc">#0</span>;
+   seqlen := <span class="kwd">strlen</span>(buffer);
+
+   <span class="kwd">write_frequencies</span>(<span class="num">1</span>, buffer, seqlen);
+   <span class="kwd">write_frequencies</span>(<span class="num">2</span>, buffer, seqlen);
+   <span class="kwd">write_count</span>(<span class="str">'ggt'</span>, buffer, seqlen);
+   <span class="kwd">write_count</span>(<span class="str">'ggta'</span>, buffer, seqlen);
+   <span class="kwd">write_count</span>(<span class="str">'ggtatt'</span>, buffer, seqlen);
+   <span class="kwd">write_count</span>(<span class="str">'ggtattttaatt'</span>, buffer, seqlen);
+   <span class="kwd">write_count</span>(<span class="str">'ggtattttaatttatagt'</span>, buffer, seqlen);
+   <span class="kwd">freemem</span>(buffer);
+<span class="kwa">end</span>; <span class="com">{ main }</span>
+
+
+<span class="kwa">begin</span>
+   <span class="slc">//SetPrecisionMode(pmDouble);</span>
+   main;
+<span class="kwa">end</span>.
+

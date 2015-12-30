@@ -1,0 +1,78 @@
+
+Fri, 04 Sep 2015 21:59:19 GMT
+
+MAKE:
+cp: ‘regexdna.sbcl’ and ‘./regexdna.sbcl’ are the same file
+SBCL built with: /usr/local/bin/sbcl --userinit /dev/null --batch --eval '(load "regexdna.sbcl_compile")'
+### START regexdna.sbcl_compile
+(handler-bind ((sb-ext:defconstant-uneql      (lambda (c) (abort c))))      (load (compile-file "regexdna.sbcl" ))) (save-lisp-and-die "sbcl.core" :purify t)
+### END regexdna.sbcl_compile
+
+; compiling file "/home/dunham/benchmarksgame/bench/regexdna/regexdna.sbcl" (written 24 JAN 2013 02:01:15 PM):
+; compiling (REQUIRE :ASDF)
+; compiling (REQUIRE :CL-PPCRE)
+; compiling (DEFPARAMETER *REGEX-LIST* ...)
+; compiling (DEFPARAMETER *ALTERNATIVES* ...)
+; compiling (DEFUN GET-INPUT-CHARS ...)
+; compiling (DEFUN MAIN ...)
+
+; /home/dunham/benchmarksgame_onecore/regexdna/tmp/regexdna.fasl written
+; compilation finished in 0:00:00.595
+[undoing binding stack and other enclosing state... done]
+[saving current Lisp image into sbcl.core:
+writing 3600 bytes from the read-only space at 0x1000000
+writing 2272 bytes from the static space at 0x1100000
+writing 34254848 bytes from the dynamic space at 0x9000000
+done]
+### START regexdna.sbcl_run
+(main) (quit)
+### END regexdna.sbcl_run
+
+1.61s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/sbcl  --dynamic-space-size 1800 --noinform --core sbcl.core --userinit /dev/null --load regexdna.sbcl_run 0 < regexdna-input5000000.txt
+
+UNEXPECTED OUTPUT 
+
+12a13
+> 66800214
+
+PROGRAM OUTPUT:
+agggtaaa|tttaccct 356
+[cgt]gggtaaa|tttaccc[acg] 1250
+a[act]ggtaaa|tttacc[agt]t 4252
+ag[act]gtaaa|tttac[agt]ct 2894
+agg[act]taaa|ttta[agt]cct 5435
+aggg[acg]aaa|ttt[cgt]ccct 1537
+agggt[cgt]aa|tt[acg]accct 1431
+agggta[cgt]a|t[acg]taccct 1608
+agggtaa[cgt]|[acg]ttaccct 2178
+
+50833411
+50000000
+
+Heap exhausted during allocation: 72802304 bytes available, 80001016 requested.
+ Gen StaPg UbSta LaSta LUbSt Boxed Unboxed LB   LUB  !move  Alloc  Waste   Trig    WP  GCs Mem-age
+   0: 59227     0     0     0 18231     1     0 19532  9769 154431864 249480 113288840    0   1  0.0000
+   1:  8380  8379     0     0  2265     2     0 169924 150400 705257104 37232 395336168 2257   1  0.5338
+   2: 14803 14801     0     0  3309    12     0 195618 164917 814765168 88976  2000000 3288   0  0.0000
+   3:     0     0     0     0     0     0     0     0     0        0     0  2000000    0   0  0.0000
+   4:     0     0     0     0     0     0     0     0     0        0     0  2000000    0   0  0.0000
+   5:     0     0     0     0     0     0     0     0     0        0     0  2000000    0   0  0.0000
+   6:     0     0     0     0  6592  1771     0     0     0 34254848     0  2000000 6537   0  0.0000
+   Total bytes allocated    = 1708708984
+   Dynamic-space-size bytes = 1887436800
+GC control variables:
+   *GC-INHIBIT* = false
+   *GC-PENDING* = false
+   *STOP-FOR-GC-PENDING* = false
+While evaluating the form starting at line 1, column 0
+  of #P"/home/dunham/benchmarksgame_onecore/regexdna/tmp/regexdna.sbcl_run":
+
+debugger invoked on a SB-KERNEL::HEAP-EXHAUSTED-ERROR in thread
+#<THREAD "main thread" RUNNING {B0B0689}>:
+  Heap exhausted (no more space for allocation).
+72802304 bytes available, 80001016 requested.
+
+PROCEED WITH CAUTION.

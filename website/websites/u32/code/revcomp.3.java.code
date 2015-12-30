@@ -1,0 +1,235 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> </span>
+<span class="com">   contributed by Leonhard Holz</span>
+<span class="com">   thanks to Anthony Donnefort for the basic mapping idea</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> java.io.IOException;
+<span class="kwa">import</span> java.util.ArrayList;
+<span class="kwa">import</span> java.util.Collections;
+<span class="kwa">import</span> java.util.LinkedList;
+<span class="kwa">import</span> java.util.List;
+<span class="kwa">import</span> java.util.concurrent.ExecutorService;
+<span class="kwa">import</span> java.util.concurrent.Executors;
+
+<span class="kwa">public class</span> revcomp
+{
+   <span class="kwa">private static final</span> <span class="kwb">byte</span>[] map = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">256</span>];      
+   <span class="kwa">private static final</span> <span class="kwb">int</span> CHUNK_SIZE = <span class="num">1024</span> * <span class="num">1024</span> * <span class="num">16</span>;
+   <span class="kwa">private static final</span> <span class="kwb">int</span> NUMBER_OF_CORES = Runtime.<span class="kwd">getRuntime</span>().<span class="kwd">availableProcessors</span>();
+   <span class="kwa">private static final</span> ExecutorService service = Executors.<span class="kwd">newFixedThreadPool</span>(NUMBER_OF_CORES);
+   <span class="kwa">private static final</span> List&lt;<span class="kwb">byte</span>[]&gt; list = Collections.<span class="kwd">synchronizedList</span>(<span class="kwa">new</span> ArrayList&lt;<span class="kwb">byte</span>[]&gt;());
+
+   <span class="kwa">static</span> {
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; map.length; i++) {
+         map[i] = (<span class="kwb">byte</span>) i;
+      }
+       map[<span class="str">'t'</span>] = map[<span class="str">'T'</span>] = <span class="str">'A'</span>;
+       map[<span class="str">'a'</span>] = map[<span class="str">'A'</span>] = <span class="str">'T'</span>;
+       map[<span class="str">'g'</span>] = map[<span class="str">'G'</span>] = <span class="str">'C'</span>;
+       map[<span class="str">'c'</span>] = map[<span class="str">'C'</span>] = <span class="str">'G'</span>;
+       map[<span class="str">'v'</span>] = map[<span class="str">'V'</span>] = <span class="str">'B'</span>;
+       map[<span class="str">'h'</span>] = map[<span class="str">'H'</span>] = <span class="str">'D'</span>;
+       map[<span class="str">'r'</span>] = map[<span class="str">'R'</span>] = <span class="str">'Y'</span>;
+       map[<span class="str">'m'</span>] = map[<span class="str">'M'</span>] = <span class="str">'K'</span>;
+       map[<span class="str">'y'</span>] = map[<span class="str">'Y'</span>] = <span class="str">'R'</span>;
+       map[<span class="str">'k'</span>] = map[<span class="str">'K'</span>] = <span class="str">'M'</span>;
+       map[<span class="str">'b'</span>] = map[<span class="str">'B'</span>] = <span class="str">'V'</span>;
+       map[<span class="str">'d'</span>] = map[<span class="str">'D'</span>] = <span class="str">'H'</span>;
+       map[<span class="str">'u'</span>] = map[<span class="str">'U'</span>] = <span class="str">'A'</span>;
+   }
+
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) <span class="kwa">throws</span> IOException
+   {
+      <span class="kwb">int</span> read;
+      <span class="kwb">byte</span>[] buffer;
+      Finder lastFinder = null; 
+      
+      <span class="kwa">do</span> {
+         buffer = <span class="kwa">new</span> <span class="kwb">byte</span>[CHUNK_SIZE];
+         read = System.<span class="kwa">in</span>.<span class="kwd">read</span>(buffer);
+         list.<span class="kwd">add</span>(buffer);
+
+         Finder finder = <span class="kwa">new</span> <span class="kwd">Finder</span>(buffer, read, lastFinder);
+         service.<span class="kwd">execute</span>(finder);
+         lastFinder = finder;
+
+      } <span class="kwa">while</span> (read == CHUNK_SIZE);
+
+      Status status = lastFinder.<span class="kwd">finish</span>();
+      Mapper mapper = <span class="kwa">new</span> <span class="kwd">Mapper</span>(status.lastFinding, status.count - <span class="num">1</span>, status.lastMapper);
+      service.<span class="kwd">execute</span>(mapper);
+
+      service.<span class="kwd">shutdown</span>();
+   }
+
+   <span class="kwa">private static final class</span> Status
+   {
+      <span class="kwa">private</span> <span class="kwb">int</span> count = <span class="num">0</span>;
+      <span class="kwa">private</span> <span class="kwb">int</span> lastFinding = <span class="num">0</span>;
+      <span class="kwa">private</span> Mapper lastMapper = null;
+   }
+   
+   <span class="kwa">private static final class</span> Finder <span class="kwa">implements</span> Runnable
+   {
+      <span class="kwa">private</span> <span class="kwb">int</span> size;
+      <span class="kwa">private</span> <span class="kwb">byte</span>[] a;
+      <span class="kwa">private</span> Status status;
+      <span class="kwa">private</span> Finder previous;
+      <span class="kwa">private</span> <span class="kwb">boolean</span> done = false;
+      
+      <span class="kwa">public</span> <span class="kwd">Finder</span>(<span class="kwb">byte</span>[] a, <span class="kwb">int</span> size, Finder previous)
+      {
+         <span class="kwa">this</span>.a = a;
+         <span class="kwa">this</span>.size = size;
+         <span class="kwa">this</span>.previous = previous;
+      }
+      
+      <span class="kwa">public</span> Status <span class="kwd">finish</span>()
+      {
+         <span class="kwa">while</span> (!done) <span class="kwa">try</span> {
+            Thread.<span class="kwd">sleep</span>(<span class="num">1</span>);
+         } <span class="kwa">catch</span> (InterruptedException e) {
+            <span class="slc">// ignored</span>
+         }
+         <span class="kwa">return</span> status;
+      }
+
+      <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>()
+      {
+         LinkedList&lt;Integer&gt; findings = <span class="kwa">new</span> LinkedList&lt;Integer&gt;();
+
+         <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; size; i++) {
+            <span class="kwa">if</span> (a[i] == <span class="str">'&gt;'</span>) {
+               findings.<span class="kwd">add</span>(i);
+            }
+         }
+      
+         <span class="kwa">if</span> (previous == null) {
+            status = <span class="kwa">new</span> <span class="kwd">Status</span>();
+         } <span class="kwa">else</span> {
+            status = previous.<span class="kwd">finish</span>();
+            findings.<span class="kwd">add</span>(<span class="num">0</span>, status.lastFinding);
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">1</span>; i &lt; findings.<span class="kwd">size</span>(); i++) {
+               findings.<span class="kwd">set</span>(i, findings.<span class="kwd">get</span>(i) + status.count);
+            }
+         }
+      
+         <span class="kwa">if</span> (findings.<span class="kwd">size</span>() &gt; <span class="num">1</span>) <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; findings.<span class="kwd">size</span>() - <span class="num">1</span>; i++) {
+            status.lastMapper = <span class="kwa">new</span> <span class="kwd">Mapper</span>(findings.<span class="kwd">get</span>(i), findings.<span class="kwd">get</span>(i + <span class="num">1</span>) - <span class="num">1</span>, status.lastMapper);
+            service.<span class="kwd">execute</span>(status.lastMapper);
+         }
+         
+         status.lastFinding = findings.<span class="kwd">get</span>(findings.<span class="kwd">size</span>() - <span class="num">1</span>);
+         status.count += size;
+         done = true;
+      }
+   }
+   
+   <span class="kwa">private static final class</span> Mapper <span class="kwa">implements</span> Runnable
+   {
+      <span class="kwa">private</span> <span class="kwb">int</span> end;
+      <span class="kwa">private</span> <span class="kwb">int</span> start;
+      <span class="kwa">private</span> Mapper previous;
+      <span class="kwa">private</span> <span class="kwb">boolean</span> done = false;
+      
+      <span class="kwa">public</span> <span class="kwd">Mapper</span>(<span class="kwb">int</span> start, <span class="kwb">int</span> end, Mapper previous)
+      {
+         <span class="kwa">this</span>.end = end;
+         <span class="kwa">this</span>.start = start;
+         <span class="kwa">this</span>.previous = previous;
+      }
+      
+      <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">finish</span>()
+      {
+         <span class="kwa">while</span> (!done) <span class="kwa">try</span> {
+            Thread.<span class="kwd">sleep</span>(<span class="num">1</span>);
+         } <span class="kwa">catch</span> (InterruptedException e) {
+            <span class="slc">// ignored</span>
+         }
+      }
+
+      <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>()
+      {
+         <span class="kwb">int</span>[] positions = <span class="kwd">find</span>(list, start, end);
+         
+         <span class="kwb">int</span> lp1 = positions[<span class="num">0</span>];
+         <span class="kwb">byte</span>[] tob = list.<span class="kwd">get</span>(lp1);
+
+         <span class="kwb">int</span> lp2 = positions[<span class="num">2</span>];
+         <span class="kwb">byte</span>[] bot = list.<span class="kwd">get</span>(lp2);
+         
+         <span class="kwb">int</span> p1 = positions[<span class="num">1</span>];
+         <span class="kwa">while</span> (tob[p1] != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) p1++;
+
+         <span class="kwb">int</span> p2 = positions[<span class="num">3</span>];
+      
+         <span class="kwa">while</span> (lp1 &lt; lp2 || p1 &lt; p2) {
+            <span class="kwa">if</span> (tob[p1] == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) {
+               p1++;
+            } <span class="kwa">else if</span> (bot[p2] == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) {
+               p2--;
+            } <span class="kwa">else</span> {
+               <span class="kwb">byte</span> tmp = tob[p1];
+               tob[p1] = map[bot[p2]];
+               bot[p2] = map[tmp];
+               p1++;
+               p2--;
+            }
+            <span class="kwa">if</span> (p1 == tob.length) {
+               lp1++;
+               tob = list.<span class="kwd">get</span>(lp1);
+               p1 = <span class="num">0</span>;
+            }
+            <span class="kwa">if</span> (p2 == -<span class="num">1</span>) {
+               lp2--;
+               bot = list.<span class="kwd">get</span>(lp2);
+               p2 = bot.length - <span class="num">1</span>;
+            }
+         }
+
+         <span class="kwa">if</span> (previous != null) {
+            previous.<span class="kwd">finish</span>();
+         }
+
+         <span class="kwd">write</span>(list, positions[<span class="num">0</span>], positions[<span class="num">1</span>], positions[<span class="num">2</span>], positions[<span class="num">3</span>]);
+         done = true;
+      }
+   }
+
+   <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">write</span>(List&lt;<span class="kwb">byte</span>[]&gt; list, <span class="kwb">int</span> lpStart, <span class="kwb">int</span> start, <span class="kwb">int</span> lpEnd, <span class="kwb">int</span> end)
+   {
+      <span class="kwb">byte</span>[] a = list.<span class="kwd">get</span>(lpStart);
+      <span class="kwa">while</span> (lpStart &lt; lpEnd) {
+         System.out.<span class="kwd">write</span>(a, start, a.length - start);
+         lpStart++;
+         a = list.<span class="kwd">get</span>(lpStart);
+         start = <span class="num">0</span>;
+      }
+      System.out.<span class="kwd">write</span>(a, start, end - start + <span class="num">1</span>);
+   }
+   
+   <span class="kwa">private static</span> <span class="kwb">int</span>[] <span class="kwd">find</span>(List&lt;<span class="kwb">byte</span>[]&gt; list, <span class="kwb">int</span> start, <span class="kwb">int</span> end)
+   {
+      <span class="kwb">int</span> n = <span class="num">0</span>, lp = <span class="num">0</span>;
+      <span class="kwb">int</span>[] result = <span class="kwa">new</span> <span class="kwb">int</span>[<span class="num">4</span>];
+      <span class="kwb">boolean</span> foundStart = false;
+
+      <span class="kwa">for</span> (<span class="kwb">byte</span>[] bytes : list) {
+         <span class="kwa">if</span> (!foundStart &amp;&amp; n + bytes.length &gt; start) {
+            result[<span class="num">0</span>] = lp;
+            result[<span class="num">1</span>] = start - n;
+            foundStart = true;
+         }
+         <span class="kwa">if</span> (foundStart &amp;&amp; n + bytes.length &gt; end) {
+            result[<span class="num">2</span>] = lp;
+            result[<span class="num">3</span>] = end - n;
+            <span class="kwa">break</span>;
+         }
+         n += bytes.length;
+         lp++;
+      }
+      <span class="kwa">return</span> result;
+   }   
+}

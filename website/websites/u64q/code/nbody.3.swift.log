@@ -1,0 +1,13 @@
+
+Thu, 24 Dec 2015 02:30:20 GMT
+
+MAKE:
+/usr/local/src/swift-2.2-SNAPSHOT-2015-12-22-a-ubuntu15.10/usr/bin/swiftc nbody.swift-3.swift -Ounchecked -whole-module-optimization  -o nbody.swift-3.swift_run
+0.85s to complete and log all make actions
+
+COMMAND LINE:
+./nbody.swift-3.swift_run 50000000
+
+PROGRAM OUTPUT:
+-0.169075163828524
+-0.169059906802725

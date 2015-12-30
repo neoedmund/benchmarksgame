@@ -1,0 +1,139 @@
+﻿﻿<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Isaac Gouy, transliterated from Oleg Mazurov's Java program</span>
+<span class="com"> * modified by Konstantin Safonov</span>
+<span class="com">*/</span>
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.Threading;
+
+<span class="kwa">internal static class</span> FannkuchRedux {
+    <span class="kwa">private</span> <span class="kwb">const int</span> Nchunks = <span class="num">150</span>;
+    <span class="kwa">private static</span> <span class="kwb">int</span> _chunksz;
+    <span class="kwa">private static</span> <span class="kwb">int</span> _ntasks;
+    <span class="kwa">private static</span> <span class="kwb">int</span> _n;
+    <span class="kwa">private static</span> <span class="kwb">int</span>[] _fact;
+    <span class="kwa">private static</span> <span class="kwb">int</span>[] _maxFlips;
+    <span class="kwa">private static</span> <span class="kwb">int</span>[] _chkSums;
+    <span class="kwa">private static</span> <span class="kwb">int</span> _taskId;
+
+    <span class="kwa">private static readonly</span> <span class="kwb">object</span> TaskidLocker = <span class="kwa">new</span> <span class="kwb">object</span>();
+    <span class="kwa">private static</span> <span class="kwb">int</span> <span class="kwd">GetTaskId</span>() { <span class="kwd">lock</span> ( TaskidLocker ) { <span class="kwa">return</span> _taskId++; } }
+
+    <span class="kwa">private static</span> unsafe <span class="kwb">void</span> <span class="kwd">Run</span>() {
+        var p = <span class="kwa">new</span> <span class="kwb">long</span>[_n];
+        var pp = <span class="kwa">new</span> <span class="kwb">long</span>[_n];
+        var count = <span class="kwa">new</span> <span class="kwb">int</span>[_n];
+        <span class="kwd">fixed</span> (<span class="kwb">int</span>* qc = count, qf = _fact)
+        <span class="kwd">fixed</span> ( <span class="kwb">long</span>* qp = p, qpp = pp ) <span class="kwd">RunCore</span>( qpp, qp, p, qc, count, qf );
+    }
+
+    <span class="kwa">private static</span> unsafe <span class="kwb">void</span> <span class="kwd">RunCore</span>( <span class="kwb">long</span>* qpp, <span class="kwb">long</span>* qp, <span class="kwb">long</span>[] p, <span class="kwb">int</span>* qc,
+        <span class="kwb">int</span>[] count, <span class="kwb">int</span>* qf ) {
+        <span class="kwb">int</span> task;
+        <span class="kwb">long</span>* pp1 = qpp + <span class="num">1L</span>, ppm1 = qpp - <span class="num">1L</span>, qpe = qp + p.LongLength, qp1 = qp + <span class="num">1L</span>;
+        <span class="kwa">while</span> ( ( task = <span class="kwd">GetTaskId</span>() ) &lt; _ntasks ) {
+            var idxMin = task * _chunksz;
+            var idxMax = Math.<span class="kwd">Min</span>( _fact[ _n ], idxMin + _chunksz );
+            {
+                var idx = idxMin;
+                var pl = p.LongLength;
+                <span class="kwa">for</span> ( var i = <span class="num">0L</span>; i &lt; pl; ++i ) p[ i ] = i;
+
+                <span class="kwa">for</span> ( var i = count.LongLength - <span class="num">1</span>; i &gt; <span class="num">0L</span>; --i ) {
+                    var qfi = *( qf + i );
+                    var qpi1 = qp1 + i;
+                    var qpi = qp + i;
+                    var d = idx / qfi;
+                    *( qc + i ) = d;
+                    idx = idx % qfi;
+                    <span class="slc">//Array.Copy( p, 0, pp, 0, i + 1 );</span>
+                    <span class="kwa">for</span> ( <span class="kwb">long</span>* qs = qp, qd = qpp; qs &lt; qpi1; *qd = *qs,++qs,++qd ) {}
+
+                    <span class="kwb">long</span> jd = d;
+                    <span class="kwa">for</span> ( var j = qp; j &lt;= qpi; ++j, ++jd )
+                        *j = jd &lt;= i ? *( qpp + jd ) : *( ppm1 + jd - i );
+                }
+            }
+
+            var maxflips = <span class="num">1</span>;
+            var chksum = <span class="num">0</span>;
+            <span class="kwa">for</span> ( var i = idxMin;; ) {
+                <span class="kwa">if</span> ( *qp != <span class="num">0</span> ) {
+                    <span class="ppc">#region CountFlips();</span>
+                    var flips = <span class="num">1</span>;
+                    var first = *qp;
+                    <span class="kwa">if</span> ( *( qp + first ) != <span class="num">0</span> ) {
+                        <span class="slc">//Array.Copy( p, 0, pp, 0, pp.Length );</span>
+                        <span class="kwa">for</span> ( <span class="kwb">long</span>* s = qp, d = qpp; s &lt; qpe; *d = *s, ++s, ++d ) {}
+                        <span class="kwa">do</span> {
+                            ++flips;
+                            <span class="kwa">for</span> ( <span class="kwb">long</span>* lo = pp1, hi = ppm1 + first; lo &lt; hi; ++lo, --hi ) {
+                                var t = *lo; *lo = *hi; *hi = t;
+                            }
+                            var qppfirst = qpp + first;
+                            var tp = *qppfirst;
+                            *qppfirst = first;
+                            first = tp;
+                        } <span class="kwa">while</span> ( *( qpp + first ) != <span class="num">0</span> );
+                    }
+                    <span class="ppc">#endregion</span>
+                    <span class="kwa">if</span> ( flips &gt; maxflips ) maxflips = flips;
+                    chksum += ( i &amp; <span class="num">1</span> ) == <span class="num">0</span> ? flips : -flips;
+                }
+                <span class="kwa">if</span> ( ++i == idxMax ) <span class="kwa">break</span>;
+                <span class="ppc">#region NextPermutation();</span>
+                {
+                    var first = *qp1;
+                    *qp1 = *qp;
+                    *qp = first;
+
+                    var i2 = <span class="num">1L</span>;
+                    <span class="kwa">while</span> ( ++*( qc + i2 ) &gt; i2 ) {
+                        *( qc + ( i2++ ) ) = <span class="num">0</span>;
+                        var next = *qp = *qp1;
+                        var qpi2 = qp + i2;
+                        <span class="kwa">for</span> ( var j = qp1; j &lt; qpi2; ) {
+                            var ji = j;
+                            ++ji;
+                            *j = *ji;
+                            j = ji;
+                        }
+                        *qpi2 = first;
+                        first = next;
+                    }
+                }
+                <span class="ppc">#endregion</span>
+            }
+            _maxFlips[ task ] = maxflips;
+            _chkSums[ task ] = chksum;
+        }
+    }
+    <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">Main</span>( String[] args ) {
+        <span class="kwd">Main2</span>( args );
+    }
+    <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">Main2</span>( params <span class="kwb">string</span>[] args ) {
+        _n = <span class="num">7</span>;
+        <span class="kwa">if</span> ( args.Length &gt; <span class="num">0</span> ) _n = Int32.<span class="kwd">Parse</span>( args[ <span class="num">0</span> ] );
+
+        _fact = <span class="kwa">new</span> <span class="kwb">int</span>[_n + <span class="num">1</span>];
+        _fact[ <span class="num">0</span> ] = <span class="num">1</span>;
+        <span class="kwa">for</span> ( var i = <span class="num">1</span>; i &lt; _fact.Length; ++i ) _fact[ i ] = _fact[ i - <span class="num">1</span> ] * i;
+
+        _chunksz = ( _fact[ _n ] + Nchunks - <span class="num">1</span> ) / Nchunks;
+        _ntasks = ( _fact[ _n ] + _chunksz - <span class="num">1</span> ) / _chunksz;
+        _maxFlips = <span class="kwa">new</span> <span class="kwb">int</span>[_ntasks];
+        _chkSums = <span class="kwa">new</span> <span class="kwb">int</span>[_ntasks];
+        _taskId = <span class="num">0</span>;
+
+        var nthreads = Environment.ProcessorCount;
+        var threads = <span class="kwa">new</span> Thread[nthreads];
+        <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; nthreads; ++i) (threads[i] = <span class="kwa">new</span> <span class="kwd">Thread</span>(Run)).<span class="kwd">Start</span>();
+        <span class="kwa">foreach</span> (var t <span class="kwa">in</span> threads) t.<span class="kwd">Join</span>();
+        var res = <span class="num">0</span>;
+        <span class="kwa">foreach</span> ( var v <span class="kwa">in</span> _maxFlips ) res = Math.<span class="kwd">Max</span>( res, v );
+        var chk = <span class="num">0</span>;
+        <span class="kwa">foreach</span> ( var v <span class="kwa">in</span> _chkSums ) chk += v;
+        Console.<span class="kwd">WriteLine</span>( <span class="str">&quot;</span><span class="ipl">{0}</span><span class="str"></span><span class="esc">\n</span><span class="str">Pfannkuchen(</span><span class="ipl">{1}</span><span class="str">) =</span> <span class="ipl">{2}</span><span class="str">&quot;</span>, chk, _n, res );
+    }
+}

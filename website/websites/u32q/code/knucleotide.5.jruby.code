@@ -1,0 +1,136 @@
+<span class="hl slc"># The Computer Language Benchmarks Game</span>
+<span class="hl slc"># http://benchmarksgame.alioth.debian.org</span>
+<span class="hl slc">#</span>
+<span class="hl slc"># contributed by Aaron Tavistock</span>
+<span class="hl slc"># optimised &amp;&amp; parallelised by Scott Leggett</span>
+
+<span class="hl kwa">module</span> MiniParallel
+    <span class="hl kwa">class</span> Worker
+        <span class="hl kwa">def</span> <span class="hl kwd">initialize</span><span class="hl opt">(</span>read<span class="hl opt">,</span> write)
+            <span class="hl kwb">&#64;read</span><span class="hl opt">,</span> <span class="hl kwb">&#64;write</span> <span class="hl opt">=</span> read<span class="hl opt">,</span> write
+        <span class="hl kwa">end</span>
+
+        <span class="hl kwa">def</span> close_pipes
+            <span class="hl kwb">&#64;read</span><span class="hl opt">.</span>close
+            <span class="hl kwb">&#64;write</span><span class="hl opt">.</span>close
+        <span class="hl kwa">end</span>
+
+        <span class="hl kwa">def</span> <span class="hl kwd">work</span><span class="hl opt">(</span>index)
+            Marshal<span class="hl opt">.</span><span class="hl kwd">dump</span><span class="hl opt">(</span>index<span class="hl opt">,</span> <span class="hl kwb">&#64;write</span>)
+            Marshal<span class="hl opt">.</span><span class="hl kwd">load</span><span class="hl opt">(</span><span class="hl kwb">&#64;read</span>)
+        <span class="hl kwa">end</span>
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span><span class="hl kwd">map</span><span class="hl opt">(</span>array<span class="hl opt">, &amp;</span>block)
+        <span class="hl kwd">work_in_processes</span><span class="hl opt">(</span>
+            array<span class="hl opt">,</span>
+            <span class="hl opt">[</span>array<span class="hl opt">.</span>size<span class="hl opt">,</span> core_count<span class="hl opt">].</span>min<span class="hl opt">,</span>
+            <span class="hl opt">&amp;</span>block
+        )
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span>core_count
+        &#64;<span class="hl kwb">&#64;core_count</span> <span class="hl opt">||=</span> IO<span class="hl opt">.</span><span class="hl kwd">read</span><span class="hl opt">(</span><span class="hl str">&quot;/proc/cpuinfo&quot;</span>)<span class="hl opt">.</span><span class="hl kwd">scan</span><span class="hl opt">(</span><span class="hl kwc">/^processor/</span>)<span class="hl opt">.</span>size
+    <span class="hl kwa">end</span>
+
+    private
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span><span class="hl kwd">work_in_processes</span><span class="hl opt">(</span>array<span class="hl opt">,</span> count<span class="hl opt">, &amp;</span>block)
+        index <span class="hl opt">= -</span><span class="hl num">1</span>
+        results<span class="hl opt">,</span> threads <span class="hl opt">= [], []</span>
+
+        workers <span class="hl opt">=</span> <span class="hl kwd">create_workers</span><span class="hl opt">(</span>array<span class="hl opt">,</span> count<span class="hl opt">, &amp;</span>block)
+
+        workers<span class="hl opt">.</span>each <span class="hl kwa">do</span> <span class="hl opt">|</span>worker<span class="hl opt">|</span>
+            threads <span class="hl opt">&lt;&lt;</span> Thread<span class="hl opt">.</span>new <span class="hl kwa">do</span>
+              <span class="hl kwa">loop do</span>
+                Thread<span class="hl opt">.</span>exclusive<span class="hl esc">{ index += 1 }</span>
+                <span class="hl kwa">break if</span> index <span class="hl opt">&gt;=</span> array<span class="hl opt">.</span>size
+                results<span class="hl opt">[</span>index<span class="hl opt">] =</span> worker<span class="hl opt">.</span><span class="hl kwd">work</span><span class="hl opt">(</span>index)
+              <span class="hl kwa">end</span>
+              worker<span class="hl opt">.</span>close_pipes
+            <span class="hl kwa">end</span>
+        <span class="hl kwa">end</span>
+
+        threads<span class="hl opt">.</span><span class="hl kwd">each</span><span class="hl opt">(&amp;</span><span class="hl kwc">:join</span>)
+        Process<span class="hl opt">.</span>waitall
+
+        results
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span><span class="hl kwd">create_workers</span><span class="hl opt">(</span>array<span class="hl opt">,</span> count<span class="hl opt">, &amp;</span>block)
+        workers <span class="hl opt">= []</span>
+        count<span class="hl opt">.</span>times <span class="hl kwa">do</span>
+            workers <span class="hl opt">&lt;&lt;</span> <span class="hl kwd">create_worker</span><span class="hl opt">(</span>array<span class="hl opt">,</span> workers<span class="hl opt">, &amp;</span>block)
+        <span class="hl kwa">end</span>
+        workers
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span><span class="hl kwd">create_worker</span><span class="hl opt">(</span>array<span class="hl opt">,</span> started_workers<span class="hl opt">, &amp;</span>block)
+        child_read<span class="hl opt">,</span> parent_write <span class="hl opt">=</span> IO<span class="hl opt">.</span>pipe
+        parent_read<span class="hl opt">,</span> child_write <span class="hl opt">=</span> IO<span class="hl opt">.</span>pipe
+
+        Process<span class="hl opt">.</span>fork <span class="hl kwa">do</span>
+            started_workers<span class="hl opt">.</span><span class="hl kwd">each</span><span class="hl opt">(&amp;</span><span class="hl kwc">:close_pipes</span>)
+
+            parent_write<span class="hl opt">.</span>close
+            parent_read<span class="hl opt">.</span>close
+
+            <span class="hl kwd">process_incoming_jobs</span><span class="hl opt">(</span>child_read<span class="hl opt">,</span> child_write<span class="hl opt">,</span> array<span class="hl opt">, &amp;</span>block)
+
+            child_read<span class="hl opt">.</span>close
+            child_write<span class="hl opt">.</span>close
+        <span class="hl kwa">end</span>
+
+        child_read<span class="hl opt">.</span>close
+        child_write<span class="hl opt">.</span>close
+
+        Worker<span class="hl opt">.</span><span class="hl kwd">new</span><span class="hl opt">(</span>parent_read<span class="hl opt">,</span> parent_write)
+    <span class="hl kwa">end</span>
+
+    <span class="hl kwa">def self</span><span class="hl opt">.</span><span class="hl kwd">process_incoming_jobs</span><span class="hl opt">(</span>read<span class="hl opt">,</span> write<span class="hl opt">,</span> array<span class="hl opt">, &amp;</span>block)
+        <span class="hl kwa">until</span> read<span class="hl opt">.</span>eof<span class="hl opt">?</span>
+            index <span class="hl opt">=</span> Marshal<span class="hl opt">.</span><span class="hl kwd">load</span><span class="hl opt">(</span>read)
+            Marshal<span class="hl opt">.</span><span class="hl kwd">dump</span><span class="hl opt">(</span>block<span class="hl opt">.</span><span class="hl kwd">call</span><span class="hl opt">(</span>array<span class="hl opt">[</span>index<span class="hl opt">]</span>)<span class="hl opt">,</span> write)
+        <span class="hl kwa">end</span>
+    <span class="hl kwa">end</span>
+<span class="hl kwa">end</span>
+
+<span class="hl kwa">def</span> <span class="hl kwd">frequency</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> keys)
+    MiniParallel<span class="hl opt">.</span><span class="hl kwd">map</span><span class="hl opt">(</span>keys) <span class="hl kwa">do</span> <span class="hl opt">|</span>key<span class="hl opt">|</span>
+        <span class="hl kwa">if</span> key<span class="hl opt">.</span>size <span class="hl opt">==</span> <span class="hl num">1</span>
+            <span class="hl opt">[</span>seq<span class="hl opt">.</span><span class="hl kwd">count</span><span class="hl opt">(</span>key)<span class="hl opt">,</span> key<span class="hl opt">.</span>upcase<span class="hl opt">]</span>
+        <span class="hl kwa">else</span>
+            index <span class="hl opt">=</span> count <span class="hl opt">=</span> <span class="hl num">0</span>
+            <span class="hl kwa">while</span> index <span class="hl opt">=</span> seq<span class="hl opt">.</span><span class="hl kwd">index</span><span class="hl opt">(</span>key<span class="hl opt">,</span> index<span class="hl opt">+</span><span class="hl num">1</span>)
+                count <span class="hl opt">+=</span> <span class="hl num">1</span>
+            <span class="hl kwa">end</span>
+            <span class="hl opt">[</span>count<span class="hl opt">,</span> key<span class="hl opt">.</span>upcase<span class="hl opt">]</span>
+        <span class="hl kwa">end</span>
+    <span class="hl kwa">end</span>
+<span class="hl kwa">end</span>
+
+<span class="hl kwa">def</span> <span class="hl kwd">percentage</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> keys)
+    <span class="hl kwd">frequency</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> keys)<span class="hl opt">.</span>sort<span class="hl opt">!.</span>reverse<span class="hl opt">!.</span>map<span class="hl opt">!</span> <span class="hl kwa">do</span> <span class="hl opt">|</span>value<span class="hl opt">,</span> key<span class="hl opt">|</span>
+        <span class="hl str">&quot;%s %.3f&quot;</span> <span class="hl opt">% [</span> key<span class="hl opt">, ((</span>value<span class="hl opt">*</span><span class="hl num">100</span>)<span class="hl opt">.</span>to_f <span class="hl opt">/</span> seq<span class="hl opt">.</span>size) <span class="hl opt">]</span>
+    <span class="hl kwa">end</span>
+<span class="hl kwa">end</span>
+
+<span class="hl kwa">def</span> <span class="hl kwd">count</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> keys)
+    <span class="hl kwd">frequency</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> keys)<span class="hl opt">.</span>map<span class="hl opt">!</span> <span class="hl kwa">do</span> <span class="hl opt">|</span>value<span class="hl opt">,</span> key<span class="hl opt">|</span>
+        <span class="hl opt">[</span>value<span class="hl opt">,</span> key<span class="hl opt">].</span><span class="hl kwd">join</span><span class="hl opt">(</span><span class="hl str">&quot;\t&quot;</span>)
+    <span class="hl kwa">end</span>
+<span class="hl kwa">end</span>
+
+seq <span class="hl opt">=</span> <span class="hl kwc">STDIN</span><span class="hl opt">.</span>map <span class="hl kwa">do</span> <span class="hl opt">|</span>line<span class="hl opt">|</span>
+    line<span class="hl opt">.</span>chomp<span class="hl opt">!</span> <span class="hl kwa">if</span> line<span class="hl opt">.</span><span class="hl kwa">include</span><span class="hl opt">?(</span><span class="hl str">'&gt;TH'</span>) <span class="hl opt">..</span> <span class="hl kwa">false</span>
+<span class="hl kwa">end</span><span class="hl opt">.</span>compact<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">..-</span><span class="hl num">1</span><span class="hl opt">].</span>join
+
+singles <span class="hl opt">= [</span><span class="hl str">'a'</span><span class="hl opt">,</span> <span class="hl str">'t'</span><span class="hl opt">,</span> <span class="hl str">'c'</span><span class="hl opt">,</span> <span class="hl str">'g'</span><span class="hl opt">]</span>
+doubles <span class="hl opt">= [</span><span class="hl str">'aa'</span><span class="hl opt">,</span> <span class="hl str">'at'</span><span class="hl opt">,</span> <span class="hl str">'ac'</span><span class="hl opt">,</span> <span class="hl str">'ag'</span><span class="hl opt">,</span> <span class="hl str">'ta'</span><span class="hl opt">,</span> <span class="hl str">'tt'</span><span class="hl opt">,</span> <span class="hl str">'tc'</span><span class="hl opt">,</span> <span class="hl str">'tg'</span><span class="hl opt">,</span> <span class="hl str">'ca'</span><span class="hl opt">,</span> <span class="hl str">'ct'</span><span class="hl opt">,</span> <span class="hl str">'cc'</span><span class="hl opt">,</span>
+           <span class="hl str">'cg'</span><span class="hl opt">,</span> <span class="hl str">'ga'</span><span class="hl opt">,</span> <span class="hl str">'gt'</span><span class="hl opt">,</span> <span class="hl str">'gc'</span><span class="hl opt">,</span> <span class="hl str">'gg'</span><span class="hl opt">]</span>
+chains  <span class="hl opt">= [</span><span class="hl str">'ggt'</span><span class="hl opt">,</span> <span class="hl str">'ggta'</span><span class="hl opt">,</span> <span class="hl str">'ggtatt'</span><span class="hl opt">,</span> <span class="hl str">'ggtattttaatt'</span><span class="hl opt">,</span> <span class="hl str">'ggtattttaatttatagt'</span><span class="hl opt">]</span>
+
+puts <span class="hl kwd">percentage</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> singles)<span class="hl opt">.</span><span class="hl kwd">join</span><span class="hl opt">(</span><span class="hl str">&quot;\n&quot;</span>)<span class="hl opt">,</span> <span class="hl str">&quot;\n&quot;</span>
+puts <span class="hl kwd">percentage</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> doubles)<span class="hl opt">.</span><span class="hl kwd">join</span><span class="hl opt">(</span><span class="hl str">&quot;\n&quot;</span>)<span class="hl opt">,</span> <span class="hl str">&quot;\n&quot;</span>
+puts <span class="hl kwd">count</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> chains)<span class="hl opt">.</span><span class="hl kwd">join</span><span class="hl opt">(</span><span class="hl str">&quot;\n&quot;</span>)

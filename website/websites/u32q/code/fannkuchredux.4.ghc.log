@@ -1,0 +1,42 @@
+
+Tue, 22 Sep 2015 03:14:38 GMT
+
+MAKE:
+mv fannkuchredux.ghc-4.ghc fannkuchredux.ghc-4.hs
+/usr/local/src/ghc-7.10.2/bin/ghc --make -fllvm -O2 -XBangPatterns -threaded -rtsopts  fannkuchredux.ghc-4.hs -o fannkuchredux.ghc-4.ghc_run
+[1 of 1] Compiling Main             ( fannkuchredux.ghc-4.hs, fannkuchredux.ghc-4.o )
+
+fannkuchredux.ghc-4.hs:68:5:
+    Illegal equational constraint Control.Monad.Primitive.PrimState m
+                                  ~ GHC.Prim.RealWorld
+    (Use GADTs or TypeFamilies to permit this)
+    When checking that ‘done’ has the inferred type
+      done :: forall (m :: * -> *).
+              (Control.Monad.Primitive.PrimMonad m,
+               Control.Monad.Primitive.PrimState m ~ GHC.Prim.RealWorld) =>
+              Int -> m Bool
+    In an equation for ‘next_permutation’:
+        next_permutation perm !n !cnt
+          = loop 1
+          where
+              loop :: Int -> IO Bool
+              loop i
+                | i >= n = done i
+                | otherwise
+                = do { tmp <- VM.unsafeRead perm 0;
+                       .... }
+              done i
+                | i >= n = return False
+                | otherwise
+                = do { v <- VM.unsafeRead cnt i;
+                       .... }
+/home/dunham/benchmarksgame/nanobench/makefiles/u32q.programs.Makefile:299: recipe for target 'fannkuchredux.ghc-4.ghc_run' failed
+make: [fannkuchredux.ghc-4.ghc_run] Error 1 (ignored)
+rm fannkuchredux.ghc-4.hs
+0.47s to complete and log all make actions
+
+COMMAND LINE:
+./fannkuchredux.ghc-4.ghc_run +RTS -N4 -RTS 10
+
+MAKE ERROR 
+

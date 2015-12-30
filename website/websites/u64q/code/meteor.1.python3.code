@@ -1,0 +1,212 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by: Olof Kraigher</span>
+<span class="slc"># 2to3</span>
+
+<span class="kwa">from</span> sys <span class="kwa">import</span> argv
+
+width = <span class="num">5</span>
+height = <span class="num">10</span>
+
+directions  = { <span class="str">&quot;E&quot;</span> : <span class="num">0</span>, <span class="str">&quot;NE&quot;</span> : <span class="num">1</span>, <span class="str">&quot;NW&quot;</span> : <span class="num">2</span>, <span class="str">&quot;W&quot;</span> : <span class="num">3</span>, <span class="str">&quot;SW&quot;</span> : <span class="num">4</span>, <span class="str">&quot;SE&quot;</span> : <span class="num">5</span>}
+rotate      = { <span class="str">&quot;E&quot;</span> : <span class="str">&quot;NE&quot;</span>, <span class="str">&quot;NE&quot;</span> : <span class="str">&quot;NW&quot;</span>, <span class="str">&quot;NW&quot;</span> : <span class="str">&quot;W&quot;</span>, <span class="str">&quot;W&quot;</span> : <span class="str">&quot;SW&quot;</span>, <span class="str">&quot;SW&quot;</span> : <span class="str">&quot;SE&quot;</span>, <span class="str">&quot;SE&quot;</span> : <span class="str">&quot;E&quot;</span>}
+flip        = { <span class="str">&quot;E&quot;</span> : <span class="str">&quot;W&quot;</span>, <span class="str">&quot;NE&quot;</span> : <span class="str">&quot;NW&quot;</span>, <span class="str">&quot;NW&quot;</span> : <span class="str">&quot;NE&quot;</span>, <span class="str">&quot;W&quot;</span> : <span class="str">&quot;E&quot;</span>, <span class="str">&quot;SW&quot;</span> : <span class="str">&quot;SE&quot;</span>, <span class="str">&quot;SE&quot;</span> : <span class="str">&quot;SW&quot;</span>}
+move        = { <span class="str">&quot;E&quot;</span> : <span class="kwa">lambda</span> x,y: (x+<span class="num">1</span>,y),
+                <span class="str">&quot;W&quot;</span> : <span class="kwa">lambda</span> x,y: (x-<span class="num">1</span>,y),
+                <span class="str">&quot;NE&quot;</span> : <span class="kwa">lambda</span> x,y: (x+(y%<span class="num">2</span>),y-<span class="num">1</span>),
+                <span class="str">&quot;NW&quot;</span> : <span class="kwa">lambda</span> x,y: (x+(y%<span class="num">2</span>)-<span class="num">1</span>,y-<span class="num">1</span>),
+                <span class="str">&quot;SE&quot;</span> : <span class="kwa">lambda</span> x,y: (x+(y%<span class="num">2</span>),y+<span class="num">1</span>),
+                <span class="str">&quot;SW&quot;</span> : <span class="kwa">lambda</span> x,y: (x+(y%<span class="num">2</span>)-<span class="num">1</span>,y+<span class="num">1</span>)}
+
+pieces =   [    [<span class="str">&quot;E&quot;</span>, <span class="str">&quot;E&quot;</span>, <span class="str">&quot;E&quot;</span>, <span class="str">&quot;SE&quot;</span>],
+                [<span class="str">&quot;SE&quot;</span>, <span class="str">&quot;SW&quot;</span>, <span class="str">&quot;W&quot;</span>, <span class="str">&quot;SW&quot;</span>],
+                [<span class="str">&quot;W&quot;</span>, <span class="str">&quot;W&quot;</span>, <span class="str">&quot;SW&quot;</span>, <span class="str">&quot;SE&quot;</span>],
+                [<span class="str">&quot;E&quot;</span>,  <span class="str">&quot;E&quot;</span>, <span class="str">&quot;SW&quot;</span>, <span class="str">&quot;SE&quot;</span>],
+                [<span class="str">&quot;NW&quot;</span>, <span class="str">&quot;W&quot;</span>, <span class="str">&quot;NW&quot;</span>, <span class="str">&quot;SE&quot;</span>, <span class="str">&quot;SW&quot;</span>],
+                [<span class="str">&quot;E&quot;</span>,  <span class="str">&quot;E&quot;</span>, <span class="str">&quot;NE&quot;</span>, <span class="str">&quot;W&quot;</span>],
+                [<span class="str">&quot;NW&quot;</span>, <span class="str">&quot;NE&quot;</span>, <span class="str">&quot;NE&quot;</span>, <span class="str">&quot;W&quot;</span>],
+                [<span class="str">&quot;NE&quot;</span>, <span class="str">&quot;SE&quot;</span>, <span class="str">&quot;E&quot;</span>, <span class="str">&quot;NE&quot;</span>],
+                [<span class="str">&quot;SE&quot;</span>, <span class="str">&quot;SE&quot;</span>, <span class="str">&quot;E&quot;</span>, <span class="str">&quot;SE&quot;</span>],
+                [<span class="str">&quot;E&quot;</span>, <span class="str">&quot;NW&quot;</span>, <span class="str">&quot;NW&quot;</span>, <span class="str">&quot;NW&quot;</span>]]
+
+solutions = []
+masks = [<span class="num">0</span> <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">10</span>)]
+
+valid = <span class="kwa">lambda</span> x,y: (<span class="num">0</span> &lt;= x) <span class="kwa">and</span> (x &lt; width) <span class="kwa">and</span> (<span class="num">0</span> &lt;= y) <span class="kwa">and</span> (y &lt; height)
+legal = <span class="kwa">lambda</span> mask,board: (mask &amp; board) == <span class="num">0</span>
+zerocount = <span class="kwa">lambda</span> mask: <span class="kwb">sum</span>([((<span class="num">1</span>&lt;&lt;x) &amp; mask) == <span class="num">0</span> <span class="kwa">for</span> x <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">50</span>)])
+
+<span class="kwa">def</span> <span class="kwd">findFreeCell</span>(board):
+    <span class="kwa">for</span> y <span class="kwa">in</span> <span class="kwb">range</span>(height):
+        <span class="kwa">for</span> x <span class="kwa">in</span> <span class="kwb">range</span>(width):
+            <span class="kwa">if</span> board &amp; (<span class="num">1</span> &lt;&lt; (x + width*y)) == <span class="num">0</span>:
+                <span class="kwa">return</span> x,y
+
+
+<span class="kwa">def</span> <span class="kwd">floodFill</span>(board, xxx_todo_changeme):
+    (x, y) = xxx_todo_changeme
+    <span class="kwa">if not</span> <span class="kwd">valid</span>(x,y):
+        <span class="kwa">return</span> board
+    <span class="kwa">if</span> board &amp; (<span class="num">1</span> &lt;&lt; (x + width*y)) != <span class="num">0</span>:
+        <span class="kwa">return</span> board
+
+    board = board | (<span class="num">1</span> &lt;&lt; (x + width*y))
+
+    <span class="kwa">for</span> f <span class="kwa">in</span> <span class="kwb">list</span>(move.<span class="kwd">values</span>()):
+        board = board | <span class="kwd">floodFill</span>(board, <span class="kwd">f</span>(x,y))
+
+    <span class="kwa">return</span> board
+
+<span class="kwa">def</span> <span class="kwd">noIslands</span>(mask):
+    zeroes = <span class="kwd">zerocount</span>(mask)
+
+    <span class="kwa">if</span> zeroes &lt; <span class="num">5</span>:
+        <span class="kwa">return False</span>
+
+    <span class="kwa">while</span> mask != <span class="num">0x3FFFFFFFFFFFF</span>:
+        mask = <span class="kwd">floodFill</span>(mask, <span class="kwd">findFreeCell</span>(mask))
+        new_zeroes = <span class="kwd">zerocount</span>(mask)
+
+        <span class="kwa">if</span> zeroes - new_zeroes &lt; <span class="num">5</span>:
+            <span class="kwa">return False</span>
+
+        zeroes = new_zeroes
+
+    <span class="kwa">return True</span>
+
+<span class="kwa">def</span> <span class="kwd">getBitmask</span>(x,y,piece):
+    mask = (<span class="num">1</span> &lt;&lt; (x + width*y))
+
+    <span class="kwa">for</span> cell <span class="kwa">in</span> piece:
+        x,y = move[cell](x,y)
+        <span class="kwa">if</span> <span class="kwd">valid</span>(x,y):
+            mask = mask | (<span class="num">1</span> &lt;&lt; (x + width*y))
+        <span class="kwa">else</span>:
+            <span class="kwa">return False</span>, <span class="num">0</span>
+
+    <span class="kwa">return True</span>, mask
+
+<span class="kwa">def</span> <span class="kwd">allBitmasks</span>(piece, color):
+    bitmasks = []
+    <span class="kwa">for</span> orientations <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">2</span>):
+        <span class="kwa">for</span> rotations <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">6</span> - <span class="num">3</span>*(color == <span class="num">4</span>)):
+            <span class="kwa">for</span> y <span class="kwa">in</span> <span class="kwb">range</span>(height):
+                <span class="kwa">for</span> x <span class="kwa">in</span> <span class="kwb">range</span>(width):
+                    isValid, mask = <span class="kwd">getBitmask</span>(x,y,piece)
+                    <span class="kwa">if</span> isValid <span class="kwa">and</span> <span class="kwd">noIslands</span>(mask):
+                        bitmasks.<span class="kwd">append</span>(mask)
+
+            piece = [rotate[cell] <span class="kwa">for</span> cell <span class="kwa">in</span> piece]
+        piece = [flip[cell] <span class="kwa">for</span> cell <span class="kwa">in</span> piece]
+
+
+    <span class="kwa">return</span> bitmasks
+
+<span class="kwa">def</span> <span class="kwd">generateBitmasks</span>():
+
+    <span class="kwa">global</span> masksAtCell
+
+    masksAtCell = [[[] <span class="kwa">for</span> j <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">10</span>)] <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(width*height)]
+
+    color = <span class="num">0</span>
+    <span class="kwa">for</span> piece <span class="kwa">in</span> pieces:
+        masks = <span class="kwd">allBitmasks</span>(piece, color)
+        masks.<span class="kwd">sort</span>()
+        cellMask = <span class="num">1</span> &lt;&lt; (width*height-<span class="num">1</span>)
+        cellCounter = width*height-<span class="num">1</span>
+
+        j = <span class="kwb">len</span>(masks)-<span class="num">1</span>
+
+        <span class="kwa">while</span> (j &gt;= <span class="num">0</span>):
+            <span class="kwa">if</span> (masks[j] &amp; cellMask) == cellMask:
+                masksAtCell[cellCounter][color].<span class="kwd">append</span>(masks[j])
+                j = j-<span class="num">1</span>
+            <span class="kwa">else</span>:
+                cellMask = cellMask &gt;&gt; <span class="num">1</span>
+                cellCounter -= <span class="num">1</span>
+        color += <span class="num">1</span>
+
+
+<span class="kwa">def</span> <span class="kwd">solveCell</span>(cell, board, n):
+
+    <span class="kwa">global</span> solutions, masks, masksAtCell
+
+    <span class="kwa">if</span> <span class="kwb">len</span>(solutions) &gt;= n:
+        <span class="kwa">return</span>
+
+    <span class="kwa">if</span> board == <span class="num">0x3FFFFFFFFFFFF</span>:
+        <span class="slc"># Solved</span>
+        s = <span class="kwd">stringOfMasks</span>(masks)
+        solutions.<span class="kwd">append</span>(s);
+        solutions.<span class="kwd">append</span>(<span class="kwd">inverse</span>(s));
+        <span class="kwa">return</span>
+
+    <span class="kwa">if</span> board &amp; (<span class="num">1</span> &lt;&lt; cell) != <span class="num">0</span>:
+        <span class="slc"># Cell full</span>
+        <span class="kwd">solveCell</span>(cell-<span class="num">1</span>, board, n)
+        <span class="kwa">return</span>
+
+    <span class="kwa">if</span> cell &lt; <span class="num">0</span>:
+        <span class="slc"># Out of board</span>
+        <span class="kwa">return</span>
+
+    <span class="kwa">for</span> color <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">10</span>):
+        <span class="kwa">if</span> masks[color] == <span class="num">0</span>:
+            <span class="kwa">for</span> mask <span class="kwa">in</span> masksAtCell[cell][color]:
+                <span class="kwa">if</span> <span class="kwd">legal</span>(mask, board):
+                    masks[color] = mask
+                    <span class="kwd">solveCell</span>(cell-<span class="num">1</span>, board | mask, n);
+                    masks[color] = <span class="num">0</span>
+
+<span class="kwa">def</span> <span class="kwd">solve</span>(n):
+    <span class="kwd">generateBitmasks</span>()
+    <span class="kwd">solveCell</span>(width*height-<span class="num">1</span>, <span class="num">0</span>, n)
+
+
+<span class="kwa">def</span> <span class="kwd">stringOfMasks</span>(masks):
+    s = <span class="str">&quot;&quot;</span>
+    mask = <span class="num">1</span>;
+    <span class="kwa">for</span> y <span class="kwa">in</span> <span class="kwb">range</span>(height):
+        <span class="kwa">for</span> x <span class="kwa">in</span> <span class="kwb">range</span>(width):
+            <span class="kwa">for</span> color <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">10</span>):
+                <span class="kwa">if</span> (masks[color] &amp; mask) != <span class="num">0</span>:
+                    s += <span class="kwb">str</span>(color)
+                    <span class="kwa">break</span>
+                <span class="kwa">elif</span> color == <span class="num">9</span>:
+                    s += <span class="str">&quot;.&quot;</span>
+            mask = mask &lt;&lt; <span class="num">1</span>
+    <span class="kwa">return</span> s
+
+<span class="kwa">def</span> <span class="kwd">inverse</span>(s):
+    ns = [x <span class="kwa">for</span> x <span class="kwa">in</span> s]
+
+    <span class="kwa">for</span> x <span class="kwa">in</span> <span class="kwb">range</span>(width):
+        <span class="kwa">for</span> y <span class="kwa">in</span> <span class="kwb">range</span>(height):
+            ns[x + y*width] = s[width-x-<span class="num">1</span> + (width - y - <span class="num">1</span>)*width]
+
+    <span class="kwa">return</span> s
+
+<span class="kwa">def</span> <span class="kwd">printSolution</span>(solution):
+    <span class="kwa">for</span> y <span class="kwa">in</span> <span class="kwb">range</span>(height):
+        <span class="kwa">for</span> x <span class="kwa">in</span> <span class="kwb">range</span>(width):
+            <span class="kwa">print</span>(solution[x + y*width], end=<span class="str">' '</span>)
+
+        <span class="kwa">if</span> (y%<span class="num">2</span>) == <span class="num">0</span>:
+            <span class="kwa">print</span>(<span class="str">&quot;&quot;</span>)
+            <span class="kwa">print</span>(<span class="str">&quot;&quot;</span>, end=<span class="str">' '</span>)
+        <span class="kwa">else</span>:
+            <span class="kwa">print</span>(<span class="str">&quot;&quot;</span>)
+
+<span class="kwa">if</span> __name__ == <span class="str">&quot;__main__&quot;</span>:
+
+    <span class="kwa">if not</span> <span class="kwb">len</span>(argv) &gt; <span class="num">1</span>:
+        <span class="kwd">exit</span>()
+
+    <span class="kwd">solve</span>(<span class="kwb">int</span>(argv[<span class="num">1</span>]))
+    <span class="kwa">print</span>(<span class="kwb">len</span>(solutions), <span class="str">&quot;solutions found&quot;</span>)
+    <span class="kwa">print</span>()
+    <span class="kwd">printSolution</span>(<span class="kwb">min</span>(solutions))
+    <span class="kwa">print</span>()
+    <span class="kwd">printSolution</span>(<span class="kwb">max</span>(solutions))
+    <span class="kwa">print</span>()

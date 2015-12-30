@@ -1,0 +1,14 @@
+
+Fri, 17 Jul 2015 00:13:28 GMT
+
+MAKE:
+mv threadring.erlang threadring.erl
+/usr/local/src/otp_src_18.0_nohipe/bin/erlc threadring.erl
+rm threadring.erl
+0.28s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/otp_src_18.0_nohipe/bin/erl  -smp enable -noshell -run  threadring main 50000000
+
+PROGRAM OUTPUT:
+292

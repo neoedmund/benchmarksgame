@@ -1,0 +1,18 @@
+
+Tue, 30 Jun 2015 23:07:28 GMT
+
+MAKE:
+mv nbody.clojure-2.clojure nbody.clj
+/usr/local/src/jdk1.8.0_45/bin/java -Dclojure.compile.path=. -cp .:/usr/local/src/clojure/clojure-1.7.0.jar clojure.lang.Compile nbody
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Compiling nbody to .
+1.64s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts -Xmx8m -cp .:/usr/local/src/clojure/clojure-1.7.0.jar nbody 50000000
+
+PROGRAM OUTPUT:
+-0.169075164
+-0.169059907
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

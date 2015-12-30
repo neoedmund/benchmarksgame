@@ -1,0 +1,302 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">Based on C contribution by Alex Burlyga</span>
+<span class="com">Based on Java contribution by Michael Barker</span>
+<span class="com">Based on the original C++ contribution by The Anh Tran </span>
+<span class="com">Based on the #5 C contribution by Dmitry Vyukov </span>
+<span class="com">Contributed &amp; Modified by Andrew Moon</span>
+<span class="com"></span>
+<span class="com">Each chameneous creature is a standard OS thread.</span>
+<span class="com">Data exchange mechanism is gcc built-in atomic ops.</span>
+<span class="com">*/</span>
+
+
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;string&gt;</span>
+
+<span class="kwa">using namespace</span> std;
+
+<span class="kwb">struct</span> CPUs {
+   <span class="kwb">enum</span> { perslot = <span class="num">2</span> };
+   <span class="kwd">CPUs</span>() {
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">33</span>; i++ )
+         <span class="kwd">CPU_ZERO</span>( &amp;affinities[i] );
+      cpu_set_t &amp;cs = affinities[<span class="num">0</span>];
+      <span class="kwd">sched_getaffinity</span>( <span class="num">0</span>, <span class="kwa">sizeof</span>(cs), &amp;cs );
+
+      count = <span class="num">0</span>;
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; CPU_SETSIZE; i++ ) {
+         <span class="kwa">if</span> ( <span class="kwd">CPU_ISSET</span>( i, &amp;cs ) ) {
+            <span class="kwd">CPU_SET</span>( i, &amp;affinities[(count / perslot) + <span class="num">1</span>] );
+            count++;
+         }
+      }
+      mod = ( count &gt; <span class="num">2</span> ) ? count &gt;&gt; <span class="num">1</span> : <span class="num">1</span>;
+   }
+   
+   cpu_set_t *<span class="kwd">getaffinity</span>( <span class="kwb">int</span> slot ) { 
+      <span class="kwa">return</span> &amp;affinities[ slot ? ( slot % mod ) + <span class="num">1</span> : <span class="num">0</span> ]; 
+   }
+
+   <span class="kwb">int</span> count, mod;
+   cpu_set_t affinities[<span class="num">33</span>]; <span class="slc">// up to 64 cores!</span>
+} cpus;
+
+<span class="slc">// kludge to make running on a single core at least SOMEWHAT performant</span>
+<span class="kwb">struct</span> SingleCoreYield {
+   <span class="kwd">SingleCoreYield</span>() : <span class="kwd">counter</span>(<span class="num">0</span>) {}
+   <span class="kwb">void</span> <span class="kwd">Run</span>() {
+      <span class="kwa">if</span> ( cpus.count &lt;= <span class="num">1</span> || counter++ &gt; <span class="num">20000</span> ) {
+         <span class="kwd">sched_yield</span>();
+         counter = <span class="num">0</span>;
+      }
+   }
+
+<span class="kwc">protected</span>:
+   <span class="kwb">int</span> counter;
+};
+
+<span class="kwb">enum</span> Color { blue = <span class="num">0</span>, red, yellow, Invalid };
+
+<span class="slc">// stream operator to write a color</span>
+ostream &amp;<span class="kwc">operator</span>&lt;&lt; ( ostream &amp;s, <span class="kwb">const</span> Color &amp;c ) {
+   <span class="kwb">static const char</span> *names[] = { <span class="str">&quot;blue&quot;</span>, <span class="str">&quot;red&quot;</span>, <span class="str">&quot;yellow&quot;</span>, <span class="str">&quot;Invalid&quot;</span> };
+   s &lt;&lt; names[c];
+   <span class="kwa">return</span> s;
+}
+
+<span class="slc">// +operator to add colors</span>
+Color <span class="kwc">operator</span>+( <span class="kwb">const</span> Color &amp;c1, <span class="kwb">const</span> Color &amp;c2 ) {
+   <span class="kwa">switch</span> ( c1 ) {
+      <span class="kwa">case</span> blue: <span class="kwa">switch</span> ( c2 ) {
+         <span class="kwa">case</span> blue:   <span class="kwa">return</span> blue;
+         <span class="kwa">case</span> red:    <span class="kwa">return</span> yellow;
+         <span class="kwa">case</span> yellow: <span class="kwa">return</span> red;
+         <span class="kwa">default</span>:;
+      }
+      <span class="kwa">case</span> red: <span class="kwa">switch</span> ( c2 ) {
+         <span class="kwa">case</span> blue:   <span class="kwa">return</span> yellow;
+         <span class="kwa">case</span> red:    <span class="kwa">return</span> red;
+         <span class="kwa">case</span> yellow: <span class="kwa">return</span> blue;
+         <span class="kwa">default</span>:;
+      }
+      <span class="kwa">case</span> yellow: <span class="kwa">switch</span> ( c2 ) {
+         <span class="kwa">case</span> blue:   <span class="kwa">return</span> red;
+         <span class="kwa">case</span> red:    <span class="kwa">return</span> blue;
+         <span class="kwa">case</span> yellow: <span class="kwa">return</span> yellow;
+         <span class="kwa">default</span>:;
+      }
+      <span class="kwa">default</span>:;
+   }
+   <span class="kwa">return</span> Invalid;
+}
+
+
+<span class="slc">// spells out a number as named digits</span>
+string <span class="kwd">SpellNumber</span>( <span class="kwb">int</span> n ) {
+   <span class="kwb">static const char</span> *numbers[] = {
+      <span class="str">&quot; zero&quot;</span>, <span class="str">&quot; one&quot;</span>, <span class="str">&quot; two&quot;</span>,
+      <span class="str">&quot; three&quot;</span>, <span class="str">&quot; four&quot;</span>, <span class="str">&quot; five&quot;</span>,
+      <span class="str">&quot; six&quot;</span>, <span class="str">&quot; seven&quot;</span>, <span class="str">&quot; eight&quot;</span>,
+      <span class="str">&quot; nine&quot;</span>
+   };
+
+   string str;
+   <span class="kwa">do</span> {
+      str.<span class="kwd">insert</span>( <span class="num">0</span>, numbers[n % <span class="num">10</span>] );
+      n /= <span class="num">10</span>;
+   } <span class="kwa">while</span> ( n );
+
+   <span class="kwa">return</span> str;
+}
+
+<span class="kwb">struct</span> MeetingPlace;
+
+<span class="kwb">struct</span> Creature {
+   <span class="kwd">Creature</span>() : <span class="kwd">id</span>(<span class="num">0</span>), <span class="kwd">count</span>(<span class="num">0</span>), <span class="kwd">sameCount</span>(<span class="num">0</span>), <span class="kwd">met</span>(<span class="kwa">false</span>) {}
+
+   <span class="slc">// output our total visits and self visits, returning total visits</span>
+   <span class="kwb">int</span> <span class="kwd">Display</span>() <span class="kwb">const</span> {
+      cout &lt;&lt; count &lt;&lt; <span class="kwd">SpellNumber</span>(sameCount) &lt;&lt; endl;
+      <span class="kwa">return</span> count;
+   }
+
+   <span class="kwb">void</span> <span class="kwd">Meet</span>( Creature *other ) {
+      <span class="kwa">if</span> ( id == other-&gt;id ) {
+         sameCount++;
+         other-&gt;sameCount++;
+      }
+
+      count++;
+      other-&gt;count++;
+
+      Color newcolor = color + other-&gt;color;
+      other-&gt;color = color = newcolor;
+      other-&gt;met = <span class="kwa">true</span>;
+   }
+
+   <span class="kwb">void</span> <span class="kwd">Init</span>( MeetingPlace *mp, Color c );
+   <span class="kwb">void</span> <span class="kwd">Run</span>();
+
+   <span class="kwb">void</span> <span class="kwd">Start</span>( <span class="kwb">int</span> affinity = <span class="num">0</span> ) {
+      <span class="kwd">pthread_attr_init</span>( &amp;threadAttr );
+      <span class="kwa">if</span> ( cpus.count &gt;= <span class="num">4</span> ) {
+         cpu_set_t *cores = cpus.<span class="kwd">getaffinity</span>( affinity );
+         <span class="kwd">pthread_attr_setaffinity_np</span>( &amp;threadAttr, <span class="kwa">sizeof</span>(cpu_set_t), cores );
+      }
+      <span class="kwd">pthread_create</span>( &amp;threadHandle, &amp;threadAttr, &amp;Creature::ThreadRun, <span class="kwa">this</span> );
+   }
+
+   <span class="kwb">static void</span> *<span class="kwd">ThreadRun</span>( <span class="kwb">void</span> *param ) {
+      ((Creature*)param)-&gt;<span class="kwd">Run</span>();
+      <span class="kwa">return</span> <span class="num">0</span>;
+   }
+
+   <span class="kwb">void</span> <span class="kwd">Wait</span>() <span class="kwb">const</span> {
+      <span class="kwd">pthread_join</span>( threadHandle, NULL );
+   }
+
+   <span class="kwb">void</span> <span class="kwd">WaitUntilMet</span>() {
+      SingleCoreYield yield;
+      <span class="kwa">while</span> ( !met )
+         yield.<span class="kwd">Run</span>();
+      met = <span class="kwa">false</span>;
+   }
+
+   <span class="kwb">int</span> id, count, sameCount;
+   <span class="kwc">volatile</span> <span class="kwb">bool</span> met; <span class="slc">// met is set from other threads, don't cache in a register</span>
+   Color initialColor, color;
+
+<span class="kwc">protected</span>:
+   pthread_t threadHandle;
+   pthread_attr_t threadAttr;
+   MeetingPlace *place;
+};
+
+<span class="kwb">struct</span> MeetingPlace {
+   <span class="slc">// max # of creatures is ( 1 &lt;&lt; S ) - 1, max # of meetings is ( 1 &lt;&lt; ( 32 - S ) ) - 1</span>
+   <span class="kwb">enum</span> { S = <span class="num">4</span>, creatureMask = (<span class="num">1</span> &lt;&lt; S) - <span class="num">1</span> };
+   <span class="kwd">MeetingPlace</span>( <span class="kwb">int</span> N ) : <span class="kwd">state</span>(N &lt;&lt; S), <span class="kwd">idGenerator</span>(<span class="num">1</span>) { creatures = <span class="kwa">new</span> Creature *[N]; }
+   ~<span class="kwd">MeetingPlace</span>() { <span class="kwa">delete</span>[] creatures; }
+   
+   <span class="kwb">void</span> <span class="kwd">Register</span>( Creature &amp;creature ) {
+      creature.id = idGenerator++;
+      creatures[creature.id] = &amp;creature;
+   }
+
+   <span class="kwb">void</span> <span class="kwd">MeetUp</span>( Creature *creature ) {
+      <span class="kwb">int</span> useState = state;
+      <span class="kwa">while</span> ( <span class="kwa">true</span> ) {
+         <span class="kwb">int</span> waiting = useState &amp; creatureMask, tryState = <span class="num">0</span>;
+         <span class="kwa">if</span> ( waiting )
+            <span class="slc">// there's a waiting creature, set the new state to meetingCount - 1</span>
+            tryState = ( ( useState &amp; ~creatureMask ) - ( <span class="num">1</span> &lt;&lt; S ) );
+         <span class="kwa">else if</span> ( useState )
+            <span class="slc">// nobody waiting and meetings left, set ourselves to the waiting creature</span>
+            tryState = useState | creature-&gt;id;
+         <span class="kwa">else</span>
+            <span class="slc">// nobody waiting and no meetings left, we're done</span>
+            <span class="kwa">return</span>;
+
+         <span class="kwb">int</span> oldState = <span class="kwd">__sync_val_compare_and_swap</span>( &amp;state, useState, tryState );
+         <span class="kwa">if</span> ( oldState == useState ) {
+            <span class="kwa">if</span> ( waiting )
+               creature-&gt;<span class="kwd">Meet</span>( creatures[waiting] );
+            <span class="kwa">else</span>
+               creature-&gt;<span class="kwd">WaitUntilMet</span>();
+            useState = state;
+         } <span class="kwa">else</span> {
+            useState = oldState;
+         }
+      }
+   }
+
+<span class="kwc">protected</span>:
+   <span class="kwc">volatile</span> <span class="kwb">int</span> state; <span class="slc">// state is read &amp; set from other threads, don't cache in a register</span>
+   <span class="kwb">int</span> idGenerator;
+   Creature **creatures;
+};
+
+
+
+<span class="kwb">void</span> Creature::<span class="kwd">Init</span>( MeetingPlace *mp, Color c ) {
+   place = mp;
+   initialColor = color = c;
+   place-&gt;<span class="kwd">Register</span>( *<span class="kwa">this</span> );
+}
+
+<span class="kwb">void</span> Creature::<span class="kwd">Run</span>() {
+   place-&gt;<span class="kwd">MeetUp</span>( <span class="kwa">this</span> );
+}
+
+
+<span class="kwc">template</span>&lt; <span class="kwb">int</span> ncolor &gt;
+<span class="kwb">struct</span> Game {
+   <span class="kwd">Game</span>( <span class="kwb">int</span> meetings, <span class="kwb">const</span> <span class="kwd">Color</span> (&amp;color)[ncolor] ) : <span class="kwd">meetingPlace</span>(meetings) {
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; ncolor; i++ )
+         creatures[i].<span class="kwd">Init</span>( &amp;meetingPlace, color[i] );
+   }
+   
+   <span class="kwb">void</span> <span class="kwd">Start</span>(  <span class="kwb">int</span> affinity = <span class="num">0</span> ) {
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; ncolor; i++ )
+         creatures[i].<span class="kwd">Start</span>( affinity );
+   }
+
+   <span class="kwb">void</span> <span class="kwd">Wait</span>() {
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; ncolor; i++ )
+         creatures[i].<span class="kwd">Wait</span>();
+   }
+
+   <span class="kwb">void</span> <span class="kwd">Display</span>() {
+      <span class="slc">// display the initial color list</span>
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; ncolor; i++ )
+         cout &lt;&lt; <span class="str">&quot; &quot;</span> &lt;&lt; creatures[i].initialColor;
+      cout &lt;&lt; endl;
+
+      <span class="slc">// output each creature and sum up the total visits</span>
+      <span class="kwb">int</span> total = <span class="num">0</span>;
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; ncolor; i++ )
+         total += creatures[i].<span class="kwd">Display</span>();
+      cout &lt;&lt; <span class="kwd">SpellNumber</span>(total) &lt;&lt; endl &lt;&lt; endl;
+   }
+
+<span class="kwc">protected</span>:
+   MeetingPlace meetingPlace;
+   Creature creatures[ncolor];
+};
+
+
+<span class="kwb">int</span> <span class="kwd">main</span>( <span class="kwb">int</span> argc, <span class="kwb">const char</span> *argv[] ) {
+   <span class="kwb">const</span> Color r1[] = {
+      blue, red, yellow
+   };
+
+   <span class="kwb">const</span> Color r2[] = {
+      blue, red, yellow,
+      red, yellow, blue,
+      red, yellow, red,
+      blue
+   };
+
+   <span class="kwa">for</span> ( <span class="kwb">int</span> c1 = blue; c1 &lt;= yellow; c1++ )
+      <span class="kwa">for</span> ( <span class="kwb">int</span> c2 = blue; c2 &lt;= yellow; c2++ )
+         cout &lt;&lt; r1[c1] &lt;&lt; <span class="str">&quot; + &quot;</span> &lt;&lt; r1[c2] &lt;&lt; <span class="str">&quot; -&gt; &quot;</span> &lt;&lt; ( r1[c1] + r1[c2] ) &lt;&lt; endl;
+   cout &lt;&lt; endl;
+
+   <span class="kwb">int</span> n = ( argc &gt;= <span class="num">2</span> ) ? <span class="kwd">atoi</span>( argv[<span class="num">1</span>] ) : <span class="num">6000000</span>;
+
+   Game&lt; <span class="num">3</span>&gt; <span class="kwd">g1</span>( n, r1 ); 
+   Game&lt;<span class="num">10</span>&gt; <span class="kwd">g2</span>( n, r2 );
+   <span class="kwa">if</span> ( cpus.count &lt; <span class="num">4</span> ) {
+      g1.<span class="kwd">Start</span>(); g1.<span class="kwd">Wait</span>();
+      g2.<span class="kwd">Start</span>(); g2.<span class="kwd">Wait</span>();
+   } <span class="kwa">else</span> {
+      g1.<span class="kwd">Start</span>(<span class="num">1</span>); g2.<span class="kwd">Start</span>(<span class="num">2</span>);
+      g1.<span class="kwd">Wait</span>(); g2.<span class="kwd">Wait</span>();
+   }
+   g1.<span class="kwd">Display</span>();
+   g2.<span class="kwd">Display</span>();
+}

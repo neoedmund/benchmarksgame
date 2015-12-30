@@ -1,0 +1,193 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by K P anonymous</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;bufio&quot;</span>
+   <span class="str">&quot;bytes&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;io/ioutil&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+   <span class="str">&quot;sort&quot;</span>
+   <span class="str">&quot;sync&quot;</span>
+)
+
+<span class="kwa">type</span> entry <span class="kwa">struct</span> {
+   bs    []<span class="kwb">byte</span>
+   value <span class="kwb">int</span>
+   next  *entry
+}
+
+<span class="kwa">const</span> tabSize = <span class="num">2</span> &lt;&lt; <span class="num">16</span>
+
+<span class="kwa">type</span> Table <span class="kwa">struct</span> {
+   count <span class="kwb">int</span>
+   items [tabSize]*entry
+}
+
+<span class="kwa">func</span> (bt *Table) <span class="kwd">Dump</span>() []kNuc {
+   res := <span class="kwb">make</span>([]kNuc, bt.count)
+   i := <span class="num">0</span>
+   <span class="kwa">for</span> _, e := <span class="kwa">range</span> bt.items {
+      <span class="kwa">for</span> e != <span class="kwb">nil</span> {
+         res[i] = kNuc{name: e.bs, count: e.value}
+         i++
+         e = e.next
+      }
+   }
+   <span class="kwa">return</span> res
+}
+
+<span class="kwa">func</span> <span class="kwd">hashbytes</span>(seg []<span class="kwb">byte</span>) <span class="kwb">uint</span> {
+   l := <span class="kwb">len</span>(seg)
+   h := <span class="kwb">uint</span>(l)
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; l; i++ {
+      h = h*<span class="num">131</span> + <span class="kwb">uint</span>(seg[i])
+   }
+   <span class="kwa">return</span> h
+}
+
+<span class="kwa">func</span> (bt *Table) <span class="kwd">get</span>(bs []<span class="kwb">byte</span>) *entry {
+   ind := <span class="kwd">hashbytes</span>(bs) % <span class="kwb">uint</span>(tabSize)
+   e := bt.items[ind]
+   <span class="kwa">if</span> e == <span class="kwb">nil</span> {
+      r := &amp;entry{bs, <span class="num">0</span>, <span class="kwb">nil</span>}
+      bt.count++
+      bt.items[ind] = r
+      <span class="kwa">return</span> r
+   }
+   <span class="kwa">for</span> {
+      <span class="kwa">if</span> bytes.<span class="kwd">Equal</span>(e.bs, bs) {
+         <span class="kwa">return</span> e
+      }
+      <span class="kwa">if</span> e.next == <span class="kwb">nil</span> {
+         r := &amp;entry{bs, <span class="num">0</span>, <span class="kwb">nil</span>}
+         bt.count++
+         e.next = r
+         <span class="kwa">return</span> r
+      }
+      e = e.next
+   }
+   <span class="kwa">return</span> <span class="kwb">nil</span>
+}
+
+<span class="kwa">var</span> (
+   tables [<span class="num">8</span>]Table
+   ti     = <span class="num">0</span>
+   tmux   sync.Mutex
+)
+
+<span class="kwa">func</span> <span class="kwd">newTable</span>() *Table {
+   tmux.<span class="kwd">Lock</span>()
+   t := &amp;tables[ti]
+   ti++
+   tmux.<span class="kwd">Unlock</span>()
+   <span class="kwa">return</span> t
+}
+
+<span class="kwa">func</span> <span class="kwd">count</span>(data []<span class="kwb">byte</span>, n <span class="kwb">int</span>) *Table {
+   counts := <span class="kwd">newTable</span>()
+   top := <span class="kwb">len</span>(data) - n
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt;= top; i++ {
+      counts.<span class="kwd">get</span>(data[i:i+n]).value++
+   }
+   <span class="kwa">return</span> counts
+}
+
+<span class="kwa">func</span> <span class="kwd">countOne</span>(data []<span class="kwb">byte</span>, s []<span class="kwb">byte</span>) <span class="kwb">int</span> {
+   <span class="kwa">return</span> <span class="kwd">count</span>(data, <span class="kwb">len</span>(s)).<span class="kwd">get</span>(s).value
+}
+
+<span class="kwa">type</span> kNuc <span class="kwa">struct</span> {
+   name  []<span class="kwb">byte</span>
+   count <span class="kwb">int</span>
+}
+
+<span class="kwa">type</span> kNucArray []kNuc
+
+<span class="kwa">func</span> (kn kNucArray) <span class="kwd">Len</span>() <span class="kwb">int</span>      { <span class="kwa">return</span> <span class="kwb">len</span>(kn) }
+<span class="kwa">func</span> (kn kNucArray) <span class="kwd">Swap</span>(i, j <span class="kwb">int</span>) { kn[i], kn[j] = kn[j], kn[i] }
+<span class="kwa">func</span> (kn kNucArray) <span class="kwd">Less</span>(i, j <span class="kwb">int</span>) <span class="kwb">bool</span> {
+   <span class="kwa">if</span> kn[i].count == kn[j].count {
+      <span class="kwa">return</span> bytes.<span class="kwd">Compare</span>(kn[i].name, kn[j].name) &lt; <span class="num">0</span> <span class="slc">// sort down</span>
+   }
+   <span class="kwa">return</span> kn[i].count &gt; kn[j].count
+}
+
+<span class="kwa">func</span> <span class="kwd">printKnucs</span>(a kNucArray) {
+   sum := <span class="num">0</span>
+   <span class="kwa">for</span> _, kn := <span class="kwa">range</span> a {
+      sum += kn.count
+   }
+   <span class="kwa">for</span> _, kn := <span class="kwa">range</span> a {
+      fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">%.3f</span><span class="esc">\n</span><span class="str">&quot;</span>, kn.name, <span class="num">100</span>*<span class="kwb">float64</span>(kn.count)/<span class="kwb">float64</span>(sum))
+   }
+   fmt.<span class="kwd">Print</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   runtime.<span class="kwd">GOMAXPROCS</span>(<span class="num">4</span>)
+   in := bufio.<span class="kwd">NewReader</span>(os.Stdin)
+   three := []<span class="kwb">byte</span>(<span class="str">&quot;&gt;THREE &quot;</span>)
+   <span class="kwa">for</span> {
+      line, err := in.<span class="kwd">ReadSlice</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+      <span class="kwa">if</span> err != <span class="kwb">nil</span> {
+         <span class="kwb">panic</span>(err)
+      }
+      <span class="kwa">if</span> bytes.<span class="kwd">HasPrefix</span>(line, three) {
+         <span class="kwa">break</span>
+      }
+   }
+   data, err := ioutil.<span class="kwd">ReadAll</span>(in)
+   <span class="kwa">if</span> err != <span class="kwb">nil</span> {
+      <span class="kwb">panic</span>(err)
+   }
+   <span class="slc">// delete the newlines and convert to upper case</span>
+   j := <span class="num">0</span>
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; <span class="kwb">len</span>(data); i++ {
+      <span class="kwa">if</span> data[i] != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> {
+         data[j] = data[i] &amp;^ <span class="str">' '</span> <span class="slc">// upper case</span>
+         j++
+      }
+   }
+   str := data[<span class="num">0</span>:j]
+
+   <span class="kwa">var</span> wg sync.WaitGroup
+   async := <span class="kwa">func</span>(fn <span class="kwa">func</span>()) {
+      wg.<span class="kwd">Add</span>(<span class="num">1</span>)
+      <span class="kwa">go func</span>() {
+         <span class="kwd">fn</span>()
+         wg.<span class="kwd">Done</span>()
+      }()
+   }
+
+   <span class="kwa">var</span> arrs [<span class="num">2</span>]kNucArray
+   <span class="kwd">async</span>(<span class="kwa">func</span>() {
+      arrs[<span class="num">0</span>] = <span class="kwd">count</span>(str, <span class="num">1</span>).<span class="kwd">Dump</span>()
+      sort.<span class="kwd">Sort</span>(arrs[<span class="num">0</span>])
+   })
+   <span class="kwd">async</span>(<span class="kwa">func</span>() {
+      arrs[<span class="num">1</span>] = <span class="kwd">count</span>(str, <span class="num">2</span>).<span class="kwd">Dump</span>()
+      sort.<span class="kwd">Sort</span>(arrs[<span class="num">1</span>])
+   })
+
+   interests := []<span class="kwb">string</span>{<span class="str">&quot;GGT&quot;</span>, <span class="str">&quot;GGTA&quot;</span>, <span class="str">&quot;GGTATT&quot;</span>, <span class="str">&quot;GGTATTTTAATT&quot;</span>, <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>}
+   results := <span class="kwb">make</span>([]<span class="kwb">string</span>, <span class="kwb">len</span>(interests))
+   <span class="kwa">for</span> i, s := <span class="kwa">range</span> interests {
+      s, i := s, i
+      <span class="kwd">async</span>(<span class="kwa">func</span>() {
+         results[i] = fmt.<span class="kwd">Sprintf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">%s</span><span class="str">&quot;</span>, <span class="kwd">countOne</span>(str, []<span class="kwb">byte</span>(s)), s)
+      })
+   }
+   wg.<span class="kwd">Wait</span>()
+   <span class="kwd">printKnucs</span>(arrs[<span class="num">0</span>])
+   <span class="kwd">printKnucs</span>(arrs[<span class="num">1</span>])
+   <span class="kwa">for</span> _, rc := <span class="kwa">range</span> results {
+      fmt.<span class="kwd">Println</span>(rc)
+   }
+}

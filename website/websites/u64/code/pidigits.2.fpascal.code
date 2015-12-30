@@ -1,0 +1,132 @@
+<span class="com">{ The Computer Language Benchmarks Game</span>
+<span class="com">  http://benchmarksgame.alioth.debian.org</span>
+<span class="com"></span>
+<span class="com">  contributed by Vincent Snijders</span>
+<span class="com">  gmp headers by Karl-Michael Schindler</span>
+<span class="com">}</span>
+
+<span class="com">{$linklib libgmp.so}</span>
+<span class="com">{$mode objfpc}</span>
+
+<span class="kwa">program</span> pidigits;
+
+<span class="kwa">uses</span>
+  ctypes;
+  
+<span class="kwa">type</span>
+
+mp_limb_t        = cuint;
+mp_ptr           = ^mp_limb_t;
+
+mpz_t = <span class="kwa">record</span>
+  mp_alloc, mp_size : cint;
+  mp_d    : mp_ptr
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">mpz_init</span> (<span class="kwa">var</span> Dest: mpz_t);
+ <span class="kwa">cdecl</span>; <span class="kwa">external</span> name <span class="str">'__gmpz_init'</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">mpz_init_set_ui</span> (<span class="kwa">var</span> Dest: mpz_t; Src: culong);
+ <span class="kwa">cdecl</span>; <span class="kwa">external</span> name <span class="str">'__gmpz_init_set_ui'</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">mpz_mul_ui</span> (<span class="kwa">var</span> Dest: mpz_t; <span class="kwa">var</span> Src1: mpz_t; Src2: culong);
+ <span class="kwa">cdecl</span>; <span class="kwa">external</span> name <span class="str">'__gmpz_mul_ui'</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">mpz_mul_si</span> (<span class="kwa">var</span> Dest: mpz_t; <span class="kwa">var</span> Src1: mpz_t; Src2: cint);
+ <span class="kwa">cdecl</span>; <span class="kwa">external</span> name <span class="str">'__gmpz_mul_si'</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">mpz_add</span> (<span class="kwa">var</span> Dest: mpz_t; <span class="kwa">var</span> Src1, Src2: mpz_t);
+ <span class="kwa">cdecl</span>; <span class="kwa">external</span> name <span class="str">'__gmpz_add'</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">mpz_tdiv_q</span> (<span class="kwa">var</span> Dest: mpz_t; <span class="kwa">var</span> Src1, Src2: mpz_t);
+ <span class="kwa">cdecl</span>; <span class="kwa">external</span> name <span class="str">'__gmpz_tdiv_q'</span>;
+
+<span class="kwa">function</span>  <span class="kwd">mpz_get_ui</span> (<span class="kwa">var</span> Src: mpz_t): culong;
+ <span class="kwa">cdecl</span>; <span class="kwa">external</span> name <span class="str">'__gmpz_get_ui'</span>;
+
+  
+<span class="kwa">procedure</span> <span class="kwd">PrintPiDigits</span>(NumDigits: <span class="kwb">integer</span>);
+<span class="kwa">var</span>
+  q, r, s, t: mpz_t; <span class="slc">// Transformation matrix components.</span>
+  u, v, w: mpz_t; <span class="slc">// Temporary variables</span>
+  i, k, digit, c: <span class="kwb">integer</span>;
+  line: <span class="kwa">string</span>[<span class="num">10</span>];
+  
+  <span class="kwa">function</span> <span class="kwd">Extract</span>(x:<span class="kwb">cardinal</span>) : <span class="kwb">integer</span>;
+  <span class="kwa">begin</span>
+    <span class="kwd">mpz_mul_ui</span>(u, q, x);
+    <span class="kwd">mpz_add</span>(u, u, r);
+    <span class="kwd">mpz_mul_ui</span>(v, s, x);
+    <span class="kwd">mpz_add</span>(v, v, t);
+    <span class="kwd">mpz_tdiv_q</span>(w, u, v);
+    result := <span class="kwd">mpz_get_ui</span>(w);
+  <span class="kwa">end</span>;
+
+  <span class="kwa">function</span> IsSafe : <span class="kwb">boolean</span>;
+  <span class="kwa">begin</span>
+    result := digit = <span class="kwd">Extract</span>(<span class="num">4</span>);
+  <span class="kwa">end</span>;
+
+  <span class="kwa">procedure</span> Produce;
+  <span class="kwa">begin</span>
+    <span class="kwd">mpz_mul_si</span>(r, r, <span class="num">10</span>);
+    <span class="kwd">mpz_mul_si</span>(v, t, -<span class="num">10</span> * digit);
+    <span class="kwd">mpz_add</span>(r, r, v);
+    <span class="kwd">mpz_mul_si</span>(q, q, <span class="num">10</span>);
+  <span class="kwa">end</span>;
+
+  <span class="kwa">procedure</span> Consume;
+  <span class="kwa">begin</span>
+    <span class="kwd">inc</span>(k);
+    <span class="kwd">mpz_mul_si</span>(r, r, <span class="num">2</span>*k+<span class="num">1</span>);
+    <span class="kwd">mpz_mul_si</span>(u, q, <span class="num">4</span>*k+<span class="num">2</span>);
+    <span class="kwd">mpz_add</span>(r, r, u);
+    <span class="kwd">mpz_mul_si</span>(t, t, <span class="num">2</span>*k+<span class="num">1</span>);
+    <span class="kwd">mpz_mul_si</span>(v, s, <span class="num">4</span>*k+<span class="num">2</span>);
+    <span class="kwd">mpz_add</span>(t, t, v);
+    <span class="kwd">mpz_mul_si</span>(s, s, k);
+    <span class="kwd">mpz_mul_si</span>(q, q, k);
+  <span class="kwa">end</span>;
+
+<span class="kwa">begin</span>
+  k := <span class="num">0</span>;
+  i := <span class="num">0</span>;
+  c := <span class="num">0</span>;
+  <span class="kwd">setlength</span>(line, <span class="num">10</span>);
+  <span class="kwd">mpz_init_set_ui</span>(q, <span class="num">1</span>);
+  <span class="kwd">mpz_init_set_ui</span>(r, <span class="num">0</span>);
+  <span class="kwd">mpz_init_set_ui</span>(s, <span class="num">0</span>);
+  <span class="kwd">mpz_init_set_ui</span>(t, <span class="num">1</span>);
+  <span class="kwd">mpz_init</span>(u);
+  <span class="kwd">mpz_init</span>(v);
+  <span class="kwd">mpz_init</span>(w);
+  <span class="kwc">while</span> (i&lt;NumDigits) <span class="kwc">do</span> <span class="kwa">begin</span>
+    digit := <span class="kwd">Extract</span>(<span class="num">3</span>);
+    <span class="kwc">while</span> <span class="kwa">not</span> IsSafe <span class="kwc">do</span> <span class="kwa">begin</span>
+      Consume;
+      digit:= <span class="kwd">Extract</span>(<span class="num">3</span>);
+    <span class="kwa">end</span>;
+    Produce;
+    <span class="kwd">inc</span>(c);
+    line[c] := <span class="kwd">chr</span>(<span class="kwd">ord</span>(<span class="str">'0'</span>)+digit);
+    <span class="kwd">inc</span>(i);
+    <span class="kwc">if</span> c=<span class="num">10</span> <span class="kwc">then</span> <span class="kwa">begin</span>
+      <span class="kwd">writeln</span>(line, <span class="esc">#9</span><span class="str">':'</span>, i);
+      c := <span class="num">0</span>;
+    <span class="kwa">end</span>;
+  <span class="kwa">end</span>;
+  <span class="kwc">if</span> c&lt;&gt;<span class="num">0</span> <span class="kwc">then</span> <span class="kwa">begin</span>
+    <span class="kwd">SetLength</span>(line, c);
+    <span class="kwd">writeln</span>(line);
+  <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">var</span>
+  n: <span class="kwb">integer</span> = <span class="num">27</span>;
+
+<span class="kwa">begin</span>
+  <span class="kwc">if</span> (ParamCount=<span class="num">1</span>) <span class="kwc">then</span>
+    <span class="kwd">val</span>(<span class="kwd">ParamStr</span>(<span class="num">1</span>), n);
+  <span class="kwd">PrintPiDigits</span>(n);
+<span class="kwa">end</span>.
+

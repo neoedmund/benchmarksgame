@@ -1,0 +1,121 @@
+<span class="slc"># The Computer Language Benchmarks game</span>
+<span class="slc">#  http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc">#  contributed by Barry Walsh</span>
+<span class="slc">#  optimized by Mykola Zubach</span>
+
+<span class="slc"># port of fasta.rb #6 </span>
+
+<span class="kwa">use</span> strict;
+<span class="kwa">use</span> warnings;
+<span class="kwa">use</span> feature <span class="str">'say'</span>;
+
+<span class="kwa">use</span> constant SEQ_WIDTH =&gt; <span class="num">60</span>;
+
+<span class="kwa">use</span> constant IM =&gt; <span class="num">139968</span>;
+<span class="kwa">use</span> constant IA =&gt; <span class="num">3877</span>;
+<span class="kwa">use</span> constant IC =&gt; <span class="num">29573</span>;
+
+<span class="kwc">my</span> <span class="kwb">$LAST</span> = <span class="num">42</span>;
+
+<span class="kwc">my</span> <span class="kwb">$alu</span> =
+   <span class="str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG'</span> .
+   <span class="str">'GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA'</span> .
+   <span class="str">'CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT'</span> .
+   <span class="str">'ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA'</span> .
+   <span class="str">'GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG'</span> .
+   <span class="str">'AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC'</span> .
+   <span class="str">'AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span>;
+
+<span class="kwc">my</span> <span class="kwb">$iub</span> = [
+   [ <span class="str">'a'</span>, <span class="num">0.27</span> ],
+   [ <span class="str">'c'</span>, <span class="num">0.12</span> ],
+   [ <span class="str">'g'</span>, <span class="num">0.12</span> ],
+   [ <span class="str">'t'</span>, <span class="num">0.27</span> ],
+   [ <span class="str">'B'</span>, <span class="num">0.02</span> ],
+   [ <span class="str">'D'</span>, <span class="num">0.02</span> ],
+   [ <span class="str">'H'</span>, <span class="num">0.02</span> ],
+   [ <span class="str">'K'</span>, <span class="num">0.02</span> ],
+   [ <span class="str">'M'</span>, <span class="num">0.02</span> ],
+   [ <span class="str">'N'</span>, <span class="num">0.02</span> ],
+   [ <span class="str">'R'</span>, <span class="num">0.02</span> ],
+   [ <span class="str">'S'</span>, <span class="num">0.02</span> ],
+   [ <span class="str">'V'</span>, <span class="num">0.02</span> ],
+   [ <span class="str">'W'</span>, <span class="num">0.02</span> ],
+   [ <span class="str">'Y'</span>, <span class="num">0.02</span> ]
+];
+
+<span class="kwc">my</span> <span class="kwb">$homosapiens</span> = [
+   [ <span class="str">'a'</span>, <span class="num">0.3029549426680</span> ],
+   [ <span class="str">'c'</span>, <span class="num">0.1979883004921</span> ],
+   [ <span class="str">'g'</span>, <span class="num">0.1975473066391</span> ],
+   [ <span class="str">'t'</span>, <span class="num">0.3015094502008</span> ]
+];
+
+<span class="kwa">sub</span> make_repeat_fasta {
+   <span class="kwc">my</span> (<span class="kwb">$src</span>, <span class="kwb">$n</span>) = <span class="kwb">&#64;_</span>;
+   <span class="kwc">my</span> <span class="kwb">$l</span> = <span class="kwc">length</span> <span class="kwb">$src</span>;
+   <span class="kwc">my</span> <span class="kwb">$start</span> = <span class="num">0</span>;
+
+   <span class="kwb">$src</span> .= <span class="kwb">$src</span>;
+   <span class="kwa">while</span>(<span class="kwb">$n</span> &gt; SEQ_WIDTH) {
+      <span class="kwb">$n</span> -= SEQ_WIDTH;
+      <span class="kwc">say substr</span>(<span class="kwb">$src</span>, <span class="kwb">$start</span>, SEQ_WIDTH);
+      <span class="kwb">$start</span> += SEQ_WIDTH;
+      <span class="kwb">$start</span> -= <span class="kwb">$l</span> <span class="kwa">if</span> <span class="kwb">$start</span> &gt; <span class="kwb">$l</span>;
+   }
+   <span class="kwc">say substr</span>(<span class="kwb">$src</span>, <span class="kwb">$start</span>, <span class="kwb">$n</span>);
+}
+
+<span class="kwa">sub</span> make_random_fasta {
+   <span class="kwc">my</span> (<span class="kwb">$table</span>, <span class="kwb">$n</span>) = <span class="kwb">&#64;_</span>;
+
+   <span class="kwc">my</span> <span class="kwb">$scanner</span>;
+   <span class="kwc">my</span> <span class="kwb">$prob_acc</span>;
+   <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$i</span> (<span class="num">0</span> .. $<span class="slc">#$table) {</span>
+      <span class="kwb">$prob_acc</span> += IM * <span class="kwb">$table</span>-&gt;[<span class="kwb">$i</span>]-&gt;[<span class="num">1</span>];
+      <span class="kwc">my</span> <span class="kwb">$char</span> = <span class="kwb">$table</span>-&gt;[<span class="kwb">$i</span>]-&gt;[<span class="num">0</span>];
+
+      <span class="kwa">if</span>(<span class="kwb">$i</span> == <span class="num">0</span>) {
+         <span class="kwb">$scanner</span> .= <span class="str">&quot;if(\</span><span class="ipl">$LAST</span> <span class="str">&lt;</span> <span class="ipl">$prob_acc</span><span class="str">) { \</span><span class="ipl">$str</span> <span class="str">.= '</span><span class="ipl">$char</span><span class="str">'; }</span><span class="esc">\n</span><span class="str">&quot;</span>;
+      } <span class="kwa">elsif</span>(<span class="kwb">$i</span> == $<span class="slc">#$table) {</span>
+         <span class="kwb">$scanner</span> .= <span class="str">&quot;else { \</span><span class="ipl">$str</span> <span class="str">.= '</span><span class="ipl">$char</span><span class="str">'; }</span><span class="esc">\n</span><span class="str">&quot;</span>;
+      } <span class="kwa">else</span> {
+         <span class="kwb">$scanner</span> .= <span class="str">&quot;elsif(\</span><span class="ipl">$LAST</span> <span class="str">&lt;</span> <span class="ipl">$prob_acc</span><span class="str">) { \</span><span class="ipl">$str</span> <span class="str">.= '</span><span class="ipl">$char</span><span class="str">'; }</span><span class="esc">\n</span><span class="str">&quot;</span>;
+      }
+   }
+
+   <span class="kwc">my</span> <span class="kwb">$code</span> = <span class="str">'</span>
+<span class="str">while(</span><span class="ipl">$n</span> <span class="str">&gt;= SEQ_WIDTH) {</span>
+<span class="str">   my</span> <span class="ipl">$str</span><span class="str">;</span>
+<span class="str">   for (1 .. SEQ_WIDTH) {</span>
+<span class="str"></span>      <span class="ipl">$LAST</span> <span class="str">= (</span><span class="ipl">$LAST</span> <span class="str">* IA + IC) % IM;</span>
+<span class="str">      '</span> . <span class="kwb">$scanner</span> . <span class="str">'</span>
+<span class="str">   }</span>
+<span class="str"></span>   <span class="ipl">$n</span> <span class="str">-= SEQ_WIDTH;</span>
+<span class="str">   say</span> <span class="ipl">$str</span><span class="str">;</span>
+<span class="str">}</span>
+<span class="str">if(</span><span class="ipl">$n</span> <span class="str">&gt; 0) {</span>
+<span class="str">   my</span> <span class="ipl">$str</span><span class="str">;</span>
+<span class="str">   for (1 ..</span> <span class="ipl">$n</span><span class="str">) {</span>
+<span class="str"></span>      <span class="ipl">$LAST</span> <span class="str">= (</span><span class="ipl">$LAST</span> <span class="str">* IA + IC) % IM;</span>
+<span class="str">      '</span> . <span class="kwb">$scanner</span> . <span class="str">'</span>
+<span class="str">   }</span>
+<span class="str">   say</span> <span class="ipl">$str</span><span class="str">;</span>
+<span class="str">}</span>
+<span class="str">'</span>;
+   <span class="kwc">eval</span> <span class="kwb">$code</span>;
+}
+
+
+
+<span class="kwc">my</span> <span class="kwb">$n</span> = <span class="kwb">$ARGV</span>[<span class="num">0</span>] || <span class="num">27</span>;
+
+<span class="kwc">say</span> <span class="str">&quot;&gt;ONE Homo sapiens alu&quot;</span>;
+make_repeat_fasta(<span class="kwb">$alu</span>, <span class="kwb">$n</span>*<span class="num">2</span>);
+
+<span class="kwc">say</span> <span class="str">&quot;&gt;TWO IUB ambiguity codes&quot;</span>;
+make_random_fasta(<span class="kwb">$iub</span>, <span class="kwb">$n</span>*<span class="num">3</span>);
+
+<span class="kwc">say</span> <span class="str">&quot;&gt;THREE Homo sapiens frequency&quot;</span>;
+make_random_fasta(<span class="kwb">$homosapiens</span>, <span class="kwb">$n</span>*<span class="num">5</span>);

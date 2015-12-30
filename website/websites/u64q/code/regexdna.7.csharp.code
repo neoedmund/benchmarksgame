@@ -1,0 +1,92 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Jimmy Tang</span>
+<span class="com"> * modified by Josh Goldfoot</span>
+<span class="com"> */</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.IO;
+<span class="kwa">using</span> System.Linq;
+<span class="kwa">using</span> System.Text;
+<span class="kwa">using</span> System.Threading;
+<span class="kwa">using</span> System.Collections.Generic;
+<span class="kwa">using</span> System.Text.RegularExpressions;
+
+<span class="kwa">class</span> regexdna
+{
+    <span class="kwa">static</span> <span class="kwb">string</span> <span class="kwd">readStdIn</span>(out <span class="kwb">int</span> seqLength, out <span class="kwb">int</span> inputLength)
+    {
+        StringBuilder sb = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>(<span class="num">10000000</span>);
+        <span class="kwb">int</span> commentLength = <span class="num">0</span>;
+        String line;
+        <span class="kwa">using</span> (var r = <span class="kwa">new</span> <span class="kwd">StreamReader</span>(Console.<span class="kwd">OpenStandardInput</span>()))
+        {
+            <span class="kwa">while</span> ((line = r.<span class="kwd">ReadLine</span>()) != <span class="kwa">null</span>)
+            {
+                <span class="kwa">if</span> (line[<span class="num">0</span>] == <span class="str">'&gt;'</span>)
+                    commentLength += line.Length + <span class="num">1</span>;
+                <span class="kwa">else</span>
+                {
+                    sb.<span class="kwd">Append</span>(line);
+                    commentLength += <span class="num">1</span>;
+                }
+            }
+        }
+        seqLength = sb.Length;
+        inputLength = seqLength + commentLength;
+        <span class="kwa">return</span> sb.<span class="kwd">ToString</span>();
+    }
+
+    <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">Main</span>()
+    {
+        <span class="kwb">int</span> seqLength, initialLength;
+        var sequence = <span class="kwd">readStdIn</span>(out seqLength, out initialLength);
+
+        <span class="kwb">string</span>[] variants = {
+           <span class="str">&quot;agggtaaa|tttaccct&quot;</span>
+          ,<span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>
+          ,<span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>
+          ,<span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>
+          ,<span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>
+          ,<span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>
+          ,<span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>
+          ,<span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>
+          ,<span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>
+        };
+
+        var flags = variants.<span class="kwd">Select</span>((v, i) =&gt;
+        {
+            var flag = <span class="kwa">new</span> <span class="kwd">ManualResetEvent</span>(<span class="kwa">false</span>);
+            ThreadPool.<span class="kwd">QueueUserWorkItem</span>(x =&gt;
+            {
+                Regex r = <span class="kwa">new</span> <span class="kwd">Regex</span>(v);
+                <span class="kwb">int</span> count = <span class="num">0</span>;
+                <span class="kwa">for</span> (Match m = r.<span class="kwd">Match</span>(sequence); m.Success; m = m.<span class="kwd">NextMatch</span>()) count++;
+                variants[i] += <span class="str">&quot; &quot;</span> + count;
+                flag.<span class="kwd">Set</span>();
+            });
+            <span class="kwa">return</span> flag;
+        });
+        var newSequenceFlag = <span class="kwa">new</span> <span class="kwd">ManualResetEvent</span>(<span class="kwa">false</span>);
+        <span class="kwb">string</span> newSequence = <span class="str">&quot;&quot;</span>;
+        ThreadPool.<span class="kwd">QueueUserWorkItem</span>(x =&gt;
+        {
+            var dict = <span class="kwa">new</span> Dictionary&lt;<span class="kwb">string</span>, <span class="kwb">string</span>&gt; {
+                {<span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>}, {<span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>},   {<span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>}, {<span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>},
+                {<span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>},   {<span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>}, {<span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>},   {<span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>},
+                {<span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>}, {<span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>},     {<span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>} 
+            };
+            newSequence = <span class="kwa">new</span> <span class="kwd">Regex</span>(<span class="str">&quot;[WYKMSRBDVHN]&quot;</span>).<span class="kwd">Replace</span>(sequence, m =&gt; dict[m.Value]);
+            newSequenceFlag.<span class="kwd">Set</span>();
+        });
+        WaitHandle.<span class="kwd">WaitAll</span>(flags.<span class="kwd">ToArray</span>());
+        newSequenceFlag.<span class="kwd">WaitOne</span>();
+
+        Console.<span class="kwd">WriteLine</span>(<span class="kwb">string</span>.<span class="kwd">Join</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>, variants));
+        Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str"></span><span class="ipl">{0}</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">{1}</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">{2}</span><span class="str">&quot;</span>, initialLength, seqLength, newSequence.Length);
+
+    }
+
+
+}

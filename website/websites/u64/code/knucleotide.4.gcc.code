@@ -1,0 +1,381 @@
+<span class="com">/* </span>
+<span class="com"> * The Computer Language Benchmarks Game </span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Mr Ledrug</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+<span class="ppc">#include &lt;unistd.h&gt;</span>
+<span class="ppc">#include &lt;ctype.h&gt;</span>
+<span class="ppc">#include &lt;stdint.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned char</span> byte;
+byte * input;
+<span class="kwb">size_t</span> input_len;
+
+byte trans[<span class="num">128</span>];
+<span class="kwb">const char</span> *codes = <span class="str">&quot;ACGT&quot;</span>;
+
+<span class="slc">// read in all the &quot;acgt&quot;s and translate them to numbers 0-3</span>
+<span class="kwb">void</span> <span class="kwd">get_input</span>(<span class="kwb">void</span>) {
+   <span class="kwb">int</span> fd = <span class="kwd">fileno</span>(stdin);
+   <span class="kwb">size_t</span> buflen = <span class="num">1</span>&lt;&lt;<span class="num">20</span>, len, i, section = <span class="num">0</span>;
+
+   input = <span class="kwd">malloc</span>(buflen + <span class="num">1</span>);
+   input_len = <span class="num">0</span>;
+
+   <span class="kwa">while</span> (<span class="num">1</span>) {
+      len = <span class="kwd">read</span>(fd, input, buflen);
+      <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; len; i++)
+         <span class="kwa">if</span> (input[i] == <span class="str">'&gt;'</span> &amp;&amp; ++section == <span class="num">3</span>)
+            <span class="kwa">goto</span> found;
+
+      <span class="kwa">if</span> (len &lt; buflen) <span class="kwa">return</span>;
+   }
+
+found:
+   input_len = buflen - i;
+   <span class="kwd">memmove</span>(input, input + i, input_len);
+   input[input_len] = <span class="num">0</span>;
+
+   <span class="kwa">while</span> (<span class="num">1</span>) {
+      <span class="kwa">if</span> (buflen &lt; input_len * <span class="num">2</span>) {
+         buflen *= <span class="num">2</span>;
+         input = <span class="kwd">realloc</span>(input, buflen + <span class="num">1</span>);
+      }
+
+      len = <span class="kwd">read</span>(fd, input + input_len, buflen - input_len);
+      input_len += len;
+      input[input_len] = <span class="num">0</span>;
+
+      <span class="kwa">if</span> (input_len &lt; buflen) {
+         byte *in = input, *ptr = input;
+         <span class="kwb">int</span> c;
+
+         <span class="kwa">while</span> (*in &amp;&amp; *in != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) in++;
+
+         <span class="kwa">while</span> ((c = *in++))
+            <span class="kwa">if</span> (c != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+               *ptr++ = trans[c];
+
+         input_len = ptr - input;
+         input[input_len] = <span class="num">0</span>;
+         <span class="kwa">return</span>;
+      }
+   }
+}
+
+<span class="ppc">#define SIMPLE_MAX 8</span>
+<span class="kwc">typedef</span> <span class="kwb">struct</span> { <span class="kwb">int</span> key, count; } count_t;
+count_t *counts[SIMPLE_MAX + <span class="num">1</span>];
+
+<span class="kwc">typedef</span> <span class="kwb">uint64_t</span> hkey_t;
+<span class="kwc">typedef</span> <span class="kwb">struct</span> {
+   hkey_t key;
+   <span class="kwb">int</span> count;
+} hrec_t;
+
+<span class="kwc">typedef</span> <span class="kwb">struct</span> {
+   <span class="kwb">int</span> size, cap, limit, mask;
+   hrec_t *table;
+   pthread_mutex_t lock;
+} ht_table;
+
+ht_table tables[<span class="num">19</span>];
+
+<span class="kwb">void</span> <span class="kwd">ht_init</span>(ht_table *t) {
+   t-&gt;size = <span class="num">0</span>;
+   t-&gt;cap = <span class="num">8</span>;
+   t-&gt;limit = t-&gt;cap / <span class="num">2</span>;
+   t-&gt;mask = t-&gt;cap - <span class="num">1</span>;
+   t-&gt;table = <span class="kwd">calloc</span>(t-&gt;cap, <span class="kwa">sizeof</span>(hrec_t));
+}
+
+<span class="kwb">void</span> <span class="kwd">extend_htable</span>(ht_table *t) {
+   <span class="kwb">int</span> i;
+   <span class="kwb">int</span> new_cap = t-&gt;cap * <span class="num">2</span>;
+   t-&gt;limit = new_cap / <span class="num">2</span>;
+   t-&gt;mask = new_cap - <span class="num">1</span>;
+
+   hrec_t *<span class="kwa">new</span> = <span class="kwd">calloc</span>(new_cap, <span class="kwa">sizeof</span>(hrec_t));
+   hrec_t *old = t-&gt;table;
+
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; t-&gt;cap; i++) {
+      <span class="kwa">if</span> (!old[i].count) <span class="kwa">continue</span>;
+      hrec_t *p = <span class="kwa">new</span> + (old[i].key &amp; t-&gt;mask);
+      <span class="kwa">if</span> (!p-&gt;count) {
+         *p = old[i];
+         <span class="kwa">continue</span>;
+      }
+      <span class="kwa">while</span> (<span class="num">1</span>) {
+         <span class="kwa">if</span> (--p &lt; <span class="kwa">new</span>)
+            p = <span class="kwa">new</span> + t-&gt;mask;
+         <span class="kwa">if</span> (p-&gt;count) <span class="kwa">continue</span>;
+         *p = old[i];
+         <span class="kwa">break</span>;
+      }
+   }
+   t-&gt;table = <span class="kwa">new</span>;
+   t-&gt;cap = new_cap;
+}
+
+<span class="slc">// after each thread finished a slice, lock and update the overall table</span>
+<span class="kwb">void</span> <span class="kwd">hash_merge</span>(ht_table *a, ht_table *b) {
+   <span class="kwb">int</span> i;
+   hrec_t *in;
+
+   <span class="kwd">pthread_mutex_lock</span>(&amp;a-&gt;lock);
+
+   <span class="kwa">for</span> (i = <span class="num">0</span>, in = b-&gt;table; i &lt; b-&gt;cap; i++, in++) {
+      <span class="kwa">if</span> (!in-&gt;key) <span class="kwa">continue</span>;
+      hrec_t *p = a-&gt;table + (in-&gt;key &amp; a-&gt;mask);
+      <span class="kwa">while</span> (<span class="num">1</span>) {
+         <span class="kwa">if</span> (!p-&gt;key) {
+            *p = *in;
+            <span class="kwa">if</span> (a-&gt;size++ == a-&gt;limit)
+               <span class="kwd">extend_htable</span>(a);
+            <span class="kwa">break</span>;
+         }
+         <span class="kwa">if</span> (p-&gt;key == in-&gt;key) {
+            p-&gt;count += in-&gt;count;
+            <span class="kwa">break</span>;
+         }
+         <span class="kwa">if</span> (--p &lt; a-&gt;table)
+            p = a-&gt;table + a-&gt;mask;
+      }
+   }
+
+   <span class="kwd">pthread_mutex_unlock</span>(&amp;a-&gt;lock);
+   <span class="kwd">free</span>(b-&gt;table);
+}
+
+<span class="slc">// hash key is just len numbers of 2-bit inters joined together</span>
+<span class="kwb">void</span> <span class="kwd">count_hash</span>(byte *s, byte *e, <span class="kwb">int</span> len, <span class="kwb">int</span> step) {
+   <span class="kwb">int</span> i;
+
+   ht_table t;
+   <span class="kwd">ht_init</span>(&amp;t);
+
+   <span class="kwb">void</span> <span class="kwd">inc_key</span>(hkey_t key) {
+      <span class="kwb">int</span> k = key &amp; t.mask;
+      hrec_t *p = t.table + k;
+
+      <span class="kwa">while</span> (<span class="num">1</span>) {
+         <span class="kwa">if</span> (p-&gt;key == key) {
+            p-&gt;count++;
+            <span class="kwa">return</span>;
+         }
+         <span class="kwa">if</span> (!p-&gt;key) {
+            p-&gt;key = key;
+            p-&gt;count = <span class="num">1</span>;
+            <span class="kwa">if</span> (++t.size == t.limit)
+               <span class="kwd">extend_htable</span>(&amp;t);
+            <span class="kwa">return</span>;
+         }
+         <span class="kwa">if</span> (--p &lt; t.table)
+            p = t.table + t.mask;
+      }
+   }
+
+   e -= len;
+   <span class="kwa">while</span> (s &lt; e) {
+      hkey_t key = <span class="num">0</span>;
+      <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; len; i++)
+         key = (key &lt;&lt; <span class="num">2</span>) | s[i];
+      <span class="kwd">inc_key</span>(key + <span class="num">1</span>);
+      s += step;
+   }
+
+   <span class="kwd">hash_merge</span>(tables + len, &amp;t);
+}
+
+<span class="slc">// small sequences just map to array indices</span>
+<span class="kwb">void</span> <span class="kwd">count_simple</span>(<span class="kwb">int</span> slen) {
+   <span class="kwb">int</span> i, k, mask = (<span class="num">1</span> &lt;&lt; (<span class="num">2</span> * slen)) - <span class="num">1</span>;
+   byte *end = input_len + input;
+   byte *s = input;
+
+   <span class="kwb">int</span> len = <span class="num">1</span> &lt;&lt; (<span class="num">2</span> * slen);
+   count_t *buf = counts[slen] = <span class="kwd">malloc</span>(<span class="kwa">sizeof</span>(count_t) * len);
+
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; len; i++)
+      buf[i].count = <span class="num">0</span>, buf[i].key = i;
+
+   <span class="kwa">for</span> (i = <span class="num">1</span>, k = <span class="num">0</span>; i &lt; slen; i++)
+      k = (k &lt;&lt; <span class="num">2</span>) | *s++;
+
+   <span class="kwa">while</span> (s &lt; end) {
+      k = ((k &lt;&lt; <span class="num">2</span>) | *s++) &amp; mask;
+      buf[k].count++;
+   }
+}
+
+<span class="kwc">typedef</span> <span class="kwb">struct</span> work_s {
+   byte *start, *end;
+   <span class="kwb">int</span> len, step;
+   <span class="kwb">struct</span> work_s *next;
+} work_t;
+
+work_t *jobs;
+
+<span class="kwb">void</span> <span class="kwd">add_work</span>(byte *start, byte *end, <span class="kwb">int</span> len, <span class="kwb">int</span> step) {
+   work_t *w = <span class="kwd">malloc</span>(<span class="kwa">sizeof</span>(work_t));
+   w-&gt;next = jobs;
+   jobs = w;
+   w-&gt;len = len;
+   w-&gt;start = start;
+   w-&gt;end = end;
+   w-&gt;step = step;
+}
+
+<span class="kwb">void</span> <span class="kwd">add_simple_work</span>(<span class="kwb">int</span> len) {
+   <span class="kwd">add_work</span>(input, input + input_len, len, <span class="num">0</span>);
+}
+
+<span class="kwb">void</span> <span class="kwd">show_works</span>(<span class="kwb">void</span>) {
+   work_t *w = jobs;
+   <span class="kwa">while</span> (w) {
+      <span class="kwd">printf</span>(<span class="str">&quot;len %d from %p to %p</span><span class="esc">\n</span><span class="str">&quot;</span>, w-&gt;len, w-&gt;start, w-&gt;end);
+      w = w-&gt;next;
+   }
+}
+
+<span class="slc">// lock for job control</span>
+pthread_mutex_t mux = PTHREAD_MUTEX_INITIALIZER;
+
+<span class="kwb">void</span> *<span class="kwd">worker</span>(<span class="kwb">void</span> *arg) {
+   <span class="kwa">while</span> (<span class="num">1</span>) {
+      <span class="kwd">pthread_mutex_lock</span>(&amp;mux);
+      <span class="kwa">if</span> (!jobs) <span class="kwa">break</span>;
+      work_t *w = jobs;
+      jobs = jobs-&gt;next;
+      <span class="kwd">pthread_mutex_unlock</span>(&amp;mux);
+      <span class="kwa">if</span> (w-&gt;len &lt;= SIMPLE_MAX)
+         <span class="kwd">count_simple</span>(w-&gt;len);
+      <span class="kwa">else</span>
+         <span class="kwd">count_hash</span>(w-&gt;start, w-&gt;end, w-&gt;len, w-&gt;step);
+      <span class="kwd">free</span>(w);
+   }
+
+   <span class="kwd">pthread_mutex_unlock</span>(&amp;mux);
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+
+<span class="kwb">int</span> <span class="kwd">cmp_count</span>(<span class="kwb">const void</span> *a, <span class="kwb">const void</span> *b) {
+   <span class="kwb">const</span> count_t *aa = a, *bb = b;
+   <span class="kwa">if</span> (aa-&gt;count &lt; bb-&gt;count) <span class="kwa">return</span> <span class="num">1</span>;
+   <span class="kwa">if</span> (aa-&gt;count &gt; bb-&gt;count) <span class="kwa">return</span> -<span class="num">1</span>;
+   <span class="kwa">if</span> (aa-&gt;key &lt; bb-&gt;key) <span class="kwa">return</span> <span class="num">1</span>;
+   <span class="kwa">return</span> -<span class="num">1</span>;
+}
+
+<span class="kwb">void</span> <span class="kwd">key_print</span>(<span class="kwb">int</span> len, <span class="kwb">int</span> key) {
+   <span class="kwb">char</span> buf[<span class="num">32</span>];
+   buf[len] = <span class="num">0</span>;
+   <span class="kwa">while</span> (len--) {
+      buf[len] = codes[key &amp; <span class="num">3</span>];
+      key &gt;&gt;= <span class="num">2</span>;
+   }
+   <span class="kwd">printf</span>(<span class="str">&quot;%s&quot;</span>, buf);
+}
+
+<span class="kwb">void</span> <span class="kwd">show_sorted</span>(<span class="kwb">int</span> len) {
+   <span class="kwb">size_t</span> size = <span class="kwa">sizeof</span>(count_t) &lt;&lt; (<span class="num">2</span> * len);
+   count_t *copy = <span class="kwd">malloc</span>(size);
+   <span class="kwd">memcpy</span>(copy, counts[len], size);
+   <span class="kwd">qsort</span>(copy, <span class="num">1</span> &lt;&lt; (<span class="num">2</span> * len), <span class="kwa">sizeof</span>(count_t), cmp_count);
+
+   <span class="kwb">int</span> i, sum = <span class="num">0</span>;
+
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; <span class="num">1</span> &lt;&lt; (<span class="num">2</span> * len); i++)
+      sum += copy[i].count;
+
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; <span class="num">1</span> &lt;&lt; (<span class="num">2</span> * len); i++) {
+      <span class="kwd">key_print</span>(len, copy[i].key);
+      <span class="kwd">printf</span>(<span class="str">&quot; %.3f</span><span class="esc">\n</span><span class="str">&quot;</span>, (<span class="kwb">double</span>)copy[i].count / sum * <span class="num">100</span>);
+   }
+   <span class="kwd">puts</span>(<span class="str">&quot;&quot;</span>);
+
+   <span class="kwd">free</span>(copy);
+}
+
+<span class="kwb">int</span> <span class="kwd">count_lookup</span>(<span class="kwb">char</span> *name) {
+   hkey_t key = <span class="num">0</span>;
+   <span class="kwb">char</span> *s = name;
+   <span class="kwb">int</span> len = <span class="num">0</span>;
+   <span class="kwa">while</span> (*s) {
+      key = (key &lt;&lt; <span class="num">2</span>) | trans[(<span class="kwb">int</span>)*s];
+      s++;
+      len++;
+   }
+   <span class="kwa">if</span> (len &lt;= SIMPLE_MAX)
+      <span class="kwa">return</span> counts[len][key].count;
+
+   key++;
+   ht_table *t = tables + len;
+   hrec_t *p = t-&gt;table + (key &amp; t-&gt;mask);
+
+   <span class="kwa">while</span> (p-&gt;key) {
+      <span class="kwa">if</span> (p-&gt;key == key)
+         <span class="kwa">return</span> p-&gt;count;
+      <span class="kwa">if</span> (--p &lt;= t-&gt;table)
+         p = t-&gt;table + t-&gt;mask;
+   }
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">void</span>) {
+   <span class="kwb">int</span> i;
+<span class="ppc">#   define N sizeof(l) / sizeof(l[0])</span>
+
+   <span class="kwa">for</span> (i = <span class="num">1</span>; codes[i]; i++) {
+      trans[<span class="kwd">toupper</span>(codes[i])] = i;
+      trans[<span class="kwd">tolower</span>(codes[i])] = i;
+   }
+
+   <span class="kwd">get_input</span>();
+
+   <span class="kwb">int</span> n_cpus = <span class="kwd">sysconf</span>(_SC_NPROCESSORS_ONLN);
+   <span class="kwa">if</span> (n_cpus &gt; <span class="num">4</span>) n_cpus = <span class="num">4</span>;
+
+   <span class="kwd">ht_init</span>(tables + <span class="num">12</span>);
+   <span class="kwd">ht_init</span>(tables + <span class="num">18</span>);
+
+   <span class="slc">// short sequences are pretty fast anyway, just let each</span>
+   <span class="slc">// thread do the whole piece</span>
+   <span class="kwd">add_simple_work</span>(<span class="num">1</span>);
+   <span class="kwd">add_simple_work</span>(<span class="num">2</span>);
+   <span class="kwd">add_simple_work</span>(<span class="num">3</span>);
+   <span class="kwd">add_simple_work</span>(<span class="num">4</span>);
+   <span class="kwd">add_simple_work</span>(<span class="num">6</span>);
+
+<span class="ppc">#define S 16</span>
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; S; i++) {
+      <span class="kwd">add_work</span>(input+i, input + input_len, <span class="num">12</span>, S);
+      <span class="kwd">add_work</span>(input+i, input + input_len, <span class="num">18</span>, S);
+   }
+
+   <span class="kwb">char</span> *names[] = { <span class="str">&quot;GGT&quot;</span>, <span class="str">&quot;GGTA&quot;</span>, <span class="str">&quot;GGTATT&quot;</span>, <span class="str">&quot;GGTATTTTAATT&quot;</span>, <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>, <span class="num">0</span> };
+
+   <span class="slc">//show_works();</span>
+
+   pthread_t tid[<span class="num">4</span>];
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; n_cpus; i++)
+      <span class="kwd">pthread_create</span>(tid + i, <span class="num">0</span>, worker, <span class="num">0</span>);
+
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; n_cpus; i++)
+      <span class="kwd">pthread_join</span>(tid[i], <span class="num">0</span>);
+
+   <span class="kwd">show_sorted</span>(<span class="num">1</span>);
+   <span class="kwd">show_sorted</span>(<span class="num">2</span>);
+
+   <span class="kwa">for</span> (i = <span class="num">0</span>; names[i]; i++) {
+      <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\t</span><span class="str">%s</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">count_lookup</span>(names[i]), names[i]);
+   }
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}

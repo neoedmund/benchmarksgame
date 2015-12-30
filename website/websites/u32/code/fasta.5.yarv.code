@@ -1,0 +1,119 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc"># Contributed by Sokolov Yura</span>
+<span class="slc"># Modified by Rick Branson, Andy Fingerhut</span>
+
+<span class="kwb">$last</span> = <span class="num">42.0</span>
+
+GR_IM = <span class="num">139968.0</span>
+GR_IA = <span class="num">3877.0</span>
+GR_IC = <span class="num">29573.0</span>
+
+alu =
+   <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>+
+   <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>+
+   <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>+
+   <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>+
+   <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>+
+   <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>+
+   <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>
+
+iub = [
+    [<span class="str">&quot;a&quot;</span>, <span class="num">0.27</span>],
+    [<span class="str">&quot;c&quot;</span>, <span class="num">0.12</span>],
+    [<span class="str">&quot;g&quot;</span>, <span class="num">0.12</span>],
+    [<span class="str">&quot;t&quot;</span>, <span class="num">0.27</span>],
+
+    [<span class="str">&quot;B&quot;</span>, <span class="num">0.02</span>],
+    [<span class="str">&quot;D&quot;</span>, <span class="num">0.02</span>],
+    [<span class="str">&quot;H&quot;</span>, <span class="num">0.02</span>],
+    [<span class="str">&quot;K&quot;</span>, <span class="num">0.02</span>],
+    [<span class="str">&quot;M&quot;</span>, <span class="num">0.02</span>],
+    [<span class="str">&quot;N&quot;</span>, <span class="num">0.02</span>],
+    [<span class="str">&quot;R&quot;</span>, <span class="num">0.02</span>],
+    [<span class="str">&quot;S&quot;</span>, <span class="num">0.02</span>],
+    [<span class="str">&quot;V&quot;</span>, <span class="num">0.02</span>],
+    [<span class="str">&quot;W&quot;</span>, <span class="num">0.02</span>],
+    [<span class="str">&quot;Y&quot;</span>, <span class="num">0.02</span>],
+]
+homosapiens = [
+    [<span class="str">&quot;a&quot;</span>, <span class="num">0.3029549426680</span>],
+    [<span class="str">&quot;c&quot;</span>, <span class="num">0.1979883004921</span>],
+    [<span class="str">&quot;g&quot;</span>, <span class="num">0.1975473066391</span>],
+    [<span class="str">&quot;t&quot;</span>, <span class="num">0.3015094502008</span>],
+]
+
+<span class="kwa">def</span> <span class="kwd">generate_rand_finder</span>(tbl<span class="opt">)</span>
+  rb = <span class="str">&quot;lambda do |n|</span> <span class="esc">\n</span><span class="str">&quot;</span>
+
+  tbl.each <span class="kwa">do</span> |va, vb|
+    rb += <span class="str">&quot;return</span> <span class="ipl">#{va.inspect}</span> <span class="str">if</span> <span class="ipl">#{vb.inspect}</span> <span class="str">&gt; n</span><span class="esc">\n</span><span class="str">&quot;</span>
+  <span class="kwa">end</span>
+
+  rb += <span class="str">&quot;end</span><span class="esc">\n</span><span class="str">&quot;</span>
+
+  <span class="kwa">eval</span> rb
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">make_repeat_fasta</span>(id, desc, src, n<span class="opt">)</span>
+    puts <span class="str">&quot;&gt;</span><span class="ipl">#{id}</span> <span class="str"></span><span class="ipl">#{desc}</span><span class="str">&quot;</span>
+    v = <span class="kwa">nil</span>
+    width = <span class="num">60</span>
+    l = src.length
+    s = src * (((width + l - <span class="num">1</span><span class="opt">)</span> / l<span class="opt">)</span> + <span class="num">1</span><span class="opt">)</span>
+    i = <span class="num">0</span>
+    p = []
+    p[i] = s.<span class="kwd">slice</span>(i,width<span class="opt">)</span>
+    i = (i + width<span class="opt">)</span> % l
+    <span class="kwa">while</span> i != <span class="num">0</span> <span class="kwa">do</span>
+      p[i] = s[i,width]
+      i = (i + width<span class="opt">)</span> % l
+    <span class="kwa">end</span>
+    i = <span class="num">0</span>
+    printed = <span class="num">0</span>
+    <span class="kwa">while</span> printed &lt;= (n - width<span class="opt">)</span> <span class="kwa">do</span>
+      puts <span class="str">&quot;</span><span class="ipl">#{p[i]}</span><span class="str">&quot;</span>
+      printed += width
+      i = (i + width<span class="opt">)</span> % l
+    <span class="kwa">end</span>
+    <span class="kwa">if</span> printed &lt; n
+      puts <span class="str">&quot;</span><span class="ipl">#{p[i].slice(0, n-printed)}</span><span class="str">&quot;</span>
+    <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">make_random_fasta</span>(id, desc, table, n<span class="opt">)</span>
+    puts <span class="str">&quot;&gt;</span><span class="ipl">#{id}</span> <span class="str"></span><span class="ipl">#{desc}</span><span class="str">&quot;</span>
+    rand, v = <span class="kwa">nil</span>,<span class="kwa">nil</span>
+    width = <span class="num">60</span>
+    chunk = <span class="num">1</span> * width
+    prob = <span class="num">0.0</span>
+    rwidth = (<span class="num">1</span>..width<span class="opt">)</span>
+    table.each{|v| v[1]= (prob += v[1])}
+    f = <span class="kwd">generate_rand_finder</span>(table<span class="opt">)</span>
+
+    <span class="kwa">if</span> <span class="kwc">RUBY_PLATFORM</span> == <span class="str">&quot;java&quot;</span>
+      collector = lambda <span class="kwa">do</span> |x|
+        rand = (<span class="kwb">$last</span> = (<span class="kwb">$last</span> * GR_IA + GR_IC<span class="opt">)</span> % GR_IM<span class="opt">)</span> / GR_IM
+        table.find { |va, vb| vb &gt; rand }[<span class="num">0</span>]
+      <span class="kwa">end</span>
+    <span class="kwa">else</span>
+      collector = lambda <span class="kwa">do</span> |x|
+        rand = (<span class="kwb">$last</span> = (<span class="kwb">$last</span> * GR_IA + GR_IC<span class="opt">)</span> % GR_IM<span class="opt">)</span> / GR_IM
+        f.<span class="kwd">call</span>(rand<span class="opt">)</span>
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">1</span>..(n/width<span class="opt">)</span>
+      puts rwidth.<span class="kwd">collect</span>(&amp;collector<span class="opt">)</span>.join
+    <span class="kwa">end</span>
+    <span class="kwa">if</span> n%width != <span class="num">0</span>
+      <span class="kwd">puts</span> (<span class="num">1</span>..(n%width<span class="opt">))</span>.<span class="kwd">collect</span>(&amp;collector<span class="opt">)</span>.join
+    <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+
+n = (<span class="kwc">ARGV</span>[<span class="num">0</span>] <span class="kwa">or</span> <span class="num">27</span><span class="opt">)</span>.to_i
+
+<span class="kwd">make_repeat_fasta</span>(<span class="str">'ONE'</span>, <span class="str">'Homo sapiens alu'</span>, alu, n*<span class="num">2</span><span class="opt">)</span>
+<span class="kwd">make_random_fasta</span>(<span class="str">'TWO'</span>, <span class="str">'IUB ambiguity codes'</span>, iub, n*<span class="num">3</span><span class="opt">)</span>
+<span class="kwd">make_random_fasta</span>(<span class="str">'THREE'</span>, <span class="str">'Homo sapiens frequency'</span>, homosapiens, n*<span class="num">5</span><span class="opt">)</span>

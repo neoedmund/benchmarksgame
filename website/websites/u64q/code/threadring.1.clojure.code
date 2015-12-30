@@ -1,0 +1,38 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; contributed by Jesse Rosenstock</span>
+
+(ns threadring
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+
+(<span class="kwa">defn</span> pass-message
+  [the-agent
+   ^Integer value
+   first-agent]
+  (<span class="kwc">if</span> (zero? value)
+    (do (println (:num the-agent))
+      (shutdown-agents)
+      (System/exit <span class="num">0</span>))
+    <span class="slc">; Pass to the next agent if we're not at the end of the line,</span>
+    <span class="slc">; otherwise back to the first.</span>
+    (send (<span class="kwc">if</span> (:next the-agent) (:next the-agent) first-agent)
+          pass-message (dec value) first-agent))
+  the-agent)
+
+(<span class="kwa">defn</span> pass-messages
+  [^Integer num-agents
+   ^Integer num-messages]
+  (<span class="kwc">let</span> [first-agent (reduce (<span class="kwa">fn</span> [next-agent agent-num]
+                              (agent {:next next-agent :num agent-num}))
+                            nil
+                            (<span class="kwd">range</span> num-agents <span class="num">0</span> -<span class="num">1</span>))]
+    (send first-agent pass-message num-messages first-agent)))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [num-messages (<span class="kwc">if</span> (empty? args)
+                       <span class="num">1000</span>
+                       (Integer/valueOf (<span class="kwd">first</span> args)))]
+    (pass-messages <span class="num">503</span> num-messages)))

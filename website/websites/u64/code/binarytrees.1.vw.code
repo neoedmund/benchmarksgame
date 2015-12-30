@@ -1,0 +1,76 @@
+<span class="com">&quot;* The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">    contributed by Isaac Gouy</span>
+<span class="com">    modified by Eliot Miranda *&quot;</span>!
+
+
+<span class="kwc">Object</span> <span class="kwb">subclass:</span> <span class="kwd">#TreeNode</span>
+   <span class="kwb">instanceVariableNames:</span> <span class="str">'left right item'</span>
+   <span class="kwb">classVariableNames:</span> <span class="str">''</span>
+   <span class="kwb">poolDictionaries:</span> <span class="str">''</span>
+   <span class="kwb">category:</span> <span class="str">'Shootout'</span>!
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">binarytrees:</span> n <span class="kwb">to:</span> output
+   <span class="kwd">| minDepth maxDepth stretchDepth check longLivedTree iterations |</span>
+   minDepth :<span class="kwb">=</span> <span class="num">4</span>.
+   maxDepth :<span class="kwb">=</span> minDepth <span class="kwb">+</span> <span class="num">2</span> <span class="kwb">max:</span> n.
+   stretchDepth :<span class="kwb">=</span> maxDepth <span class="kwb">+</span> <span class="num">1</span>.
+
+   check :<span class="kwb">=</span> (<span class="kwc">TreeNode</span> <span class="kwb">bottomUpTree:</span> <span class="num">0</span> <span class="kwb">depth:</span> stretchDepth) itemCheck.
+   output
+      <span class="kwb">nextPutAll:</span> <span class="str">'stretch tree of depth '</span>; <span class="kwb">print:</span> stretchDepth; tab;
+      <span class="kwb">nextPutAll:</span> <span class="str">' check: '</span>; <span class="kwb">print:</span> check; nl.
+
+   longLivedTree :<span class="kwb">=</span> <span class="kwc">TreeNode</span> <span class="kwb">bottomUpTree:</span> <span class="num">0</span> <span class="kwb">depth:</span> maxDepth.
+   minDepth <span class="kwb">to:</span> maxDepth <span class="kwb">by:</span> <span class="num">2</span> <span class="kwb">do:</span> [<span class="kwd">:depth</span>|
+      iterations :<span class="kwb">=</span> <span class="num">1</span> <span class="kwb">bitShift:</span> maxDepth <span class="kwb">-</span> depth <span class="kwb">+</span> minDepth.
+
+      check :<span class="kwb">=</span> <span class="num">0</span>.
+      <span class="num">1</span> <span class="kwb">to:</span> iterations <span class="kwb">do:</span> [<span class="kwd">:i</span>|
+         check :<span class="kwb">=</span> check <span class="kwb">+</span> (<span class="kwc">TreeNode</span> <span class="kwb">bottomUpTree:</span> i <span class="kwb">depth:</span> depth) itemCheck.
+         check :<span class="kwb">=</span> check <span class="kwb">+</span> (<span class="kwc">TreeNode</span> <span class="kwb">bottomUpTree: -</span><span class="num">1</span><span class="kwb">*</span>i <span class="kwb">depth:</span> depth) itemCheck
+         ].
+      output
+         <span class="kwb">print:</span>  (<span class="num">2</span><span class="kwb">*</span>iterations); tab;
+         <span class="kwb">nextPutAll:</span> <span class="str">' trees of depth '</span>; <span class="kwb">print:</span> depth; tab;
+         <span class="kwb">nextPutAll:</span> <span class="str">' check: '</span>; <span class="kwb">print:</span> check; nl
+      ].
+
+   output
+      <span class="kwb">nextPutAll:</span> <span class="str">'long lived tree of depth '</span>; <span class="kwb">print:</span> maxDepth; tab;
+      <span class="kwb">nextPutAll:</span> <span class="str">' check: '</span>; <span class="kwb">print:</span> longLivedTree itemCheck; nl! !
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmark scripts'</span>!
+<span class="kwb">binarytrees</span>
+   <span class="kwa">self</span> <span class="kwb">binarytrees:</span> <span class="kwa">self</span> arg <span class="kwb">to:</span> <span class="kwa">self</span> stdout.
+   ^<span class="str">''</span>! !
+
+
+!<span class="kwc">TreeNode</span> <span class="kwb">methodsFor:</span> <span class="str">'initialize-release'</span>!
+<span class="kwb">left:</span> leftChild <span class="kwb">right:</span> rightChild <span class="kwb">item:</span> anItem
+   left :<span class="kwb">=</span> leftChild.
+   right :<span class="kwb">=</span> rightChild.
+   item :<span class="kwb">=</span> anItem! !
+
+!<span class="kwc">TreeNode</span> <span class="kwb">methodsFor:</span> <span class="str">'accessing'</span>!
+<span class="kwb">itemCheck</span>
+   ^left isNil 
+      <span class="kwb">ifTrue:</span> [item] <span class="kwb">ifFalse:</span> [item <span class="kwb">+</span> (left itemCheck <span class="kwb">-</span> right itemCheck)]! !
+
+
+!<span class="kwc">TreeNode</span> class <span class="kwb">methodsFor:</span> <span class="str">'instance creation'</span>!
+<span class="kwb">bottomUpTree:</span> anItem <span class="kwb">depth:</span> anInteger
+   ^(anInteger &gt; <span class="num">0</span>) 
+      <span class="kwb">ifTrue:</span> [
+         <span class="kwa">self</span> 
+            <span class="kwb">left:</span> (<span class="kwa">self</span> <span class="kwb">bottomUpTree:</span> <span class="num">2</span><span class="kwb">*</span>anItem <span class="kwb">-</span> <span class="num">1</span> <span class="kwb">depth:</span> anInteger <span class="kwb">-</span> <span class="num">1</span>) 
+            <span class="kwb">right:</span> (<span class="kwa">self</span> <span class="kwb">bottomUpTree:</span> <span class="num">2</span><span class="kwb">*</span>anItem <span class="kwb">depth:</span> anInteger <span class="kwb">-</span> <span class="num">1</span>)  
+            <span class="kwb">item:</span> anItem
+         ]
+      <span class="kwb">ifFalse:</span> [<span class="kwa">self</span> <span class="kwb">left:</span> <span class="kwa">nil</span> <span class="kwb">right:</span> <span class="kwa">nil</span> <span class="kwb">item:</span> anItem]! !
+
+!<span class="kwc">TreeNode</span> class <span class="kwb">methodsFor:</span> <span class="str">'instance creation'</span>!
+<span class="kwb">left:</span> leftChild <span class="kwb">right:</span> rightChild <span class="kwb">item:</span> anItem      
+   ^(<span class="kwa">super</span> new) <span class="kwb">left:</span> leftChild <span class="kwb">right:</span> rightChild <span class="kwb">item:</span> anItem! !
+

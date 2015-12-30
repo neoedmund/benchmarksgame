@@ -1,0 +1,105 @@
+<span class="slc">--</span>
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Spencer Janssen, Trevor McCort, Christophe Poucet and Don Stewart</span>
+<span class="slc">-- Parallelised by Tim Newsham</span>
+<span class="slc">--</span>
+<span class="slc">-- Must be compiled with the -fexcess-precision flag as a pragma. GHC</span>
+<span class="slc">-- currently doesn't recognise the -fexcess-precision flag on the command</span>
+<span class="slc">-- line (!).</span>
+<span class="slc">--</span>
+<span class="slc">-- The following flags are suggested when compiling:</span>
+<span class="slc">--</span>
+<span class="slc">--      ghc -optc-march=pentium4 -optc-mfpmath=sse -optc-msse2 -threaded --make</span>
+<span class="slc">--</span>
+<span class="slc">-- Run with -N6 on a quad core (more capabilities to hide latency)</span>
+<span class="slc">--</span>
+<span class="slc">--      $ time ./A 6400 +RTS -N6</span>
+<span class="slc">--</span>
+
+<span class="kwd">import</span> System.Environment
+<span class="kwd">import</span> System.<span class="kwb">IO</span>
+<span class="kwd">import</span> Foreign
+<span class="kwd">import</span> Foreign.Marshal.<span class="kwb">Array</span>
+<span class="kwd">import</span> Control.Concurrent
+<span class="kwd">import</span> Control.Concurrent.MVar
+<span class="kwd">import</span> Control.Concurrent.Chan
+<span class="kwd">import</span> Control.Monad
+
+main = <span class="kwd">do</span>
+    <span class="slc">-- width in pixels</span>
+    w &lt;- <span class="kwc">getArgs</span> &gt;&gt;= <span class="kwc">readIO</span> . <span class="kwc">head</span>
+        <span class="slc">-- width in bytes</span>
+    <span class="kwd">let</span> n      = w `<span class="kwc">div</span>` <span class="num">8</span>
+        <span class="slc">-- width of a pixel in the complex plane</span>
+        m  = <span class="num">2</span> / <span class="kwc">fromIntegral</span> w
+        coords = [T <span class="num">1 0</span> y (<span class="kwc">fromIntegral</span> y * m - <span class="num">1</span>) | y &lt;- [<span class="num">0</span>..w-<span class="num">1</span>]]
+    q &lt;- newChan
+    replies &lt;- replicateM w newEmptyMVar
+    <span class="kwc">mapM_</span> (writeChan q) $ <span class="kwc">zip</span> coords replies
+    replicateM_ <span class="num">4</span> . forkIO $ worker q w m n
+
+    <span class="kwc">putStrLn</span> (<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">&quot;</span>++<span class="kwc">show</span> w++<span class="str">&quot; &quot;</span>++<span class="kwc">show</span> w)
+    <span class="kwc">mapM_</span> (takeMVar &gt;=&gt; <span class="esc">\b</span> -&gt; hPutBuf <span class="kwc">stdout</span> b n) replies
+
+<span class="slc">-- Worker computes one line of the image and sends it to the master</span>
+<span class="slc">-- q - work queue</span>
+<span class="slc">-- w - width in pixels</span>
+<span class="slc">-- m - width of a pixel in the complex plane</span>
+<span class="slc">-- n - width in bytes</span>
+worker q w m n = forever (<span class="kwd">do</span>
+    (coord, reply) &lt;- readChan q
+    p &lt;- mallocArray0 n
+    unfold (next_x w m n) p coord
+    putMVar reply p)
+
+<span class="slc">-- f - takes coordinates and returns Nothing if done</span>
+<span class="slc">--     or the next byte of the bitmap otherwise.</span>
+<span class="slc">-- ptr - buffer to write to</span>
+<span class="slc">-- x0 - initial coordinates </span>
+unfold :: (T -&gt; <span class="kwb">Maybe</span> (Word8,T)) -&gt; Ptr Word8 -&gt; T -&gt; <span class="kwb">IO</span> (Ptr Word8)
+unfold !f !ptr !x0 = go ptr x0
+  <span class="kwd">where</span>
+    <span class="slc">-- p - pointer into the buffer</span>
+    <span class="slc">-- x - coordinates</span>
+    go !p !x = <span class="kwd">case</span> f x <span class="kwd">of</span>
+        Just (w,y)          -&gt; poke p w &gt;&gt; go (p `plusPtr` <span class="num">1</span>) y
+        Nothing             -&gt; <span class="kwc">return</span> ptr
+
+<span class="slc">-- T bs x y ci</span>
+<span class="slc">--    bx - x position in bytes</span>
+<span class="slc">--    x  - x position in pixels</span>
+<span class="slc">--    y  - y position in pixels</span>
+<span class="slc">--    ci - y position in complex plane</span>
+<span class="kwd">data</span> T = T !<span class="kwb">Int</span> !<span class="kwb">Int</span> !<span class="kwb">Int</span> !<span class="kwb">Double</span>
+
+<span class="slc">-- w - image width in pixels</span>
+<span class="slc">-- iw - pixel width in the complex plane</span>
+<span class="slc">-- bw - image width in bytes</span>
+next_x !w !iw !bw (T bx x y ci)
+    | bx == bw  = Nothing
+    | <span class="kwc">otherwise</span> = Just (loop_x w x <span class="num">8</span> iw ci <span class="num">0</span>, T (bx+<span class="num">1</span>) (x+<span class="num">8</span>) y ci)
+
+<span class="slc">-- w - image width in pixels</span>
+<span class="slc">-- x - current x coordinate in pixels</span>
+<span class="slc">-- n - bit positition from 8 to 0</span>
+<span class="slc">-- iw - pixel width in the complex plane</span>
+<span class="slc">-- ci - current y coordinate in complex plane</span>
+<span class="slc">-- b - accumulated bit value.</span>
+loop_x !w !x !n !iw !ci !b
+    | x &lt; w = <span class="kwd">if</span> n == <span class="num">0</span>
+                    <span class="kwd">then</span> b
+                    <span class="kwd">else</span> loop_x w (x+<span class="num">1</span>) (n-<span class="num">1</span>) iw ci (b+b+v)
+    | <span class="kwc">otherwise</span> = b `shiftL` n
+  <span class="kwd">where</span>
+    v = fractal <span class="num">0 0</span> (<span class="kwc">fromIntegral</span> x * iw - <span class="num">1.5</span>) ci <span class="num">50</span>
+
+<span class="slc">-- julia function (r :+ i) (cr :+ ci) with max iterations k.</span>
+fractal :: <span class="kwb">Double</span> -&gt; <span class="kwb">Double</span> -&gt; <span class="kwb">Double</span> -&gt; <span class="kwb">Double</span> -&gt; <span class="kwb">Int</span> -&gt; Word8
+fractal !r !i !cr !ci !k
+    | r2 + i2 &gt; <span class="num">4</span> = <span class="num">0</span>
+    | k == <span class="num">0</span>      = <span class="num">1</span>
+    | <span class="kwc">otherwise</span>   = fractal (r2-i2+cr) ((r+r)*i+ci) cr ci (k-<span class="num">1</span>)
+  <span class="kwd">where</span>
+    (!r2,!i2) = (r*r,i*i)

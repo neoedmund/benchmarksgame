@@ -1,0 +1,165 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Isaac Gouy, transliterated from Oleg Mazurov's Java program</span>
+<span class="com">*/</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.Threading;
+
+
+<span class="kwa">class</span> FannkuchRedux
+{
+   <span class="kwa">private static</span> <span class="kwb">int</span> NCHUNKS = <span class="num">150</span>;
+   <span class="kwa">private static</span> <span class="kwb">int</span> CHUNKSZ;
+   <span class="kwa">private static</span> <span class="kwb">int</span> NTASKS;
+   <span class="kwa">private static</span> <span class="kwb">int</span> n;
+   <span class="kwa">private static</span> <span class="kwb">int</span>[] Fact;
+   <span class="kwa">private static</span> <span class="kwb">int</span>[] maxFlips;
+   <span class="kwa">private static</span> <span class="kwb">int</span>[] chkSums;
+   <span class="kwa">private static</span> <span class="kwb">int</span> taskId;
+
+   <span class="kwb">int</span>[] p, pp, count;
+
+
+   <span class="kwb">void</span> <span class="kwd">FirstPermutation</span>( <span class="kwb">int</span> idx )
+   {
+       <span class="kwa">for</span> ( <span class="kwb">int</span> i=<span class="num">0</span>; i&lt;p.Length; ++i ) {
+          p[i] = i;
+       }
+
+       <span class="kwa">for</span> ( <span class="kwb">int</span> i=count.Length-<span class="num">1</span>; i&gt;<span class="num">0</span>; --i ) {
+           <span class="kwb">int</span> d = idx / Fact[i];
+           count[i] = d;
+           idx = idx % Fact[i];
+
+           Array.<span class="kwd">Copy</span>( p, <span class="num">0</span>, pp, <span class="num">0</span>, i+<span class="num">1</span> );
+           <span class="kwa">for</span> ( <span class="kwb">int</span> j=<span class="num">0</span>; j&lt;=i; ++j ) {
+               p[j] = j+d &lt;= i ? pp[j+d] : pp[j+d-i-<span class="num">1</span>];
+           }
+       }
+   }
+
+
+   <span class="kwb">bool</span> <span class="kwd">NextPermutation</span>()
+   {
+      <span class="kwb">int</span> first = p[<span class="num">1</span>];
+      p[<span class="num">1</span>] = p[<span class="num">0</span>];
+      p[<span class="num">0</span>] = first;
+
+      <span class="kwb">int</span> i=<span class="num">1</span>;
+      <span class="kwa">while</span> ( ++count[i] &gt; i ) {
+         count[i++] = <span class="num">0</span>;
+         <span class="kwb">int</span> next = p[<span class="num">0</span>] = p[<span class="num">1</span>];
+         <span class="kwa">for</span> ( <span class="kwb">int</span> j=<span class="num">1</span>; j&lt;i; ++j ) {
+            p[j] = p[j+<span class="num">1</span>];
+         }
+         p[i] = first;
+         first = next;
+      }
+      <span class="kwa">return true</span>;
+   }
+
+
+   <span class="kwb">int</span> <span class="kwd">CountFlips</span>()
+   {
+      <span class="kwb">int</span> flips = <span class="num">1</span>;
+      <span class="kwb">int</span> first = p[<span class="num">0</span>];
+      <span class="kwa">if</span> ( p[first] != <span class="num">0</span> ) {
+         Array.<span class="kwd">Copy</span>( p, <span class="num">0</span>, pp, <span class="num">0</span>, pp.Length );
+         <span class="kwa">do</span> {
+            ++flips;
+            <span class="kwa">for</span> ( <span class="kwb">int</span> lo = <span class="num">1</span>, hi = first - <span class="num">1</span>; lo &lt; hi; ++lo, --hi ) {
+               <span class="kwb">int</span> t = pp[lo];
+               pp[lo] = pp[hi];
+               pp[hi] = t;
+            }
+            <span class="kwb">int</span> tp = pp[first];
+            pp[first] = first;
+            first = tp;
+         } <span class="kwa">while</span> ( pp[first] != <span class="num">0</span> );
+      }
+      <span class="kwa">return</span> flips;
+   }
+
+
+   <span class="kwb">void</span> <span class="kwd">RunTask</span>( <span class="kwb">int</span> task )
+   {
+      <span class="kwb">int</span> idxMin = task*CHUNKSZ;
+      <span class="kwb">int</span> idxMax = Math.<span class="kwd">Min</span>( Fact[n], idxMin+CHUNKSZ );
+
+      <span class="kwd">FirstPermutation</span>( idxMin );
+
+      <span class="kwb">int</span> maxflips = <span class="num">1</span>;
+      <span class="kwb">int</span> chksum = <span class="num">0</span>;
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i=idxMin;; ) {
+
+         <span class="kwa">if</span> ( p[<span class="num">0</span>] != <span class="num">0</span> ) {
+            <span class="kwb">int</span> flips = <span class="kwd">CountFlips</span>();
+            maxflips = Math.<span class="kwd">Max</span>( maxflips, flips );
+            chksum += i%<span class="num">2</span> ==<span class="num">0</span> ? flips : -flips;
+         }
+
+         <span class="kwa">if</span> ( ++i == idxMax ) {
+	    <span class="kwa">break</span>;
+	 }
+
+         <span class="kwd">NextPermutation</span>();
+      }
+      maxFlips[task] = maxflips;
+      chkSums[task]  = chksum;
+   }
+
+
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">Run</span>()
+   {
+      p     = <span class="kwa">new</span> <span class="kwb">int</span>[n];
+      pp    = <span class="kwa">new</span> <span class="kwb">int</span>[n];
+      count = <span class="kwa">new</span> <span class="kwb">int</span>[n];
+
+      <span class="kwb">int</span> task;
+      <span class="kwa">while</span> ( (task = taskId++) &lt; NTASKS ) { <span class="slc">// NOT SAFE - need PFX</span>
+	 <span class="kwd">RunTask</span>( task );       
+      } 
+   }
+
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(<span class="kwb">string</span>[] args)
+   {
+      n = <span class="num">7</span>;
+      <span class="kwa">if</span> (args.Length &gt; <span class="num">0</span>) n = Int32.<span class="kwd">Parse</span>(args[<span class="num">0</span>]);
+
+      Fact = <span class="kwa">new</span> <span class="kwb">int</span>[n+<span class="num">1</span>];
+      Fact[<span class="num">0</span>] = <span class="num">1</span>;
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i=<span class="num">1</span>; i&lt;Fact.Length; ++i ) {
+         Fact[i] = Fact[i-<span class="num">1</span>] * i;
+      }
+
+      CHUNKSZ = (Fact[n] + NCHUNKS - <span class="num">1</span>) / NCHUNKS;
+      NTASKS = (Fact[n] + CHUNKSZ - <span class="num">1</span>) / CHUNKSZ;
+      maxFlips = <span class="kwa">new</span> <span class="kwb">int</span>[NTASKS];
+      chkSums  = <span class="kwa">new</span> <span class="kwb">int</span>[NTASKS];
+      taskId = <span class="num">0</span>;
+
+      <span class="kwb">int</span> nthreads = Environment.ProcessorCount;
+      Thread[] threads = <span class="kwa">new</span> Thread[nthreads];
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i=<span class="num">0</span>; i&lt;nthreads; ++i ) {
+         threads[i] = <span class="kwa">new</span> <span class="kwd">Thread</span>( <span class="kwa">new</span> <span class="kwd">ThreadStart</span>(<span class="kwa">new</span> <span class="kwd">FannkuchRedux</span>().Run) );
+         threads[i].<span class="kwd">Start</span>();
+      }
+      <span class="kwa">foreach</span> ( Thread t <span class="kwa">in</span> threads ) {
+         t.<span class="kwd">Join</span>();
+      }
+
+      <span class="kwb">int</span> res = <span class="num">0</span>;
+      <span class="kwa">foreach</span> ( <span class="kwb">int</span> v <span class="kwa">in</span> maxFlips ) {
+         res = Math.<span class="kwd">Max</span>( res, v );
+      }
+      <span class="kwb">int</span> chk = <span class="num">0</span>;
+      <span class="kwa">foreach</span> ( <span class="kwb">int</span> v <span class="kwa">in</span> chkSums ) {
+         chk += v;
+      }
+
+      Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="ipl">{0}</span><span class="str"></span><span class="esc">\n</span><span class="str">Pfannkuchen(</span><span class="ipl">{1}</span><span class="str">) =</span> <span class="ipl">{2}</span><span class="str">&quot;</span>, chk, n, res);
+   }
+}

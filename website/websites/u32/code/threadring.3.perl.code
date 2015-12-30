@@ -1,0 +1,77 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#  contributed by Peter Corlett </span>
+
+<span class="slc"># This is really more a classic fork() and Unix IPC implementation, but it</span>
+<span class="slc"># uses threads purely to satisfy the rules of the game. This makes it quite</span>
+<span class="slc"># nippy as it doesn't have to worry about any sort of locking because we</span>
+<span class="slc"># essentially have 503 independent processes that just happen to share an</span>
+<span class="slc"># address space.</span>
+<span class="slc">#</span>
+<span class="slc"># Almost all of the time appears to be consumed by the thread library doing</span>
+<span class="slc"># all the deep copying required to create a clone and then tearing it down</span>
+<span class="slc"># afterwards. A fork() implementation is thus likely to be very fast as it'd</span>
+<span class="slc"># use copy-on-write pages in the kernel.</span>
+<span class="slc">#</span>
+<span class="slc"># As a minor aside, IO::Pipe wasn't used here because it expects one to fork()</span>
+<span class="slc"># and use -&gt;reader and -&gt;writer in different processes to set which side of</span>
+<span class="slc"># the pipe the IO::Pipe object will now refer to.</span>
+<span class="slc">#</span>
+<span class="slc"># It requires at least perl 5.10.0, although it could be easily rewritten to</span>
+<span class="slc"># use an earlier version.</span>
+
+<span class="kwa">use</span> <span class="num">5.010</span>;
+<span class="kwa">use</span> warnings;
+<span class="kwa">use</span> strict;
+<span class="kwa">use</span> threads;
+<span class="kwa">use</span> IO::Handle; <span class="slc"># for autoflush</span>
+
+<span class="kwa">use</span> constant THREADS =&gt; <span class="num">503</span>;
+<span class="slc"># stack size may need tuning for your arch, default of 8MB is likely to not</span>
+<span class="slc"># work well on 32 bit systems or those with limited memory.</span>
+<span class="kwa">use</span> constant THREAD_STACK_SIZE =&gt; <span class="num">512</span> * <span class="num">1024</span>;
+
+<span class="kwc">my</span> <span class="kwb">$passes</span> = <span class="kwc">shift</span>;
+<span class="kwc">die</span> <span class="str">&quot;Usage:</span> <span class="ipl">$0</span> <span class="str">[passes]</span><span class="esc">\n</span><span class="str">&quot;</span>
+  <span class="kwa">unless</span> <span class="kwc">defined</span> <span class="kwb">$passes</span> &amp;&amp; <span class="kwc">int</span>(<span class="kwb">$passes</span>) &gt; <span class="num">0</span>;
+<span class="kwb">$passes</span> = <span class="kwc">int</span>(<span class="kwb">$passes</span>);
+
+<span class="kwc">my</span>(<span class="kwb">&#64;pipes</span>, <span class="kwb">&#64;threads</span>);
+
+<span class="kwb">&#64;pipes</span> = <span class="kwc">map</span> {
+  <span class="kwc">pipe my</span>(<span class="kwb">$r</span>, <span class="kwb">$w</span>) <span class="kwc">or die</span> <span class="str">&quot;pipe() failed&quot;</span>;
+  { <span class="kwc">read</span> =&gt; <span class="kwb">$r</span>, <span class="kwc">write</span> =&gt; <span class="kwb">$w</span> }
+} (<span class="num">0</span> .. THREADS-<span class="num">1</span>);
+
+<span class="kwb">&#64;threads</span> = <span class="kwc">map</span> {
+  <span class="kwc">my</span> <span class="kwb">$in</span> = <span class="kwb">$pipes</span>[<span class="kwb">$_</span>]{<span class="kwc">read</span>};
+  <span class="kwb">$in</span>-&gt;<span class="kwd">autoflush</span>;
+  <span class="kwc">my</span> <span class="kwb">$out</span> = <span class="kwb">$pipes</span>[(<span class="kwb">$_</span> + <span class="num">1</span>) % THREADS]{<span class="kwc">write</span>};
+  <span class="kwb">$out</span>-&gt;<span class="kwd">autoflush</span>;
+  <span class="kwc">my</span> <span class="kwb">$thread_id</span> = <span class="kwb">$_</span> + <span class="num">1</span>;
+  threads-&gt;<span class="kwd">create</span>
+    ({ stack_size =&gt; THREAD_STACK_SIZE, },
+     <span class="kwa">sub</span> {	     <span class="slc"># $in, $out and $thread_id are captured in this closure</span>
+       <span class="kwa">while</span>(<span class="kwc">my</span> <span class="kwb">$msg</span> = &lt;<span class="kwb">$in</span>&gt;) { <span class="slc"># receive message</span>
+	 <span class="kwc">chomp</span> <span class="kwb">$msg</span>;
+	 <span class="kwa">if</span>(<span class="kwb">$msg</span> <span class="kwc">eq</span> <span class="str">'EXIT'</span>) {	<span class="slc"># asked to exit</span>
+	   <span class="kwa">last</span>;
+	 } <span class="kwa">elsif</span>(<span class="kwb">$msg</span> &gt; <span class="num">0</span>) {	<span class="slc"># still work to do</span>
+	   <span class="kwc">say</span> <span class="kwb">$out</span> --<span class="kwb">$msg</span>;	<span class="slc"># send message</span>
+	 } <span class="kwa">else</span> {		<span class="slc"># no more work to do</span>
+	   <span class="kwc">say</span> <span class="kwb">$thread_id</span>;	<span class="slc"># output result</span>
+	   <span class="slc"># tell all threads to exit</span>
+	   <span class="kwc">say</span> <span class="kwb">$_</span> <span class="str">'EXIT'</span> <span class="kwa">foreach</span> <span class="kwc">map</span> { <span class="kwb">$_</span>-&gt;{<span class="kwc">write</span>} } <span class="kwb">&#64;pipes</span>;
+	   <span class="kwa">last</span>;
+	 }
+       }
+     });
+} (<span class="num">0</span> .. THREADS-<span class="num">1</span>);
+
+<span class="slc"># inject initial message</span>
+<span class="kwc">my</span> <span class="kwb">$start_fh</span> = <span class="kwb">$pipes</span>[<span class="num">0</span>]{<span class="kwc">write</span>};
+<span class="kwc">say</span> <span class="kwb">$start_fh $passes</span>;
+
+<span class="slc"># collect exited threads</span>
+<span class="kwb">$_</span>-&gt;<span class="kwc">join</span> <span class="kwa">foreach</span> <span class="kwb">&#64;threads</span>;
+

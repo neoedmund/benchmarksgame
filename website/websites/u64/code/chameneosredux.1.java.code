@@ -1,0 +1,261 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Michael Barker</span>
+<span class="com">*/</span>
+
+
+<span class="kwa">import</span> java.util.concurrent.ArrayBlockingQueue;
+<span class="kwa">import</span> java.util.concurrent.BlockingQueue;
+<span class="kwa">import</span> java.util.concurrent.CountDownLatch;
+<span class="kwa">import</span> java.util.concurrent.atomic.AtomicInteger;
+<span class="kwa">import</span> java.util.concurrent.atomic.AtomicReference;
+
+
+<span class="com">/**</span>
+<span class="com"> * This implementation uses the java.util.concurrent.atomic library</span>
+<span class="com"> * i.e. (compare and set) to avoid locking.  Real threads are used, but</span>
+<span class="com"> * are set up as a thread pool and meeting requests are pushed onto a</span>
+<span class="com"> * queue that feeds the thread pool.</span>
+<span class="com"> */</span>
+<span class="kwa">public final class</span> chameneosredux {
+
+    enum Colour {
+        blue,
+        red,
+        yellow
+    }
+
+    <span class="kwa">private static</span> Colour <span class="kwd">doCompliment</span>(<span class="kwa">final</span> Colour c1, <span class="kwa">final</span> Colour c2) {
+        <span class="kwa">switch</span> (c1) {
+        <span class="kwa">case</span> blue:
+            <span class="kwa">switch</span> (c2) {
+            <span class="kwa">case</span> blue:
+                <span class="kwa">return</span> Colour.blue;
+            <span class="kwa">case</span> red:
+                <span class="kwa">return</span> Colour.yellow;
+            <span class="kwa">case</span> yellow:
+                <span class="kwa">return</span> Colour.red;
+            }
+        <span class="kwa">case</span> red:
+            <span class="kwa">switch</span> (c2) {
+            <span class="kwa">case</span> blue:
+                <span class="kwa">return</span> Colour.yellow;
+            <span class="kwa">case</span> red:
+                <span class="kwa">return</span> Colour.red;
+            <span class="kwa">case</span> yellow:
+                <span class="kwa">return</span> Colour.blue;
+            }
+        <span class="kwa">case</span> yellow:
+            <span class="kwa">switch</span> (c2) {
+            <span class="kwa">case</span> blue:
+                <span class="kwa">return</span> Colour.red;
+            <span class="kwa">case</span> red:
+                <span class="kwa">return</span> Colour.blue;
+            <span class="kwa">case</span> yellow:
+                <span class="kwa">return</span> Colour.yellow;
+            }
+        }
+
+        <span class="kwa">throw new</span> <span class="kwd">RuntimeException</span>(<span class="str">&quot;Error&quot;</span>);
+    }
+
+    <span class="kwa">static final class</span> MeetingPlace {
+
+        <span class="kwa">private final</span> AtomicInteger meetingsLeft;
+        <span class="kwa">private final</span> AtomicReference&lt;Creature&gt; creatureRef = <span class="kwa">new</span> AtomicReference&lt;Creature&gt;();
+
+        <span class="kwa">public</span> <span class="kwd">MeetingPlace</span>(<span class="kwa">final</span> <span class="kwb">int</span> meetings) {
+            meetingsLeft = <span class="kwa">new</span> <span class="kwd">AtomicInteger</span>(meetings);
+        }
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">meet</span>(<span class="kwa">final</span> Creature incoming) {
+            Colour newColour = null;
+            Creature first = null;
+            Creature next = null;
+            <span class="kwa">do</span> {
+                first = creatureRef.<span class="kwd">get</span>();
+                next = incoming;
+                <span class="kwa">if</span> (first != null) {
+                    newColour = <span class="kwd">doCompliment</span>(incoming.colour, first.colour);
+                    next = null;
+                }
+            } <span class="kwa">while</span> (!creatureRef.<span class="kwd">compareAndSet</span>(first, next));
+
+            <span class="kwa">if</span> (first != null) {
+                <span class="kwa">final</span> <span class="kwb">int</span> meetings = meetingsLeft.<span class="kwd">decrementAndGet</span>();
+                <span class="kwa">if</span> (meetings &gt;= <span class="num">0</span>) {
+                    first.<span class="kwd">setColour</span>(incoming.id, newColour);
+                    incoming.<span class="kwd">setColour</span>(first.id, newColour);
+                } <span class="kwa">else</span> {
+                    first.<span class="kwd">complete</span>();
+                    incoming.<span class="kwd">complete</span>();
+                }
+            }
+        }
+    }
+
+    <span class="kwa">static final class</span> Dispatcher <span class="kwa">implements</span> Runnable {
+        <span class="kwa">private final</span> BlockingQueue&lt;Creature&gt; q;
+
+        <span class="kwa">public</span> <span class="kwd">Dispatcher</span>(<span class="kwa">final</span> BlockingQueue&lt;Creature&gt; q) {
+            <span class="kwa">this</span>.q = q;
+        }
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+            <span class="kwa">try</span> {
+                <span class="kwa">while</span> (true) {
+                    q.<span class="kwd">take</span>().<span class="kwd">run</span>();
+                }
+            } <span class="kwa">catch</span> (<span class="kwa">final</span> InterruptedException e) {
+            }
+        }
+    }
+
+    <span class="kwa">static final class</span> Creature {
+
+        <span class="kwa">private final</span> <span class="kwb">int</span> id;
+        <span class="kwa">private final</span> MeetingPlace place;
+        <span class="kwa">private final</span> BlockingQueue&lt;Creature&gt; q;
+        <span class="kwa">private final</span> CountDownLatch latch;
+        <span class="kwa">private</span> <span class="kwb">int</span> count = <span class="num">0</span>;
+        <span class="kwa">private</span> <span class="kwb">int</span> sameCount = <span class="num">0</span>;
+        <span class="kwa">private</span> Colour colour;
+
+        <span class="kwa">public</span> <span class="kwd">Creature</span>(<span class="kwa">final</span> MeetingPlace place, <span class="kwa">final</span> Colour colour,
+                        <span class="kwa">final</span> BlockingQueue&lt;Creature&gt; q, <span class="kwa">final</span> CountDownLatch latch) {
+            <span class="kwa">this</span>.id = System.<span class="kwd">identityHashCode</span>(<span class="kwa">this</span>);
+            <span class="kwa">this</span>.place = place;
+            <span class="kwa">this</span>.latch = latch;
+            <span class="kwa">this</span>.colour = colour;
+            <span class="kwa">this</span>.q = q;
+        }
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">complete</span>() {
+            latch.<span class="kwd">countDown</span>();
+        }
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">setColour</span>(<span class="kwa">final</span> <span class="kwb">int</span> id, <span class="kwa">final</span> Colour newColour) {
+            <span class="kwa">this</span>.colour = newColour;
+            count++;
+            sameCount += <span class="num">1</span> ^ Integer.<span class="kwd">signum</span>(<span class="kwd">abs</span>(<span class="kwa">this</span>.id - id));
+            q.<span class="kwd">add</span>(<span class="kwa">this</span>);
+        }
+
+        <span class="kwa">private</span> <span class="kwb">int</span> <span class="kwd">abs</span>(<span class="kwa">final</span> <span class="kwb">int</span> x) {
+            <span class="kwa">final</span> <span class="kwb">int</span> y = x &gt;&gt; <span class="num">31</span>;
+            <span class="kwa">return</span> (x ^ y) - y;
+        }
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+            place.<span class="kwd">meet</span>(<span class="kwa">this</span>);
+        }
+
+        <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">getCount</span>() {
+            <span class="kwa">return</span> count;
+        }
+
+        <span class="kwc">&#64;Override</span>
+        <span class="kwa">public</span> String <span class="kwd">toString</span>() {
+            <span class="kwa">return</span> String.<span class="kwd">valueOf</span>(count) + <span class="kwd">getNumber</span>(sameCount);
+        }
+    }
+
+    <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">run</span>(<span class="kwa">final</span> <span class="kwb">int</span> n, <span class="kwa">final</span> Colour...colours) {
+        <span class="kwa">final</span> <span class="kwb">int</span> len = colours.length;
+        <span class="kwa">final</span> MeetingPlace place = <span class="kwa">new</span> <span class="kwd">MeetingPlace</span>(n);
+        <span class="kwa">final</span> Creature[] creatures = <span class="kwa">new</span> Creature[len];
+        <span class="kwa">final</span> BlockingQueue&lt;Creature&gt; q = <span class="kwa">new</span> ArrayBlockingQueue&lt;Creature&gt;(len);
+        <span class="kwa">final</span> CountDownLatch latch = <span class="kwa">new</span> <span class="kwd">CountDownLatch</span>(len - <span class="num">1</span>);
+
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; len; i++) {
+            System.out.<span class="kwd">print</span>(<span class="str">&quot; &quot;</span> + colours[i]);
+            creatures[i] = <span class="kwa">new</span> <span class="kwd">Creature</span>(place, colours[i], q, latch);
+        }
+
+        System.out.<span class="kwd">println</span>();
+        <span class="kwa">final</span> Thread[] ts = <span class="kwa">new</span> Thread[len];
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>, h = ts.length; i &lt; h; i++) {
+            ts[i] = <span class="kwa">new</span> <span class="kwd">Thread</span>(<span class="kwa">new</span> <span class="kwd">Dispatcher</span>(q));
+            ts[i].<span class="kwd">setDaemon</span>(true);
+            ts[i].<span class="kwd">start</span>();
+        }
+
+        <span class="kwa">for</span> (<span class="kwa">final</span> Creature creature : creatures) {
+            q.<span class="kwd">add</span>(creature);
+        }
+
+        <span class="kwa">try</span> {
+            latch.<span class="kwd">await</span>();
+            <span class="kwa">for</span> (<span class="kwa">final</span> Thread t : ts) {
+                t.<span class="kwd">interrupt</span>();
+            }
+            <span class="kwa">for</span> (<span class="kwa">final</span> Thread t : ts) {
+                t.<span class="kwd">join</span>();
+            }
+        } <span class="kwa">catch</span> (<span class="kwa">final</span> InterruptedException e1) {
+            System.err.<span class="kwd">println</span>(<span class="str">&quot;Existing with error: &quot;</span> + e1);
+        }
+
+        <span class="kwb">int</span> total = <span class="num">0</span>;
+        <span class="kwa">for</span> (<span class="kwa">final</span> Creature creature : creatures) {
+            System.out.<span class="kwd">println</span>(creature);
+            total += creature.<span class="kwd">getCount</span>();
+        }
+        System.out.<span class="kwd">println</span>(<span class="kwd">getNumber</span>(total));
+        System.out.<span class="kwd">println</span>();
+    }
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(<span class="kwa">final</span> String[] args){
+        chameneosredux.<span class="kwd">program_main</span>(args,true);
+    }
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">program_main</span>(<span class="kwa">final</span> String[] args, <span class="kwa">final</span> <span class="kwb">boolean</span> isWarm) {
+
+        <span class="kwb">int</span> n = <span class="num">600</span>;
+        <span class="kwa">try</span> {
+            n = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+        } <span class="kwa">catch</span> (<span class="kwa">final</span> Exception e) {
+        }
+
+        <span class="kwd">printColours</span>();
+        System.out.<span class="kwd">println</span>();
+        <span class="kwd">run</span>(n, Colour.blue, Colour.red, Colour.yellow);
+        <span class="kwd">run</span>(n, Colour.blue, Colour.red, Colour.yellow, Colour.red, Colour.yellow,
+               Colour.blue, Colour.red, Colour.yellow, Colour.red, Colour.blue);
+    }
+
+    <span class="kwa">private static final</span> String[] NUMBERS = {
+        <span class="str">&quot;zero&quot;</span>, <span class="str">&quot;one&quot;</span>, <span class="str">&quot;two&quot;</span>, <span class="str">&quot;three&quot;</span>, <span class="str">&quot;four&quot;</span>, <span class="str">&quot;five&quot;</span>,
+        <span class="str">&quot;six&quot;</span>, <span class="str">&quot;seven&quot;</span>, <span class="str">&quot;eight&quot;</span>, <span class="str">&quot;nine&quot;</span>
+    };
+
+    <span class="kwa">private static</span> String <span class="kwd">getNumber</span>(<span class="kwa">final</span> <span class="kwb">int</span> n) {
+        <span class="kwa">final</span> StringBuilder sb = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>();
+        <span class="kwa">final</span> String nStr = String.<span class="kwd">valueOf</span>(n);
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; nStr.<span class="kwd">length</span>(); i++) {
+            sb.<span class="kwd">append</span>(<span class="str">&quot; &quot;</span>);
+            sb.<span class="kwd">append</span>(NUMBERS[Character.<span class="kwd">getNumericValue</span>(nStr.<span class="kwd">charAt</span>(i))]);
+        }
+
+        <span class="kwa">return</span> sb.<span class="kwd">toString</span>();
+    }
+
+    <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">printColours</span>() {
+        <span class="kwd">printColours</span>(Colour.blue, Colour.blue);
+        <span class="kwd">printColours</span>(Colour.blue, Colour.red);
+        <span class="kwd">printColours</span>(Colour.blue, Colour.yellow);
+        <span class="kwd">printColours</span>(Colour.red, Colour.blue);
+        <span class="kwd">printColours</span>(Colour.red, Colour.red);
+        <span class="kwd">printColours</span>(Colour.red, Colour.yellow);
+        <span class="kwd">printColours</span>(Colour.yellow, Colour.blue);
+        <span class="kwd">printColours</span>(Colour.yellow, Colour.red);
+        <span class="kwd">printColours</span>(Colour.yellow, Colour.yellow);
+    }
+
+    <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">printColours</span>(<span class="kwa">final</span> Colour c1, <span class="kwa">final</span> Colour c2) {
+        System.out.<span class="kwd">println</span>(c1 + <span class="str">&quot; + &quot;</span> + c2 + <span class="str">&quot; -&gt; &quot;</span> + <span class="kwd">doCompliment</span>(c1, c2));
+    }
+
+
+}

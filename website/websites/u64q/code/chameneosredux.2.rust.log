@@ -1,0 +1,40 @@
+
+Thu, 10 Dec 2015 17:28:30 GMT
+
+MAKE:
+/usr/local/src/rust-1.5.0/bin/rustc -C opt-level=3 -C target-cpu=core2  chameneosredux.rs -o chameneosredux.rust-2.rust_run
+2.37s to complete and log all make actions
+
+COMMAND LINE:
+./chameneosredux.rust-2.rust_run 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+ blue red yellow
+4034327 zero
+3953425 zero
+4012248 zero
+ one two zero zero zero zero zero zero
+
+ blue red yellow red yellow blue red yellow red blue
+1057638 zero
+1254409 zero
+1078006 zero
+1359468 zero
+1112864 zero
+1271483 zero
+1133290 zero
+1412933 zero
+1038280 zero
+1281629 zero
+ one two zero zero zero zero zero zero
+

@@ -1,0 +1,33 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Tomasz bla Fortuna *)</span>
+
+<span class="kwa">let</span> size = <span class="num">503</span>
+<span class="kwa">and</span> n = int_of_string <span class="kwc">Sys</span>.argv.(<span class="num">1</span>)
+
+<span class="kwa">type</span> channel = { m : <span class="kwc">Mutex</span>.t; d : <span class="kwb">int ref</span> }
+<span class="kwa">let</span> channel () =
+  <span class="kwa">let</span> mx = <span class="kwc">Mutex</span>.create () <span class="kwa">in</span> <span class="kwc">Mutex</span>.lock mx;
+  { m = mx; d = <span class="kwb">ref</span> <span class="num">0</span>}
+
+<span class="kwa">let rec</span> spawn id i o loop () =
+  <span class="kwa">let rec</span> thread () =
+    <span class="kwc">Mutex</span>.lock i.m;
+    <span class="kwa">if</span> !(i.d) = n <span class="kwa">then</span> (
+      print_int (size-id+<span class="num">1</span>); print_newline (); exit <span class="num">0</span>;
+    );
+    o.d := !(i.d) + <span class="num">1</span>;  <span class="com">(* Forward token *)</span>
+    <span class="kwc">Mutex</span>.unlock o.m;
+    thread ()
+  <span class="kwa">in</span>
+  <span class="kwa">if</span> id &gt; <span class="num">1</span> <span class="kwa">then</span> (
+    <span class="kwa">let</span> new_o = <span class="kwa">if</span> id = <span class="num">2</span> <span class="kwa">then</span> loop <span class="kwa">else</span> channel () <span class="kwa">in</span>
+    <span class="kwa">let</span> f = spawn (id-<span class="num">1</span>) o new_o loop <span class="kwa">in</span>
+    ignore (<span class="kwc">Thread</span>.create f ())
+  );
+  thread ()
+
+<span class="kwa">let</span> _ =
+  <span class="kwa">let</span> loop, o = channel (), channel () <span class="kwa">in</span>
+  <span class="kwc">Mutex</span>.unlock loop.m;
+  <span class="kwc">Thread</span>.join (<span class="kwc">Thread</span>.create (spawn size loop o loop) ())

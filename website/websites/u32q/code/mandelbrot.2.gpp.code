@@ -1,0 +1,86 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by Elam Kolenovic</span>
+
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;iterator&gt;</span>
+<span class="ppc">#include &lt;limits&gt;</span>
+<span class="ppc">#include &lt;sstream&gt;</span>
+<span class="ppc">#include &lt;string&gt;</span>
+<span class="ppc">#include &lt;vector&gt;</span>
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>* argv[])
+{
+    <span class="kwc">typedef</span> <span class="kwb">unsigned char</span> Byte;
+
+    <span class="kwb">const size_t</span> N             = std::<span class="kwd">max</span>(<span class="num">0</span>, (argc &gt; <span class="num">1</span>) ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">0</span>);
+    <span class="kwb">const size_t</span> width         = N;
+    <span class="kwb">const size_t</span> height        = N;
+    <span class="kwb">const size_t</span> maxX          = (width + <span class="num">7</span>) / <span class="num">8</span>;
+    <span class="kwb">const size_t</span> maxIterations = <span class="num">50</span>;
+    <span class="kwb">const double</span> limit         = <span class="num">2.0</span>;
+    <span class="kwb">const double</span> limitSq       = limit * limit;
+
+    std::vector&lt;Byte&gt; <span class="kwd">data</span>(height * maxX);
+
+    <span class="kwa">for</span> (<span class="kwb">size_t</span> y = <span class="num">0</span>; y &lt; height; ++y)
+    {
+        <span class="kwb">const double</span> ci0  = <span class="num">2.0</span> * y / height - <span class="num">1.0</span>;
+        Byte*        line = &amp;data[y * maxX];
+
+        <span class="kwa">for</span> (<span class="kwb">size_t</span> x = <span class="num">0</span>; x &lt; maxX; ++x)
+        {
+            <span class="kwb">double</span> cr0[<span class="num">8</span>];
+            <span class="kwa">for</span> (<span class="kwb">size_t</span> k = <span class="num">0</span>; k &lt; <span class="num">8</span>; ++k)
+            {
+                cr0[k] = <span class="num">2.0</span> * (<span class="num">8</span> * x + k) / width - <span class="num">1.5</span>;
+            }
+
+            <span class="kwb">double</span> cr[<span class="num">8</span>];
+            std::<span class="kwd">copy</span>(cr0, cr0 + <span class="num">8</span>, &amp;cr[<span class="num">0</span>]);
+
+            <span class="kwb">double</span> ci[<span class="num">8</span>];
+            std::<span class="kwd">fill</span>(ci, ci + <span class="num">8</span>, ci0);
+
+            Byte bits = <span class="num">0</span>;
+            <span class="kwa">for</span> (<span class="kwb">size_t</span> i = <span class="num">0</span>; i &lt; maxIterations &amp;&amp; bits != <span class="num">0xFF</span>; ++i)
+            {
+                <span class="kwb">double</span> cr2[<span class="num">8</span>];
+                <span class="kwb">double</span> ci2[<span class="num">8</span>];
+                <span class="kwb">double</span> crci[<span class="num">8</span>];
+
+                <span class="kwa">for</span> (<span class="kwb">size_t</span> k = <span class="num">0</span>; k &lt; <span class="num">8</span>; ++k)
+                {
+                    <span class="kwb">const</span> Byte mask = (<span class="num">1</span> &lt;&lt; (<span class="num">7</span> - k));
+                    <span class="kwa">if</span> ((bits &amp; mask) == <span class="num">0</span>)
+                    {
+                        cr2[k]  = cr[k] * cr[k];
+                        ci2[k]  = ci[k] * ci[k];
+                        crci[k] = cr[k] * ci[k];
+
+                        cr[k] = cr2[k] - ci2[k] + cr0[k];
+                        ci[k] = <span class="num">2.0</span> * crci[k] + ci0;
+
+                        <span class="kwa">if</span> (cr2[k] + ci2[k] &gt; limitSq)
+                        {
+                            bits |= mask;
+                        }
+                    }
+                }
+            }
+            line[x] = ~bits;
+        }
+    }
+
+    std::cout &lt;&lt; <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">&quot;</span> &lt;&lt; width &lt;&lt; <span class="str">' '</span> &lt;&lt; height &lt;&lt; <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+    <span class="kwa">for</span> (<span class="kwb">size_t</span> y = <span class="num">0</span>; y &lt; height; ++y)
+    {
+        Byte* line = <span class="kwa">reinterpret_cast</span>&lt;Byte*&gt;(&amp;data[y * maxX]);
+        std::<span class="kwd">copy</span>(line, line + width / <span class="num">8</span>, std::ostream_iterator&lt;Byte&gt;(std::cout));
+    }
+
+    <span class="kwa">return</span> <span class="num">0</span>;
+}

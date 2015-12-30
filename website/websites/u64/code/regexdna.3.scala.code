@@ -1,0 +1,73 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">// Contributed by The Anh Tran</span>
+<span class="slc">// Updated for 2.8 by Rex Kerr</span>
+
+<span class="kwa">import</span> scala.io.Source
+<span class="kwa">import</span> java.util.regex.Pattern
+<span class="kwa">import</span> scala.collection.immutable.HashMap
+<span class="kwa">import</span> scala.actors.Futures.future
+
+<span class="kwa">object</span> regexdna {
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args : Array[String]) {
+
+    <span class="slc">// load data from stdin</span>
+    <span class="kwa">var</span> input = Source.stdin.mkString
+    <span class="kwa">val</span> init_len = input length
+
+    <span class="slc">// strip header &amp; newline</span>
+    input = <span class="str">&quot;&gt;.*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;</span>.r <span class="kwd">replaceAllIn</span>(input, <span class="str">&quot;&quot;</span>)
+    <span class="kwa">val</span> strip_len = input length
+
+    <span class="slc">// counting patterns</span>
+    <span class="kwa">val</span> patterns  = <span class="kwd">Array</span>(
+      <span class="str">&quot;agggtaaa|tttaccct&quot;</span> ,
+      <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+      <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+      <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+      <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+      <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+      <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+      <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+      <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>)
+
+    <span class="slc">// queue tasks, each task is handled in a separate thread</span>
+    <span class="kwa">val</span> count_results  = patterns <span class="kwd">map</span>( pt =&gt; 
+      <span class="kwd">future</span>(pt.r.<span class="kwd">findAllIn</span>(input).toArray.length)
+    )
+
+    <span class="slc">// replace IUB</span>
+    <span class="kwa">val</span> replace_result  = future {
+      <span class="kwa">val</span> iub = <span class="kwd">HashMap</span>(
+        <span class="str">'B'</span> -&gt; <span class="str">&quot;(c|g|t)&quot;</span>,
+        <span class="str">'D'</span> -&gt; <span class="str">&quot;(a|g|t)&quot;</span>,
+        <span class="str">'H'</span> -&gt; <span class="str">&quot;(a|c|t)&quot;</span>,
+        <span class="str">'K'</span> -&gt; <span class="str">&quot;(g|t)&quot;</span>,
+        <span class="str">'M'</span> -&gt; <span class="str">&quot;(a|c)&quot;</span>,
+        <span class="str">'N'</span> -&gt; <span class="str">&quot;(a|c|g|t)&quot;</span>,
+        <span class="str">'R'</span> -&gt; <span class="str">&quot;(a|g)&quot;</span>,
+        <span class="str">'S'</span> -&gt; <span class="str">&quot;(c|g)&quot;</span>,
+        <span class="str">'V'</span> -&gt; <span class="str">&quot;(a|c|g)&quot;</span>,
+        <span class="str">'W'</span> -&gt; <span class="str">&quot;(a|t)&quot;</span>,
+        <span class="str">'Y'</span> -&gt; <span class="str">&quot;(c|t)&quot;</span>  )
+
+      <span class="kwa">val</span> buffer  = <span class="kwa">new</span> <span class="kwd">StringBuffer</span>((input.length * <span class="num">3</span>) / <span class="num">2</span>)
+      <span class="kwa">val</span> matcher  = Pattern compile <span class="str">&quot;[BDHKMNRSVWY]&quot;</span> matcher input
+
+      <span class="kwa">while</span> ( matcher find )
+        matcher <span class="kwd">appendReplacement</span>( buffer, <span class="kwd">iub</span>(<span class="kwd">input</span>(matcher start))  )
+
+      matcher appendTail buffer
+      buffer length
+    }
+
+
+    <span class="slc">// print results</span>
+    <span class="kwa">for</span> ((pt, cres) &lt;- patterns zip count_results)
+      <span class="kwd">printf</span>( <span class="str">&quot;%s %d</span><span class="esc">\n</span><span class="str">&quot;</span>, pt, <span class="kwd">cres</span>() )
+
+    <span class="kwd">printf</span>( <span class="str">&quot;</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">&quot;</span>, init_len, strip_len, <span class="kwd">replace_result</span>() )
+  }
+}

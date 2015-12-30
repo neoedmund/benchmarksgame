@@ -1,0 +1,62 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc"># contributed by Danny Sauer</span>
+<span class="slc"># completely rewritten and cleaned up for speed and fun by Mirco Wahab</span>
+<span class="slc"># improved STDIN read, regex clean up by Jake Berner</span>
+<span class="slc"># more speed and multithreading by Andrew Rodland</span>
+<span class="slc"># moved alternation out of the regexes into the program logic for speed by Daniel Green</span>
+
+<span class="kwa">use</span> strict;
+<span class="kwa">use</span> warnings;
+
+<span class="kwc">my</span> <span class="kwb">$l_file</span>  = -s STDIN;
+<span class="kwc">my</span> <span class="kwb">$content</span>; <span class="kwc">read</span> STDIN, <span class="kwb">$content</span>, <span class="kwb">$l_file</span>;
+<span class="slc"># this is significantly faster than using &lt;&gt; in this case</span>
+
+<span class="kwb">$content</span> =~ <span class="kwd">s/^&gt;.*//mg</span>;
+<span class="kwb">$content</span> =~ <span class="kwd">tr/\n//d</span>;
+<span class="kwc">my</span> <span class="kwb">$l_code</span>  =  <span class="kwc">length</span> <span class="kwb">$content</span>;
+
+<span class="kwc">my</span> <span class="kwb">&#64;seq</span> = ( [<span class="str">'agggtaaa'</span>, <span class="str">'tttaccct'</span>],
+        [<span class="str">'[cgt]gggtaaa'</span>, <span class="str">'tttaccc[acg]'</span>],
+        [<span class="str">'a[act]ggtaaa'</span>, <span class="str">'tttacc[agt]t'</span>],
+        [<span class="str">'ag[act]gtaaa'</span>, <span class="str">'tttac[agt]ct'</span>],
+        [<span class="str">'agg[act]taaa'</span>, <span class="str">'ttta[agt]cct'</span>],
+        [<span class="str">'aggg[acg]aaa'</span>, <span class="str">'ttt[cgt]ccct'</span>],
+        [<span class="str">'agggt[cgt]aa'</span>, <span class="str">'tt[acg]accct'</span>],
+        [<span class="str">'agggta[cgt]a'</span>, <span class="str">'t[acg]taccct'</span>],
+        [<span class="str">'agggtaa[cgt]'</span>, <span class="str">'[acg]ttaccct'</span>] );
+
+<span class="kwc">my</span> <span class="kwb">&#64;procs</span>;
+<span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$s</span> (<span class="kwb">&#64;seq</span>) {
+  <span class="kwc">my</span> (<span class="kwb">$pat_l</span>, <span class="kwb">$pat_r</span>) = (<span class="kwd">qr/$s-&gt;[0]/</span>, <span class="kwd">qr/$s-&gt;[1]/</span>);
+  <span class="kwc">my</span> <span class="kwb">$pid</span> = <span class="kwc">open my</span> <span class="kwb">$fh</span>, <span class="str">'-|'</span>;
+  <span class="kwc">defined</span> <span class="kwb">$pid</span> <span class="kwc">or die</span> <span class="str">&quot;Error creating process&quot;</span>;
+  <span class="kwa">unless</span> (<span class="kwb">$pid</span>) {
+    <span class="kwc">my</span> <span class="kwb">$cnt</span> = <span class="num">0</span>;
+    ++<span class="kwb">$cnt</span> <span class="kwa">while</span> <span class="kwb">$content</span> =~ <span class="kwd">/$pat_l/gi</span>;
+    ++<span class="kwb">$cnt</span> <span class="kwa">while</span> <span class="kwb">$content</span> =~ <span class="kwd">/$pat_r/gi</span>;
+    <span class="kwc">print</span> <span class="str">&quot;</span><span class="ipl">$s</span><span class="str">-&gt;[0]|</span><span class="ipl">$s</span><span class="str">-&gt;[1]</span> <span class="ipl">$cnt</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>;
+    <span class="kwa">exit</span> <span class="num">0</span>;
+  }
+  <span class="kwc">push</span> <span class="kwb">&#64;procs</span>, <span class="kwb">$fh</span>;
+}
+
+<span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$proc</span> (<span class="kwb">&#64;procs</span>) {
+  <span class="kwc">print</span> &lt;<span class="kwb">$proc</span>&gt;;
+  <span class="kwc">close</span> <span class="kwb">$proc</span>;
+}
+
+<span class="kwc">my</span> <span class="kwb">%iub</span> = (         B =&gt; <span class="str">'(c|g|t)'</span>,  D =&gt; <span class="str">'(a|g|t)'</span>,
+  H =&gt; <span class="str">'(a|c|t)'</span>,   K =&gt; <span class="str">'(g|t)'</span>,    M =&gt; <span class="str">'(a|c)'</span>,
+  N =&gt; <span class="str">'(a|c|g|t)'</span>, R =&gt; <span class="str">'(a|g)'</span>,    S =&gt; <span class="str">'(c|g)'</span>,
+  V =&gt; <span class="str">'(a|c|g)'</span>,   W =&gt; <span class="str">'(a|t)'</span>,    Y =&gt; <span class="str">'(c|t)'</span> );
+
+<span class="slc"># We could cheat here by using $&amp; in the subst and doing it inside a string</span>
+<span class="slc"># eval to &quot;hide&quot; the fact that we're using $&amp; from the rest of the code... but</span>
+<span class="slc"># it's only worth 0.4 seconds on my machine.</span>
+<span class="kwc">my</span> <span class="kwb">$findiub</span> = <span class="str">'(['</span>.(<span class="kwc">join</span> <span class="str">''</span>, <span class="kwc">keys</span> <span class="kwb">%iub</span>).<span class="str">'])'</span>;
+
+<span class="kwb">$content</span> =~ <span class="kwd">s/$findiub/$iub{$1}/g</span>;
+
+<span class="kwc">printf</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwb">$l_file</span>, <span class="kwb">$l_code</span>, <span class="kwc">length</span> <span class="kwb">$content</span>;

@@ -1,0 +1,116 @@
+
+Mon, 21 Sep 2015 18:20:50 GMT
+
+MAKE:
+mv fannkuchredux.ghc-3.ghc fannkuchredux.ghc-3.hs
+/usr/local/src/ghc-7.10.2/bin/ghc --make -fllvm -O2 -XBangPatterns -threaded -rtsopts  fannkuchredux.ghc-3.hs -o fannkuchredux.ghc-3.ghc_run
+[1 of 1] Compiling Main             ( fannkuchredux.ghc-3.hs, fannkuchredux.ghc-3.o )
+
+fannkuchredux.ghc-3.hs:22:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:23:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:32:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:33:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:34:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:35:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:39:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:40:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:41:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:42:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:46:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:47:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:48:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:49:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:50:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:51:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:52:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:53:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:54:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:55:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:56:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:57:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:58:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:62:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:63:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:64:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:65:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:66:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:67:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:68:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:69:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:70:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:79:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:80:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:81:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:82:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:83:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:84:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:85:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:86:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:87:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:88:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:89:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:90:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:91:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:92:1: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:99:4: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:100:4: Warning: Tab character
+
+fannkuchredux.ghc-3.hs:101:4: Warning: Tab character
+Linking fannkuchredux.ghc-3.ghc_run ...
+rm fannkuchredux.ghc-3.hs
+1.61s to complete and log all make actions
+
+COMMAND LINE:
+./fannkuchredux.ghc-3.ghc_run +RTS -N4 -RTS 10
+
+TIMED OUT after 900s
+
+
+PROGRAM OUTPUT:

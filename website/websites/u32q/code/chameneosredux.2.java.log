@@ -1,0 +1,44 @@
+
+Mon, 18 May 2015 22:08:16 GMT
+
+MAKE:
+mv chameneosredux.java-2.java chameneosredux.java
+/usr/local/src/jdk1.8.0_45/bin/javac chameneosredux.java
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+0.78s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java  -server -XX:+TieredCompilation -XX:+AggressiveOpts chameneosredux 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+ blue red yellow
+3805715 zero
+4493042 zero
+3701243 zero
+ one two zero zero zero zero zero zero
+
+ blue red yellow red yellow blue red yellow red blue
+1167440 zero
+1265127 zero
+1219745 zero
+1154636 zero
+1183212 zero
+1186131 zero
+1273960 zero
+1188989 zero
+1235171 zero
+1125589 zero
+ one two zero zero zero zero zero zero
+
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

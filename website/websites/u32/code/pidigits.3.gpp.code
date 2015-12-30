@@ -1,0 +1,96 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Marcin Zalewski &amp; Jeremiah Willcock</span>
+<span class="com"> */</span>
+
+
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;gmpxx.h&gt;</span>
+<span class="ppc">#include &lt;boost/lexical_cast.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/tuple/tuple.hpp&gt;</span>
+<span class="ppc">#include &lt;algorithm&gt;</span>
+
+<span class="kwa">using namespace</span> boost;
+
+<span class="kwc">class</span> Digits {
+<span class="kwc">private</span>:
+  <span class="kwb">unsigned int</span> j;
+  tuple&lt;mpz_class, mpz_class, mpz_class&gt; nad;
+  mpz_class tmp1, tmp2;
+
+<span class="kwc">public</span>:
+  <span class="kwd">Digits</span>() { j = <span class="num">0</span>; get&lt;<span class="num">0</span>&gt;(nad) = <span class="num">1</span>; get&lt;<span class="num">1</span>&gt;(nad) = <span class="num">0</span>; get&lt;<span class="num">2</span>&gt;(nad) = <span class="num">1</span>; }
+
+  <span class="kwc">inline</span> <span class="kwb">char</span> <span class="kwc">operator</span>()() {
+    ++j;
+    <span class="kwd">next_term</span>();
+
+    <span class="kwa">if</span>(get&lt;<span class="num">0</span>&gt;(nad) &gt; get&lt;<span class="num">1</span>&gt;(nad)) <span class="kwa">return</span> (*<span class="kwa">this</span>)();
+
+    <span class="kwd">mpz_mul_2exp</span>(tmp1.<span class="kwd">get_mpz_t</span>(), get&lt;<span class="num">0</span>&gt;(nad).<span class="kwd">get_mpz_t</span>(), <span class="num">1</span>);
+    tmp1 += get&lt;<span class="num">0</span>&gt;(nad);
+    tmp1 += get&lt;<span class="num">1</span>&gt;(nad);
+
+    <span class="kwd">mpz_fdiv_qr</span>(tmp1.<span class="kwd">get_mpz_t</span>(), tmp2.<span class="kwd">get_mpz_t</span>(), tmp1.<span class="kwd">get_mpz_t</span>(), get&lt;<span class="num">2</span>&gt;(nad).<span class="kwd">get_mpz_t</span>());
+
+    tmp2 += get&lt;<span class="num">0</span>&gt;(nad);
+
+    <span class="kwa">if</span>(tmp2 &gt;= get&lt;<span class="num">2</span>&gt;(nad)) {
+      <span class="kwa">return</span> (*<span class="kwa">this</span>)();
+    } <span class="kwa">else</span> {
+      <span class="kwb">unsigned int</span> d = tmp1.<span class="kwd">get_ui</span>();
+      <span class="kwd">eliminate_digit</span>(d);
+      <span class="kwa">return</span> d + <span class="str">'0'</span>;
+    }
+  }
+
+<span class="kwc">private</span>:
+
+  <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">next_term</span>() {
+    <span class="kwb">unsigned int</span> y = j * <span class="num">2</span> + <span class="num">1</span>;
+    <span class="kwd">mpz_mul_2exp</span>(tmp1.<span class="kwd">get_mpz_t</span>(), get&lt;<span class="num">0</span>&gt;(nad).<span class="kwd">get_mpz_t</span>(), <span class="num">1</span>);
+    get&lt;<span class="num">1</span>&gt;(nad) += tmp1;
+    get&lt;<span class="num">1</span>&gt;(nad) *= y;
+    get&lt;<span class="num">0</span>&gt;(nad) *= j;
+    get&lt;<span class="num">2</span>&gt;(nad) *= y;
+  }
+
+  <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">eliminate_digit</span>(<span class="kwb">unsigned int</span> d) {
+    <span class="kwd">mpz_submul_ui</span>(get&lt;<span class="num">1</span>&gt;(nad).<span class="kwd">get_mpz_t</span>(), get&lt;<span class="num">2</span>&gt;(nad).<span class="kwd">get_mpz_t</span>(), d);
+    get&lt;<span class="num">0</span>&gt;(nad) *= <span class="num">10</span>;
+    get&lt;<span class="num">1</span>&gt;(nad) *= <span class="num">10</span>;
+  }
+
+};
+
+<span class="kwb">void</span> <span class="kwd">pi</span>(<span class="kwb">unsigned int</span> n) {
+  <span class="kwb">unsigned int</span> i = <span class="num">0</span>;
+  Digits digits;
+
+  <span class="kwa">while</span>((i += <span class="num">10</span>) &lt;= n) {
+    <span class="kwa">for</span>(<span class="kwb">int</span> count = <span class="num">0</span>; count &lt; <span class="num">10</span>; ++count) {
+      std::cout &lt;&lt; <span class="kwd">digits</span>();
+    }
+    std::cout &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span> &lt;&lt; i &lt;&lt; <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+  }
+  
+  i -= <span class="num">10</span>;
+  <span class="kwa">if</span>(n &gt; i) {
+    <span class="kwa">for</span>(<span class="kwb">int</span> count = <span class="num">0</span>; count &lt; n - i; ++count) {
+      std::cout &lt;&lt; <span class="kwd">digits</span>();
+    }
+    i += <span class="num">10</span>;
+    <span class="kwa">for</span>(<span class="kwb">int</span> count = <span class="num">0</span>; count &lt; i - n; ++count) {
+      std::cout &lt;&lt; <span class="str">' '</span>;
+    }
+    std::cout &lt;&lt; <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span> &lt;&lt; n &lt;&lt; <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+  }
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>** argv) {
+  std::cout.<span class="kwd">sync_with_stdio</span>(<span class="kwa">false</span>);
+  <span class="kwb">unsigned int</span> count = (argc &gt;= <span class="num">2</span> ? boost::lexical_cast&lt;<span class="kwb">unsigned int</span>&gt;(argv[<span class="num">1</span>]) : <span class="num">10000</span>);
+  <span class="kwd">pi</span>(count);
+  <span class="kwa">return</span> <span class="num">0</span>;
+}

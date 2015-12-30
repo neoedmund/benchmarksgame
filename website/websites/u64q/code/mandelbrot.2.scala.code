@@ -1,0 +1,63 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Isaac Gouy</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> java.io.BufferedOutputStream
+
+<span class="kwa">object</span> mandelbrot { 
+   <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) = {
+      <span class="kwa">val</span> side = Integer.<span class="kwd">parseInt</span>(<span class="kwd">args</span>(<span class="num">0</span>))
+      <span class="kwa">val</span> limitSquared = <span class="num">4.0</span>
+      <span class="kwa">val</span> max = <span class="num">50</span>
+      <span class="kwa">var</span> bits = <span class="num">0</span>
+      <span class="kwa">var</span> bitnum = <span class="num">0</span>
+      <span class="kwa">val</span> w = <span class="kwa">new</span> <span class="kwd">BufferedOutputStream</span>(System.out)
+
+      Console.<span class="kwd">println</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">&quot;</span> + side + <span class="str">&quot; &quot;</span> + side)
+
+      <span class="kwa">var</span> y = <span class="num">0</span>
+      <span class="kwa">while</span> (y &lt; side){
+
+         <span class="kwa">var</span> x = <span class="num">0</span>
+         <span class="kwa">while</span> (x &lt; side){
+
+            <span class="kwa">val</span> cr = <span class="num">2.0</span> * x / side - <span class="num">1.5</span>
+            <span class="kwa">val</span> ci = <span class="num">2.0</span> * y / side - <span class="num">1.0</span>
+
+            <span class="kwa">var</span> zr = <span class="num">0.0</span>; <span class="kwa">var</span> zi = <span class="num">0.0</span>
+            <span class="kwa">var</span> tr = <span class="num">0.0</span>; <span class="kwa">var</span> ti = <span class="num">0.0</span>
+
+            <span class="kwa">var</span> j = max
+            <span class="kwa">do</span> {
+               zi = <span class="num">2.0</span> * zr * zi + ci
+               zr = tr - ti + cr
+               ti = zi*zi
+               tr = zr*zr
+
+               j = j - <span class="num">1</span>
+            } <span class="kwa">while</span> (!(tr + ti &gt; limitSquared) &amp;&amp; j &gt; <span class="num">0</span>)
+
+
+            bits = bits &lt;&lt; <span class="num">1</span>
+            <span class="kwa">if</span> (!(tr + ti &gt; limitSquared)) bits = bits + <span class="num">1</span>
+            bitnum = bitnum + <span class="num">1</span>
+
+            <span class="kwa">if</span> (x == side - <span class="num">1</span>){
+               bits = bits &lt;&lt; (<span class="num">8</span> - bitnum)
+               bitnum = <span class="num">8</span>
+            }
+
+            <span class="kwa">if</span> (bitnum == <span class="num">8</span>){
+               w.<span class="kwd">write</span>(bits.toByte)
+               bits = <span class="num">0</span>
+               bitnum = <span class="num">0</span>
+            }
+
+            x = x + <span class="num">1</span>
+         }
+         y = y + <span class="num">1</span>
+      }
+      w.close
+   } 
+}

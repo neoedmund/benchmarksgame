@@ -1,0 +1,8 @@
+
+Tue, 13 Jan 2015 01:27:37 GMT
+
+COMMAND LINE:
+/usr/local/src/lua-5.3.0/bin/lua  spectralnorm.lua 5500
+
+PROGRAM OUTPUT:
+1.274224153

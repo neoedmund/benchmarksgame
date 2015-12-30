@@ -1,0 +1,150 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * </span>
+<span class="com"> * modified by Mehmet D. AKIN</span>
+<span class="com"> *</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.io.IOException;
+<span class="kwa">import</span> java.io.OutputStream;
+
+<span class="kwa">class</span> fasta {
+    <span class="kwa">public static final</span> <span class="kwb">int</span> IM = <span class="num">139968</span>;
+    <span class="kwa">public static final</span> <span class="kwb">int</span> IA = <span class="num">3877</span>;
+    <span class="kwa">public static final</span> <span class="kwb">int</span> IC = <span class="num">29573</span>;
+    <span class="kwa">public static</span> <span class="kwb">int</span> last = <span class="num">42</span>;
+
+    <span class="kwa">public static final</span> <span class="kwb">int</span> LINE_LENGTH = <span class="num">60</span>;
+
+    <span class="slc">// pseudo-random number generator</span>
+    <span class="kwa">public static final</span> <span class="kwb">double</span> <span class="kwd">random</span>(<span class="kwb">double</span> max) {
+        last = (last * IA + IC) % IM;
+        <span class="kwa">return</span> max * last / IM;
+    }
+
+    <span class="slc">// Weighted selection from alphabet</span>
+    <span class="kwa">public static</span> String ALU = 
+              <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>
+            + <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>
+            + <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>
+            + <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>
+            + <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>
+            + <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>
+            + <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+    <span class="kwa">public static</span> <span class="kwb">byte</span>[] ALUB = ALU.<span class="kwd">getBytes</span>(); 
+
+    <span class="kwa">public static final</span> frequency[] IUB = <span class="kwa">new</span> frequency[] {
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'a'</span>, <span class="num">0.27</span>), 
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'c'</span>, <span class="num">0.12</span>),
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'g'</span>, <span class="num">0.12</span>), 
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'t'</span>, <span class="num">0.27</span>),
+            
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'B'</span>, <span class="num">0.02</span>), 
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'D'</span>, <span class="num">0.02</span>),
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'H'</span>, <span class="num">0.02</span>), 
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'K'</span>, <span class="num">0.02</span>),
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'M'</span>, <span class="num">0.02</span>), 
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'N'</span>, <span class="num">0.02</span>),
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'R'</span>, <span class="num">0.02</span>), 
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'S'</span>, <span class="num">0.02</span>),
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'V'</span>, <span class="num">0.02</span>), 
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'W'</span>, <span class="num">0.02</span>),
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'Y'</span>, <span class="num">0.02</span>) };
+
+    <span class="kwa">public static final</span> frequency[] HomoSapiens = <span class="kwa">new</span> frequency[] {
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'a'</span>, <span class="num">0.3029549426680</span>d),
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'c'</span>, <span class="num">0.1979883004921</span>d),
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'g'</span>, <span class="num">0.1975473066391</span>d),
+            <span class="kwa">new</span> <span class="kwd">frequency</span>(<span class="str">'t'</span>, <span class="num">0.3015094502008</span>d)};
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">makeCumulative</span>(frequency[] a) {
+        <span class="kwb">double</span> cp = <span class="num">0.0</span>;
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; a.length; i++) {
+            cp += a[i].p;
+            a[i].p = cp;
+        }
+    }
+
+    <span class="slc">// naive</span>
+    <span class="kwa">public final static</span> <span class="kwb">byte</span> <span class="kwd">selectRandom</span>(frequency[] a) {
+        <span class="kwb">int</span> len = a.length;
+        <span class="kwb">double</span> r = <span class="kwd">random</span>(<span class="num">1.0</span>);
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; len; i++)
+            <span class="kwa">if</span> (r &lt; a[i].p)
+                <span class="kwa">return</span> a[i].c;
+        <span class="kwa">return</span> a[len - <span class="num">1</span>].c;
+    }
+
+    <span class="kwa">static</span> <span class="kwb">int</span> BUFFER_SIZE = <span class="num">1024</span>;
+    <span class="kwa">static</span> <span class="kwb">int</span> index = <span class="num">0</span>;
+    <span class="kwa">static</span> <span class="kwb">byte</span>[] bbuffer = <span class="kwa">new</span> <span class="kwb">byte</span>[BUFFER_SIZE];
+    <span class="kwa">static final</span> <span class="kwb">void</span> <span class="kwd">makeRandomFasta</span>(String id, String desc,frequency[] a, <span class="kwb">int</span> n, OutputStream writer) <span class="kwa">throws</span> IOException
+    {
+        index = <span class="num">0</span>;
+        <span class="kwb">int</span> m = <span class="num">0</span>;
+        String descStr = <span class="str">&quot;&gt;&quot;</span> + id + <span class="str">&quot; &quot;</span> + desc + <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>; 
+        writer.<span class="kwd">write</span>(descStr.<span class="kwd">getBytes</span>());
+        <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+            <span class="kwa">if</span> (n &lt; LINE_LENGTH) m = n;  <span class="kwa">else</span> m = LINE_LENGTH;
+            <span class="kwa">if</span>(BUFFER_SIZE - index &lt; m){
+                writer.<span class="kwd">write</span>(bbuffer, <span class="num">0</span>, index);
+                index = <span class="num">0</span>;
+            }
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; m; i++) {
+                bbuffer[index++] = <span class="kwd">selectRandom</span>(a);
+            }
+            bbuffer[index++] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+            n -= LINE_LENGTH;
+        }
+        <span class="kwa">if</span>(index != <span class="num">0</span>) writer.<span class="kwd">write</span>(bbuffer, <span class="num">0</span>, index);
+    }    
+    
+    <span class="kwa">static final</span> <span class="kwb">void</span> <span class="kwd">makeRepeatFasta</span>(String id, String desc, String alu, <span class="kwb">int</span> n, OutputStream writer) <span class="kwa">throws</span> IOException
+    {
+        index = <span class="num">0</span>;
+        <span class="kwb">int</span> m = <span class="num">0</span>;
+        <span class="kwb">int</span> k = <span class="num">0</span>;
+        <span class="kwb">int</span> kn = ALUB.length;
+        String descStr = <span class="str">&quot;&gt;&quot;</span> + id + <span class="str">&quot; &quot;</span> + desc + <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>; 
+        writer.<span class="kwd">write</span>(descStr.<span class="kwd">getBytes</span>());
+        <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+            <span class="kwa">if</span> (n &lt; LINE_LENGTH) m = n; <span class="kwa">else</span> m = LINE_LENGTH;
+            <span class="kwa">if</span>(BUFFER_SIZE - index &lt; m){
+                writer.<span class="kwd">write</span>(bbuffer, <span class="num">0</span>, index);
+                index = <span class="num">0</span>;
+            }
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; m; i++) {
+                <span class="kwa">if</span> (k == kn) k = <span class="num">0</span>;
+                bbuffer[index++] = ALUB[k];
+                k++;
+            }
+            bbuffer[index++] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+            n -= LINE_LENGTH;
+        }
+        <span class="kwa">if</span>(index != <span class="num">0</span>) writer.<span class="kwd">write</span>(bbuffer, <span class="num">0</span>, index);
+    }
+    
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) <span class="kwa">throws</span> IOException {
+        <span class="kwd">makeCumulative</span>(HomoSapiens);
+        <span class="kwd">makeCumulative</span>(IUB);
+        <span class="kwb">int</span> n = <span class="num">2500000</span>;
+        <span class="kwa">if</span> (args.length &gt; <span class="num">0</span>)
+            n = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+        OutputStream out = System.out;
+        <span class="kwd">makeRepeatFasta</span>(<span class="str">&quot;ONE&quot;</span>, <span class="str">&quot;Homo sapiens alu&quot;</span>, ALU, n * <span class="num">2</span>, out);
+        <span class="kwd">makeRandomFasta</span>(<span class="str">&quot;TWO&quot;</span>, <span class="str">&quot;IUB ambiguity codes&quot;</span>, IUB, n * <span class="num">3</span>, out);
+        <span class="kwd">makeRandomFasta</span>(<span class="str">&quot;THREE&quot;</span>, <span class="str">&quot;Homo sapiens frequency&quot;</span>, HomoSapiens, n * <span class="num">5</span>, out);
+        out.<span class="kwd">close</span>();
+    }
+
+    <span class="kwa">public static class</span> frequency {
+        <span class="kwa">public</span> <span class="kwb">byte</span> c;
+        <span class="kwa">public</span> <span class="kwb">double</span> p;
+
+        <span class="kwa">public</span> <span class="kwd">frequency</span>(<span class="kwb">char</span> c, <span class="kwb">double</span> p) {
+            <span class="kwa">this</span>.c = (<span class="kwb">byte</span>)c;
+            <span class="kwa">this</span>.p = p;
+        }
+    }
+}

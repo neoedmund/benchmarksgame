@@ -1,0 +1,80 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; contributed by Jim Kannampuzha</span>
+<span class="slc">;; inspired by Jesse Rosenstock</span>
+<span class="slc">;; modified by Andy Fingerhut (small bug where if input value n was</span>
+<span class="slc">;;    not a multiple of the number of available processors, the</span>
+<span class="slc">;;    program would hang.)</span>
+
+
+(ns spectralnorm
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+
+(<span class="kwa">defmacro</span> eval-a [ii jj]
+  `(<span class="kwc">let</span> [i# (int ~ii)
+         j# (int ~jj)
+         n# (unchecked-add i# j#)
+         n+<span class="num">1</span># (unchecked-inc n#)]
+     (/ (double <span class="num">1.0</span>)
+        (unchecked-add (bit-shift-right (unchecked-multiply n# n+<span class="num">1</span>#) (int <span class="num">1</span>))
+                       (unchecked-inc i#)))))
+
+(<span class="kwa">defn</span> multiply-a-v [agent ^doubles v ^doubles av <span class="kwd">range</span>]
+  (<span class="kwc">let</span> [end (int (<span class="kwd">second range</span>))]
+    (<span class="kwb">loop</span> [i (int (<span class="kwd">first range</span>))]
+      (<span class="kwc">if</span> (= i end)
+        nil
+        (do
+          (aset av i (double (areduce v j sum (double <span class="num">0</span>)
+                                      (+ sum (* (eval-a i j) (aget v j))))))
+          (<span class="kwb">recur</span> (unchecked-inc i)))))))
+
+(<span class="kwa">defn</span> multiply-at-v [agent ^doubles v ^doubles atv <span class="kwd">range</span>]
+  (<span class="kwc">let</span> [end (int (<span class="kwd">second range</span>))]
+    (<span class="kwb">loop</span> [i (int (<span class="kwd">first range</span>))]
+      (<span class="kwc">if</span> (= i end) nil
+          (do
+            (aset atv i
+                  (double (areduce v j sum (double <span class="num">0</span>)
+                   (+ sum (* (eval-a j i) (aget v j))))))
+            (<span class="kwb">recur</span> (unchecked-inc i)))))))
+
+(<span class="kwa">defn</span> multiply-at-a-v [^doubles v ^doubles tmp ^doubles at-av
+                       num-threads workers ranges]
+  (<span class="kwb">dotimes</span> [i num-threads]
+    (send (nth workers i) multiply-a-v v tmp (nth ranges i)))
+  (apply await workers)
+  (<span class="kwb">dotimes</span> [i num-threads]
+    (send (nth workers i) multiply-at-v tmp at-av (nth ranges i)))
+  (apply await workers))
+
+(<span class="kwa">defmacro</span> dot-product [^doubles u ^doubles v]
+  `(areduce ~u i# sum# (double <span class="num">0</span>) (+ sum# (* (aget ~u i#) (aget ~v i#)))))
+
+(<span class="kwa">defn</span> run-game [size]
+  (<span class="kwc">let</span> [num-threads (int (.availableProcessors (Runtime/getRuntime)))
+        workers (vec (repeatedly num-threads #(agent ())))
+        chunk-size (int (Math/ceil (/ size num-threads)))
+        ranges  (vec (partition <span class="num">2 1</span>
+                                (<span class="kwd">take</span> (unchecked-inc num-threads)
+                                      (<span class="kwd">iterate</span> #(min (+ chunk-size %) size)
+                                               (int <span class="num">0</span>)))))
+        u (double-array size <span class="num">1.0</span>)
+        tmp (double-array size <span class="num">0.0</span>)
+        v (double-array size <span class="num">0.0</span>)]
+    (<span class="kwb">dotimes</span> [_ <span class="num">10</span>]
+      (multiply-at-a-v u tmp v num-threads workers ranges)
+      (multiply-at-a-v v tmp u num-threads workers ranges))
+    (<span class="kwc">let</span> [vbv (dot-product u v)
+          vv (dot-product v v)]
+      (Math/sqrt (/ vbv vv)))))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [n (<span class="kwc">if</span> (empty? args)
+            <span class="num">2500</span>
+            (Integer/valueOf ^String (<span class="kwd">first</span> args)))]
+    (println (format <span class="str">&quot;%.9f&quot;</span> (run-game n)))
+    (shutdown-agents)))

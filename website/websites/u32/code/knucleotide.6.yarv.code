@@ -1,0 +1,44 @@
+<span class="hl slc"># The Computer Language Benchmarks Game</span>
+<span class="hl slc"># http://benchmarksgame.alioth.debian.org</span>
+<span class="hl slc">#</span>
+<span class="hl slc"># contributed by Aaron Tavistock</span>
+<span class="hl slc"># optimised by Scott Leggett</span>
+
+<span class="hl kwa">def</span> <span class="hl kwd">frequency</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> keys)
+    keys<span class="hl opt">.</span>map<span class="hl opt">!</span> <span class="hl kwa">do</span> <span class="hl opt">|</span>key<span class="hl opt">|</span>
+        <span class="hl kwa">if</span> key<span class="hl opt">.</span>size <span class="hl opt">==</span> <span class="hl num">1</span>
+            <span class="hl opt">[</span>seq<span class="hl opt">.</span><span class="hl kwd">count</span><span class="hl opt">(</span>key)<span class="hl opt">,</span> key<span class="hl opt">.</span>upcase<span class="hl opt">]</span>
+        <span class="hl kwa">else</span>
+            index <span class="hl opt">=</span> count <span class="hl opt">=</span> <span class="hl num">0</span>
+            <span class="hl kwa">while</span> index <span class="hl opt">=</span> seq<span class="hl opt">.</span><span class="hl kwd">index</span><span class="hl opt">(</span>key<span class="hl opt">,</span> index<span class="hl opt">+</span><span class="hl num">1</span>)
+                count <span class="hl opt">+=</span> <span class="hl num">1</span>
+            <span class="hl kwa">end</span>
+            <span class="hl opt">[</span>count<span class="hl opt">,</span> key<span class="hl opt">.</span>upcase<span class="hl opt">]</span>
+        <span class="hl kwa">end</span>
+    <span class="hl kwa">end</span>
+<span class="hl kwa">end</span>
+
+<span class="hl kwa">def</span> <span class="hl kwd">percentage</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> keys)
+    <span class="hl kwd">frequency</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> keys)<span class="hl opt">.</span>sort<span class="hl opt">!.</span>reverse<span class="hl opt">!.</span>map<span class="hl opt">!</span> <span class="hl kwa">do</span> <span class="hl opt">|</span>value<span class="hl opt">,</span> key<span class="hl opt">|</span>
+        <span class="hl str">&quot;%s %.3f&quot;</span> <span class="hl opt">% [</span> key<span class="hl opt">, ((</span>value<span class="hl opt">*</span><span class="hl num">100</span>)<span class="hl opt">.</span>to_f <span class="hl opt">/</span> seq<span class="hl opt">.</span>size) <span class="hl opt">]</span>
+    <span class="hl kwa">end</span>
+<span class="hl kwa">end</span>
+
+<span class="hl kwa">def</span> <span class="hl kwd">count</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> keys)
+    <span class="hl kwd">frequency</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> keys)<span class="hl opt">.</span>map<span class="hl opt">!</span> <span class="hl kwa">do</span> <span class="hl opt">|</span>value<span class="hl opt">,</span> key<span class="hl opt">|</span>
+        <span class="hl opt">[</span>value<span class="hl opt">,</span> key<span class="hl opt">].</span><span class="hl kwd">join</span><span class="hl opt">(</span><span class="hl str">&quot;\t&quot;</span>)
+    <span class="hl kwa">end</span>
+<span class="hl kwa">end</span>
+
+seq <span class="hl opt">=</span> <span class="hl kwc">STDIN</span><span class="hl opt">.</span>map <span class="hl kwa">do</span> <span class="hl opt">|</span>line<span class="hl opt">|</span>
+    line<span class="hl opt">.</span>chomp<span class="hl opt">!</span> <span class="hl kwa">if</span> line<span class="hl opt">.</span><span class="hl kwa">include</span><span class="hl opt">?(</span><span class="hl str">'&gt;TH'</span>) <span class="hl opt">..</span> <span class="hl kwa">false</span>
+<span class="hl kwa">end</span><span class="hl opt">.</span>compact<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">..-</span><span class="hl num">1</span><span class="hl opt">].</span>join
+
+singles <span class="hl opt">= [</span><span class="hl str">'a'</span><span class="hl opt">,</span> <span class="hl str">'t'</span><span class="hl opt">,</span> <span class="hl str">'c'</span><span class="hl opt">,</span> <span class="hl str">'g'</span><span class="hl opt">]</span>
+doubles <span class="hl opt">= [</span><span class="hl str">'aa'</span><span class="hl opt">,</span> <span class="hl str">'at'</span><span class="hl opt">,</span> <span class="hl str">'ac'</span><span class="hl opt">,</span> <span class="hl str">'ag'</span><span class="hl opt">,</span> <span class="hl str">'ta'</span><span class="hl opt">,</span> <span class="hl str">'tt'</span><span class="hl opt">,</span> <span class="hl str">'tc'</span><span class="hl opt">,</span> <span class="hl str">'tg'</span><span class="hl opt">,</span> <span class="hl str">'ca'</span><span class="hl opt">,</span> <span class="hl str">'ct'</span><span class="hl opt">,</span> <span class="hl str">'cc'</span><span class="hl opt">,</span>
+           <span class="hl str">'cg'</span><span class="hl opt">,</span> <span class="hl str">'ga'</span><span class="hl opt">,</span> <span class="hl str">'gt'</span><span class="hl opt">,</span> <span class="hl str">'gc'</span><span class="hl opt">,</span> <span class="hl str">'gg'</span><span class="hl opt">]</span>
+chains  <span class="hl opt">= [</span><span class="hl str">'ggt'</span><span class="hl opt">,</span> <span class="hl str">'ggta'</span><span class="hl opt">,</span> <span class="hl str">'ggtatt'</span><span class="hl opt">,</span> <span class="hl str">'ggtattttaatt'</span><span class="hl opt">,</span> <span class="hl str">'ggtattttaatttatagt'</span><span class="hl opt">]</span>
+
+puts <span class="hl kwd">percentage</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> singles)<span class="hl opt">.</span><span class="hl kwd">join</span><span class="hl opt">(</span><span class="hl str">&quot;\n&quot;</span>)<span class="hl opt">,</span> <span class="hl str">&quot;\n&quot;</span>
+puts <span class="hl kwd">percentage</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> doubles)<span class="hl opt">.</span><span class="hl kwd">join</span><span class="hl opt">(</span><span class="hl str">&quot;\n&quot;</span>)<span class="hl opt">,</span> <span class="hl str">&quot;\n&quot;</span>
+puts <span class="hl kwd">count</span><span class="hl opt">(</span>seq<span class="hl opt">,</span> chains)<span class="hl opt">.</span><span class="hl kwd">join</span><span class="hl opt">(</span><span class="hl str">&quot;\n&quot;</span>)

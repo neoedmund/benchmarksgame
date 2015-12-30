@@ -1,0 +1,89 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Contributed by James Wendel</span>
+<span class="com">   Modified by Anders Johnsen</span>
+<span class="com">*/</span>
+
+<span class="kwc">import</span> <span class="str">'dart:io'</span>;
+
+<span class="kwa">void</span> main() {
+  <span class="kwa">var</span> src   = <span class="str">&quot;CGATMKRYVBHD&quot;</span>;
+  <span class="kwa">var</span> dst   = <span class="str">&quot;GCTAKMYRBVDH&quot;</span>;
+  <span class="kwa">var</span> tbl   = <span class="kwa">new</span> List&lt;<span class="kwb">int</span>&gt;(<span class="num">256</span>);
+  <span class="kwa">var</span> seq   = <span class="kwa">new</span> List&lt;<span class="kwb">int</span>&gt;();
+  
+  <span class="slc">// Set up lookup table</span>
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; tbl.length; i++)
+    tbl[i] = i;
+  
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; src.length; i++) {
+    tbl[src.codeUnitAt(i)]                = dst.codeUnitAt(i);
+    tbl[src.toLowerCase().codeUnitAt(i)]  = dst.codeUnitAt(i);
+  }
+
+  <span class="kwa">var</span> buffer = <span class="kwa">new</span> List&lt;<span class="kwb">int</span>&gt;(<span class="num">60</span>);
+  List&lt;<span class="kwb">int</span>&gt; list = <span class="kwa">new</span> List&lt;<span class="kwb">int</span>&gt;();
+  <span class="kwb">bool</span> commentLine = <span class="kwa">false</span>;
+  StringBuffer sbuf = <span class="kwa">new</span> StringBuffer();
+   
+  stdin.listen((List&lt;<span class="kwb">int</span>&gt; dataList) {
+    <span class="slc">// Loop over all the contents of the buffer so far</span>
+    <span class="kwa">for</span> (<span class="kwb">int</span> data <span class="kwa">in</span> dataList) {
+      
+      <span class="slc">// Check if this is a comment line (and that we aren't already on a comment line)</span>
+      <span class="kwa">if</span> (data == <span class="num">62</span> &amp;&amp; !commentLine) {
+        <span class="kwb">int</span> count = <span class="num">0</span>;
+        
+        <span class="slc">// Print the reverse components for the last block </span>
+        <span class="kwa">for</span> (<span class="kwb">int</span> g <span class="kwa">in</span> list.reversed) {
+          <span class="kwa">if</span> (count == <span class="num">60</span>) {
+            sbuf.writeln(<span class="kwa">new</span> String.fromCharCodes(buffer));
+            count=<span class="num">0</span>;
+          } 
+          buffer[count++] = g;
+        }
+        <span class="slc">// Print any stragling data</span>
+        <span class="kwa">if</span> (count &gt; <span class="num">0</span>) {
+          sbuf.writeln(<span class="kwa">new</span> String.fromCharCodes(buffer.getRange(<span class="num">0</span>, count)));
+        }
+        <span class="slc">// Reset the data for the begining of a block of data</span>
+        list.clear();
+        commentLine = <span class="kwa">true</span>;
+      } 
+        
+      <span class="kwa">if</span> (commentLine) {
+        <span class="kwa">if</span> (data == <span class="num">10</span>) {
+          sbuf.write(<span class="kwa">new</span> String.fromCharCodes(list));
+          print(sbuf);
+          sbuf = <span class="kwa">new</span> StringBuffer();
+          commentLine = <span class="kwa">false</span>;
+          list.clear();
+        } <span class="kwa">else</span> {
+          list.add(data);
+        }
+      } <span class="kwa">else if</span> (data != <span class="num">10</span>) {
+          <span class="slc">// Add the complement to the buffer</span>
+          list.add(tbl[data]);
+      }
+    }
+  }).onDone(() {
+    <span class="slc">// Print out anything remaining in the buffers</span>
+    <span class="kwa">if</span> (commentLine) {
+      sbuf.write(<span class="kwa">new</span> String.fromCharCodes(list));
+    } <span class="kwa">else</span> {
+      <span class="kwb">int</span> count = <span class="num">0</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> data <span class="kwa">in</span> list.reversed) {
+        <span class="kwa">if</span> (count == <span class="num">60</span>) {
+          sbuf.writeln(<span class="kwa">new</span> String.fromCharCodes(buffer));
+          count=<span class="num">0</span>;
+        } 
+        buffer[count++] = data;
+      }
+      <span class="kwa">if</span> (count &gt; <span class="num">0</span>) {
+        sbuf.write(<span class="kwa">new</span> String.fromCharCodes(buffer.getRange(<span class="num">0</span>, count)));
+      }
+    }
+    print(sbuf);
+  });
+}

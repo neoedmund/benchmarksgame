@@ -1,0 +1,116 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Contributed by Andrew Gottemoller</span>
+<span class="com">*/</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;semaphore.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+
+
+<span class="ppc">#define LIKELY(expression)   __builtin_expect(!!(expression), 1)</span>
+<span class="ppc">#define UNLIKELY(expression) __builtin_expect(!!(expression), 0)</span>
+
+
+<span class="ppc">#define THREAD_COUNT 503</span>
+<span class="ppc">#define PASS_COUNT   1000</span>
+
+<span class="ppc">#define THREAD_CREATED 0x01</span>
+
+
+<span class="kwb">struct</span> thread_data
+{
+   <span class="kwb">unsigned int</span> flags;
+   <span class="kwb">unsigned int</span> id;
+
+   sem_t pass_semaphore;
+
+   pthread_t thread;
+};
+
+
+<span class="kwb">static struct</span> thread_data passing_threads[THREAD_COUNT] = {{<span class="num">0</span>}};
+<span class="kwb">static unsigned int</span>      passes_remaining           = PASS_COUNT+<span class="num">1</span>;
+
+
+<span class="kwb">static</span> <span class="kwc">inline</span> <span class="kwb">void</span>  <span class="kwd">CreateThread</span> (<span class="kwb">unsigned int</span>);
+<span class="kwb">static void</span>*      <span class="kwd">PerformPass</span>  (<span class="kwb">void</span>*);
+
+
+<span class="kwb">static</span> <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">CreateThread</span> (<span class="kwb">unsigned int</span> id)
+{
+   <span class="kwb">struct</span> thread_data* restrict thread;
+
+   thread = &amp;passing_threads[id];
+
+   thread-&gt;id = id;
+
+   <span class="kwd">sem_init</span>(&amp;thread-&gt;pass_semaphore, <span class="num">0</span>, <span class="num">0</span>);
+   <span class="kwd">pthread_create</span>(&amp;thread-&gt;thread, NULL, &amp;PerformPass, thread);
+
+   <span class="kwd">__sync_fetch_and_or</span>(&amp;thread-&gt;flags, THREAD_CREATED);
+}
+
+<span class="kwb">static void</span>* <span class="kwd">PerformPass</span> (<span class="kwb">void</span>* argument)
+{
+   <span class="kwb">struct</span> thread_data* restrict thread;
+   <span class="kwb">struct</span> thread_data* restrict next_thread;
+   <span class="kwb">unsigned int</span>             id;
+   <span class="kwb">unsigned int</span>             next_id;
+   <span class="kwb">unsigned int</span>             thread_ready;
+
+   thread = argument;
+
+   id     = thread-&gt;id;
+   next_id = (id+<span class="num">1</span>)%THREAD_COUNT;
+
+   next_thread = &amp;passing_threads[next_id];
+
+   <span class="kwd">sem_wait</span>(&amp;thread-&gt;pass_semaphore);
+
+   passes_remaining--;
+   <span class="kwa">if</span>(<span class="kwd">LIKELY</span>(passes_remaining != <span class="num">0</span>))
+   {
+      <span class="kwa">do</span>
+      {
+         thread_ready = <span class="kwd">__sync_fetch_and_or</span>(&amp;next_thread-&gt;flags, <span class="num">0</span>);
+      }<span class="kwa">while</span>(!(thread_ready&amp;THREAD_CREATED));
+
+      <span class="kwa">while</span>(<span class="num">1</span>)
+      {
+         <span class="kwd">sem_post</span>(&amp;next_thread-&gt;pass_semaphore);
+         <span class="kwd">sem_wait</span>(&amp;thread-&gt;pass_semaphore);
+
+         passes_remaining--;
+         <span class="kwa">if</span>(<span class="kwd">UNLIKELY</span>(passes_remaining == <span class="num">0</span>))
+            <span class="kwa">break</span>;
+      }
+   }
+
+   <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\n</span><span class="str">&quot;</span>, id+<span class="num">1</span>);
+
+   <span class="kwd">exit</span>(EXIT_SUCCESS);
+}
+
+
+<span class="kwb">int</span> <span class="kwd">main</span> (<span class="kwb">int</span> argument_count, <span class="kwb">char</span>** arguments)
+{
+   <span class="kwb">struct</span> thread_data* restrict initial_thread;
+
+   <span class="kwa">if</span>(argument_count &gt; <span class="num">1</span>)
+      passes_remaining = <span class="kwd">atoi</span>(arguments[<span class="num">1</span>])+<span class="num">1</span>;
+
+   <span class="kwd">CreateThread</span>(<span class="num">0</span>);
+
+   initial_thread = &amp;passing_threads[<span class="num">0</span>];
+
+   <span class="kwd">sem_post</span>(&amp;initial_thread-&gt;pass_semaphore);
+
+   <span class="kwa">for</span>(<span class="kwb">unsigned int</span> index = <span class="num">1</span>; index &lt; THREAD_COUNT; index++)
+      <span class="kwd">CreateThread</span>(index);
+
+   <span class="kwd">pthread_join</span>(initial_thread-&gt;thread, NULL);
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}

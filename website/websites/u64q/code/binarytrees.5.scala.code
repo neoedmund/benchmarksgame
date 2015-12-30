@@ -1,0 +1,60 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Kannan Goundan</span>
+<span class="com">   modified by Isaac Gouy</span>
+<span class="com">   optimized by David Pollak</span>
+<span class="com">   updated to 2.8 by Rex Kerr</span>
+<span class="com">   parallelized by Yang Bo</span>
+<span class="com">*/</span>
+ 
+<span class="kwa">import</span> scala.concurrent.duration._
+<span class="kwa">import</span> scala.concurrent._
+<span class="kwa">import</span> scala.concurrent.ExecutionContext.Implicits.global 
+<span class="kwa">object</span> binarytrees {
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) = {
+    <span class="kwa">val</span> n = <span class="kwa">try</span>{ <span class="kwd">args</span>(<span class="num">0</span>).toInt } <span class="kwa">catch</span> { <span class="kwa">case</span> _ =&gt; <span class="num">1</span> }
+    <span class="kwa">val</span> minDepth = <span class="num">4</span>
+    <span class="kwa">val</span> maxDepth = n <span class="kwd">max</span> (minDepth+<span class="num">2</span>)
+ 
+    <span class="kwa">def</span> <span class="kwd">print</span>(name: String, depth: Int, check: Int) =
+      <span class="kwd">println</span>(name + <span class="str">&quot; of depth &quot;</span> + depth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + check)
+ 
+    <span class="kwd">print</span>(<span class="str">&quot;stretch tree&quot;</span>, maxDepth+<span class="num">1</span>, Await.<span class="kwd">result</span>(<span class="kwd">Tree</span>(<span class="num">0</span>,maxDepth+<span class="num">1</span>), Duration.Inf).isum)
+    <span class="kwa">val</span> longLivedTree = Await.<span class="kwd">result</span>(<span class="kwd">Tree</span>(<span class="num">0</span>,maxDepth), Duration.Inf)
+    <span class="kwa">var</span> depth = minDepth
+    <span class="kwa">while</span> (depth &lt;= maxDepth) {
+      <span class="kwa">val</span> iterations = <span class="num">1</span> &lt;&lt; (maxDepth - depth + minDepth)
+      <span class="kwa">var</span> i,sum = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt; iterations) {
+        i += <span class="num">1</span>
+        sum += Await.<span class="kwd">result</span>(<span class="kwd">Tree</span>(i,depth), Duration.Inf).isum + Await.<span class="kwd">result</span>(<span class="kwd">Tree</span>(-i,depth), Duration.Inf).isum
+      }
+      <span class="kwd">print</span>(iterations*<span class="num">2</span> + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">trees&quot;</span>, depth, sum)
+      depth += <span class="num">2</span>
+    }
+    <span class="kwd">print</span>(<span class="str">&quot;long lived tree&quot;</span>, maxDepth, longLivedTree.isum)
+  }
+}
+ 
+<span class="kwa">final class</span> <span class="kwd">Tree</span>(i: Int, left: Tree, right: Tree) {
+  <span class="kwa">def</span> isum: Int = {
+    <span class="kwa">val</span> tl = left
+    <span class="kwa">if</span> (tl eq null) i
+    <span class="kwa">else</span> i + tl.isum - right.isum
+  }
+}
+<span class="kwa">object</span> Tree {
+  <span class="kwa">def</span> <span class="kwd">apply</span>(i: Int, depth: Int, futureDepth: Int = <span class="num">0</span>): Future[Tree] = {
+    <span class="kwa">if</span> (futureDepth &lt; <span class="num">4</span>) {
+      <span class="kwa">if</span> (depth &gt; <span class="num">0</span>) <span class="kwd">Tree</span>(i*<span class="num">2</span>-<span class="num">1</span>, depth-<span class="num">1</span>, futureDepth+<span class="num">1</span>).<span class="kwd">zip</span>(<span class="kwd">Tree</span>(i*<span class="num">2</span>, depth-<span class="num">1</span>, futureDepth+<span class="num">1</span>)).map { <span class="kwa">case</span> (left, right) =&gt; <span class="kwa">new</span> <span class="kwd">Tree</span>(i, left, right) }
+      <span class="kwa">else</span> <span class="kwd">Future</span>(<span class="kwa">new</span> <span class="kwd">Tree</span>(i, null, null))
+    } <span class="kwa">else</span> {
+      <span class="kwa">def</span> <span class="kwd">synchronizedApply</span>(i: Int, depth: Int):Tree = {
+        <span class="kwa">if</span> (depth &gt; <span class="num">0</span>) <span class="kwa">new</span> <span class="kwd">Tree</span>(i, <span class="kwd">synchronizedApply</span>(i*<span class="num">2</span>-<span class="num">1</span>, depth-<span class="num">1</span>), <span class="kwd">synchronizedApply</span>(i*<span class="num">2</span>, depth-<span class="num">1</span>))
+        <span class="kwa">else new</span> <span class="kwd">Tree</span>(i, null, null)
+      }
+      <span class="kwd">Future</span>(<span class="kwd">synchronizedApply</span>(i, depth))
+    }
+  }
+}

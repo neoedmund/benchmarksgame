@@ -1,0 +1,74 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Jos Hirth</span>
+<span class="com">*/</span>
+
+<span class="kwa">var</span> line, out, reverseFormat, complement;
+
+complement = {
+   y: <span class="str">'R'</span>,
+   v: <span class="str">'B'</span>,
+   w: <span class="str">'W'</span>,
+   t: <span class="str">'A'</span>,
+   u: <span class="str">'A'</span>,
+   r: <span class="str">'Y'</span>,
+   s: <span class="str">'S'</span>,
+   n: <span class="str">'N'</span>,
+   m: <span class="str">'K'</span>,
+   k: <span class="str">'M'</span>,
+   h: <span class="str">'D'</span>,
+   g: <span class="str">'C'</span>,
+   d: <span class="str">'H'</span>,
+   b: <span class="str">'V'</span>,
+   c: <span class="str">'G'</span>,
+   a: <span class="str">'T'</span>,
+   Y: <span class="str">'R'</span>,
+   V: <span class="str">'B'</span>,
+   W: <span class="str">'W'</span>,
+   T: <span class="str">'A'</span>,
+   U: <span class="str">'A'</span>,
+   R: <span class="str">'Y'</span>,
+   S: <span class="str">'S'</span>,
+   N: <span class="str">'N'</span>,
+   M: <span class="str">'K'</span>,
+   K: <span class="str">'M'</span>,
+   H: <span class="str">'D'</span>,
+   G: <span class="str">'C'</span>,
+   D: <span class="str">'H'</span>,
+   B: <span class="str">'V'</span>,
+   C: <span class="str">'G'</span>,
+   A: <span class="str">'T'</span>
+};
+
+reverseFormat = <span class="kwa">function</span> (a, complement) {
+   <span class="kwa">var</span> i, l, line, c = <span class="num">1</span>, out;
+   out = <span class="str">''</span>;
+   <span class="kwa">for</span> (l = a.length; l--;) {
+      line = a[l];
+      <span class="kwa">for</span> (i = line.length; i--; c++) {
+         out += complement[line[i]];
+         <span class="kwa">if</span> (c === <span class="num">60</span>) {
+            <span class="kwd">print</span>(out);
+            out = <span class="str">''</span>;
+            c = <span class="num">0</span>;
+         }
+      }
+   }
+   <span class="kwa">if</span> (out.length) {
+      <span class="kwd">print</span>(out);
+   }
+};
+
+out = [];
+<span class="kwa">while</span> ((line = <span class="kwd">readline</span>())) {
+   <span class="kwa">if</span> (line[<span class="num">0</span>] !== <span class="str">'&gt;'</span>) {
+      out.<span class="kwd">push</span>(line);
+   } <span class="kwa">else</span> {
+      <span class="kwd">reverseFormat</span>(out, complement);
+      out = [];
+      <span class="kwd">print</span>(line);
+   }
+}
+
+<span class="kwd">reverseFormat</span>(out, complement);

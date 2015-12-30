@@ -1,0 +1,236 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   Based partially on the single-threaded version by Isaac Gouy with fixes from</span>
+<span class="com">   Iulian Dragos and Meiko Rachimow.</span>
+<span class="com">   Based on Scala contribution of Rex Kerr</span>
+<span class="com">   Based on bit encoding idea of C++ contribution of Andrew Moon</span>
+<span class="com">   Contributed by The Anh Tran</span>
+<span class="com">   Updated for 2.8 by Rex Kerr</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> scala.actors.Futures.future
+<span class="kwa">import</span> scala.actors.Future
+<span class="kwa">import</span> scala.collection.mutable.HashMap
+<span class="kwa">import</span> java.io._
+
+<span class="kwa">final</span>
+<span class="kwa">object</span> knucleotide
+{
+   <span class="kwa">def</span> <span class="kwd">main</span>(args : Array[String]) =
+   {
+      <span class="slc">// read all data from inputstream</span>
+      <span class="kwa">val</span> data = Helper.readAll
+
+      <span class="slc">// hand out tasks, each task will be picked up by scala threadpool</span>
+      <span class="kwa">val</span> tables = <span class="kwd">List</span>(<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>, <span class="num">6</span>, <span class="num">12</span>, <span class="num">18</span>)
+         .<span class="kwd">map</span>( sz =&gt; <span class="kwd">queueBuildHashtable</span>(data, sz) )
+         .<span class="kwd">splitAt</span>(<span class="num">2</span>)
+
+      <span class="slc">// print frequency of each nucleotide</span>
+      tables._1.<span class="kwd">foreach</span>(<span class="kwd">printFreq</span>(_, data.length))
+
+      <span class="slc">// print how many times a specific pattern appears in input data</span>
+      <span class="kwa">val</span> codeSeq = <span class="kwd">List</span>(<span class="str">&quot;GGT&quot;</span>, <span class="str">&quot;GGTA&quot;</span>, <span class="str">&quot;GGTATT&quot;</span>, <span class="str">&quot;GGTATTTTAATT&quot;</span>, <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>);
+      (tables._2 zip codeSeq).<span class="kwd">foreach</span>( e =&gt; <span class="kwd">printFreq</span>(e._1, e._2) )
+   }
+
+   <span class="kwa">private</span>
+   <span class="kwa">def</span> <span class="kwd">printFreq</span>(lht: List[Future[KnuHashMap]], data_length : Int) =
+   {
+      <span class="slc">// have to merge (whole list of results) into a hashmap</span>
+      <span class="kwa">val</span> ht = <span class="kwd">mergeTables</span>(lht)
+
+      <span class="slc">// sort by decending frequencies</span>
+      <span class="kwa">val</span> sorted_list = ht.toArray.<span class="kwd">sortWith</span>((a, b) =&gt; !(a._2 &lt; b._2) )
+
+      <span class="kwa">val</span> total = data_length.toFloat
+
+      sorted_list <span class="kwd">foreach</span> ( a =&gt;   <span class="kwd">printf</span>(<span class="str">&quot;%s %.3f</span><span class="esc">\n</span><span class="str">&quot;</span>,
+                              a._1.decode,
+                              (a._2.toFloat * <span class="num">100.0</span>f / total))   )
+
+      println
+   }
+
+   <span class="kwa">private</span>
+   <span class="kwa">def</span> <span class="kwd">printFreq</span>(lht : List[Future[KnuHashMap]], pt : String) =
+   {
+      <span class="kwa">val</span> ht = <span class="kwd">mergeTables</span>(lht)
+
+      <span class="kwa">val</span> k = <span class="kwa">new</span> <span class="kwd">KnuKey</span>(pt.length)
+      k.<span class="kwd">encode</span>(pt.toCharArray, <span class="num">0</span>)
+      <span class="kwd">assert</span>(pt == k.decode)
+
+      <span class="kwa">val</span> v = ht.<span class="kwd">getOrElse</span>(k, <span class="num">0</span>)
+      <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\t</span><span class="str">%s</span><span class="esc">\n</span><span class="str">&quot;</span>, v, pt)
+   }
+
+   <span class="kwa">private</span>
+   <span class="kwa">def</span> <span class="kwd">queueBuildHashtable</span>(data : Array[Char], frameSize : Int) =
+   {
+      <span class="slc">// each task will hash whole input data, at a specific offset</span>
+      <span class="slc">// with (0 &lt;= offset &lt; frameSize)</span>
+      (<span class="num">0</span> until frameSize)
+         .<span class="kwd">map</span>( offset =&gt; <span class="kwd">future</span>(<span class="kwd">buildHashtable</span>(data, frameSize, offset)) )
+         .toList
+   }
+
+   <span class="kwa">private</span>
+   <span class="kwa">def</span> <span class="kwd">buildHashtable</span>(data : Array[Char], frameSize : Int, startOffset : Int) : KnuHashMap =
+   {
+      <span class="kwa">val</span> ht = <span class="kwa">new</span> KnuHashMap
+      <span class="kwa">val</span> key = <span class="kwa">new</span> <span class="kwd">KnuKey</span>(frameSize)
+
+      <span class="kwa">val</span> i_end = data.length - frameSize + <span class="num">1</span>
+      <span class="kwa">var</span> i_beg = startOffset
+
+      <span class="kwa">while</span> (i_beg &lt; i_end)
+      {
+         key.<span class="kwd">encode</span>(data, i_beg)
+         ht.<span class="kwd">incCounter</span>(key)
+
+         i_beg += frameSize
+      }
+
+      ht
+   }
+
+   <span class="kwa">private</span>
+   <span class="kwa">def</span> <span class="kwd">mergeTables</span>(list_hashtable: List[Future[KnuHashMap]]) =
+      list_hashtable
+         .<span class="kwd">map</span>( <span class="kwd">_</span>() )
+         .<span class="kwd">reduceLeft</span>( (t1, t2) =&gt; {
+            t2.<span class="kwd">foreach</span>(e =&gt; t1.<span class="kwd">addCounter</span>(e._1, e._2))
+            t1
+         })
+}
+
+<span class="kwa">private final</span>
+<span class="kwa">class</span> <span class="kwd">KnuKey</span>(<span class="kwa">var</span> key : Long, <span class="kwa">val</span> hash_length : Int)
+{
+   <span class="kwa">def this</span>(hlen: Int) = <span class="kwa">this</span>(<span class="num">0</span>, hlen)
+
+   <span class="kwc">&#64;inline</span>
+   <span class="kwa">override def</span> <span class="kwd">clone</span>() = <span class="kwa">new</span> <span class="kwd">KnuKey</span>(key, hash_length)
+
+   <span class="kwc">&#64;inline</span>
+   <span class="kwa">override def</span> <span class="kwd">hashCode</span>() : Int = key.toInt
+
+   <span class="kwc">&#64;inline</span>
+   <span class="kwa">override def</span> <span class="kwd">equals</span>(other : Any) = other match {
+      <span class="kwa">case</span> that: KnuKey =&gt; <span class="kwa">this</span>.key == that.key
+      <span class="kwa">case</span> _            =&gt; false
+   }
+
+   <span class="kwc">&#64;inline</span>
+   <span class="kwa">def</span> <span class="kwd">encode</span>(data : Array[Char], offset : Int) = {
+      <span class="kwa">var</span> mkey = <span class="num">0L</span>
+      <span class="kwa">var</span> index = <span class="num">0</span>
+      <span class="kwa">var</span> shift = <span class="num">0</span>
+
+      <span class="kwa">while</span> (index &lt; hash_length)
+      {
+         mkey |= (<span class="kwd">Helper</span>(<span class="kwd">data</span>(offset + index)) &lt;&lt; shift)
+
+         shift += Helper.bit_per_code
+         index += <span class="num">1</span>
+      }
+
+      key = mkey
+      <span class="kwa">this</span>
+   }
+
+   <span class="kwa">def</span> <span class="kwd">decode</span>() = {
+      <span class="kwa">val</span> sb = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>(hash_length)
+
+      <span class="kwa">var</span> index = <span class="num">0</span>
+      <span class="kwa">var</span> extract_mask = Helper.bit_mask
+
+      <span class="kwa">while</span> (index &lt; hash_length)
+      {
+         <span class="kwa">val</span> extract_value = ((key &amp; extract_mask) &gt;&gt;&gt; (index * Helper.bit_per_code)).toInt
+         sb <span class="kwd">append</span>( <span class="kwd">Helper</span>(extract_value) )
+
+         extract_mask &lt;&lt;= Helper.bit_per_code
+         index += <span class="num">1</span>
+      }
+
+      sb toString
+   }
+}
+
+
+<span class="kwa">private final</span>
+<span class="kwa">object</span> Helper {
+   <span class="kwa">val</span> bit_mask      = <span class="num">3L</span>
+   <span class="kwa">val</span> bit_per_code   = <span class="num">2</span>
+
+   <span class="kwc">&#64;inline</span>
+   <span class="kwa">def</span> <span class="kwd">apply</span>(c : Char) : Long = (c: <span class="kwc">&#64;annotation</span>.<span class="kwa">switch</span>) match {
+      <span class="kwa">case</span> <span class="str">'a'</span>   =&gt; <span class="num">0</span>
+      <span class="kwa">case</span> <span class="str">'t'</span>   =&gt; <span class="num">1</span>
+      <span class="kwa">case</span> <span class="str">'c'</span>   =&gt; <span class="num">2</span>
+      <span class="kwa">case</span> <span class="str">'g'</span>   =&gt; <span class="num">3</span>
+
+      <span class="kwa">case</span> <span class="str">'A'</span>   =&gt; <span class="num">0</span>
+      <span class="kwa">case</span> <span class="str">'T'</span>   =&gt; <span class="num">1</span>
+      <span class="kwa">case</span> <span class="str">'C'</span>   =&gt; <span class="num">2</span>
+      <span class="kwa">case</span> <span class="str">'G'</span>   =&gt; <span class="num">3</span>
+
+      <span class="kwa">case</span> _      =&gt; <span class="kwd">assert</span>(false); -<span class="num">1</span>
+   }
+
+   <span class="kwa">private</span>
+   <span class="kwa">val</span> Int2Iub = <span class="kwd">Array</span>(<span class="str">'A'</span>, <span class="str">'T'</span>, <span class="str">'C'</span>, <span class="str">'G'</span>)
+
+   <span class="kwc">&#64;inline</span>
+   <span class="kwa">def</span> <span class="kwd">apply</span>(c : Int) : Char = <span class="kwd">Int2Iub</span>(c)
+
+
+   <span class="kwa">def</span> <span class="kwd">readAll</span>() = {
+      <span class="kwa">val</span> reader = <span class="kwa">new</span> <span class="kwd">BufferedReader</span>(<span class="kwa">new</span> <span class="kwd">InputStreamReader</span> (System.<span class="kwa">in</span>, <span class="str">&quot;US-ASCII&quot;</span>), <span class="num">4</span>*<span class="num">1024</span>*<span class="num">1024</span>)
+
+      <span class="kwa">var</span> line = reader <span class="kwd">readLine</span>()
+      <span class="kwa">while</span> ((line != null) &amp;&amp; ((<span class="kwd">line</span>(<span class="num">0</span>) != <span class="str">'&gt;'</span>) || (line.<span class="kwd">startsWith</span>(<span class="str">&quot;&gt;THREE&quot;</span>) == false)))
+         line = reader readLine
+
+      <span class="kwa">val</span> sb = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>(<span class="num">32</span>*<span class="num">1024</span>*<span class="num">1024</span>)
+
+      line = reader <span class="kwd">readLine</span>()
+      <span class="kwa">while</span> (line != null)
+      {
+         sb append line
+         line = reader readLine
+      }
+
+      <span class="slc">// Read a char by &quot;String.charAt(index)&quot; is much slower than &quot;Array(index)&quot;</span>
+      <span class="slc">// =&gt; use Array[Char]</span>
+      sb.toString.toCharArray
+   }
+}
+
+
+<span class="kwa">private final</span>
+<span class="kwa">class</span> KnuHashMap <span class="kwa">extends</span> HashMap[KnuKey, Int]
+{
+   <span class="kwc">&#64;inline</span>
+   <span class="kwa">def</span> <span class="kwd">incCounter</span>(key : KnuKey) : Unit = <span class="kwd">addCounter</span>(key, <span class="num">1</span>)
+
+   <span class="kwc">&#64;inline</span>
+   <span class="kwa">def</span> <span class="kwd">addCounter</span>(key : KnuKey, valToAdd: Int) {
+      <span class="slc">// directly look up entry inside hashtable</span>
+      <span class="kwa">var</span> e  = <span class="kwd">table</span>(<span class="kwd">index</span>(key.hashCode)).asInstanceOf[Entry]
+      <span class="kwa">while</span> (e != null)
+      {
+         <span class="kwa">if</span> (e.key == key)
+         {
+            e.value += valToAdd
+            <span class="kwa">return</span>
+         }
+         <span class="kwa">else</span>
+            e = e.next
+      }
+
+      <span class="kwd">addEntry</span>(<span class="kwa">new</span> <span class="kwd">Entry</span>(key.clone, valToAdd))
+   }
+}

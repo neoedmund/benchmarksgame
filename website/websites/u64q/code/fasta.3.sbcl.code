@@ -1,0 +1,133 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; Contributed by Lorenzo Bolla</span>
+
+(<span class="kwa">declaim</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">debug</span> <span class="num">0</span>) (<span class="kwa">safety</span> <span class="num">0</span>)))
+
+(<span class="kwa">declaim</span> (<span class="kwa">fixnum</span> +line-length+ +buffer-size+ +im+))
+(<span class="kwa">defconstant</span> +line-length+ <span class="num">60</span>)
+(<span class="kwa">defconstant</span> +buffer-size+ <span class="num">3000</span>)
+(<span class="kwa">defconstant</span> +im+ <span class="num">139968</span>)
+
+(<span class="kwa">declaim</span> (<span class="kwa">simple-base-string</span> *alu*))
+(<span class="kwa">defparameter</span> *alu* (<span class="kwa">concatenate</span> 'simple-base-string
+						<span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>
+						<span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>
+						<span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>
+						<span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>
+						<span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>
+						<span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>
+						<span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>))
+
+(<span class="kwa">defun</span> cumsum (<span class="kwa">lst</span>)
+  (<span class="kwa">let</span> ((<span class="kwa">c</span> <span class="num">0.0</span>))
+	(<span class="kwa">declare</span> (<span class="kwa">type</span> single-float c))
+	(<span class="kwa">mapcar</span> #'(<span class="kwa">lambda</span> (<span class="kwa">x</span>) 
+				(<span class="kwa">declare</span> (<span class="kwa">type</span> single-float x)
+						 (<span class="kwa">values</span> fixnum))
+				(<span class="kwa">the</span> fixnum (<span class="kwa">ceiling</span> (* +im+ (<span class="kwa">incf</span> c x)))))
+			lst)))
+
+(<span class="kwa">defun</span> make-cprob (<span class="kwa">probs</span>)
+  (<span class="kwa">make-array</span> (<span class="kwa">length</span> probs)
+			   :element-type 'fixnum
+			   :initial-contents (<span class="kwa">cumsum</span> probs)))
+
+(<span class="kwa">defparameter</span> *amino-acids-syms* <span class="str">&quot;acgtBDHKMNRSVWY&quot;</span>)
+(<span class="kwa">defparameter</span> *amino-acids-cprobs* 
+  (<span class="kwa">make-cprob</span> '(<span class="kwa">0</span>.27 <span class="num">0.12 0.12 0.27 0.02 0.02 0.02 0.02 0.02 0.02 0.02 0.02 0.02 0.02 0.02</span>)))
+
+(<span class="kwa">defparameter</span> *homo-sapiens-syms* <span class="str">&quot;acgt&quot;</span>)
+(<span class="kwa">defparameter</span> *homo-sapiens-cprobs* 
+  (<span class="kwa">make-cprob</span> '(<span class="kwa">0</span>.3029549426680 <span class="num">0.1979883004921 0.1975473066391 0.3015094502008</span>)))
+
+(<span class="kwa">let</span> ((<span class="kwa">r</span> <span class="num">42</span>)
+	  (<span class="kwa">ia</span> <span class="num">3877</span>)
+	  (<span class="kwa">ic</span> <span class="num">29573</span>))
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum r ia ic))
+  (<span class="kwa">defun</span> reset-random () (<span class="kwa">setf</span> r (<span class="kwa">the</span> fixnum <span class="num">42</span>)))
+  (<span class="kwa">declaim</span> (<span class="kwa">inline</span> next-random))
+  (<span class="kwa">defun</span> next-random ()
+	(<span class="kwa">declare</span> (<span class="kwa">values</span> fixnum))
+	(<span class="kwa">setf</span> r (<span class="kwa">mod</span> (+ (<span class="kwa">the</span> (<span class="kwa">integer</span> <span class="num">0 542655936</span>) (* r ia)) ic) +im+))))
+
+(<span class="kwa">defun</span> find-amino-acid (<span class="kwa">amino-acids-syms</span> amino-acids-cprobs p)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">simple-array</span> fixnum (*)) amino-acids-cprobs)
+		   (<span class="kwa">type</span> simple-string amino-acids-syms)
+		   (<span class="kwa">type</span> fixnum p))
+  (<span class="kwa">let</span>* ((<span class="kwa">i</span> <span class="num">0</span>)
+		 (<span class="kwa">j</span> (<span class="kwa">length</span> amino-acids-syms)))
+	(<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum i j))
+	(<span class="kwa">loop</span>
+	  (<span class="kwa">when</span> (&lt;= j i) 
+		(<span class="kwa">return</span> (<span class="kwa">aref</span> amino-acids-syms i)))
+	  (<span class="kwa">let</span>* ((<span class="kwa">mid</span> (<span class="kwa">ash</span> (+ i j) -<span class="num">1</span>))
+			 (<span class="kwa">c</span> (<span class="kwa">aref</span> amino-acids-cprobs mid)))
+		(<span class="kwa">cond</span> ((&lt; p c)
+			   (<span class="kwa">setf</span> j mid))
+			  (<span class="kwa">t</span>
+				(<span class="kwa">setf</span> i (<span class="kwa">1</span>+ mid))))))))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> output-line flush))
+(<span class="kwa">defun</span> output-line (<span class="kwa">line</span> &amp;key (<span class="kwa">start</span> <span class="num">0</span>) (<span class="kwa">end</span> nil))
+  (<span class="kwa">write-line</span> line *standard-output* :start start :end end))
+(<span class="kwa">defun</span> flush ()
+  (<span class="kwa">finish-output</span> *standard-output*))
+
+(<span class="kwa">defun</span> randomize (<span class="kwa">amino-acids-syms</span> amino-acids-cprobs title n)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum n))
+  (<span class="kwa">output-line</span> title)
+  (<span class="kwa">loop</span>
+	with buf of-type simple-base-string = (<span class="kwa">make-string</span> +buffer-size+ :element-type 'base-char)
+	with i of-type fixnum = <span class="num">0</span>
+	with max-j of-type fixnum = (<span class="kwa">1-</span> +buffer-size+)
+	for j of-type fixnum from <span class="num">0</span>
+	for k of-type fixnum from <span class="num">0</span>
+	while (&lt; i n)
+	if (= k +line-length+) do 
+	(<span class="kwa">setf</span> (<span class="kwa">aref</span> buf j) #\Newline) 
+	(<span class="kwa">setf</span> k -<span class="num">1</span>)
+	else do 
+	(<span class="kwa">incf</span> i)
+	(<span class="kwa">setf</span> (<span class="kwa">aref</span> buf j) 
+		  (<span class="kwa">find-amino-acid</span> amino-acids-syms amino-acids-cprobs (<span class="kwa">next-random</span>)))
+	end
+	when (= j max-j) do 
+	(<span class="kwa">write-string</span> buf *standard-output*)
+	(<span class="kwa">setf</span> j -<span class="num">1</span>)
+	finally 
+	(<span class="kwa">output-line</span> buf :start <span class="num">0</span> :end j)
+	(<span class="kwa">flush</span>)))
+
+(<span class="kwa">defun</span> repeat (<span class="kwa">alu</span> title n)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> simple-base-string alu) 
+		   (<span class="kwa">type</span> fixnum n))
+  (<span class="kwa">let</span> ((<span class="kwa">len</span> (<span class="kwa">length</span> alu))
+		(<span class="kwa">buf</span> (<span class="kwa">concatenate</span> 'simple-base-string 
+						  alu 
+						  (<span class="kwa">subseq</span> alu <span class="num">0</span> +line-length+))))
+	(<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum len) 
+			 (<span class="kwa">type</span> simple-base-string buf))
+	(<span class="kwa">output-line</span> title)
+	(<span class="kwa">do</span>* ((<span class="kwa">pos-start</span> <span class="num">0</span> (<span class="kwa">mod</span> pos-end len))
+		  (<span class="kwa">m</span> n (<span class="kwa">-</span> m bytes))
+		  (<span class="kwa">bytes</span> (<span class="kwa">min</span> n +line-length+) (<span class="kwa">min</span> m +line-length+))
+		  (<span class="kwa">pos-end</span> (+ pos-start bytes) (+ pos-start bytes)))
+	  ((&lt;= m <span class="num">0</span>) (<span class="kwa">flush</span>))
+	  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum pos-start pos-end m bytes))
+	  (<span class="kwa">output-line</span> buf :start pos-start :end pos-end))))
+
+(<span class="kwa">defun</span> main (&amp;optional in-n)
+  (<span class="kwa">let</span> ((<span class="kwa">n</span> (<span class="kwa">or</span> in-n
+			   (<span class="kwa">ignore-errors</span>
+				 (<span class="kwa">parse-integer</span> (<span class="kwa">car</span> (<span class="kwa">last</span> #+sbcl sb-ext:*posix-argv*
+										   #+cmu  extensions:*command-line-strings*
+										   #+gcl  si::*command-args*
+										   #+clisp nil))))
+			   <span class="num">1000</span>)))
+	(<span class="kwa">declare</span> (<span class="kwa">fixnum</span> n))
+	(<span class="kwa">reset-random</span>)
+	(<span class="kwa">repeat</span> *alu* <span class="str">&quot;&gt;ONE Homo sapiens alu&quot;</span> (<span class="kwa">the</span> fixnum (* n <span class="num">2</span>)))
+	(<span class="kwa">randomize</span> *amino-acids-syms* *amino-acids-cprobs* <span class="str">&quot;&gt;TWO IUB ambiguity codes&quot;</span> (<span class="kwa">the</span> fixnum (* n <span class="num">3</span>)))
+	(<span class="kwa">randomize</span> *homo-sapiens-syms* *homo-sapiens-cprobs* <span class="str">&quot;&gt;THREE Homo sapiens frequency&quot;</span> (<span class="kwa">the</span> fixnum (* n <span class="num">5</span>)))))

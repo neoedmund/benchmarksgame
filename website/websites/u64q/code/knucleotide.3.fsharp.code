@@ -1,0 +1,90 @@
+﻿<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Don Syme</span>
+<span class="com"> * Based on C# contribution by Isaac Gouy, Antti Lankila, A.Nahr, The Anh Tran</span>
+<span class="com"> * Uses one byte array rather than strings.</span>
+<span class="com"> *)</span>
+
+<span class="kwa">open</span> <span class="kwd">System</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">IO</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Collections</span>.<span class="kwd">Generic</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Text</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Threading</span>
+
+<span class="kwa">let</span> input = <span class="kwd">Console</span>.<span class="kwd">In</span>
+<span class="kwa">let</span> toBytes (s: <span class="kwb">string</span>) = s.<span class="kwd">ToCharArray</span>() |&gt; <span class="kwd">Array</span>.map byte
+<span class="kwa">let</span> toString (s: byte []) = <span class="kwd">String</span>(s |&gt; <span class="kwd">Array</span>.map char)
+<span class="kwa">let</span> prefixes = [| <span class="str">&quot;ggt&quot;</span>; <span class="str">&quot;ggta&quot;</span>; <span class="str">&quot;ggtatt&quot;</span>; <span class="str">&quot;ggtattttaatt&quot;</span>; <span class="str">&quot;ggtattttaatttatagt&quot;</span> |]
+
+<span class="kwa">let</span> prefixBytes = 
+    [| <span class="kwa">for</span> p <span class="kwa">in</span> prefixes -&gt; toBytes p |]
+
+<span class="kwa">let</span> prefixLengths = 
+    [| <span class="kwa">for</span> p <span class="kwa">in</span> prefixBytes -&gt; p.<span class="kwd">Length</span> |]
+
+<span class="kwa">let</span> prefixOffsets = <span class="kwd">Array</span>.scan (+) <span class="num">0</span> prefixLengths
+<span class="kwa">let</span> dnaStart = prefixOffsets.[prefixLengths.<span class="kwd">Length</span>]
+
+<span class="kwa">let</span> dna = 
+    seq { <span class="kwa">while true do</span> yield input.<span class="kwd">ReadLine</span>() }
+    |&gt; <span class="kwd">Seq</span>.takeWhile (<span class="kwa">fun</span> x -&gt; x &lt;&gt; <span class="kwa">null</span>)
+    |&gt; <span class="kwd">Seq</span>.skipWhile (<span class="kwa">fun</span> x -&gt; not (x.<span class="kwd">StartsWith</span>(<span class="str">&quot;&gt;THREE&quot;</span>)))
+    |&gt; <span class="kwd">Seq</span>.skip <span class="num">1</span>
+    |&gt; <span class="kwd">String</span>.concat <span class="str">&quot;&quot;</span>
+    |&gt; toBytes
+    |&gt; <span class="kwd">Array</span>.append (<span class="kwd">Array</span>.concat prefixBytes)
+
+<span class="kwa">let</span> keyHash (k, n) = 
+    <span class="kwa">let mutable</span> h = <span class="num">0</span>
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..n - <span class="num">1</span> <span class="kwa">do</span>
+        h &lt;- h * <span class="num">31</span> + <span class="kwb">int</span> dna.[k + i]
+    h
+
+<span class="kwa">let</span> keyText (k, n) = toString(dna.[k..k + n - <span class="num">1</span>]).<span class="kwd">ToUpper</span>()
+
+<span class="kwa">type</span> <span class="kwd">KeyData</span> = 
+    { <span class="kwa">mutable</span> count: <span class="kwb">int</span>
+      key: <span class="kwb">int</span> * <span class="kwb">int</span> }
+
+<span class="kwa">let</span> generateFrequencies(frameSize) = 
+    <span class="kwa">let</span> freq = <span class="kwa">new</span> <span class="kwd">Dictionary</span>&lt;<span class="kwb">int</span>, <span class="kwd">KeyData</span>&gt;()
+    <span class="kwa">let mutable</span> v = <span class="kwd">Unchecked</span>.defaultof&lt;<span class="kwd">KeyData</span>&gt;
+    <span class="kwa">for</span> i <span class="kwa">in</span> dnaStart..dna.<span class="kwd">Length</span> - frameSize <span class="kwa">do</span>
+        <span class="kwa">let</span> h = keyHash (i, frameSize)
+        <span class="kwa">if</span> freq.<span class="kwd">TryGetValue</span>(h, &amp;v) <span class="kwa">then</span> v.count &lt;- v.count + <span class="num">1</span>
+        <span class="kwa">else</span> freq.[h] &lt;- { count = <span class="num">1</span>; key = (i, frameSize) }
+    freq
+
+<span class="kwa">let</span> writeCount(n) = 
+    <span class="kwa">let</span> freq = generateFrequencies(prefixLengths.[n])
+    <span class="kwa">let</span> hash = keyHash(prefixOffsets.[n], prefixLengths.[n])
+    
+    <span class="kwa">let</span> count = 
+        <span class="kwa">if</span> freq.<span class="kwd">ContainsKey</span>(hash) <span class="kwa">then</span> freq.[hash].count
+        <span class="kwa">else</span> <span class="num">0</span>
+    <span class="kwd">String</span>.<span class="kwd">Format</span>(<span class="str">&quot;</span><span class="ipl">{0}</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">{1}</span><span class="str">&quot;</span>, count, prefixes.[n].<span class="kwd">ToUpper</span>())
+
+<span class="kwa">type</span> <span class="kwd">Pair</span> = <span class="kwd">KeyValuePair</span>&lt;<span class="kwb">int</span>, <span class="kwd">KeyData</span>&gt;
+
+<span class="kwa">let</span> writeFrequencies(nucleotideLength) = 
+    <span class="kwa">let</span> freq = generateFrequencies(nucleotideLength)
+    <span class="kwa">let</span> items = <span class="kwa">new</span> <span class="kwd">ResizeArray</span>&lt;<span class="kwd">Pair</span>&gt;(freq)
+    items.<span class="kwd">Sort</span>(<span class="kwa">fun</span> (kv1: <span class="kwd">Pair</span>) (kv2: <span class="kwd">Pair</span>) -&gt; 
+        <span class="kwa">let</span> c = kv2.<span class="kwd">Value</span>.count - kv1.<span class="kwd">Value</span>.count
+        <span class="kwa">if</span> c = <span class="num">0</span> <span class="kwa">then</span> keyText(kv1.<span class="kwd">Value</span>.key).<span class="kwd">CompareTo</span>(keyText(kv2.<span class="kwd">Value</span>.key))
+        <span class="kwa">else</span> c)
+    <span class="kwa">let</span> buf = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>()
+    <span class="kwa">let</span> sum = dna.<span class="kwd">Length</span> - dnaStart - nucleotideLength + <span class="num">1</span>
+    <span class="kwa">for</span> element <span class="kwa">in</span> items <span class="kwa">do</span>
+        <span class="kwa">let</span> percent = double element.<span class="kwd">Value</span>.count * <span class="num">100.0</span> / double sum
+        buf.<span class="kwd">AppendFormat</span>(<span class="str">&quot;</span><span class="ipl">{0}</span> <span class="str">{1:f3}</span><span class="esc">\n</span><span class="str">&quot;</span>, keyText(element.<span class="kwd">Value</span>.key), percent) |&gt; ignore
+    buf.<span class="kwd">ToString</span>()
+
+<span class="kwd">Async</span>.<span class="kwd">Parallel</span> [ yield async { return writeFrequencies(<span class="num">1</span>) }
+                 yield async { return writeFrequencies(<span class="num">2</span>) }
+                 <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..prefixes.<span class="kwd">Length</span> - <span class="num">1</span> <span class="kwa">do</span>
+                     yield async { return writeCount(i) } ]
+|&gt; <span class="kwd">Async</span>.<span class="kwd">RunSynchronously</span>
+|&gt; <span class="kwd">Array</span>.iter <span class="kwd">Console</span>.<span class="kwd">Out</span>.<span class="kwd">WriteLine</span>
+

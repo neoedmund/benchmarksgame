@@ -1,0 +1,40 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc"># transliterated from Mike Pall's Lua program</span>
+<span class="slc"># contributed by Mario Pernici</span>
+
+<span class="kwa">from</span> gmpy2 <span class="kwa">import</span> mpz
+<span class="kwa">from</span> sys <span class="kwa">import</span> argv
+
+<span class="kwa">try</span>:
+  N = <span class="kwb">int</span>(argv[<span class="num">1</span>])
+<span class="kwa">except</span>:
+  N = <span class="num">100</span>
+
+i = k = ns = <span class="num">0</span>
+k1 = <span class="num">1</span>
+n,a,d,t,u = <span class="kwb">map</span>(mpz,(<span class="num">1</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">0</span>))
+<span class="kwa">while</span>(<span class="num">1</span>):
+  k += <span class="num">1</span>
+  t = n&lt;&lt;<span class="num">1</span>
+  n *= k
+  a += t
+  k1 += <span class="num">2</span>
+  a *= k1
+  d *= k1
+  <span class="kwa">if</span> a &gt;= n:
+    t,u = <span class="kwb">divmod</span>(n*<span class="num">3</span> +a,d)
+    u += n
+    <span class="kwa">if</span> d &gt; u:
+      ns = ns*<span class="num">10</span> + t
+      i += <span class="num">1</span>
+      <span class="kwa">if</span> i % <span class="num">10</span> == <span class="num">0</span>:
+        <span class="kwa">print</span> (<span class="str">'</span><span class="ipl">%0</span><span class="str">10d</span><span class="esc">\t</span><span class="str">:</span><span class="ipl">%d</span><span class="str">'</span> % (ns, i))
+        ns = <span class="num">0</span>
+      <span class="kwa">if</span> i &gt;= N:
+        <span class="kwa">break</span>
+      a -= d*t
+      a *= <span class="num">10</span>
+      n *= <span class="num">10</span>
+

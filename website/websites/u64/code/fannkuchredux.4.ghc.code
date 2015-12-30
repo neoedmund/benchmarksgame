@@ -1,0 +1,73 @@
+<span class="com">{-  The Computer Language Benchmarks Game</span>
+<span class="com"></span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">    contributed by Branimir Maksimovic</span>
+<span class="com">   optimized/rewritten by Bryan O'Sullivan</span>
+<span class="com">-}</span>
+
+<span class="kwd">import</span> System.Environment
+<span class="kwd">import</span> Text.Printf
+<span class="kwd">import</span> Data.Bits
+
+<span class="kwd">import qualified</span> Data.Vector.Unboxed.Mutable <span class="kwd">as</span> VM
+<span class="kwd">import qualified</span> Data.Vector.Generic.Mutable <span class="kwd">as</span> VG
+<span class="kwd">import qualified</span> Data.Vector.Unboxed <span class="kwd">as</span> V
+
+main = <span class="kwd">do</span>
+    n &lt;- <span class="kwc">getArgs</span> &gt;&gt;= <span class="kwc">readIO</span>.<span class="kwc">head</span>
+    (checksum,maxflips) &lt;- fannkuch n
+    printf <span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">Pfannkuchen(</span><span class="ipl">%d</span><span class="str">) =</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> checksum n maxflips
+
+fannkuch :: <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> (<span class="kwb">Int</span>, <span class="kwb">Int</span>)
+fannkuch n = <span class="kwd">do</span>
+    perm &lt;- V.unsafeThaw $ V.enumFromN <span class="num">1</span> n
+    !tperm &lt;- VG.new n
+    !cnt &lt;- VG.<span class="kwc">replicate</span> n <span class="num">0</span>
+    <span class="kwd">let</span> 
+        loop :: <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span>(<span class="kwb">Int</span>,<span class="kwb">Int</span>)
+        loop !c !m !pc = <span class="kwd">do</span>
+        b &lt;- next_permutation perm n cnt
+        <span class="kwd">if</span> b == <span class="kwa">False</span>
+            <span class="kwd">then</span> <span class="kwc">return</span> (c,m)
+            <span class="kwd">else do</span>
+            VM.unsafeCopy tperm perm
+            <span class="kwd">let</span> count_flips !flips = <span class="com">{-# SCC &quot;count_flips&quot; #-}</span> <span class="kwd">do</span>
+                f &lt;- VM.unsafeRead tperm <span class="num">0</span>
+                <span class="kwd">if</span> f == <span class="num">1</span>
+                <span class="kwd">then</span> loop (c + (<span class="kwd">if</span> pc .&amp;. <span class="num">1</span> == <span class="num">0</span> <span class="kwd">then</span> flips <span class="kwd">else</span> -flips))
+                            (<span class="kwc">max</span> m flips)
+                            (pc+<span class="num">1</span>)
+                <span class="kwd">else do</span>
+                    VG.<span class="kwc">reverse</span> $ VM.unsafeSlice <span class="num">0</span> f tperm
+                    count_flips (flips+<span class="num">1</span>)
+            count_flips <span class="num">0</span>
+    loop <span class="num">0 0 1</span>
+
+next_permutation :: VM.IOVector <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; VM.IOVector <span class="kwb">Int</span> -&gt; <span class="kwb">IO Bool</span>
+next_permutation perm !n !cnt = loop <span class="num">1</span>
+    <span class="kwd">where</span>
+    loop :: <span class="kwb">Int</span> -&gt; <span class="kwb">IO Bool</span>
+    loop i
+        | i &gt;= n = done i
+        | <span class="kwc">otherwise</span> = <span class="kwd">do</span>
+            tmp &lt;- VM.unsafeRead perm <span class="num">0</span>
+            <span class="kwd">let</span> 
+                rotate :: <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span>()
+                rotate j
+                    | j &gt;= i = VM.unsafeWrite perm i tmp
+                    | <span class="kwc">otherwise</span> = <span class="kwd">do</span>
+                        !v &lt;- VM.unsafeRead perm (j+<span class="num">1</span>)
+                        VM.unsafeWrite perm j v
+                        rotate (j+<span class="num">1</span>)
+            rotate <span class="num">0</span>
+            v &lt;- VM.unsafeRead cnt i
+            <span class="kwd">if</span> v &gt;= i
+            <span class="kwd">then</span> VM.unsafeWrite cnt i <span class="num">0</span> &gt;&gt; loop (i+<span class="num">1</span>)
+            <span class="kwd">else</span> done i
+    done i
+        | i &gt;= n = <span class="kwc">return</span> <span class="kwa">False</span>
+        | <span class="kwc">otherwise</span> = <span class="kwd">do</span>
+            v &lt;- VM.unsafeRead cnt i
+            VM.unsafeWrite cnt i (v+<span class="num">1</span>)
+            <span class="kwc">return</span> <span class="kwa">True</span>

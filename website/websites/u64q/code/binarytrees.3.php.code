@@ -1,0 +1,62 @@
+&lt;?php 
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Peter Baltruschat</span>
+<span class="com">   modified by Levi Cameron</span>
+<span class="com">*/</span>
+
+<span class="kwa">function</span> <span class="kwd">bottomUpTree</span>($item, $depth)
+{
+   <span class="kwa">if</span> (!$depth) <span class="kwa">return array</span>(null,null,$item);
+   $item2 = $item + $item;
+   $depth--;
+   <span class="kwa">return array</span>(
+      <span class="kwd">bottomUpTree</span>($item2-<span class="num">1</span>,$depth),
+      <span class="kwd">bottomUpTree</span>($item2,$depth),
+      $item);
+}
+
+<span class="kwa">function</span> <span class="kwd">itemCheck</span>($treeNode) { 
+   <span class="kwa">return</span> $treeNode[<span class="num">2</span>]
+      + ($treeNode[<span class="num">0</span>][<span class="num">0</span>] === null ? <span class="kwd">itemCheck</span>($treeNode[<span class="num">0</span>]) : $treeNode[<span class="num">0</span>][<span class="num">2</span>])
+      - ($treeNode[<span class="num">1</span>][<span class="num">0</span>] === null ? <span class="kwd">itemCheck</span>($treeNode[<span class="num">1</span>]) : $treeNode[<span class="num">1</span>][<span class="num">2</span>]);
+}
+
+$minDepth = <span class="num">4</span>;
+
+$n = ($argc == <span class="num">2</span>) ? $argv[<span class="num">1</span>] : <span class="num">1</span>;
+$maxDepth = <span class="kwd">max</span>($minDepth + <span class="num">2</span>, $n);
+$stretchDepth = $maxDepth + <span class="num">1</span>;
+
+$stretchTree = <span class="kwd">bottomUpTree</span>(<span class="num">0</span>, $stretchDepth);
+<span class="kwd">printf</span>(<span class="str">&quot;stretch tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>,
+$stretchDepth, <span class="kwd">itemCheck</span>($stretchTree));
+<span class="kwa">unset</span>($stretchTree);
+
+$longLivedTree = <span class="kwd">bottomUpTree</span>(<span class="num">0</span>, $maxDepth);
+
+$iterations = <span class="num">1</span> &lt;&lt; ($maxDepth);
+<span class="kwa">do</span>
+{
+   $check = <span class="num">0</span>;
+   <span class="kwa">for</span>($i = <span class="num">1</span>; $i &lt;= $iterations; ++$i)
+   {
+      $t = <span class="kwd">bottomUpTree</span>($i, $minDepth);
+      $check += <span class="kwd">itemCheck</span>($t);
+      <span class="kwa">unset</span>($t);
+      $t = <span class="kwd">bottomUpTree</span>(-$i, $minDepth);
+      $check += <span class="kwd">itemCheck</span>($t);
+      <span class="kwa">unset</span>($t);
+   }
+   
+   <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">trees of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, $iterations&lt;&lt;<span class="num">1</span>, $minDepth, $check);
+   
+   $minDepth += <span class="num">2</span>;
+   $iterations &gt;&gt;= <span class="num">2</span>;
+}
+<span class="kwa">while</span>($minDepth &lt;= $maxDepth);
+
+<span class="kwd">printf</span>(<span class="str">&quot;long lived tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>,
+$maxDepth, <span class="kwd">itemCheck</span>($longLivedTree));
+?&gt;

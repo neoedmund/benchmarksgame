@@ -1,0 +1,80 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * </span>
+<span class="com"> * contributed by Stefan Krause</span>
+<span class="com"> * slightly modified by Chad Whipkey</span>
+<span class="com"> * parallelized by Colin D Bennett 2008-10-04</span>
+<span class="com"> * reduce synchronization cost by The Anh Tran</span>
+<span class="com"> * optimizations and refactoring by Enotus 2010-11-11</span>
+<span class="com"> */</span>
+ 
+
+<span class="kwa">import</span> java.io.*;
+<span class="kwa">import</span> java.util.concurrent.atomic.AtomicInteger;
+
+<span class="kwa">public final class</span> mandelbrot {
+    <span class="kwa">static</span> <span class="kwb">byte</span>[][] out;
+    <span class="kwa">static</span> AtomicInteger yCt;
+    <span class="kwa">static</span> <span class="kwb">double</span>[] Crb;
+    <span class="kwa">static</span> <span class="kwb">double</span>[] Cib;
+
+    <span class="kwa">static</span> <span class="kwb">int</span> <span class="kwd">getByte</span>(<span class="kwb">int</span> x, <span class="kwb">int</span> y){
+        <span class="kwb">double</span> Ci=Cib[y];
+        <span class="kwb">int</span> res=<span class="num">0</span>;
+        <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;<span class="num">8</span>;i+=<span class="num">2</span>){
+            <span class="kwb">double</span> Zr1=Crb[x+i];
+            <span class="kwb">double</span> Zi1=Cib[y];
+
+            <span class="kwb">double</span> Zr2=Crb[x+i+<span class="num">1</span>];
+            <span class="kwb">double</span> Zi2=Cib[y];
+
+            <span class="kwb">int</span> b=<span class="num">0</span>;
+            <span class="kwb">int</span> j=<span class="num">49</span>;<span class="kwa">do</span>{
+                <span class="kwb">double</span> nZr1=Zr1*Zr1-Zi1*Zi1+Crb[x+i];
+                <span class="kwb">double</span> nZi1=Zr1*Zi1+Zr1*Zi1+Cib[y];
+                Zr1=nZr1;Zi1=nZi1;
+
+                <span class="kwb">double</span> nZr2=Zr2*Zr2-Zi2*Zi2+Crb[x+i+<span class="num">1</span>];
+                <span class="kwb">double</span> nZi2=Zr2*Zi2+Zr2*Zi2+Cib[y];
+                Zr2=nZr2;Zi2=nZi2;
+
+                <span class="kwa">if</span>(Zr1*Zr1+Zi1*Zi1&gt;<span class="num">4</span>) b|=<span class="num">2</span>;
+                <span class="kwa">if</span>(Zr2*Zr2+Zi2*Zi2&gt;<span class="num">4</span>) b|=<span class="num">1</span>;
+                <span class="kwa">if</span>(b==<span class="num">3</span>) <span class="kwa">break</span>;
+            }<span class="kwa">while</span>(--j&gt;<span class="num">0</span>);
+            res=(res&lt;&lt;<span class="num">2</span>)+b;
+        }
+        <span class="kwa">return</span> res^-<span class="num">1</span>;
+    }
+    
+    <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">putLine</span>(<span class="kwb">int</span> y, <span class="kwb">byte</span>[] line){
+        <span class="kwa">for</span> (<span class="kwb">int</span> xb=<span class="num">0</span>; xb&lt;line.length; xb++)
+            line[xb]=(<span class="kwb">byte</span>)<span class="kwd">getByte</span>(xb*<span class="num">8</span>,y);
+    }
+ 
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) <span class="kwa">throws</span> Exception {
+        <span class="kwb">int</span> N=<span class="num">6000</span>;
+        <span class="kwa">if</span> (args.length&gt;=<span class="num">1</span>) N=Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+
+        Crb=<span class="kwa">new</span> <span class="kwb">double</span>[N+<span class="num">7</span>]; Cib=<span class="kwa">new</span> <span class="kwb">double</span>[N+<span class="num">7</span>];
+        <span class="kwb">double</span> invN=<span class="num">2.0</span>/N; <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;N;i++){ Cib[i]=i*invN-<span class="num">1.0</span>; Crb[i]=i*invN-<span class="num">1.5</span>; }
+        yCt=<span class="kwa">new</span> <span class="kwd">AtomicInteger</span>();
+        out=<span class="kwa">new</span> <span class="kwb">byte</span>[N][(N+<span class="num">7</span>)/<span class="num">8</span>];
+
+        Thread[] pool=<span class="kwa">new</span> Thread[<span class="num">2</span>*Runtime.<span class="kwd">getRuntime</span>().<span class="kwd">availableProcessors</span>()];
+        <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;pool.length;i++)
+            pool[i]=<span class="kwa">new</span> <span class="kwd">Thread</span>(){
+                <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+                     <span class="kwb">int</span> y; <span class="kwa">while</span>((y=yCt.<span class="kwd">getAndIncrement</span>())&lt;out.length) <span class="kwd">putLine</span>(y,out[y]);
+                }
+            };
+        <span class="kwa">for</span> (Thread t:pool) t.<span class="kwd">start</span>();
+        <span class="kwa">for</span> (Thread t:pool) t.<span class="kwd">join</span>();
+
+        OutputStream stream = <span class="kwa">new</span> <span class="kwd">BufferedOutputStream</span>(System.out);
+        stream.<span class="kwd">write</span>((<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">&quot;</span>+N+<span class="str">&quot; &quot;</span>+N+<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>).<span class="kwd">getBytes</span>());
+        <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;N;i++) stream.<span class="kwd">write</span>(out[i]);
+        stream.<span class="kwd">close</span>();
+    }
+}
+

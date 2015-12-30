@@ -1,0 +1,15 @@
+
+Fri, 23 Oct 2015 22:32:31 GMT
+
+MAKE:
+/usr/bin/g++ -c -pipe -O3 -fomit-frame-pointer -march=native  -std=c++0x fannkuchredux.gpp-7.c++ -o fannkuchredux.gpp-7.c++.o &&  \
+        /usr/bin/g++ fannkuchredux.gpp-7.c++.o -o fannkuchredux.gpp-7.gpp_run -lpthread 
+rm fannkuchredux.gpp-7.c++
+1.22s to complete and log all make actions
+
+COMMAND LINE:
+./fannkuchredux.gpp-7.gpp_run 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

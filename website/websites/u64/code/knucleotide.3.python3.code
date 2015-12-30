@@ -1,0 +1,186 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># submitted by Joerg Baumann</span>
+
+<span class="kwa">from</span> os <span class="kwa">import</span> cpu_count
+<span class="kwa">from</span> sys <span class="kwa">import</span> stdin
+<span class="kwa">from</span> collections <span class="kwa">import</span> defaultdict
+<span class="kwa">from</span> itertools <span class="kwa">import</span> starmap, chain
+<span class="kwa">from</span> multiprocessing <span class="kwa">import</span> Pool
+
+lean_buffer = {}
+
+<span class="kwa">def</span> <span class="kwd">lean_args</span>(sequence, reading_frames, i, j):
+    <span class="kwa">global</span> lean_buffer
+
+    lean_key = <span class="kwb">len</span>(lean_buffer)
+    lean_buffer[lean_key] = sequence
+    <span class="kwa">return</span> lean_key, reading_frames, i, j
+
+<span class="kwa">class</span> lean_call:
+    <span class="kwa">def</span> <span class="kwd">__init__</span>(self, func):
+        self.func = func
+
+    <span class="kwa">def</span> <span class="kwd">__call__</span>(self, lean_key, reading_frames, i, j):
+        <span class="kwa">global</span> lean_buffer
+
+        sequence = lean_buffer[lean_key]
+        results = self.<span class="kwd">func</span>(sequence, reading_frames, i, j)
+        lean_results = []
+        <span class="kwa">for</span> frame, n, frequences <span class="kwa">in</span> results:
+            lean_frequences = <span class="kwd">defaultdict</span>(<span class="kwb">int</span>)
+            <span class="kwa">for</span> reading_frame, bits_list <span class="kwa">in</span> reading_frames:
+                <span class="kwa">if</span> reading_frame == frame:
+                    <span class="kwa">for</span> bits <span class="kwa">in</span> bits_list:
+                        lean_frequences[bits] = frequences[bits]
+            lean_results.<span class="kwd">append</span>((frame, n, lean_frequences))
+        <span class="kwa">return</span> lean_results
+
+<span class="kwa">def</span> <span class="kwd">count_frequencies</span>(sequence, reading_frames, i, j):
+    frames = <span class="kwb">tuple</span>(
+        <span class="kwb">sorted</span>([frame <span class="kwa">for</span> frame,_ <span class="kwa">in</span> reading_frames], reverse=<span class="kwa">True</span>))
+    frequences_mask_list = <span class="kwb">tuple</span>(
+        ((<span class="kwd">defaultdict</span>(<span class="kwb">int</span>), (<span class="num">1</span> &lt;&lt; (<span class="num">2</span> * frame)) - <span class="num">1</span>) <span class="kwa">for</span> frame <span class="kwa">in</span> frames))
+    frame = frames[<span class="num">0</span>]
+    frequences, mask = frequences_mask_list[<span class="num">0</span>]
+    short_frame_frequences = frequences_mask_list[<span class="num">1</span>:]
+
+    mono_nucleotides = []
+    frame_tail = <span class="kwb">len</span>(frames) - <span class="num">1</span>
+    <span class="kwa">if</span> frame_tail &gt;= <span class="num">0</span> <span class="kwa">and</span> frames[frame_tail] == <span class="num">1</span>:
+        freq = frequences_mask_list[frame_tail][<span class="num">0</span>]
+        worklist = sequence[i:j]
+        len_before = <span class="kwb">len</span>(worklist)
+        <span class="kwa">while</span> len_before &gt; <span class="num">0</span>:
+            n = worklist[<span class="num">0</span>:<span class="num">1</span>]
+            worklist = worklist.<span class="kwd">translate</span>(<span class="kwa">None</span>, n)
+            len_after = <span class="kwb">len</span>(worklist)
+            freq[n[<span class="num">0</span>]] = len_before - len_after
+            len_before = len_after
+            mono_nucleotides.<span class="kwd">append</span>(n)
+        frame_tail -= <span class="num">1</span>
+
+    <span class="kwa">if</span> frame_tail &gt;= <span class="num">0</span> <span class="kwa">and</span> frames[frame_tail] == <span class="num">2</span> <span class="kwa">and</span> mono_nucleotides:
+        freq = frequences_mask_list[frame_tail][<span class="num">0</span>]
+        worklist = sequence[i:<span class="kwb">min</span>(j+<span class="num">1</span>, <span class="kwb">len</span>(sequence))]
+        overlaps = []
+        <span class="kwa">for</span> v <span class="kwa">in</span> (n + m <span class="kwa">for</span> n <span class="kwa">in</span> mono_nucleotides <span class="kwa">for</span> m <span class="kwa">in</span> mono_nucleotides):
+            bits = v[<span class="num">0</span>]*<span class="num">4</span>+v[<span class="num">1</span>]
+            freq[bits] = worklist.<span class="kwd">count</span>(v)
+            <span class="kwa">if</span> v[<span class="num">1</span>:] == v[:<span class="num">1</span>]:
+                overlaps.<span class="kwd">append</span>((v, bits, v[:<span class="num">1</span>]+v))
+        <span class="kwa">for</span> v, bits, pattern <span class="kwa">in</span> overlaps:
+            count = <span class="kwb">len</span>(worklist)
+            tmp = worklist.<span class="kwd">replace</span>(pattern+pattern, b<span class="str">'12'</span>)
+            tmp = tmp.<span class="kwd">replace</span>(pattern, b<span class="str">'1'</span>)
+            count = (count - <span class="kwb">len</span>(tmp)) // <span class="num">2</span>
+            count += tmp.<span class="kwd">count</span>(b<span class="str">'1'</span>+v)
+            count += tmp.<span class="kwd">count</span>(b<span class="str">'2'</span>+v[:<span class="num">1</span>])
+            freq[bits] += count
+        frame_tail -= <span class="num">1</span>
+
+    short_frame_frequences = short_frame_frequences[:frame_tail]
+    <span class="kwa">if</span> <span class="kwb">len</span>(short_frame_frequences):
+        bits = <span class="num">0</span>
+        <span class="kwa">if</span> i == <span class="num">0</span>:
+            <span class="kwa">for</span> k <span class="kwa">in</span> <span class="kwb">range</span>(i, i + frame - <span class="num">1</span>):
+                bits = bits * <span class="num">4</span> + sequence[k]
+                <span class="kwa">for</span> t, (f, m) <span class="kwa">in</span> <span class="kwb">enumerate</span>(short_frame_frequences, <span class="num">1</span>):
+                    <span class="kwa">if</span> k - i + <span class="num">1</span> &gt;= frames[t]:
+                        f[bits &amp; m] += <span class="num">1</span>
+        <span class="kwa">else</span>:
+            <span class="kwa">for</span> k <span class="kwa">in</span> <span class="kwb">range</span>(i - frame + <span class="num">1</span>, i):
+                bits = bits * <span class="num">4</span> + sequence[k]
+
+        <span class="kwa">for</span> byte <span class="kwa">in</span> sequence[k+<span class="num">1</span>:j]:
+            bits = (bits * <span class="num">4</span> + byte) &amp; mask
+            frequences[bits] += <span class="num">1</span>
+            <span class="kwa">for</span> f, m <span class="kwa">in</span> short_frame_frequences:
+                f[bits &amp; m] += <span class="num">1</span>
+
+    <span class="kwa">return</span> [
+        (frame, <span class="kwb">len</span>(sequence) - frame + <span class="num">1</span>, frequences_mask_list[i][<span class="num">0</span>])
+            <span class="kwa">for</span> i, frame <span class="kwa">in</span> <span class="kwb">enumerate</span>(frames)]
+
+<span class="kwa">def</span> <span class="kwd">read_sequence</span>(<span class="kwb">file</span>, header, translation) :
+    <span class="kwa">for</span> line <span class="kwa">in</span> <span class="kwb">file</span>:
+        <span class="kwa">if</span> line[<span class="num">0</span>] == <span class="kwb">ord</span>(<span class="str">'&gt;'</span>):
+            <span class="kwa">if</span> line[<span class="num">1</span>:<span class="kwb">len</span>(header)+<span class="num">1</span>] == header:
+                <span class="kwa">break</span>
+
+    sequence = <span class="kwd">bytearray</span>()
+    <span class="kwa">for</span> line <span class="kwa">in</span> <span class="kwb">file</span>:
+        <span class="kwa">if</span> line[<span class="num">0</span>] == <span class="kwb">ord</span>(<span class="str">'&gt;'</span>):
+            <span class="kwa">break</span>
+        sequence += line
+
+    <span class="kwa">return</span> sequence.<span class="kwd">translate</span>(translation, b<span class="str">'</span><span class="esc">\n\r\t</span> <span class="str">'</span>)
+
+<span class="kwa">def</span> <span class="kwd">lookup_frequency</span>(results, frame, bits):
+    n = <span class="num">1</span>
+    frequency = <span class="num">0</span>
+    <span class="kwa">for</span> _, n, frequencies <span class="kwa">in</span> <span class="kwb">filter</span>(<span class="kwa">lambda</span> r: r[<span class="num">0</span>] == frame, results):
+        frequency += frequencies[bits]
+    <span class="kwa">return</span> frequency, n <span class="kwa">if</span> n &gt; <span class="num">0</span> <span class="kwa">else</span> <span class="num">1</span>
+
+<span class="kwa">def</span> <span class="kwd">display</span>(results, display_list, sort=<span class="kwa">False</span>, relative=<span class="kwa">False</span>, end=<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>):
+    lines = [
+        (k_nucleotide, <span class="kwd">lookup_frequency</span>(results, frame, bits))
+            <span class="kwa">for</span> k_nucleotide, frame, bits <span class="kwa">in</span> display_list
+    ]
+    <span class="kwa">if</span> sort: lines = <span class="kwb">sorted</span>(lines, key=<span class="kwa">lambda</span> v: (-v[<span class="num">1</span>][<span class="num">0</span>], v[<span class="num">0</span>]))
+    <span class="kwa">for</span> k_nucleotide, (frequency, n) <span class="kwa">in</span> lines:
+        <span class="kwa">if</span> relative:
+            <span class="kwa">print</span>(<span class="str">&quot;{0} {1:.3f}&quot;</span>.<span class="kwd">format</span>(k_nucleotide, frequency * <span class="num">100</span>. / n))
+        <span class="kwa">else</span>:
+            <span class="kwa">print</span>(<span class="str">&quot;{1}</span><span class="esc">\t</span><span class="str">{0}&quot;</span>.<span class="kwd">format</span>(k_nucleotide, frequency))
+    <span class="kwa">print</span>(end=end)
+
+<span class="kwa">def</span> <span class="kwd">main</span>():
+    translation = bytes.<span class="kwd">maketrans</span>(b<span class="str">'GTCAgtca'</span>,
+        b<span class="str">'</span><span class="esc">\x00\x01\x02\x03\x00\x01\x02\x03</span><span class="str">'</span>)
+    <span class="kwa">def</span> <span class="kwd">str_to_bits</span>(text):
+        <span class="kwb">buffer</span> = text.<span class="kwd">encode</span>(<span class="str">'latin1'</span>).<span class="kwd">translate</span>(translation)
+        bits = <span class="num">0</span>
+        <span class="kwa">for</span> k <span class="kwa">in</span> <span class="kwb">range</span>(<span class="kwb">len</span>(<span class="kwb">buffer</span>)):
+            bits = bits * <span class="num">4</span> + <span class="kwb">buffer</span>[k]
+        <span class="kwa">return</span> bits
+    <span class="kwa">def</span> <span class="kwd">display_list</span>(k_nucleotides):
+        <span class="kwa">return</span> [(n, <span class="kwb">len</span>(n), <span class="kwd">str_to_bits</span>(n)) <span class="kwa">for</span> n <span class="kwa">in</span> k_nucleotides]
+
+    sequence = <span class="kwd">read_sequence</span>(stdin.<span class="kwb">buffer</span>, b<span class="str">'THREE'</span>, translation)
+
+    mono_nucleotides = (<span class="str">'G'</span>, <span class="str">'A'</span>, <span class="str">'T'</span>, <span class="str">'C'</span>)
+    di_nucleotides = <span class="kwb">tuple</span>(n + m
+        <span class="kwa">for</span> n <span class="kwa">in</span> mono_nucleotides <span class="kwa">for</span> m <span class="kwa">in</span> mono_nucleotides)
+    k_nucleotides = (
+        <span class="str">'GGT'</span>, <span class="str">'GGTA'</span>, <span class="str">'GGTATT'</span>, <span class="str">'GGTATTTTAATT'</span>, <span class="str">'GGTATTTTAATTTATAGT'</span>)
+
+    reading_frames = [
+        (<span class="num">1</span>, <span class="kwb">tuple</span>(<span class="kwb">map</span>(str_to_bits, mono_nucleotides))),
+        (<span class="num">2</span>, <span class="kwb">tuple</span>(<span class="kwb">map</span>(str_to_bits, di_nucleotides))),
+    ] + <span class="kwb">list</span>(<span class="kwb">map</span>(<span class="kwa">lambda</span> s: (<span class="kwb">len</span>(s), (<span class="kwd">str_to_bits</span>(s),)), k_nucleotides))
+
+    <span class="kwa">if</span> <span class="kwb">len</span>(sequence) &gt; <span class="num">128</span> * <span class="kwd">cpu_count</span>(): n = <span class="kwd">cpu_count</span>()
+    <span class="kwa">else</span>: n = <span class="num">1</span>
+    partitions = [<span class="kwb">len</span>(sequence) * i // n <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(n+<span class="num">1</span>)]
+    count_jobs = [
+        (sequence, reading_frames, partitions[i], partitions[i + <span class="num">1</span>])
+            <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(<span class="kwb">len</span>(partitions) - <span class="num">1</span>)]
+
+    <span class="kwa">if</span> n == <span class="num">1</span>:
+        results = <span class="kwb">list</span>(<span class="kwd">chain</span>(*<span class="kwd">starmap</span>(count_frequencies, count_jobs)))
+    <span class="kwa">else</span>:
+        lean_jobs = <span class="kwb">list</span>(<span class="kwd">starmap</span>(lean_args, count_jobs))
+        with <span class="kwd">Pool</span>() <span class="kwa">as</span> pool:
+            async_results = pool.<span class="kwd">starmap_async</span>(
+                <span class="kwd">lean_call</span>(count_frequencies), lean_jobs)
+            results = <span class="kwb">list</span>(<span class="kwd">chain</span>(*async_results.<span class="kwd">get</span>()))
+
+    <span class="kwd">display</span>(results, <span class="kwd">display_list</span>(mono_nucleotides), relative=<span class="kwa">True</span>, sort=<span class="kwa">True</span>)
+    <span class="kwd">display</span>(results, <span class="kwd">display_list</span>(di_nucleotides), relative=<span class="kwa">True</span>, sort=<span class="kwa">True</span>)
+    <span class="kwd">display</span>(results, <span class="kwd">display_list</span>(k_nucleotides), end=<span class="str">''</span>)
+
+<span class="kwa">if</span> __name__==<span class="str">'__main__'</span> :
+    <span class="kwd">main</span>()

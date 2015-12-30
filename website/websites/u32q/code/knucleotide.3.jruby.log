@@ -1,0 +1,16 @@
+
+Thu, 27 Aug 2015 19:02:39 GMT
+
+MAKE:
+mv knucleotide.jruby-3.jruby knucleotide.rb
+0.08s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jruby-9.0.0.0/bin/jruby --server -J-Xmn512m -J-Xms2048m -J-Xmx2048m knucleotide.rb 0 < knucleotide-input250000.txt
+
+TIMED OUT after 3600s
+
+
+PROGRAM OUTPUT:
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

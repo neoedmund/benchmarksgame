@@ -1,0 +1,48 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Benedikt Nordhoff</span>
+<span class="com"> * port from revcomp.scala-5.scala (Rex Kerr)</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> scala.collection.mutable.ArrayBuffer
+
+<span class="kwa">object</span> revcomp {
+  <span class="kwa">def</span> <span class="kwd">hl</span>(s: String) = s + s.toLowerCase
+  <span class="kwa">val</span> table:Map[Char,Char] = <span class="kwd">Map</span>( (<span class="kwd">hl</span>(<span class="str">&quot;ACGTUMRWSYKVHDBN&quot;</span>) <span class="kwd">zip</span> (<span class="str">&quot;TGCAAKYWSRMBDHVN&quot;</span>*<span class="num">2</span>)): _* )
+  <span class="kwa">def</span> <span class="kwd">mapChar</span>(s:Char) = <span class="kwd">table</span>(s)
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args:Array[String]) = {
+    <span class="kwa">var</span> buf:ArrayBuffer[Char] = <span class="kwa">new</span> ArrayBuffer
+    <span class="kwa">var</span> name = <span class="str">&quot;&quot;</span>
+    <span class="kwa">for</span> (line &lt;- io.Source.stdin.getLines) {
+      <span class="kwa">if</span>(line.<span class="kwd">startsWith</span>(<span class="str">&quot;&gt;&quot;</span>)) {
+        <span class="kwd">printResult</span>(name,buf) <span class="slc">// print the old stuff</span>
+        name = line
+        buf = <span class="kwa">new</span> ArrayBuffer 
+      } <span class="kwa">else</span> {
+        buf ++= line
+      }        
+    }
+    <span class="kwd">printResult</span>(name,buf)
+  }
+
+  
+  <span class="kwa">private var</span> lastThread:Thread = null
+  <span class="kwa">def</span> <span class="kwd">printResult</span>(name: String, buf:ArrayBuffer[Char]) {
+    <span class="kwa">if</span>(buf.isEmpty) <span class="kwa">return</span>   
+    <span class="kwa">val</span> prev = lastThread
+    lastThread = <span class="kwa">new</span> Thread { 
+      <span class="kwa">override def</span> <span class="kwd">run</span>() {
+        buf.<span class="kwd">transform</span>(mapChar) <span class="slc">// do the mapping inplace</span>
+        <span class="kwa">val</span> res = <span class="kwa">new</span> ArrayBuffer[Array[Char]] <span class="slc">// buffer for reverse grouped data</span>
+        <span class="kwa">for</span>(x &lt;- buf.reverseIterator.<span class="kwd">grouped</span>(<span class="num">60</span>)) {res += x.toArray} <span class="slc">// fill buffer</span>
+        <span class="kwa">if</span>(prev != null)
+          prev.<span class="kwd">join</span>() <span class="slc">// join with previous thread before output</span>
+        <span class="kwd">println</span>(name)
+        <span class="kwa">for</span>(x &lt;- res){System.out.<span class="kwd">println</span>(x)} <span class="slc">// print char arrays </span>
+      }
+    }
+    lastThread.<span class="kwd">start</span>()
+  }
+}

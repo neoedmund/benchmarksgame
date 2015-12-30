@@ -1,0 +1,254 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Contributed by The Anh Tran</span>
+
+<span class="ppc">#include &lt;omp.h&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+<span class="ppc">#include &lt;memory.h&gt;</span>
+
+<span class="ppc">#include &lt;cassert&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;vector&gt;</span>
+<span class="ppc">#include &lt;iterator&gt;</span>
+
+<span class="ppc">#include &lt;boost/format.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/scoped_array.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/xpressive/xpressive_static.hpp&gt;</span>
+
+
+<span class="kwa">using namespace</span> boost::xpressive;
+<span class="kwa">namespace</span> x = boost::xpressive;
+<span class="kwa">using namespace</span> std;
+
+<span class="kwc">typedef</span> <span class="kwb">char</span>         Char_T;
+<span class="kwc">typedef</span> Char_T <span class="kwb">const</span>*   PChar_T;
+<span class="kwc">typedef</span> vector&lt;Char_T&gt;   Data_T;
+
+<span class="kwc">typedef</span> Data_T::const_iterator         CIte_Data_T;
+<span class="kwc">typedef</span> back_insert_iterator&lt;Data_T&gt;   OIte_Data_T;
+
+<span class="kwc">typedef</span> basic_regex&lt;CIte_Data_T&gt;      Regex_Data_T;
+
+
+
+<span class="slc">// read all redirected data from stdin</span>
+<span class="slc">// strip DNA headers and newline characters</span>
+<span class="kwb">size_t</span> 
+<span class="kwd">ReadInput_StripHeader</span>(   <span class="kwb">size_t</span> &amp;file_size, Data_T &amp;output )
+{
+   <span class="slc">// get input size</span>
+   file_size = <span class="kwd">ftell</span>(stdin);
+   <span class="kwd">fseek</span>(stdin, <span class="num">0</span>, SEEK_END);
+   file_size = <span class="kwd">ftell</span>(stdin) - file_size;
+   <span class="kwd">fseek</span>(stdin, <span class="num">0</span>, SEEK_SET);
+   file_size /= <span class="kwa">sizeof</span>(Char_T);
+
+
+   <span class="slc">// load content into memory</span>
+   boost::scoped_array&lt;Char_T&gt; <span class="kwd">p_src</span>(<span class="kwa">new</span> Char_T[file_size +<span class="num">1</span>]);
+   {
+      <span class="kwb">size_t</span> sz = <span class="kwd">fread</span>(p_src.<span class="kwd">get</span>(), <span class="kwa">sizeof</span>(Char_T), file_size, stdin);
+      <span class="kwa">assert</span>(sz == file_size);
+      p_src[file_size] = <span class="num">0</span>;
+   }
+
+   
+   PChar_T p_src_beg = p_src.<span class="kwd">get</span>();
+   PChar_T p_src_end = p_src_beg + file_size;
+   output.<span class="kwd">reserve</span> (file_size);
+
+   <span class="kwd">regex_replace</span> (   <span class="kwd">OIte_Data_T</span>(output), 
+               p_src_beg, p_src_end, 
+
+               <span class="slc">// &quot;&gt;.*\n | \n&quot;</span>
+               basic_regex&lt;PChar_T&gt;( <span class="kwd">as_xpr</span>(<span class="str">'&gt;'</span>) &gt;&gt; *(~_n) &gt;&gt; _n | _n ),
+
+               <span class="str">&quot;&quot;</span>); 
+
+   <span class="kwa">return</span> output.<span class="kwd">size</span>();
+}
+
+
+
+<span class="kwb">void</span> 
+<span class="kwd">Count_Patterns</span>(Data_T <span class="kwb">const</span>&amp; input, string&amp; result)
+{
+   <span class="kwc">typedef</span> std::pair&lt;PChar_T, Regex_Data_T&gt; PReg;
+   
+   <span class="kwb">static</span> PReg <span class="kwb">const</span> ptns[] = 
+   {
+      <span class="kwd">PReg</span>(<span class="str">&quot;agggtaaa|tttaccct&quot;</span>,   
+         <span class="kwd">as_xpr</span>(<span class="str">&quot;agggtaaa&quot;</span>) | <span class="str">&quot;tttaccct&quot;</span>   ),
+
+      <span class="kwd">PReg</span>(<span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,   
+            (x::set=<span class="str">'c'</span>,<span class="str">'g'</span>,<span class="str">'t'</span>) &gt;&gt; <span class="str">&quot;gggtaaa&quot;</span>
+         |    <span class="str">&quot;tttaccc&quot;</span> &gt;&gt; (x::set=<span class="str">'a'</span>,<span class="str">'c'</span>,<span class="str">'g'</span>)   ),
+
+      <span class="kwd">PReg</span>(<span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,   
+            <span class="kwd">as_xpr</span>(<span class="str">'a'</span>) &gt;&gt; (x::set=<span class="str">'a'</span>,<span class="str">'c'</span>,<span class="str">'t'</span>) &gt;&gt; <span class="str">&quot;ggtaaa&quot;</span>
+         |   <span class="str">&quot;tttacc&quot;</span> &gt;&gt; (x::set=<span class="str">'a'</span>,<span class="str">'g'</span>,<span class="str">'t'</span>) &gt;&gt; <span class="str">'t'</span>   ),
+
+      <span class="kwd">PReg</span>(<span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,   
+            <span class="kwd">as_xpr</span>(<span class="str">&quot;ag&quot;</span>) &gt;&gt; (x::set=<span class="str">'a'</span>,<span class="str">'c'</span>,<span class="str">'t'</span>) &gt;&gt; <span class="str">&quot;gtaaa&quot;</span>
+         |   <span class="str">&quot;tttac&quot;</span> &gt;&gt; (x::set=<span class="str">'a'</span>,<span class="str">'g'</span>,<span class="str">'t'</span>) &gt;&gt; <span class="str">&quot;ct&quot;</span>   ),
+         
+      <span class="kwd">PReg</span>(<span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,   
+            <span class="kwd">as_xpr</span>(<span class="str">&quot;agg&quot;</span>) &gt;&gt; (x::set=<span class="str">'a'</span>,<span class="str">'c'</span>,<span class="str">'t'</span>) &gt;&gt; <span class="str">&quot;taaa&quot;</span>
+         |   <span class="str">&quot;ttta&quot;</span> &gt;&gt; (x::set=<span class="str">'a'</span>,<span class="str">'g'</span>,<span class="str">'t'</span>) &gt;&gt; <span class="str">&quot;cct&quot;</span>   ),
+         
+      <span class="kwd">PReg</span>(<span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,   
+            <span class="kwd">as_xpr</span>(<span class="str">&quot;aggg&quot;</span>) &gt;&gt; (x::set=<span class="str">'a'</span>,<span class="str">'c'</span>,<span class="str">'g'</span>) &gt;&gt; <span class="str">&quot;aaa&quot;</span>
+         |   <span class="str">&quot;ttt&quot;</span> &gt;&gt; (x::set=<span class="str">'c'</span>,<span class="str">'g'</span>,<span class="str">'t'</span>) &gt;&gt; <span class="str">&quot;ccct&quot;</span>   ),
+         
+      <span class="kwd">PReg</span>(<span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,   
+            <span class="kwd">as_xpr</span>(<span class="str">&quot;agggt&quot;</span>) &gt;&gt; (x::set=<span class="str">'c'</span>,<span class="str">'g'</span>,<span class="str">'t'</span>) &gt;&gt; <span class="str">&quot;aa&quot;</span>
+         |   <span class="str">&quot;tt&quot;</span> &gt;&gt; (x::set=<span class="str">'a'</span>,<span class="str">'c'</span>,<span class="str">'g'</span>) &gt;&gt; <span class="str">&quot;accct&quot;</span>   ),
+         
+      <span class="kwd">PReg</span>(<span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,   
+            <span class="kwd">as_xpr</span>(<span class="str">&quot;agggta&quot;</span>) &gt;&gt; (x::set=<span class="str">'c'</span>,<span class="str">'g'</span>,<span class="str">'t'</span>) &gt;&gt; <span class="str">'a'</span>   
+         |   <span class="str">'t'</span> &gt;&gt; (x::set=<span class="str">'a'</span>,<span class="str">'c'</span>,<span class="str">'g'</span>) &gt;&gt; <span class="str">&quot;taccct&quot;</span>   ),
+         
+      <span class="kwd">PReg</span>(<span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>,   
+            <span class="kwd">as_xpr</span>(<span class="str">&quot;agggtaa&quot;</span>) &gt;&gt; (x::set=<span class="str">'c'</span>,<span class="str">'g'</span>,<span class="str">'t'</span>)
+         |   (x::set=<span class="str">'a'</span>,<span class="str">'c'</span>,<span class="str">'g'</span>) &gt;&gt; <span class="str">&quot;ttaccct&quot;</span>   )
+   };
+   <span class="kwb">static int const</span> n_ptns = <span class="kwa">sizeof</span>(ptns) / <span class="kwa">sizeof</span>(ptns[<span class="num">0</span>]);
+   <span class="kwb">static size_t</span> counters[n_ptns] = {<span class="num">0</span>};
+
+
+   <span class="ppc">#pragma omp for schedule(dynamic, 1) nowait</span>
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; n_ptns; ++i)
+   {
+      <span class="kwc">typedef</span> regex_iterator&lt;CIte_Data_T&gt; RI_T;
+
+      <span class="slc">// static regex</span>
+      Regex_Data_T <span class="kwb">const</span>&amp; <span class="kwd">regex</span>(ptns[i].second);
+      counters[i] = <span class="kwd">distance</span>(   <span class="kwd">RI_T</span>(input.<span class="kwd">begin</span>(), input.<span class="kwd">end</span>(), regex), <span class="kwd">RI_T</span>()   );
+   }
+
+   <span class="slc">// we want the last thread, reaching this code block, to print result</span>
+   <span class="kwb">static size_t</span> thread_passed = <span class="num">0</span>;
+   <span class="kwa">if</span> (<span class="kwd">__sync_add_and_fetch</span>(&amp;thread_passed, <span class="num">1</span>) == <span class="kwa">static_cast</span>&lt;<span class="kwb">size_t</span>&gt;(<span class="kwd">omp_get_num_threads</span>()))
+   {
+      boost::format <span class="kwd">format</span>(<span class="str">&quot;%1% %2%</span><span class="esc">\n</span><span class="str">&quot;</span>);
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; n_ptns; ++i)
+      {
+         format % ptns[i].first % counters[i];
+         result += format.<span class="kwd">str</span>();
+      }
+      thread_passed = <span class="num">0</span>;
+   }
+}
+
+
+<span class="kwb">struct</span> IUB
+{
+   PChar_T   iub;
+   <span class="kwb">int</span>      len;
+};
+
+IUB <span class="kwb">const</span> iub_table[] = 
+{
+   {<span class="num">0</span>}, 
+   {<span class="str">&quot;(c|g|t)&quot;</span>,   <span class="num">7</span>}, 
+   {<span class="num">0</span>}, 
+   {<span class="str">&quot;(a|g|t)&quot;</span>,   <span class="num">7</span>}, 
+   {<span class="num">0</span>}, {<span class="num">0</span>}, {<span class="num">0</span>}, 
+   {<span class="str">&quot;(a|c|t)&quot;</span>,   <span class="num">7</span>}, 
+   {<span class="num">0</span>}, {<span class="num">0</span>}, 
+   {<span class="str">&quot;(g|t)&quot;</span>,   <span class="num">5</span>}, 
+   {<span class="num">0</span>}, 
+   {<span class="str">&quot;(a|c)&quot;</span>,   <span class="num">5</span>}, 
+   {<span class="str">&quot;(a|c|g|t)&quot;</span>,   <span class="num">9</span>}, 
+   {<span class="num">0</span>}, {<span class="num">0</span>}, {<span class="num">0</span>}, 
+   {<span class="str">&quot;(a|g)&quot;</span>,   <span class="num">5</span>}, 
+   {<span class="str">&quot;(c|t)&quot;</span>,   <span class="num">5</span>}, 
+   {<span class="num">0</span>}, {<span class="num">0</span>}, 
+   {<span class="str">&quot;(a|c|g)&quot;</span>,   <span class="num">7</span>}, 
+   {<span class="str">&quot;(a|t)&quot;</span>,   <span class="num">5</span>}, 
+   {<span class="num">0</span>}, 
+   {<span class="str">&quot;(c|t)&quot;</span>,   <span class="num">5</span>}
+};
+<span class="kwb">int const</span> n_iub = <span class="kwa">sizeof</span>(iub_table)/<span class="kwa">sizeof</span>(iub_table[<span class="num">0</span>]);
+
+
+<span class="kwb">struct</span> Formatter
+{
+   <span class="kwc">template</span>&lt;typename Match, typename Out&gt;
+   Out 
+   <span class="kwc">operator</span>()(Match <span class="kwb">const</span> &amp;m, Out o) <span class="kwb">const</span>
+   {
+      IUB <span class="kwb">const</span> &amp;<span class="kwd">i</span> (iub_table[ *m[<span class="num">0</span>].first - <span class="str">'A'</span> ]);
+      <span class="kwa">return</span> <span class="kwd">copy</span>(i.iub, i.iub + i.len, o);
+   }
+};
+
+
+<span class="kwb">void</span> <span class="kwd">Replace_Patterns</span>(Data_T <span class="kwb">const</span>&amp; input, <span class="kwb">size_t</span> &amp;replace_len)
+{
+   <span class="ppc">#pragma omp single nowait</span>
+   {
+      Data_T         output;
+      output.<span class="kwd">reserve</span>   (input.<span class="kwd">size</span>() + (input.<span class="kwd">size</span>() &gt;&gt; <span class="num">1</span>));   <span class="slc">// size * 1.5</span>
+
+      <span class="kwd">regex_replace</span>(   <span class="kwd">OIte_Data_T</span>(output), 
+                  input.<span class="kwd">begin</span>(), input.<span class="kwd">end</span>(), 
+
+                  <span class="slc">// &quot;[BDHKMNRSVWY]&quot;</span>
+                  <span class="kwd">Regex_Data_T</span>( (x::set=<span class="str">'B'</span>,<span class="str">'D'</span>,<span class="str">'H'</span>,<span class="str">'K'</span>,<span class="str">'M'</span>,<span class="str">'N'</span>,<span class="str">'R'</span>,<span class="str">'S'</span>,<span class="str">'V'</span>,<span class="str">'W'</span>,<span class="str">'Y'</span>) ), 
+
+                  <span class="kwd">Formatter</span>()   );
+
+      replace_len = output.<span class="kwd">size</span>();
+   }
+}
+
+
+
+<span class="slc">// Detect single - multi thread benchmark</span>
+<span class="kwb">int</span> 
+<span class="kwd">GetThreadCount</span>()
+{
+   cpu_set_t cs;
+   <span class="kwd">CPU_ZERO</span>(&amp;cs);
+   <span class="kwd">sched_getaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(cs), &amp;cs);
+
+   <span class="kwb">int</span> count = <span class="num">0</span>;
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">16</span>; ++i)
+   {
+      <span class="kwa">if</span> (<span class="kwd">CPU_ISSET</span>(i, &amp;cs))
+      ++count;
+   }
+   <span class="kwa">return</span> count;
+}
+
+
+<span class="kwb">int</span> 
+<span class="kwd">main</span>()
+{
+   <span class="kwb">size_t</span> initial_length = <span class="num">0</span>;
+   <span class="kwb">size_t</span> striped_length = <span class="num">0</span>;
+   <span class="kwb">size_t</span> replace_length = <span class="num">0</span>;
+   
+   Data_T input;
+   
+   striped_length = <span class="kwd">ReadInput_StripHeader</span> (initial_length, input);
+
+   std::string match_result;
+   <span class="ppc">#pragma omp parallel default(shared) num_threads(GetThreadCount())</span>
+   {
+      <span class="kwd">Count_Patterns</span>   (input, match_result);
+      <span class="kwd">Replace_Patterns</span>(input, replace_length);
+   }
+
+   std::cout &lt;&lt; (   boost::<span class="kwd">format</span>(<span class="str">&quot;%1%</span><span class="esc">\n</span><span class="str">%2%</span><span class="esc">\n</span><span class="str">%3%</span><span class="esc">\n</span><span class="str">%4%</span><span class="esc">\n</span><span class="str">&quot;</span>) 
+      % match_result 
+      % initial_length % striped_length % replace_length );
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+

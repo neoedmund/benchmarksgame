@@ -1,0 +1,9 @@
+
+Thu, 17 Sep 2015 03:19:43 GMT
+
+COMMAND LINE:
+/usr/local/src/lua-5.3.0/bin/lua  nbody.lua-2.lua 50000000
+
+PROGRAM OUTPUT:
+-0.169075164
+-0.169059907

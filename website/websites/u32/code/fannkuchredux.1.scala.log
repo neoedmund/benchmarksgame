@@ -1,0 +1,20 @@
+
+Tue, 19 May 2015 01:59:30 GMT
+
+MAKE:
+mv fannkuchredux.scala fannkuchredux.scala
+mv: ‘fannkuchredux.scala’ and ‘fannkuchredux.scala’ are the same file
+/home/dunham/benchmarksgame/nanobench/makefiles/u32.programs.Makefile:598: recipe for target 'fannkuchredux.scala_run' failed
+make: [fannkuchredux.scala_run] Error 1 (ignored)
+/usr/local/src/scala-2.11.6/bin/scalac -optimise -target:jvm-1.8 fannkuchredux.scala
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+3.97s to complete and log all make actions
+
+COMMAND LINE:
+ /usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -Xbootclasspath/a:/usr/local/src/scala-2.11.6/lib/scala-library.jar:/usr/local/src/scala-2.11.6/lib/akka-actors.jar:/usr/local/src/scala-2.11.6/lib/typesafe-config.jar fannkuchredux 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

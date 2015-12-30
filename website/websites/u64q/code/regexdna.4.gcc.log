@@ -1,0 +1,35 @@
+
+Fri, 23 Oct 2015 15:46:04 GMT
+
+MAKE:
+/usr/bin/gcc -pipe -Wall -O3 -fomit-frame-pointer -march=native -fopenmp regexdna.gcc-4.c -o regexdna.gcc-4.gcc_run -lpcre
+regexdna.gcc-4.c: In function ‘Count_Patterns’:
+regexdna.gcc-4.c:131:41: warning: format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘size_t {aka long unsigned int}’ [-Wformat=]
+          plen += sprintf(result + plen, "%s %d\n", ptns[i], counters[i]);
+                                         ^
+regexdna.gcc-4.c: In function ‘main’:
+regexdna.gcc-4.c:259:11: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘size_t {aka long unsigned int}’ [-Wformat=]
+    printf("%s\n%d\n%d\n%d\n", 
+           ^
+regexdna.gcc-4.c:259:11: warning: format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘size_t {aka long unsigned int}’ [-Wformat=]
+regexdna.gcc-4.c:259:11: warning: format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t {aka long unsigned int}’ [-Wformat=]
+rm regexdna.gcc-4.c
+0.24s to complete and log all make actions
+
+COMMAND LINE:
+./regexdna.gcc-4.gcc_run 0 < regexdna-input5000000.txt
+
+PROGRAM OUTPUT:
+agggtaaa|tttaccct 356
+[cgt]gggtaaa|tttaccc[acg] 1250
+a[act]ggtaaa|tttacc[agt]t 4252
+ag[act]gtaaa|tttac[agt]ct 2894
+agg[act]taaa|ttta[agt]cct 5435
+aggg[acg]aaa|ttt[cgt]ccct 1537
+agggt[cgt]aa|tt[acg]accct 1431
+agggta[cgt]a|t[acg]taccct 1608
+agggtaa[cgt]|[acg]ttaccct 2178
+
+50833411
+50000000
+66800214

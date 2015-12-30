@@ -1,0 +1,159 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Oleg Mazurov, June 2010</span>
+<span class="com"> * flag.Arg hack by Isaac Gouy</span>
+<span class="com"> *</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+    <span class="str">&quot;fmt&quot;</span>
+    <span class="str">&quot;runtime&quot;</span>
+    <span class="str">&quot;flag&quot;</span>
+    <span class="str">&quot;strconv&quot;</span>
+)
+
+<span class="kwa">type</span> Result <span class="kwa">struct</span> {
+    maxFlips <span class="kwb">int</span>
+    checkSum <span class="kwb">int</span>
+}
+
+<span class="kwa">var</span> (
+    NCHUNKS = <span class="num">720</span>
+    CHUNKSZ = <span class="num">0</span>
+    NTASKS  = <span class="num">0</span>
+)
+<span class="kwa">var</span> n = <span class="num">12</span>
+<span class="kwa">var</span> Fact []<span class="kwb">int</span>
+
+<span class="kwa">func</span> <span class="kwd">fannkuch</span>( idxMin <span class="kwb">int</span>, ch <span class="kwa">chan</span> Result ) {
+
+    idxMax := idxMin + CHUNKSZ
+    <span class="kwa">if</span> idxMax &lt; Fact[n] {
+        <span class="kwa">go</span> <span class="kwd">fannkuch</span>( idxMax, ch )
+    } <span class="kwa">else</span> {
+        idxMax = Fact[n]
+    }
+
+    p     := <span class="kwb">make</span>([]<span class="kwb">int</span>, n)
+    pp    := <span class="kwb">make</span>([]<span class="kwb">int</span>, n)
+    count := <span class="kwb">make</span>([]<span class="kwb">int</span>, n)
+
+    <span class="slc">// first permutation</span>
+    <span class="kwa">for</span> i := <span class="num">0</span>; i&lt;n; i++ {
+        p[i] = i
+    }
+    <span class="kwa">for</span> i, idx := n-<span class="num">1</span>, idxMin; i&gt;<span class="num">0</span>; i-- {
+        d := idx / Fact[i]
+        count[i] = d
+        idx = idx % Fact[i]
+
+        <span class="kwd">copy</span>( pp, p )
+        <span class="kwa">for</span> j := <span class="num">0</span>; j &lt;= i; j++ {
+	    <span class="kwa">if</span> j+d &lt;= i {
+                p[j] = pp[j+d]
+	    } <span class="kwa">else</span> {
+                p[j] = pp[j+d-i-<span class="num">1</span>]
+	    }
+        }
+    }
+
+    maxFlips := <span class="num">1</span>
+    checkSum := <span class="num">0</span>
+
+    <span class="kwa">for</span> idx, sign := idxMin, <span class="kwb">true</span>; ; sign = !sign {
+
+        <span class="slc">// count flips</span>
+        first := p[<span class="num">0</span>]
+	<span class="kwa">if</span> first != <span class="num">0</span> {
+	    flips := <span class="num">1</span>
+	    <span class="kwa">if</span> p[first] != <span class="num">0</span> {
+		<span class="kwd">copy</span>( pp, p )
+		p0 := first
+	        <span class="kwa">for</span> {
+		    flips++
+		    <span class="kwa">for</span> i, j := <span class="num">1</span>, p0-<span class="num">1</span>; i &lt; j; i, j = i+<span class="num">1</span>, j-<span class="num">1</span> {
+		        pp[i], pp[j] = pp[j], pp[i]
+		    }
+		    t := pp[p0]
+		    pp[p0] = p0
+		    p0 = t
+		    <span class="kwa">if</span> pp[p0] == <span class="num">0</span> {
+		        <span class="kwa">break</span>
+		    }
+	        }
+	    }
+	    <span class="kwa">if</span> maxFlips &lt; flips {
+		maxFlips = flips
+	    }
+	    <span class="kwa">if</span> sign {
+		checkSum += flips
+	    } <span class="kwa">else</span> {
+		checkSum -= flips
+	    }
+	}
+
+	<span class="kwa">if</span> idx++; idx == idxMax {
+	    <span class="kwa">break</span>
+	}
+
+	<span class="slc">// next permutation</span>
+	<span class="kwa">if</span> sign {
+	    p[<span class="num">0</span>], p[<span class="num">1</span>] = p[<span class="num">1</span>], first
+	} <span class="kwa">else</span> {
+	    p[<span class="num">1</span>], p[<span class="num">2</span>] = p[<span class="num">2</span>], p[<span class="num">1</span>]
+	    <span class="kwa">for</span> k := <span class="num">2</span>;; k++ {
+	        <span class="kwa">if</span> count[k]++; count[k] &lt;= k {
+		    <span class="kwa">break</span>
+		}
+	        count[k] = <span class="num">0</span>
+		<span class="kwa">for</span> j:=<span class="num">0</span>; j&lt;=k; j++ {
+		    p[j] = p[j+<span class="num">1</span>]
+		}
+		p[k+<span class="num">1</span>] = first
+		first = p[<span class="num">0</span>]
+	    }
+	}
+    }
+
+    ch &lt;- Result{ maxFlips, checkSum }
+}
+
+<span class="kwa">func</span> <span class="kwd">printResult</span>( n <span class="kwb">int</span>, res <span class="kwb">int</span>, chk <span class="kwb">int</span> ) {
+    fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">Pfannkuchen(</span><span class="ipl">%d</span><span class="str">) =</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, chk, n, res)
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+    flag.<span class="kwd">Parse</span>()
+    <span class="kwa">if</span> flag.<span class="kwd">NArg</span>() &gt; <span class="num">0</span> { n,_ = strconv.<span class="kwd">Atoi</span>( flag.<span class="kwd">Arg</span>(<span class="num">0</span>) ) }
+    runtime.<span class="kwd">GOMAXPROCS</span>(<span class="num">4</span>)
+
+    Fact = <span class="kwb">make</span>([]<span class="kwb">int</span>, n+<span class="num">1</span>)
+    Fact[<span class="num">0</span>] = <span class="num">1</span>
+    <span class="kwa">for</span> i := <span class="num">1</span>; i&lt;<span class="kwb">len</span>(Fact); i++ {
+        Fact[i] = Fact[i-<span class="num">1</span>] * i
+    }
+
+    CHUNKSZ = (Fact[n] + NCHUNKS - <span class="num">1</span>) / NCHUNKS
+    CHUNKSZ += CHUNKSZ%2
+    NTASKS = (Fact[n] + CHUNKSZ - <span class="num">1</span>) / CHUNKSZ
+
+    ch := <span class="kwb">make</span>(<span class="kwa">chan</span> Result, NTASKS)
+
+    <span class="kwa">go</span> <span class="kwd">fannkuch</span>(<span class="num">0</span>, ch)
+    
+    res := <span class="num">0</span>
+    chk := <span class="num">0</span>
+    <span class="kwa">for</span> i := <span class="num">0</span>; i&lt;NTASKS; i++ {
+	r := &lt;-ch
+	<span class="kwa">if</span> res &lt; r.maxFlips {
+            res = r.maxFlips
+	}
+	chk += r.checkSum
+    }
+
+    <span class="kwd">printResult</span>( n, res, chk )
+}

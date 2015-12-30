@@ -1,0 +1,89 @@
+<span class="com">/* </span>
+<span class="com"> * The Computer Language Benchmarks Game </span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Mr Ledrug</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+
+<span class="kwc">typedef</span> <span class="kwb">struct</span> node_s {
+   <span class="kwb">int</span> item;
+   <span class="kwb">struct</span> node_s *left, *right;
+} node;
+
+node * <span class="kwd">make_tree</span>(<span class="kwb">int</span> depth, <span class="kwb">int</span> root_item) {
+   <span class="kwb">const int</span> len = <span class="num">1</span> &lt;&lt; depth;
+
+   <span class="slc">// allocate the whole tree in one go, more of a bin heap really</span>
+   node * <span class="kwb">const</span> root = (node*)<span class="kwd">calloc</span>(len, <span class="kwa">sizeof</span>(node));
+
+   root[<span class="num">1</span>].item = root_item;
+   root[<span class="num">1</span>].left = root + <span class="num">2</span>;
+   root[<span class="num">1</span>].right = root + <span class="num">3</span>;
+
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">2</span>; i &lt; len; i++) {
+      root[i].item = <span class="num">2</span> * root[i/<span class="num">2</span>].item - <span class="num">1</span> + (i&amp;<span class="num">1</span>);
+
+      <span class="kwa">if</span> (i * <span class="num">2</span> &gt;= len) <span class="kwa">continue</span>;
+
+      root[i].left = root + i * <span class="num">2</span>;
+      root[i].right = root + i * <span class="num">2</span> + <span class="num">1</span>;
+   }
+
+   <span class="kwa">return</span> root + <span class="num">1</span>;
+}
+
+<span class="kwb">void</span> <span class="kwd">del_tree</span>(node *s) { <span class="kwd">free</span>(s - <span class="num">1</span>); }
+
+<span class="slc">// It's actually faster to do the check sequentially because the whole</span>
+<span class="slc">// tree is in one array.  Here traversing the tree by pointer is just</span>
+<span class="slc">// to show the bin heap functions as a linked tree</span>
+<span class="kwb">int</span> <span class="kwd">check_tree</span>(<span class="kwb">const</span> node* <span class="kwb">const</span> s) {
+   <span class="kwa">if</span> (!s-&gt;left)
+      <span class="kwa">return</span> s-&gt;item;
+
+   <span class="kwa">return</span> s-&gt;item + <span class="kwd">check_tree</span>(s-&gt;left) - <span class="kwd">check_tree</span>(s-&gt;right);
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> **argv) {
+   <span class="kwb">int</span> min = <span class="num">4</span>;
+   <span class="kwb">int</span> max = <span class="kwd">atoi</span>(argv[<span class="num">1</span>]);
+
+   <span class="kwa">if</span> (max &lt; <span class="num">6</span>) max = <span class="num">6</span>;
+
+   node *stretch = <span class="kwd">make_tree</span>(max + <span class="num">1</span>, <span class="num">0</span>);
+   <span class="kwd">printf</span>(<span class="str">&quot;stretch tree of depth %d</span><span class="esc">\t</span> <span class="str">check: %d</span><span class="esc">\n</span><span class="str">&quot;</span>,
+      max + <span class="num">1</span>, <span class="kwd">check_tree</span>(stretch));
+   <span class="kwd">del_tree</span>(stretch);
+
+   node *longlived = <span class="kwd">make_tree</span>(max, <span class="num">0</span>);
+
+   <span class="kwa">for</span> (<span class="kwb">int</span> d = min; d &lt;= max; d+= <span class="num">2</span>) {
+      <span class="kwb">int</span> iter = <span class="num">1</span> &lt;&lt; (max + min - d);
+      <span class="kwb">int</span> check = <span class="num">0</span>;
+
+      <span class="com">/* this can be easily parallel, unfortunately malloc's locking</span>
+<span class="com">         slows down the thing by a lot with either -pthread</span>
+<span class="com">         or -fopenmp, so much so that it's not worth the hassle */</span>
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">1</span>; i &lt;= iter; i++){
+         node *s = <span class="kwd">make_tree</span>(d, i);
+         check += <span class="kwd">check_tree</span>(s);
+         <span class="kwd">del_tree</span>(s);
+
+         s = <span class="kwd">make_tree</span>(d, -i);
+         check += <span class="kwd">check_tree</span>(s);
+         <span class="kwd">del_tree</span>(s);
+      }
+
+      <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\t</span> <span class="str">trees of depth %d</span><span class="esc">\t</span> <span class="str">check: %d</span><span class="esc">\n</span><span class="str">&quot;</span>,
+         iter * <span class="num">2</span>, d, check);
+   }
+
+   <span class="kwd">printf</span>(<span class="str">&quot;long lived tree of depth %d</span><span class="esc">\t</span> <span class="str">check: %d</span><span class="esc">\n</span><span class="str">&quot;</span>,
+      max, <span class="kwd">check_tree</span>(longlived));
+   <span class="kwd">del_tree</span>(longlived);
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}

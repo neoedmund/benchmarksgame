@@ -1,0 +1,36 @@
+
+Fri, 25 Dec 2015 20:58:36 GMT
+
+COMMAND LINE:
+/usr/local/src/ruby/bin/ruby -W0 chameneosredux.yarv 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+blue red yellow 
+3991765 zero
+4000491 zero
+4007744 zero
+ one two zero zero zero zero zero zero
+
+blue red yellow red yellow blue red yellow red blue 
+1202562 zero
+1198898 zero
+1201443 zero
+1202726 zero
+1195159 zero
+1195816 zero
+1200070 zero
+1201985 zero
+1200560 zero
+1200781 zero
+ one two zero zero zero zero zero zero
+

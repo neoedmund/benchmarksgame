@@ -1,0 +1,58 @@
+<span class="com">{-  The Computer Language Benchmarks Game </span>
+<span class="com"></span>
+<span class="com">    http://benchmarkgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">    contributed by Bryan O'Sullivan</span>
+<span class="com">-}</span>
+
+<span class="kwd">import</span> Control.Monad
+<span class="kwd">import</span> Data.ByteString.Unsafe
+<span class="kwd">import</span> Foreign.Ptr
+<span class="kwd">import</span> Foreign.Storable
+<span class="kwd">import</span> System.Environment
+<span class="kwd">import qualified</span> Data.ByteString.Char8 <span class="kwd">as</span> B
+<span class="kwd">import qualified</span> Data.ByteString.Lazy.Char8 <span class="kwd">as</span> L
+
+main = <span class="kwd">do</span>
+    n &lt;- <span class="kwc">getArgs</span> &gt;&gt;= <span class="kwc">readIO</span>.<span class="kwc">head</span>
+    writeAlu <span class="str">&quot;&gt;ONE Homo sapiens alu&quot;</span> (L.<span class="kwc">take</span> (<span class="kwc">fromIntegral</span> n*<span class="num">2</span>) (L.<span class="kwc">cycle</span> alu))
+    make <span class="str">&quot;&gt;TWO IUB ambiguity codes&quot;</span> (n*<span class="num">3</span>) iub <span class="num">42</span> &gt;&gt;=
+      void . make <span class="str">&quot;&gt;THREE Homo sapiens frequency&quot;</span> (n*<span class="num">5</span>) homosapiens
+
+writeAlu name s0 = B.<span class="kwc">putStrLn</span> name &gt;&gt; go s0
+ <span class="kwd">where</span> go s = L.<span class="kwc">putStrLn</span> h &gt;&gt; <span class="kwc">unless</span> (L.<span class="kwc">null</span> t) (go t)
+         <span class="kwd">where</span> (h,t) = L.<span class="kwc">splitAt</span> <span class="num">60</span> s
+
+make name n0 tbl seed0 = <span class="kwd">do</span>
+  B.<span class="kwc">putStrLn</span> name
+  <span class="kwd">let</span> modulus = <span class="num">139968</span>
+      fill ((c,p):cps) j =
+	<span class="kwd">let</span> !k = <span class="kwc">min</span> modulus (<span class="kwa">floor</span> (<span class="kwc">fromIntegral</span> modulus * (p::<span class="kwb">Float</span>) + <span class="num">1</span>))
+	<span class="kwd">in</span> B.<span class="kwc">replicate</span> (k - j) c : fill cps k
+      fill _ _ = []
+      lookupTable = B.<span class="kwc">concat</span> $ fill (<span class="kwc">scanl1</span> (\(_,p) (c,q) -&gt; (c,p+q)) tbl) <span class="num">0</span>
+      line = B.<span class="kwc">replicate</span> <span class="num">60</span> '\<span class="num">0</span>'
+  unsafeUseAsCString line $ \ptr -&gt; <span class="kwd">do</span>
+    <span class="kwd">let</span> make' n !i seed
+	    | n &gt; (<span class="num">0</span>::<span class="kwb">Int</span>) = <span class="kwd">do</span>
+		<span class="kwd">let</span> newseed = <span class="kwc">rem</span> (seed * <span class="num">3877</span> + <span class="num">29573</span>) modulus
+		plusPtr ptr i `poke` unsafeIndex lookupTable newseed
+		<span class="kwd">if</span> i+<span class="num">1</span> &gt;= <span class="num">60</span>
+		    <span class="kwd">then</span> puts line <span class="num">60</span> &gt;&gt; make' (n-<span class="num">1</span>) <span class="num">0</span> newseed
+		    <span class="kwd">else</span> make' (n-<span class="num">1</span>) (i+<span class="num">1</span>) newseed
+	    | <span class="kwc">otherwise</span> = <span class="kwc">when</span> (i &gt; <span class="num">0</span>) (puts line i) &gt;&gt; <span class="kwc">return</span> seed
+    make' n0 <span class="num">0</span> seed0
+
+alu = <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGG\</span>
+<span class="str">    \TCAGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAATACAAAAATTAGCCGGG\</span>
+<span class="str">    \CGTGGTGGCGCGCGCCTGTAATCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGGAGGC\</span>
+<span class="str">    \GGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>
+
+iub = [('a',<span class="num">0.27</span>),('c',<span class="num">0.12</span>),('g',<span class="num">0.12</span>),('t',<span class="num">0.27</span>),('B',<span class="num">0.02</span>)
+      ,('D',<span class="num">0.02</span>),('H',<span class="num">0.02</span>),('K',<span class="num">0.02</span>),('M',<span class="num">0.02</span>),('N',<span class="num">0.02</span>)
+      ,('R',<span class="num">0.02</span>),('S',<span class="num">0.02</span>),('V',<span class="num">0.02</span>),('W',<span class="num">0.02</span>),('Y',<span class="num">0.02</span>)]
+
+homosapiens = [('a',<span class="num">0.3029549426680</span>),('c',<span class="num">0.1979883004921</span>)
+              ,('g',<span class="num">0.1975473066391</span>),('t',<span class="num">0.3015094502008</span>)]
+
+puts bs n = B.<span class="kwc">putStrLn</span> (B.<span class="kwc">take</span> n bs)

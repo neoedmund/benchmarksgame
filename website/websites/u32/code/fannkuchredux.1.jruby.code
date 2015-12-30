@@ -1,0 +1,58 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc"># Contributed by Wesley Moxam </span>
+<span class="slc"># Modified by Sokolov Yura aka funny_falcon</span>
+
+<span class="kwa">def</span> <span class="kwd">fannkuch</span>(n<span class="opt">)</span>
+  p = (<span class="num">0</span>..n<span class="opt">)</span>.to_a
+  s = p.dup
+  q = p.dup
+  sign = <span class="num">1</span>
+  sum = maxflips = <span class="num">0</span>
+  <span class="kwa">while</span>(<span class="kwa">true</span><span class="opt">)</span>
+    <span class="slc"># flip.</span>
+    <span class="kwa">if</span> (q1 = p[<span class="num">1</span>]<span class="opt">)</span> != <span class="num">1</span>
+      q[<span class="num">0</span>..-<span class="num">1</span>] = p
+      flips = <span class="num">1</span>
+      <span class="kwa">until</span> (qq = q[q1]<span class="opt">)</span> == <span class="num">1</span>
+        q[q1] = q1
+        <span class="kwa">if</span> q1 &gt;= <span class="num">4</span>
+          i, j = <span class="num">2</span>, q1 - <span class="num">1</span>
+          <span class="kwa">while</span> i &lt; j
+            q[i], q[j] = q[j], q[i]
+            i += <span class="num">1</span>
+            j -= <span class="num">1</span>
+          <span class="kwa">end</span>
+        <span class="kwa">end</span>
+        q1 = qq
+        flips += <span class="num">1</span>
+      <span class="kwa">end</span>
+      sum += sign * flips
+      maxflips = flips <span class="kwa">if</span> flips &gt; maxflips <span class="slc"># New maximum?</span>
+    <span class="kwa">end</span>
+    <span class="slc"># Permute.</span>
+    <span class="kwa">if</span> sign == <span class="num">1</span>
+      <span class="slc"># Rotate 1&lt;-2.</span>
+      p[<span class="num">1</span>], p[<span class="num">2</span>] = p[<span class="num">2</span>], p[<span class="num">1</span>]
+      sign = -<span class="num">1</span>
+    <span class="kwa">else</span>
+      <span class="slc"># Rotate 1&lt;-2 and 1&lt;-2&lt;-3.</span>
+      p[<span class="num">2</span>], p[<span class="num">3</span>] = p[<span class="num">3</span>], p[<span class="num">2</span>]
+      sign = <span class="num">1</span>
+      i = <span class="num">3</span>
+      <span class="kwa">while</span> i &lt;= n &amp;&amp; s[i] == <span class="num">1</span>
+        <span class="kwa">return</span> [sum, maxflips] <span class="kwa">if</span> i == n     <span class="slc"># Out of permutations.</span>
+        s[i] = i
+        <span class="slc"># Rotate 1&lt;-...&lt;-i+1.</span>
+        t = p.<span class="kwd">delete_at</span>(<span class="num">1</span><span class="opt">)</span>
+        i += <span class="num">1</span>
+        p.<span class="kwd">insert</span>(i, t<span class="opt">)</span>
+      <span class="kwa">end</span>
+      s[i] -= <span class="num">1</span>  <span class="kwa">if</span> i &lt;= n
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+n = (<span class="kwc">ARGV</span>[<span class="num">0</span>] || <span class="num">1</span><span class="opt">)</span>.to_i
+sum, flips = <span class="kwd">fannkuch</span>(n<span class="opt">)</span>
+printf <span class="str">&quot;%d</span><span class="esc">\n</span><span class="str">Pfannkuchen(%d)</span> = %d<span class="esc">\n</span><span class="str">&quot;, sum, n, flips</span>

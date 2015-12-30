@@ -1,0 +1,54 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Kannan Goundan</span>
+<span class="com">   modified by Isaac Gouy</span>
+<span class="com">   optimized by David Pollak</span>
+<span class="com">   updated to 2.8 by Rex Kerr</span>
+<span class="com">   modified by Piotr Tarsa</span>
+<span class="com">*/</span>
+
+<span class="kwa">sealed abstract class</span> <span class="kwd">Node</span>(i: Int, left: Node, right: Node) {
+  <span class="kwa">def</span> isum: Int
+}
+<span class="kwa">case class</span> <span class="kwd">NonLeaf</span>(i: Int, left: Node, right: Node) <span class="kwa">extends</span> <span class="kwd">Node</span>(i, left, right) {
+  <span class="kwa">def</span> isum: Int = i + left.isum - right.isum
+}
+<span class="kwa">case class</span> <span class="kwd">Leaf</span>(i: Int) <span class="kwa">extends</span> <span class="kwd">Node</span>(i, NullNode, NullNode) {
+  <span class="kwa">def</span> isum: Int = i
+}
+<span class="kwa">case object</span> NullNode <span class="kwa">extends</span> <span class="kwd">Node</span>(<span class="num">0</span>, <span class="kwa">new</span> <span class="kwd">Leaf</span>(<span class="num">0</span>), <span class="kwa">new</span> <span class="kwd">Leaf</span>(<span class="num">0</span>)) {
+  <span class="kwa">def</span> isum: Int = <span class="num">0</span>
+}
+
+<span class="kwa">object</span> Tree {
+  <span class="kwa">def</span> <span class="kwd">apply</span>(i: Int, depth: Int): Node = {
+    <span class="kwa">if</span> (depth &gt; <span class="num">0</span>) <span class="kwd">NonLeaf</span>(i, <span class="kwd">Tree</span>(i * <span class="num">2</span> - <span class="num">1</span>, depth - <span class="num">1</span>), <span class="kwd">Tree</span>(i * <span class="num">2</span>, depth - <span class="num">1</span>))
+    <span class="kwa">else</span> <span class="kwd">Leaf</span>(i)
+  }
+}
+
+<span class="kwa">object</span> binarytrees {
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) = {
+    <span class="kwa">val</span> n = <span class="kwa">try</span>{ <span class="kwd">args</span>(<span class="num">0</span>).toInt } <span class="kwa">catch</span> { <span class="kwa">case</span> _ =&gt; <span class="num">1</span> }
+    <span class="kwa">val</span> minDepth = <span class="num">4</span>
+    <span class="kwa">val</span> maxDepth = n <span class="kwd">max</span> (minDepth + <span class="num">2</span>)
+
+    <span class="kwa">def</span> <span class="kwd">print</span>(name: String, depth: Int, check: Int) =
+      <span class="kwd">println</span>(name + <span class="str">&quot; of depth &quot;</span> + depth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + check)
+
+    <span class="kwd">print</span>(<span class="str">&quot;stretch tree&quot;</span>, maxDepth + <span class="num">1</span>, <span class="kwd">Tree</span>(<span class="num">0</span>, maxDepth + <span class="num">1</span>).isum)
+    <span class="kwa">val</span> longLivedTree = <span class="kwd">Tree</span>(<span class="num">0</span>, maxDepth)
+    minDepth to maxDepth by <span class="num">2</span> foreach {
+      depth =&gt;
+      <span class="kwa">val</span> iterations = <span class="num">1</span> &lt;&lt; (maxDepth - depth + minDepth)
+      <span class="kwa">var</span> i, sum = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt; iterations) {
+        i += <span class="num">1</span>
+        sum += <span class="kwd">Tree</span>(i, depth).isum + <span class="kwd">Tree</span>(-i, depth).isum
+      }
+      <span class="kwd">print</span>(iterations *<span class="num">2</span>  + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">trees&quot;</span>, depth, sum)
+    }
+    <span class="kwd">print</span>(<span class="str">&quot;long lived tree&quot;</span>, maxDepth, longLivedTree.isum)
+  }
+}

@@ -1,0 +1,67 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by TeXitoi</span>
+<span class="slc">// contributed by BurntSushi</span>
+
+<span class="kwa">extern crate</span> regex;
+
+<span class="kwa">use</span> std::io::{<span class="kwa">self</span>, Read};
+<span class="kwa">use</span> std::sync::Arc;
+<span class="kwa">use</span> std::thread;
+
+macro_rules! regex { ($re:expr) =&gt; { ::regex::Regex::new($re).unwrap() } }
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let mut</span> seq = String::with_capacity(<span class="num">50</span> * (<span class="num">1</span> &lt;&lt; <span class="num">20</span>));
+    io::stdin().read_to_string(&amp;<span class="kwa">mut</span> seq).unwrap();
+    <span class="kwa">let</span> ilen = seq.len();
+
+    seq = regex!(<span class="str">&quot;&gt;[^</span><span class="esc">\n</span><span class="str">]*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;</span>).replace_all(&amp;seq, <span class="str">&quot;&quot;</span>);
+    <span class="kwa">let</span> clen = seq.len();
+    <span class="kwa">let</span> seq_arc = Arc::new(seq.clone());
+
+    <span class="kwa">let</span> variants = vec![
+        regex!(<span class="str">&quot;agggtaaa|tttaccct&quot;</span>),
+        regex!(<span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>),
+        regex!(<span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>),
+        regex!(<span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>),
+        regex!(<span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>),
+        regex!(<span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>),
+        regex!(<span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>),
+        regex!(<span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>),
+        regex!(<span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>),
+    ];
+    <span class="kwa">let mut</span> counts = vec![];
+    <span class="kwa">for</span> variant <span class="kwa">in</span> variants {
+        <span class="kwa">let</span> seq = seq_arc.clone();
+        <span class="kwa">let</span> restr = variant.to_string();
+        <span class="kwa">let</span> future = thread::spawn(<span class="kwa">move</span> || variant.find_iter(&amp;seq).count());
+        counts.push((restr, future));
+    }
+
+    <span class="kwa">let</span> substs = vec![
+        (regex!(<span class="str">&quot;B&quot;</span>), <span class="str">&quot;(c|g|t)&quot;</span>),
+        (regex!(<span class="str">&quot;D&quot;</span>), <span class="str">&quot;(a|g|t)&quot;</span>),
+        (regex!(<span class="str">&quot;H&quot;</span>), <span class="str">&quot;(a|c|t)&quot;</span>),
+        (regex!(<span class="str">&quot;K&quot;</span>), <span class="str">&quot;(g|t)&quot;</span>),
+        (regex!(<span class="str">&quot;M&quot;</span>), <span class="str">&quot;(a|c)&quot;</span>),
+        (regex!(<span class="str">&quot;N&quot;</span>), <span class="str">&quot;(a|c|g|t)&quot;</span>),
+        (regex!(<span class="str">&quot;R&quot;</span>), <span class="str">&quot;(a|g)&quot;</span>),
+        (regex!(<span class="str">&quot;S&quot;</span>), <span class="str">&quot;(c|g)&quot;</span>),
+        (regex!(<span class="str">&quot;V&quot;</span>), <span class="str">&quot;(a|c|g)&quot;</span>),
+        (regex!(<span class="str">&quot;W&quot;</span>), <span class="str">&quot;(a|t)&quot;</span>),
+        (regex!(<span class="str">&quot;Y&quot;</span>), <span class="str">&quot;(c|t)&quot;</span>),
+    ];
+    <span class="kwa">let mut</span> seq = seq;
+    <span class="kwa">for</span> (re, replacement) <span class="kwa">in</span> substs.into_iter() {
+        seq = re.replace_all(&amp;seq, replacement);
+    }
+    <span class="kwa">let</span> rlen = seq.len();
+
+    <span class="kwa">for</span> (variant, count) <span class="kwa">in</span> counts {
+        println!(<span class="str">&quot;{} {}&quot;</span>, variant, count.join().unwrap());
+    }
+    println!(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">{}</span><span class="esc">\n</span><span class="str">{}</span><span class="esc">\n</span><span class="str">{}&quot;</span>, ilen, clen, rlen);
+}

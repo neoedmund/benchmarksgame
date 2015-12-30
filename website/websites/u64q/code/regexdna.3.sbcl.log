@@ -1,0 +1,110 @@
+
+Sat, 05 Sep 2015 04:36:23 GMT
+
+MAKE:
+cp: ‘regexdna.sbcl-3.sbcl’ and ‘./regexdna.sbcl-3.sbcl’ are the same file
+SBCL built with: /usr/local/bin/sbcl --userinit /dev/null --batch --eval '(load "regexdna.sbcl-3.sbcl_compile")'
+### START regexdna.sbcl-3.sbcl_compile
+(handler-bind ((sb-ext:defconstant-uneql      (lambda (c) (abort c))))      (load (compile-file "regexdna.sbcl-3.sbcl" ))) (save-lisp-and-die "sbcl.core" :purify t)
+### END regexdna.sbcl-3.sbcl_compile
+
+; compiling file "/home/dunham/benchmarksgame/bench/regexdna/regexdna.sbcl-3.sbcl" (written 23 JAN 2013 08:20:11 PM):
+; compiling (REQUIRE :ASDF)
+; compiling (REQUIRE :CL-PPCRE)
+; compiling (DEFINE-ALIEN-ROUTINE SYSCONF ...)
+; compiling (USE-PACKAGE :SB-THREAD)
+; compiling (DEFCONSTANT +REGEX-LIST+ ...)
+; compiling (DEFCONSTANT +ALTERNATIVES+ ...)
+; compiling (DEFCONSTANT +CPU-COUNT+ ...)
+; compiling (DEFVAR *MUTEX* ...)
+; compiling (DEFVAR *AUX-MUTEX* ...)
+; compiling (DEFMACRO BG ...)
+; compiling (DEFMACRO JOIN-ALL ...)
+; compiling (DEFUN READ-ALL ...)
+; compiling (DEFUN LENGTH-TO-REPLACE ...)
+; compiling (DEFUN REPLACE-AUX ...)
+; file: /home/dunham/benchmarksgame/bench/regexdna/regexdna.sbcl-3.sbcl
+; in: DEFUN REPLACE-AUX
+;     (LOOP WITH (I J) OF-TYPE FIXNUM = (LIST RESULT-START TARGET-START)
+;           WITH MMATCH = (IF (> MATCH-BEGIN MATCH-END)
+;                             MATCH
+;                             (SUBSEQ MATCH MATCH-BEGIN MATCH-END))
+;           FOR ...)
+; --> BLOCK LET SB-LOOP::LOOP-DESTRUCTURING-BIND DESTRUCTURING-BIND 
+; --> SB-INT:BINDING* LET* IF 
+; ==>
+;   NIL
+; 
+; caught STYLE-WARNING:
+;   The binding of I is not a FIXNUM:
+;     NIL
+;   See also:
+;     The SBCL Manual, Node "Handling of Types"
+; 
+; caught STYLE-WARNING:
+;   The binding of J is not a FIXNUM:
+;     NIL
+;   See also:
+;     The SBCL Manual, Node "Handling of Types"
+
+; compiling (DEFUN PARTS ...)
+; file: /home/dunham/benchmarksgame/bench/regexdna/regexdna.sbcl-3.sbcl
+; in: DEFUN PARTS
+;     (LOOP WITH (STEP
+;                 REST) OF-TYPE FIXNUM = (MULTIPLE-VALUE-LIST
+;                                         (FLOOR LEN PARTS-NUM))
+;           WITH I OF-TYPE FIXNUM = ...)
+; --> BLOCK LET SB-LOOP::LOOP-DESTRUCTURING-BIND DESTRUCTURING-BIND 
+; --> SB-INT:BINDING* LET* IF 
+; ==>
+;   NIL
+; 
+; caught STYLE-WARNING:
+;   This is not a FIXNUM:
+;     NIL
+;   See also:
+;     The SBCL Manual, Node "Handling of Types"
+; 
+; caught STYLE-WARNING:
+;   The binding of REST is not a FIXNUM:
+;     NIL
+;   See also:
+;     The SBCL Manual, Node "Handling of Types"
+
+; compiling (DEFUN REPLACE-ALL ...)
+; compiling (DEFUN MAIN ...); 
+; compilation unit finished
+;   caught 4 STYLE-WARNING conditions
+
+
+; /home/dunham/benchmarksgame_quadcore/regexdna/tmp/regexdna.sbcl-3.fasl written
+; compilation finished in 0:00:00.979
+[undoing binding stack and other enclosing state... done]
+[saving current Lisp image into sbcl.core:
+writing 4944 bytes from the read-only space at 0x20000000
+writing 3168 bytes from the static space at 0x20100000
+writing 52297728 bytes from the dynamic space at 0x1000000000
+done]
+### START regexdna.sbcl-3.sbcl_run
+(main) (quit)
+### END regexdna.sbcl-3.sbcl_run
+
+2.57s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/sbcl  --noinform --core sbcl.core --userinit /dev/null --load regexdna.sbcl-3.sbcl_run 0 < regexdna-input5000000.txt
+
+PROGRAM OUTPUT:
+agggtaaa|tttaccct 356
+[cgt]gggtaaa|tttaccc[acg] 1250
+a[act]ggtaaa|tttacc[agt]t 4252
+ag[act]gtaaa|tttac[agt]ct 2894
+agg[act]taaa|ttta[agt]cct 5435
+aggg[acg]aaa|ttt[cgt]ccct 1537
+agggt[cgt]aa|tt[acg]accct 1431
+agggta[cgt]a|t[acg]taccct 1608
+agggtaa[cgt]|[acg]ttaccct 2178
+
+50833411
+50000000
+66800214

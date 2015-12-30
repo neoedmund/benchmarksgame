@@ -1,0 +1,156 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">! fasta implementation - translated from the lua program</span>
+<span class="slc">! contributed by Simon Geard, 18/1/05</span>
+<span class="slc">! modified by Andrei Jirnyi</span>
+<span class="slc">! 1 : baseline</span>
+<span class="slc">! 1a: submitted (shorter a%p arrays)</span>
+<span class="slc">! 1b: try float!</span>
+<span class="slc">!</span>
+<span class="slc">! Building info.</span>
+<span class="slc">! ==============</span>
+<span class="slc">!</span>
+<span class="slc">! Linux  - using the Intel Fortran90 compiler:</span>
+<span class="slc">!</span>
+<span class="slc">!          ifort -fast -O3 fasta.f90</span>
+<span class="slc">! or equivalently </span>
+<span class="slc">!          ifort -xHost -no-prec-div -static -O3 fasta.f90</span>
+
+
+<span class="kwa">program</span> fasta
+  <span class="kwa">use</span> iso_fortran_env
+
+ <span class="kwa">implicit none</span>
+  <span class="kwa">integer</span> num
+  <span class="kwa">character</span>(len=<span class="num">8</span>) argv
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: IM = <span class="num">139968</span>, IA = <span class="num">3877</span>, IC = <span class="num">29573</span>
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: LW=<span class="num">60</span>
+  <span class="kwa">character</span>(len=*), <span class="kwa">parameter</span> :: alu = &amp;
+<span class="str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG'</span> // &amp;
+<span class="str">'GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA'</span> // &amp;
+<span class="str">'CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT'</span> // &amp;
+<span class="str">'ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA'</span> // &amp;
+<span class="str">'GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG'</span> // &amp;
+<span class="str">'AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC'</span> // &amp;
+<span class="str">'AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span>
+  <span class="kwa">character</span>(len=<span class="num">1</span>), <span class="kwa">parameter</span> :: EOL = <span class="kwd">achar</span>(<span class="num">10</span>)
+
+  <span class="kwa">type</span> pair
+     <span class="kwa">character</span>(len=<span class="num">1</span>),<span class="kwa">dimension</span>(:),allocatable :: c
+     <span class="kwa">real</span>,<span class="kwa">dimension</span>(:),allocatable :: p
+  <span class="kwa">end type</span> pair
+  
+  <span class="kwa">type</span>(pair) :: homosapiens
+  <span class="kwa">type</span>(pair) :: iub
+  
+  iub = <span class="kwd">mkpair</span>(<span class="num">15</span>, c=<span class="str">'acgtBDHKMNRSVWY'</span>,&amp;
+       &amp;       p=[<span class="num">.27</span>,<span class="num">.12</span>,<span class="num">.12</span>,<span class="num">.27</span>,(<span class="num">.02</span>,num=<span class="num">1</span>,<span class="num">11</span>)])
+  homosapiens = <span class="kwd">mkpair</span>(<span class="num">4</span>, c=<span class="str">'acgt'</span>,&amp;
+                     &amp; p = [<span class="num">0.3029549426680</span>, <span class="num">0.1979883004921</span>, &amp;
+                            <span class="num">0.1975473066391</span>, <span class="num">0.3015094502008</span>])
+
+  <span class="kwa">call</span> <span class="kwd">getarg</span>(<span class="num">1</span>,argv)
+  <span class="kwa">read</span>(argv,*) num
+ 
+  <span class="kwa">close</span>(output_unit)
+  <span class="kwa">open</span>(unit=output_unit, access=<span class="str">'stream'</span>,form=<span class="str">'unformatted'</span>,buffered=<span class="str">'yes'</span>)
+
+  <span class="kwa">call</span> <span class="kwd">makeRepeatFasta</span>(<span class="str">'ONE'</span>,<span class="str">'Homo sapiens alu'</span>,alu,num*<span class="num">2</span>)
+
+  <span class="kwa">call</span> <span class="kwd">makeRandomFasta</span>(<span class="str">'TWO'</span>,<span class="str">'IUB ambiguity codes'</span>,iub,num*<span class="num">3</span>)
+
+  <span class="kwa">call</span> <span class="kwd">makeRandomFasta</span>(<span class="str">'THREE'</span>,<span class="str">'Homo sapiens frequency'</span>,homosapiens,num*<span class="num">5</span>)
+
+     
+<span class="kwa">contains</span>
+
+  <span class="kwa">type</span>(pair) <span class="kwa">function</span> <span class="kwd">mkpair</span>(n,c,p)
+    <span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: n
+    <span class="kwa">character</span>(len=n) :: c
+    <span class="kwa">real</span> :: <span class="kwd">p</span>(n), z
+    <span class="kwa">integer</span> :: i,k
+    <span class="kwd">allocate</span>(mkpair%<span class="kwd">c</span>(<span class="num">0</span>:n-<span class="num">1</span>))
+    <span class="kwd">allocate</span>(mkpair%<span class="kwd">p</span>(n-<span class="num">1</span>))
+    z = <span class="num">0</span>
+    k = <span class="num">1</span>
+    <span class="kwa">do</span> i=<span class="num">1</span>,n-<span class="num">1</span>
+       mkpair%<span class="kwd">c</span>(i-<span class="num">1</span>) = <span class="kwd">c</span>(i:i)
+       mkpair%<span class="kwd">p</span>(i) = z+<span class="kwd">p</span>(i)
+       z = z+<span class="kwd">p</span>(i)
+    <span class="kwa">end do</span>
+    mkpair%<span class="kwd">c</span>(n-<span class="num">1</span>) = <span class="kwd">c</span>(n:n)
+  <span class="kwa">end function</span> mkpair
+  
+  <span class="kwa">real function</span> <span class="kwd">getRandom</span> ()
+    <span class="kwa">integer</span>, <span class="kwa">save</span> :: last = <span class="num">42</span>
+    last = <span class="kwd">mod</span>(last * IA + IC, IM)
+    getRandom = <span class="kwa">real</span>(last)/IM
+  <span class="kwa">end function</span> getRandom
+
+  <span class="kwa">subroutine</span> <span class="kwd">makeRandomFasta</span>(id,desc,a,n)
+     <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: id
+     <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: desc
+     <span class="kwa">type</span>(pair), <span class="kwd">intent</span>(inout) :: a
+     <span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: n
+     <span class="kwa">character</span>(len=LW) :: title
+     <span class="kwa">character</span>(len=<span class="num">1</span>) :: <span class="kwd">line</span>(LW)
+     <span class="kwa">integer</span> :: j,l
+
+     <span class="kwa">write</span>(title,<span class="str">'(4a)'</span>) <span class="str">'&gt;'</span>,id,<span class="str">' '</span>,desc
+     <span class="kwa">write</span>(output_unit) <span class="kwd">trim</span>(title),EOL
+     j = <span class="num">0</span>
+     l = <span class="num">0</span>
+     <span class="kwa">do</span>
+        j = j+<span class="num">1</span>
+        l = l+<span class="num">1</span>
+        <span class="kwd">line</span>(j) = a%<span class="kwd">c</span>(<span class="kwd">count</span>(<span class="kwd">getRandom</span>() &gt;= a%p))
+        <span class="kwa">if</span>(l == n) <span class="kwa">then</span>  <span class="slc">! last line, exit</span>
+           <span class="kwa">write</span>(output_unit) <span class="kwd">line</span>(<span class="num">1</span>:j),EOL
+           exit
+        <span class="kwa">end if</span>
+        <span class="kwa">if</span>(j == LW) <span class="kwa">then</span> <span class="slc">! write another line</span>
+           j = <span class="num">0</span>
+           <span class="kwa">write</span>(output_unit) line,EOL
+        <span class="kwa">end if</span>
+     <span class="kwa">end do</span>
+     <span class="kwd">flush</span>(output_unit)
+  <span class="kwa">end subroutine</span> makeRandomFasta
+
+  <span class="kwa">subroutine</span> <span class="kwd">makeRepeatFasta</span>(id,desc,s,n)
+     <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: id
+     <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: desc
+     <span class="kwa">character</span>(len=*), <span class="kwd">intent</span>(in) :: s
+     <span class="kwa">integer</span>, <span class="kwd">intent</span>(in) :: n
+     <span class="kwa">integer</span> :: j, k, l, kn
+     <span class="kwa">integer</span>, <span class="kwa">parameter</span> :: length = <span class="num">60</span>
+     <span class="kwa">character</span>(len=LW) :: title
+     <span class="kwa">character</span>(len=<span class="num">1</span>) :: <span class="kwd">line</span>(LW)
+     <span class="kwa">intrinsic</span> len
+
+     <span class="kwa">write</span>(title,<span class="str">'(4a)'</span>) <span class="str">'&gt;'</span>,id,<span class="str">' '</span>,desc
+     <span class="kwa">write</span>(output_unit) <span class="kwd">trim</span>(title),EOL
+     k = <span class="num">1</span>; kn = <span class="kwd">len</span>(s)
+     
+     j = <span class="num">0</span> <span class="slc">! in output line</span>
+     k = <span class="num">0</span> <span class="slc">! in repeat seq</span>
+     l = <span class="num">0</span> <span class="slc">! generated count</span>
+     <span class="kwa">do</span>
+        j = j+<span class="num">1</span>
+        k = k+<span class="num">1</span>
+        l = l+<span class="num">1</span>
+        <span class="kwa">if</span>(k&gt;kn) k=<span class="num">1</span>
+        <span class="kwd">line</span>(j) = <span class="kwd">s</span>(k:k)
+        <span class="kwa">if</span>(l == n) <span class="kwa">then</span>
+           <span class="kwa">write</span>(output_unit) <span class="kwd">line</span>(<span class="num">1</span>:j),EOL
+           exit
+        <span class="kwa">end if</span>
+        <span class="kwa">if</span>(j == LW) <span class="kwa">then</span>
+           j = <span class="num">0</span>
+           <span class="kwa">write</span>(output_unit) line,EOL
+        <span class="kwa">end if</span>
+     <span class="kwa">end do</span>
+     <span class="kwd">flush</span>(output_unit)
+  <span class="kwa">end subroutine</span> makeRepeatFasta
+
+<span class="kwa">end program</span> fasta

@@ -1,0 +1,469 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Stefan Westen</span>
+<span class="com"></span>
+<span class="com">   loosely based on Ben St. John's and Kevin Barnes' implementation</span>
+<span class="com"></span>
+<span class="com">   Main improvements:</span>
+<span class="com">      - Check for isolated cells instead of bad islands</span>
+<span class="com">      - Pre-calculate lists based on availability of 3 neighbouring cells</span>
+<span class="com">      - OpenMP tasks</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;omp.h&gt;</span>
+
+<span class="kwb">const int</span> nPieceCount = <span class="num">10</span>;
+<span class="kwb">const int</span> pieces[<span class="num">10</span>][<span class="num">5</span>][<span class="num">2</span>]  = {
+   {{<span class="num">0</span>, <span class="num">0</span>}, {<span class="num">1</span>, <span class="num">0</span>}, {<span class="num">2</span>, <span class="num">0</span>}, {<span class="num">3</span>, <span class="num">0</span>}, {<span class="num">3</span>, <span class="num">1</span>}},
+   {{<span class="num">0</span>, <span class="num">0</span>}, {<span class="num">0</span>, <span class="num">1</span>}, {-<span class="num">2</span>, <span class="num">2</span>}, {-<span class="num">1</span>, <span class="num">2</span>}, {-<span class="num">3</span>, <span class="num">3</span>}},
+   {{<span class="num">0</span>, <span class="num">0</span>}, {<span class="num">1</span>, <span class="num">0</span>}, {<span class="num">2</span>, <span class="num">0</span>}, {-<span class="num">1</span>, <span class="num">1</span>}, {-<span class="num">1</span>, <span class="num">2</span>}},
+   {{<span class="num">0</span>, <span class="num">0</span>}, {<span class="num">1</span>, <span class="num">0</span>}, {<span class="num">2</span>, <span class="num">0</span>}, {<span class="num">1</span>, <span class="num">1</span>}, {<span class="num">1</span>, <span class="num">2</span>}},
+   {{<span class="num">0</span>, <span class="num">0</span>}, {<span class="num">0</span>, <span class="num">1</span>}, {<span class="num">1</span>, <span class="num">1</span>}, {-<span class="num">1</span>, <span class="num">2</span>}, {<span class="num">1</span>, <span class="num">2</span>}},
+   {{<span class="num">0</span>, <span class="num">0</span>}, {<span class="num">1</span>, <span class="num">0</span>}, {-<span class="num">2</span>, <span class="num">1</span>}, {-<span class="num">1</span>, <span class="num">1</span>}, {<span class="num">0</span>, <span class="num">1</span>}},
+   {{<span class="num">0</span>, <span class="num">0</span>}, {<span class="num">1</span>, <span class="num">0</span>}, {<span class="num">0</span>, <span class="num">1</span>}, {-<span class="num">1</span>, <span class="num">2</span>}, {-<span class="num">1</span>, <span class="num">3</span>}},
+   {{<span class="num">0</span>, <span class="num">0</span>}, {<span class="num">2</span>, <span class="num">0</span>}, {-<span class="num">1</span>, <span class="num">1</span>}, {<span class="num">0</span>, <span class="num">1</span>}, {<span class="num">1</span>, <span class="num">1</span>}},
+   {{<span class="num">0</span>, <span class="num">0</span>}, {<span class="num">0</span>, <span class="num">1</span>}, {<span class="num">0</span>, <span class="num">2</span>}, {<span class="num">1</span>, <span class="num">2</span>}, {<span class="num">1</span>, <span class="num">3</span>}},
+   {{<span class="num">0</span>, <span class="num">0</span>}, {<span class="num">0</span>, <span class="num">1</span>}, {<span class="num">0</span>, <span class="num">2</span>}, {-<span class="num">1</span>, <span class="num">3</span>}, {<span class="num">0</span>, <span class="num">3</span>}}
+   };
+
+<span class="kwb">unsigned int</span> g_AllMasks[<span class="num">8192</span>];
+<span class="kwb">unsigned int</span> *g_MaskStart[<span class="num">50</span>][<span class="num">8</span>];
+
+<span class="kwb">unsigned char</span> g_min_solution[<span class="num">50</span>], g_max_solution[<span class="num">50</span>];
+<span class="kwb">unsigned int</span> g_solutions;
+
+<span class="kwb">unsigned int</span> EvenRowsLookup[<span class="num">50</span>];
+<span class="kwb">unsigned int</span> LeftBorderLookup[<span class="num">50</span>];
+   
+<span class="kwb">bool</span> <span class="kwd">GoodPiece</span>(<span class="kwb">unsigned int</span> mask, <span class="kwb">unsigned int</span> pos)
+{
+   <span class="kwb">bool</span> <span class="kwd">bOK</span>(<span class="kwa">true</span>);
+   <span class="kwb">const unsigned long long</span> even_rows = <span class="num">0xf07c1f07c1f07c1f</span>;
+   <span class="kwb">const unsigned long long</span> odd_rows = ~even_rows;   
+   <span class="kwb">const unsigned long long</span> left_border = <span class="num">0x1084210842108421</span>;
+   <span class="kwb">const unsigned long long</span> right_border = left_border &gt;&gt; <span class="num">1</span>;
+   <span class="kwb">unsigned long long</span> a,b,a_old,s1,s2,s3,s4,s5,s6,s7,s8;
+   
+   b = (((<span class="kwb">unsigned long long</span>)mask) &lt;&lt; pos) | <span class="num">0xFFFC000000000000</span>ULL;
+   
+   b = ~b;
+
+   <span class="kwa">while</span> (b)
+   {
+      a = b&amp;-b;
+
+      <span class="kwa">do</span> 
+      {
+         s1 = a &lt;&lt; <span class="num">5</span>;
+         s2 = a &gt;&gt; <span class="num">5</span>;
+         s3 = (a &lt;&lt; <span class="num">1</span>)&amp;(~left_border);
+         s4 = (a &gt;&gt; <span class="num">1</span>)&amp;(~right_border);
+         s5 = ((a &amp; even_rows) &gt;&gt; <span class="num">6</span>) &amp;(~right_border);
+         s6 = ((a &amp; even_rows) &lt;&lt; <span class="num">4</span>) &amp;(~right_border);
+         s7 = ((a &amp; odd_rows) &gt;&gt; <span class="num">4</span>) &amp; (~left_border);
+         s8 = ((a &amp; odd_rows) &lt;&lt; <span class="num">6</span>) &amp;(~left_border);
+         a_old = a;
+         a = (a|s1|s2|s3|s4|s5|s6|s7|s8)&amp;b;
+      } <span class="kwa">while</span> (a_old!=a);
+      <span class="kwa">if</span> (<span class="kwd">__builtin_popcountll</span>(a)%<span class="num">5</span>!=<span class="num">0</span>)
+      {
+         bOK = <span class="kwa">false</span>;
+         <span class="kwa">break</span>;
+      }
+      b = b ^ a;
+   }
+   <span class="kwa">return</span> bOK;
+}
+
+<span class="kwb">void</span> <span class="kwd">Initialise</span>()
+{   
+   <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;<span class="num">50</span>;i++)
+   {
+      EvenRowsLookup[i] = <span class="num">0xF07C1F07C1F07C1F</span>ULL &gt;&gt; i;
+      LeftBorderLookup[i] = <span class="num">0x1084210842108421</span>ULL &gt;&gt; i;
+   }
+   
+   <span class="kwb">int</span> <span class="kwd">nTotalCount</span>(<span class="num">0</span>);
+   <span class="kwb">int</span> x[<span class="num">5</span>], y[<span class="num">5</span>];
+   <span class="kwa">for</span> (<span class="kwb">int</span> nYBase=<span class="num">2</span>;nYBase&lt;<span class="num">4</span>;nYBase++)
+   {
+      <span class="kwa">for</span> (<span class="kwb">int</span> nXBase=<span class="num">0</span>;nXBase&lt;<span class="num">5</span>;nXBase++)
+      {
+         <span class="kwb">int</span> nPos = nXBase+<span class="num">5</span>*nYBase;
+         g_MaskStart[nPos][<span class="num">0</span>] = &amp;g_AllMasks[nTotalCount];
+         <span class="kwa">for</span> (<span class="kwb">int</span> nPiece=<span class="num">0</span>;nPiece&lt;nPieceCount;nPiece++)
+         {
+            <span class="kwa">for</span> (<span class="kwb">int</span> j=<span class="num">0</span>;j&lt;<span class="num">5</span>;j++)
+            {
+               x[j] = pieces[nPiece][j][<span class="num">0</span>];
+               y[j] = pieces[nPiece][j][<span class="num">1</span>];
+            }
+         
+            <span class="kwb">int</span> nCurrentRotation=<span class="num">0</span>;
+            <span class="kwa">for</span> (nCurrentRotation=<span class="num">0</span>;nCurrentRotation&lt;<span class="num">12</span>;nCurrentRotation++)
+            {
+               <span class="kwa">if</span> (nPiece!=<span class="num">3</span>||(nCurrentRotation/<span class="num">3</span>)%<span class="num">2</span>==<span class="num">0</span>)
+               {
+                  <span class="kwb">int</span> nMinX = x[<span class="num">0</span>];
+                  <span class="kwb">int</span> nMinY = y[<span class="num">0</span>];
+                  <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">1</span>;i&lt;<span class="num">5</span>;i++)
+                  {
+                     <span class="kwa">if</span> (y[i]&lt;nMinY||(y[i]==nMinY&amp;&amp;x[i]&lt;nMinX))
+                     {
+                        nMinX=x[i];
+                        nMinY=y[i];
+                     }
+                  }
+            
+                  <span class="kwb">unsigned int</span> mask = <span class="num">0</span>;
+                  <span class="kwb">bool</span> <span class="kwd">bFit</span>(<span class="kwa">true</span>);
+            
+                  <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;<span class="num">5</span>;i++)
+                  {
+                     <span class="kwb">int</span> nX = (x[i]-nMinX+(nXBase-nYBase/<span class="num">2</span>))
+                              +(y[i]-nMinY+nYBase)/<span class="num">2</span>;
+                     <span class="kwb">int</span> nY = y[i]-nMinY+nYBase;
+                     <span class="kwa">if</span> (nX&gt;=<span class="num">0</span>&amp;&amp;nX&lt;<span class="num">5</span>)
+                     {
+                        <span class="kwb">int</span> nBit = nX-nXBase+<span class="num">5</span>*(nY-nYBase);
+                        mask |= (<span class="num">1</span>&lt;&lt;nBit);
+                     }
+                     <span class="kwa">else</span>
+                     {
+                        bFit = <span class="kwa">false</span>;
+                     }
+                  }
+                  <span class="kwa">if</span> (bFit)
+                  {
+                     <span class="kwa">if</span> (<span class="kwd">GoodPiece</span>(mask,nPos))
+                     {
+                        g_AllMasks[nTotalCount++] = 
+                           mask|(<span class="num">1</span>&lt;&lt;(nPiece+<span class="num">22</span>));
+                     }
+                  }
+               }
+               <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;<span class="num">5</span>;i++)
+               {
+                  <span class="kwb">int</span> xnew = x[i]+y[i];
+                  <span class="kwb">int</span> ynew = -x[i];
+                  x[i] = xnew;
+                  y[i] = ynew;
+                  <span class="kwa">if</span> (nCurrentRotation==<span class="num">5</span>)
+                  {
+                     <span class="kwb">int</span> xnew = x[i]+y[i];
+                     <span class="kwb">int</span> ynew = -y[i];
+                     x[i] = xnew;
+                     y[i] = ynew;
+                  }      
+               }
+            }
+         }
+         g_AllMasks[nTotalCount++] = <span class="num">0</span>;
+      }
+   }
+   
+   <span class="slc">// copy rows 2 and 3 to other rows</span>
+   
+   <span class="kwa">for</span> (<span class="kwb">int</span> nYBase=<span class="num">0</span>;nYBase&lt;<span class="num">10</span>;nYBase++)
+   {
+      <span class="kwa">if</span> (nYBase!=<span class="num">2</span>&amp;&amp;nYBase!=<span class="num">3</span>)
+      {
+         <span class="kwa">for</span> (<span class="kwb">int</span> nXBase=<span class="num">0</span>;nXBase&lt;<span class="num">5</span>;nXBase++)
+         {
+            <span class="kwb">int</span> nPos = nXBase+<span class="num">5</span>*nYBase;
+            <span class="kwb">int</span> nOrigPos = nXBase+<span class="num">5</span>*(nYBase%<span class="num">2</span>+<span class="num">2</span>);
+            g_MaskStart[nPos][<span class="num">0</span>] = &amp;g_AllMasks[nTotalCount];
+            <span class="kwb">unsigned int</span> *pMask = g_MaskStart[nOrigPos][<span class="num">0</span>];
+            <span class="kwb">unsigned int</span> bottom = (<span class="num">0xFFFC000000000000</span>ULL&gt;&gt;nPos)
+                                 &amp;<span class="num">0x003FFFFF</span>;
+            <span class="kwb">unsigned int</span> last_row = (<span class="num">0xFFFC000000000000</span>ULL&gt;&gt;(nPos+<span class="num">5</span>))
+                                 &amp;<span class="num">0x003FFFFF</span>;
+            <span class="kwa">while</span> (*pMask)
+            {
+               <span class="kwb">unsigned int</span> mask=*pMask;
+               pMask++;
+               <span class="kwa">if</span> ((mask&amp;bottom)==<span class="num">0</span>)
+               {
+                  <span class="kwa">if</span> (nYBase==<span class="num">0</span>||(mask&amp;last_row))
+                  {
+                     <span class="kwa">if</span> (!<span class="kwd">GoodPiece</span>(mask&amp;<span class="num">0x003FFFFF</span>,nPos))
+                     {
+                        <span class="kwa">continue</span>;
+                     }
+                  }
+                  g_AllMasks[nTotalCount++] = mask;
+               }
+            }
+            g_AllMasks[nTotalCount++] = <span class="num">0</span>;
+         }
+      }
+   }
+   
+   <span class="kwa">for</span> (<span class="kwb">int</span> nFilter=<span class="num">1</span>;nFilter&lt;<span class="num">8</span>;nFilter++)
+   {
+      <span class="kwa">for</span> (<span class="kwb">int</span> nPos=<span class="num">0</span>;nPos&lt;<span class="num">50</span>;nPos++)
+      {
+         g_MaskStart[nPos][nFilter] = &amp;g_AllMasks[nTotalCount];
+         <span class="kwb">unsigned int</span> filter_mask;
+         filter_mask = ((nFilter&amp;<span class="num">1</span>)&lt;&lt;<span class="num">1</span>)|((nFilter&amp;<span class="num">6</span>)&lt;&lt;
+                     (<span class="num">4</span>-(EvenRowsLookup[nPos]&amp;<span class="num">1</span>)));
+         <span class="kwb">unsigned int</span> *pMask = g_MaskStart[nPos][<span class="num">0</span>];
+         <span class="kwa">while</span> (*pMask)
+         {
+            <span class="kwb">unsigned int</span> mask=*pMask;
+            <span class="kwa">if</span> ((mask&amp;filter_mask)==<span class="num">0</span>)
+            {
+               g_AllMasks[nTotalCount++] = mask;
+            }
+            pMask++;
+         }
+         g_AllMasks[nTotalCount++] = <span class="num">0</span>;
+      }
+   }
+}
+
+<span class="kwb">void</span> <span class="kwd">CompareSolution</span>(<span class="kwb">unsigned char</span>* board, <span class="kwb">unsigned char</span>* min_solution,
+               <span class="kwb">unsigned char</span>* max_solution)
+{
+   <span class="kwb">int</span> i,j;
+   
+   <span class="kwa">for</span> (i=<span class="num">0</span>;i&lt;<span class="num">50</span>;i++)
+   {
+      <span class="kwa">if</span> (board[i]&lt;min_solution[i])
+      {
+         <span class="kwa">for</span> (j=<span class="num">0</span>;j&lt;<span class="num">50</span>;j++)
+         {
+            min_solution[j] = board[j];
+         }
+         <span class="kwa">break</span>;
+      }
+      <span class="kwa">else if</span> (board[i]&gt;min_solution[i])
+      {
+         <span class="kwa">break</span>;
+      }
+   }
+   <span class="kwa">for</span> (i=<span class="num">0</span>;i&lt;<span class="num">50</span>;i++)
+   {
+      <span class="kwa">if</span> (board[i]&gt;max_solution[i])
+      {
+         <span class="kwa">for</span> (j=<span class="num">0</span>;j&lt;<span class="num">50</span>;j++)
+         {
+            max_solution[j] = board[j];
+         }
+         <span class="kwa">break</span>;
+      }
+      <span class="kwa">else if</span> (board[i]&lt;max_solution[i])
+      {
+         <span class="kwa">break</span>;
+      }
+   }
+}
+
+<span class="kwb">void</span> <span class="kwd">PrintBoard</span>(<span class="kwb">unsigned char</span> *board)
+{
+   <span class="kwb">int</span> i;
+   
+   <span class="kwa">for</span> (i=<span class="num">0</span>;i&lt;<span class="num">50</span>;i++)
+   {
+      <span class="kwd">printf</span> (<span class="str">&quot;%d &quot;</span>, board[i]);
+      <span class="kwa">if</span> (i%<span class="num">5</span>==<span class="num">4</span>)
+      {
+         <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+         <span class="kwa">if</span> ((i&amp;<span class="num">1</span>)==<span class="num">0</span>)
+         {
+            <span class="kwd">printf</span> (<span class="str">&quot; &quot;</span>);
+         }
+      }
+   }
+   <span class="kwd">printf</span> (<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+   
+}
+
+<span class="kwb">void</span> <span class="kwd">RecordSolution</span>(<span class="kwb">unsigned int</span> current_solution[])
+{
+   <span class="kwb">unsigned char</span> board[<span class="num">50</span>], flip_board[<span class="num">50</span>];
+   <span class="kwb">int</span> i;
+   <span class="kwb">unsigned long</span> piece;
+   <span class="kwb">unsigned int</span> mask, pos, current_bit, b1;
+   <span class="kwb">unsigned long</span> count;
+   b1 = <span class="num">0</span>;
+   pos = <span class="num">0</span>;
+   <span class="kwa">for</span> (i=<span class="num">0</span>;i&lt;<span class="num">10</span>;i++)
+   {
+      mask = current_solution[i];
+      piece = <span class="kwd">__builtin_ctz</span>(mask&gt;&gt;<span class="num">22</span>);
+      mask &amp;= <span class="num">0x003FFFFF</span>;
+      b1 |= mask;
+      <span class="kwa">while</span> (mask)
+      {
+         current_bit = mask&amp;-mask;
+         count = <span class="kwd">__builtin_ctz</span>(current_bit);
+         board[count+pos] = piece;
+         flip_board[<span class="num">49</span>-count-pos] = piece;
+         mask ^= current_bit;
+      }
+      count = <span class="kwd">__builtin_ctz</span>(~b1);
+      pos+=count;
+      b1 &gt;&gt;= count;
+   }
+   <span class="kwa">if</span> (g_solutions==<span class="num">0</span>)
+   {
+      <span class="kwa">for</span> (i=<span class="num">0</span>;i&lt;<span class="num">50</span>;i++)
+      {
+         g_min_solution[i] = g_max_solution[i] = board[i];
+      }
+   }
+   <span class="kwa">else</span>
+   {
+      <span class="kwd">CompareSolution</span>(board, g_min_solution, g_max_solution);
+      <span class="kwd">CompareSolution</span>(flip_board, g_min_solution, g_max_solution);
+   }
+   
+   g_solutions+=<span class="num">2</span>;
+}
+     
+<span class="kwb">void</span> <span class="kwd">searchLinear</span>(<span class="kwb">unsigned int</span> board, <span class="kwb">unsigned int</span> pos, <span class="kwb">unsigned int</span> used, 
+         <span class="kwb">unsigned int</span> placed, <span class="kwb">unsigned int</span> current_solution[])
+{
+   <span class="kwb">unsigned long</span> count;
+   <span class="kwb">unsigned int</span> even_rows, odd_rows, left_border, right_border, s1, s2, s3,
+                  s4, s5, s6, s7, s8;
+   <span class="kwa">if</span> (placed==<span class="num">10</span>)
+   {
+      <span class="ppc">#pragma omp critical</span>
+      <span class="kwd">RecordSolution</span>(current_solution);
+   }
+   <span class="kwa">else</span>
+   {
+      even_rows = EvenRowsLookup[pos];
+
+      odd_rows = ~even_rows;
+      
+      left_border = LeftBorderLookup[pos];
+      right_border = left_border&gt;&gt;<span class="num">1</span>;
+
+      s1 = (board &lt;&lt; <span class="num">1</span>) | left_border;
+      s2 = (board &gt;&gt; <span class="num">1</span>) | right_border;
+      s3 = (board &lt;&lt; <span class="num">4</span>) | ((<span class="num">1</span>&lt;&lt;<span class="num">4</span>)-<span class="num">1</span>) | right_border;
+      s4 = (board &gt;&gt; <span class="num">4</span>) | left_border;
+      s5 = (board &lt;&lt; <span class="num">5</span>) | ((<span class="num">1</span>&lt;&lt;<span class="num">5</span>)-<span class="num">1</span>);
+      s6 = (board &gt;&gt; <span class="num">5</span>);
+      s7 = (board &lt;&lt; <span class="num">6</span>) | ((<span class="num">1</span>&lt;&lt;<span class="num">6</span>)-<span class="num">1</span>) | left_border;
+      s8 = (board &gt;&gt; <span class="num">6</span>) | right_border;
+
+      <span class="kwa">if</span> (~board&amp;s1&amp;s2&amp;s5&amp;s6&amp;((even_rows&amp;s4&amp;s7)|(odd_rows&amp;s3&amp;s8)))
+      {
+         <span class="kwa">return</span>;
+      }
+      
+      count = <span class="kwd">__builtin_ctz</span>(~board);
+      pos+=count;
+      board &gt;&gt;= count;
+      
+      <span class="kwb">unsigned int</span> f;
+      f = ((board&gt;&gt;<span class="num">1</span>)&amp;<span class="num">1</span>)|((board&gt;&gt;(<span class="num">4</span>-(EvenRowsLookup[pos]&amp;<span class="num">1</span>)))&amp;<span class="num">6</span>);   
+      <span class="kwb">unsigned int</span> board_and_used = board|used;
+      
+      <span class="kwb">unsigned int</span> *masks = g_MaskStart[pos][f];
+      <span class="kwb">unsigned int</span> mask;
+      
+      <span class="kwa">while</span> (*masks)
+      {
+         <span class="kwa">while</span> ((*masks)&amp;board_and_used)
+         {
+            masks++;
+         }
+         <span class="kwa">if</span> (*masks)
+         {
+            mask = *masks;
+            current_solution[placed] = mask;
+            <span class="kwd">searchLinear</span>(board|((mask&amp;<span class="num">0x003FFFFF</span>)), pos, used|(mask&amp;<span class="num">0xFFC00000</span>),
+                  placed+<span class="num">1</span>, current_solution);
+            masks++;
+         }
+      }
+   }
+}
+
+<span class="kwb">void</span> <span class="kwd">searchParallel</span>(<span class="kwb">unsigned int</span> board, <span class="kwb">unsigned int</span> pos, <span class="kwb">unsigned int</span> used, 
+         <span class="kwb">unsigned int</span> placed, <span class="kwb">unsigned int</span> first_piece)
+{
+   <span class="kwb">unsigned long</span> count;
+                     
+   count = <span class="kwd">__builtin_ctz</span>(~board);
+   pos+=count;
+   board &gt;&gt;= count;
+   
+   <span class="kwb">unsigned int</span> board_and_used = board|used;
+   
+   <span class="kwb">unsigned int</span> *masks = g_MaskStart[pos][<span class="num">0</span>];
+   <span class="kwb">unsigned int</span> mask;
+   
+   <span class="kwa">if</span> (placed==<span class="num">0</span>)
+   {
+      <span class="kwa">while</span> (*masks)
+      {
+         <span class="kwa">while</span> ((*masks)&amp;board_and_used)
+         {
+            masks++;
+         }
+         <span class="kwa">if</span> (*masks)
+         {
+            mask = *masks++;
+            {
+               <span class="kwd">searchParallel</span>(board|((mask&amp;<span class="num">0x003FFFFF</span>)), pos, used|(mask&amp;<span class="num">0xFFC00000</span>),
+                  placed+<span class="num">1</span>, mask);
+            }
+         }
+      }
+   }
+   <span class="kwa">else</span>
+   {   <span class="slc">// placed==1</span>
+      <span class="kwa">while</span> (*masks)
+      {
+         <span class="kwa">while</span> ((*masks)&amp;board_and_used)
+         {
+            masks++;
+         }
+         <span class="kwa">if</span> (*masks)
+         {
+            mask = *masks++;
+            <span class="ppc">#pragma omp task default(none) firstprivate(board, mask, pos, used, placed, first_piece)</span>
+            {
+               <span class="kwb">unsigned int</span> current_solution[<span class="num">10</span>];
+               current_solution[<span class="num">0</span>] = first_piece;
+               current_solution[placed] = mask;
+               <span class="kwd">searchLinear</span>(board|((mask&amp;<span class="num">0x003FFFFF</span>)), pos, used|(mask&amp;<span class="num">0xFFC00000</span>),
+                  placed+<span class="num">1</span>, current_solution);
+            }
+         }
+      }
+   }
+}
+
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>* argv[])
+{
+   <span class="kwa">if</span> (argc &gt; <span class="num">2</span>)
+     <span class="kwa">return</span> <span class="num">1</span>;
+
+   <span class="kwd">Initialise</span>();
+
+   g_solutions = <span class="num">0</span>;
+
+   <span class="ppc">#pragma omp parallel</span>
+   {
+      <span class="ppc">#pragma omp single</span>
+      {
+         <span class="kwd">searchParallel</span>(<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>);
+      }
+   }
+   
+   <span class="kwd">printf</span> (<span class="str">&quot;%d solutions found</span><span class="esc">\n\n</span><span class="str">&quot;</span>,g_solutions);
+   <span class="kwd">PrintBoard</span>(g_min_solution);
+   <span class="kwd">PrintBoard</span>(g_max_solution);
+                        
+   <span class="kwa">return</span> <span class="num">0</span>;
+}

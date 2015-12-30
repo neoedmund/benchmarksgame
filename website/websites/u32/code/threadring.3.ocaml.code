@@ -1,0 +1,31 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Tomasz bla Fortuna *)</span>
+
+<span class="kwa">let</span> size, n = <span class="num">503</span>, int_of_string <span class="kwc">Sys</span>.argv.(<span class="num">1</span>)
+<span class="kwa">let</span> mutex = 
+  <span class="kwa">let</span> f _ = <span class="kwa">let</span> m = <span class="kwc">Mutex</span>.create () <span class="kwa">in</span> <span class="kwc">Mutex</span>.lock m; m <span class="kwa">in</span>
+  <span class="kwc">Array</span>.init size f
+<span class="kwa">and</span> data = <span class="kwc">Array</span>.create size <span class="num">0</span>
+
+<span class="kwa">let</span> run id idata odata =
+  <span class="kwa">let rec</span> loop () =
+    <span class="kwc">Mutex</span>.lock mutex.(idata);
+    <span class="kwa">if</span> data.(idata) = n <span class="kwa">then</span> (
+      print_int id; print_newline (); exit <span class="num">0</span>;
+    ) <span class="kwa">else</span> (
+      data.(odata) &lt;- data.(idata) + <span class="num">1</span>;
+      <span class="kwc">Mutex</span>.unlock mutex.(odata);
+      loop ();
+    )
+  <span class="kwa">in</span> <span class="kwc">Thread</span>.create loop ()
+
+<span class="kwa">let</span> _ =
+  <span class="kwa">let</span> thread =
+    <span class="kwc">Array</span>.init size
+      (<span class="kwa">fun</span> i -&gt; run (i + <span class="num">1</span>) i ((i + <span class="num">1</span>) <span class="kwa">mod</span> size)) <span class="kwa">in</span>
+  <span class="kwc">Mutex</span>.unlock mutex.(<span class="num">0</span>);
+  <span class="kwc">Thread</span>.join thread.(<span class="num">0</span>)
+
+
+

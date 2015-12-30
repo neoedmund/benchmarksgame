@@ -1,0 +1,96 @@
+<span class="slc">% The Computer Language Benchmarks Game</span>
+<span class="slc">% http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">%%% contributed by Christian von Roques</span>
+<span class="slc">%%% modified by Jiri Isa</span>
+
+<span class="slc">%% Each chameneos is its own process.</span>
+<span class="slc">%% A chameneos sends {self(), Color} to the broker to request a</span>
+<span class="slc">%% meeting with another chameneos.</span>
+<span class="slc">%% The broker replies with {Pid, Color} of the partner met or 'stop'</span>
+<span class="slc">%% whereupon the chameneos prints the Meetings and Selfmeetings it had</span>
+<span class="slc">%% and replies with the number of Meetings for the broker to sum.</span>
+
+<span class="opt">-</span><span class="kwd">module</span><span class="opt">(</span>chameneosredux<span class="opt">).</span>
+<span class="opt">-</span><span class="kwd">export</span><span class="opt">([</span>main<span class="opt">/</span><span class="num">1</span><span class="opt">]).</span>
+
+<span class="opt">-</span><span class="kwd">import</span><span class="opt">(</span>lists<span class="opt">, [</span>foreach<span class="opt">/</span><span class="num">2</span><span class="opt">]).</span>
+
+<span class="kwd">spell</span><span class="opt">(</span><span class="num">0</span><span class="opt">) -&gt;</span> <span class="str">&quot; zero&quot;</span><span class="opt">;</span>
+<span class="kwd">spell</span><span class="opt">(</span>N<span class="opt">) -&gt;</span> <span class="kwd">spell</span><span class="opt">(</span>N<span class="opt">, []).</span>
+
+<span class="kwd">spell</span><span class="opt">(</span><span class="num">0</span><span class="opt">,</span> L<span class="opt">) -&gt;</span> L<span class="opt">;</span>
+<span class="kwd">spell</span><span class="opt">(</span>N<span class="opt">,</span> L<span class="opt">) -&gt;</span> <span class="kwd">spell</span><span class="opt">(</span>N div <span class="num">10</span><span class="opt">, [</span><span class="kwb">element</span><span class="opt">(</span>N rem <span class="num">10</span> <span class="opt">+</span> <span class="num">1</span><span class="opt">, {</span><span class="str">&quot; zero&quot;</span><span class="opt">,</span> <span class="str">&quot; one&quot;</span><span class="opt">,</span> <span class="str">&quot; two&quot;</span><span class="opt">,</span> <span class="str">&quot; three&quot;</span><span class="opt">,</span> <span class="str">&quot; four&quot;</span><span class="opt">,</span> <span class="str">&quot; five&quot;</span><span class="opt">,</span> <span class="str">&quot; six&quot;</span><span class="opt">,</span> <span class="str">&quot; seven&quot;</span><span class="opt">,</span> <span class="str">&quot; eight&quot;</span><span class="opt">,</span> <span class="str">&quot; nine&quot;</span><span class="opt">}) |</span> L<span class="opt">]).</span>
+
+
+<span class="kwd">complement</span><span class="opt">(</span>C<span class="opt">,</span> C<span class="opt">) -&gt;</span> C<span class="opt">;</span>
+<span class="kwd">complement</span><span class="opt">(</span>blue<span class="opt">,</span> red<span class="opt">) -&gt;</span> yellow<span class="opt">;</span>
+<span class="kwd">complement</span><span class="opt">(</span>blue<span class="opt">,</span> yellow<span class="opt">) -&gt;</span> red<span class="opt">;</span>
+<span class="kwd">complement</span><span class="opt">(</span>red<span class="opt">,</span> blue<span class="opt">) -&gt;</span> yellow<span class="opt">;</span>
+<span class="kwd">complement</span><span class="opt">(</span>red<span class="opt">,</span> yellow<span class="opt">) -&gt;</span> blue<span class="opt">;</span>
+<span class="kwd">complement</span><span class="opt">(</span>yellow<span class="opt">,</span> blue<span class="opt">) -&gt;</span> red<span class="opt">;</span>
+<span class="kwd">complement</span><span class="opt">(</span>yellow<span class="opt">,</span> red<span class="opt">) -&gt;</span> blue<span class="opt">.</span>
+
+
+<span class="kwd">show_complements</span><span class="opt">() -&gt;</span>
+    <span class="opt">[</span> <span class="kwc">io</span><span class="opt">:</span><span class="kwd">fwrite</span><span class="opt">(</span><span class="str">&quot;~p + ~p -&gt; ~p~n&quot;</span><span class="opt">, [</span>A<span class="opt">,</span> B<span class="opt">,</span> <span class="kwd">complement</span><span class="opt">(</span>A<span class="opt">,</span> B<span class="opt">)]) ||</span>
+        A <span class="opt">&lt;- [</span>blue<span class="opt">,</span> red<span class="opt">,</span> yellow<span class="opt">],</span>
+        B <span class="opt">&lt;- [</span>blue<span class="opt">,</span> red<span class="opt">,</span> yellow<span class="opt">]].</span>
+
+
+<span class="kwd">print_header</span><span class="opt">(</span>L<span class="opt">) -&gt;</span>
+    <span class="kwc">io</span><span class="opt">:</span><span class="kwd">fwrite</span><span class="opt">(</span><span class="str">&quot;~n&quot;</span><span class="opt">),</span>
+    <span class="kwd">foreach</span><span class="opt">(</span><span class="kwa">fun</span><span class="opt">(</span>C<span class="opt">) -&gt;</span> <span class="kwc">io</span><span class="opt">:</span><span class="kwd">fwrite</span><span class="opt">(</span><span class="str">&quot; ~p&quot;</span><span class="opt">, [</span>C<span class="opt">])</span> <span class="kwa">end</span><span class="opt">,</span> L<span class="opt">),</span>
+    <span class="kwc">io</span><span class="opt">:</span><span class="kwd">fwrite</span><span class="opt">(</span><span class="str">&quot;~n&quot;</span><span class="opt">).</span>
+
+
+<span class="kwd">run</span><span class="opt">(</span>L<span class="opt">,</span> N<span class="opt">) -&gt;</span>
+    <span class="kwd">print_header</span><span class="opt">(</span>L<span class="opt">),</span>
+    Broker <span class="opt">=</span> <span class="kwb">self</span><span class="opt">(),</span>
+    <span class="kwd">foreach</span><span class="opt">(</span><span class="kwa">fun</span><span class="opt">(</span>Color<span class="opt">) -&gt;</span> <span class="kwb">spawn</span><span class="opt">(</span><span class="kwa">fun</span><span class="opt">() -&gt;</span> <span class="kwd">chameneos</span><span class="opt">(</span>Broker<span class="opt">,</span> Color<span class="opt">,</span> <span class="num">0</span><span class="opt">,</span> <span class="num">0</span><span class="opt">)</span> <span class="kwa">end</span><span class="opt">)</span> <span class="kwa">end</span><span class="opt">,</span> L<span class="opt">),</span>
+    <span class="kwd">broker</span><span class="opt">(</span>N<span class="opt">),</span>
+    <span class="kwd">cleanup</span><span class="opt">(</span><span class="kwb">length</span><span class="opt">(</span>L<span class="opt">),</span> <span class="num">0</span><span class="opt">).</span>
+
+
+<span class="kwd">chameneos</span><span class="opt">(</span>Broker<span class="opt">,</span> Color<span class="opt">,</span> Meetings<span class="opt">,</span> MetSelf<span class="opt">) -&gt;</span>
+    Broker <span class="opt">! {</span> <span class="kwb">self</span><span class="opt">(),</span> Color <span class="opt">},</span>
+    <span class="kwa">receive</span>
+        <span class="opt">{</span>OPid<span class="opt">,</span> OColor<span class="opt">} -&gt;</span>
+            <span class="kwd">chameneos</span><span class="opt">(</span>Broker<span class="opt">,</span> <span class="kwd">complement</span><span class="opt">(</span>Color<span class="opt">,</span> OColor<span class="opt">),</span> Meetings<span class="opt">+</span><span class="num">1</span><span class="opt">,</span>
+                      <span class="kwa">if</span> OPid <span class="opt">==</span> <span class="kwb">self</span><span class="opt">() -&gt;</span> MetSelf<span class="opt">+</span><span class="num">1</span><span class="opt">;</span> true <span class="opt">-&gt;</span> MetSelf <span class="kwa">end</span><span class="opt">);</span>
+        stop <span class="opt">-&gt;</span>
+            <span class="kwc">io</span><span class="opt">:</span><span class="kwd">fwrite</span><span class="opt">(</span><span class="str">&quot;~w~s</span><span class="esc">\n</span><span class="str">&quot;</span><span class="opt">, [</span>Meetings<span class="opt">,</span> <span class="kwd">spell</span><span class="opt">(</span>MetSelf<span class="opt">)]),</span>
+            Broker <span class="opt">!</span> Meetings
+    <span class="kwa">end</span><span class="opt">.</span>
+
+
+<span class="kwd">broker</span><span class="opt">(</span><span class="num">0</span><span class="opt">) -&gt;</span> nil<span class="opt">;</span>
+<span class="kwd">broker</span><span class="opt">(</span>N<span class="opt">) -&gt;</span>
+    <span class="kwa">receive</span>
+        C1 <span class="opt">= {</span>Pid1<span class="opt">,</span> _<span class="opt">} -&gt;</span> nil
+    <span class="kwa">end</span><span class="opt">,</span>
+    <span class="kwa">receive</span>
+        C2 <span class="opt">= {</span>Pid2<span class="opt">,</span> _<span class="opt">} -&gt;</span>
+            Pid1 <span class="opt">!</span> C2<span class="opt">,</span>
+            Pid2 <span class="opt">!</span> C1<span class="opt">,</span>
+            <span class="kwd">broker</span><span class="opt">(</span>N<span class="opt">-</span><span class="num">1</span><span class="opt">)</span>
+    <span class="kwa">end</span><span class="opt">.</span>
+
+<span class="kwd">cleanup</span><span class="opt">(</span><span class="num">0</span><span class="opt">,</span> M<span class="opt">) -&gt;</span> <span class="kwc">io</span><span class="opt">:</span><span class="kwd">fwrite</span><span class="opt">(</span><span class="str">&quot;~s~n&quot;</span><span class="opt">, [</span><span class="kwd">spell</span><span class="opt">(</span>M<span class="opt">)]);</span>
+<span class="kwd">cleanup</span><span class="opt">(</span>N<span class="opt">,</span> M<span class="opt">) -&gt;</span>
+    <span class="kwa">receive</span>
+        <span class="opt">{</span>Pid<span class="opt">,</span> _Color<span class="opt">} -&gt;</span>
+            Pid <span class="opt">!</span> stop<span class="opt">,</span>
+            <span class="kwd">cleanup</span><span class="opt">(</span>N<span class="opt">,</span> M<span class="opt">);</span>
+        Meetings <span class="opt">-&gt;</span>
+            <span class="kwd">cleanup</span><span class="opt">(</span>N<span class="opt">-</span><span class="num">1</span><span class="opt">,</span> M<span class="opt">+</span>Meetings<span class="opt">)</span>
+    <span class="kwa">end</span><span class="opt">.</span>
+
+
+<span class="kwd">main</span><span class="opt">([</span>Arg<span class="opt">]) -&gt;</span>
+    N <span class="opt">=</span> <span class="kwb">list_to_integer</span><span class="opt">(</span>Arg<span class="opt">),</span>
+    <span class="kwd">show_complements</span><span class="opt">(),</span>
+    <span class="kwd">run</span><span class="opt">([</span>blue<span class="opt">,</span> red<span class="opt">,</span> yellow<span class="opt">],</span> N<span class="opt">),</span>
+    <span class="kwd">run</span><span class="opt">([</span>blue<span class="opt">,</span> red<span class="opt">,</span> yellow<span class="opt">,</span> red<span class="opt">,</span> yellow<span class="opt">,</span> blue<span class="opt">,</span> red<span class="opt">,</span> yellow<span class="opt">,</span> red<span class="opt">,</span> blue<span class="opt">],</span> N<span class="opt">),</span>
+    <span class="kwc">io</span><span class="opt">:</span><span class="kwd">fwrite</span><span class="opt">(</span><span class="str">&quot;~n&quot;</span><span class="opt">),</span>
+    <span class="kwb">halt</span><span class="opt">(</span><span class="num">0</span><span class="opt">).</span>
+

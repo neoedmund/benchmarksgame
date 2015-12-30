@@ -1,0 +1,20 @@
+
+Sat, 18 Jul 2015 17:06:10 GMT
+
+MAKE:
+mv knucleotide.hipe knucleotide.erl
+/usr/local/src/otp_src_18.0/bin/erlc +native +"{hipe, [o3]}"  knucleotide.erl
+rm knucleotide.erl
+0.67s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/otp_src_18.0/bin/erl -smp enable -noshell -run  knucleotide main 0 < knucleotide-input25000000.txt
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+
+Crash dump is being written to: erl_crash.dump...done
+eheap_alloc: Cannot allocate 659133920 bytes of memory (of type "heap").

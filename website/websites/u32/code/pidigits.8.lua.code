@@ -1,0 +1,105 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- contributed by Wim Couwenberg</span>
+<span class="slc">--</span>
+<span class="slc">-- requires LGMP &quot;A GMP package for Lua 5.1&quot;</span>
+<span class="slc">--</span>
+<span class="slc">-- This is still the step-by-step unbounded spigot algorithm but a number of</span>
+<span class="slc">-- optimizations make it an interesting alternative implementation.  :-)</span>
+<span class="slc">--</span>
+<span class="slc">-- 21 September 2008</span>
+
+<span class="kwa">local</span> gmp, aux = {}, {}
+require <span class="str">&quot;c-gmp&quot;</span> (gmp, aux)
+<span class="kwa">local</span> add, mul, divmod = gmp.mpz_add, gmp.mpz_mul_ui, gmp.mpz_fdiv_qr
+<span class="kwa">local</span> addmul, submul = gmp.mpz_addmul_ui, gmp.mpz_submul_ui
+<span class="kwa">local</span> init, get, set = gmp.mpz_init_set_d, gmp.mpz_get_d, gmp.mpz_set
+<span class="kwa">local</span> cmp, divx, gcd = gmp.mpz_cmp, gmp.mpz_divexact, gmp.mpz_gcd
+
+<span class="slc">-- used to store various intermediate results</span>
+<span class="kwa">local</span> t1, t2
+
+<span class="slc">--</span>
+<span class="slc">-- Production:</span>
+<span class="slc">--</span>
+<span class="slc">-- [m11 m12]     [m11 m12][k  4*k+2]</span>
+<span class="slc">-- [ 0  m22] &lt;-- [ 0  m22][0  2*k+1]</span>
+<span class="slc">--</span>
+<span class="kwa">local function</span> <span class="kwd">produce</span>(m11, m12, m22, k)
+  <span class="kwa">local</span> p = <span class="num">2</span>*k + <span class="num">1</span>
+  <span class="kwd">mul</span>(m12, p, m12)
+  <span class="kwd">addmul</span>(m12, m11, <span class="num">2</span>*p)
+  <span class="kwd">mul</span>(m11, k, m11)
+  <span class="kwd">mul</span>(m22, p, m22)
+<span class="kwa">end</span>
+
+<span class="slc">--</span>
+<span class="slc">-- Extraction:</span>
+<span class="slc">--</span>
+<span class="slc">-- [m11 m12]     [10 -10*d][m11 m12]</span>
+<span class="slc">-- [ 0  m22] &lt;-- [ 0   1  ][ 0  m22]</span>
+<span class="slc">--</span>
+<span class="kwa">local function</span> <span class="kwd">extract</span>(m11, m12, m22, d)
+  <span class="kwd">submul</span>(m12, m22, d)
+  <span class="kwd">mul</span>(m11, <span class="num">10</span>, m11)
+  <span class="kwd">mul</span>(m12, <span class="num">10</span>, m12)
+<span class="kwa">end</span>
+
+<span class="slc">--</span>
+<span class="slc">-- Test for a new digit.  Note that</span>
+<span class="slc">--</span>
+<span class="slc">-- [m11 m12][4]   [m11 m12][3]   [m11]</span>
+<span class="slc">-- [ 0  m22][1] = [ 0  m22][1] + [ 0 ]</span>
+<span class="slc">--</span>
+<span class="slc">-- so we can extract an extra digit exactly if (3*m11 + m12)%m22 + m11 is</span>
+<span class="slc">-- smaller than m22.  (Here % denotes the remainder.)  Then m11 is itself</span>
+<span class="slc">-- necessarily smaller than m22.</span>
+<span class="slc">--</span>
+<span class="kwa">local function</span> <span class="kwd">digit</span>(m11, m12, m22)
+  <span class="kwa">if</span> <span class="kwd">cmp</span>(m11, m22) &lt; <span class="num">0</span> <span class="kwa">then</span>
+    <span class="kwd">set</span>(t1, m12)
+    <span class="kwd">addmul</span>(t1, m11, <span class="num">3</span>)
+    <span class="kwd">divmod</span>(t1, m22, t1, t2)
+    <span class="kwd">add</span>(t2, m11, t2)
+    <span class="kwa">if</span> <span class="kwd">cmp</span>(t2, m22) &lt; <span class="num">0</span> <span class="kwa">then return</span> <span class="kwd">get</span>(t1) <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="slc">--</span>
+<span class="slc">-- Divide out common factors in the matrix coefficients m11, m12, m22.</span>
+<span class="slc">--</span>
+<span class="kwa">local function</span> <span class="kwd">reduce</span>(m11, m12, m22)
+  <span class="kwd">gcd</span>(m11, m12, t1)
+  <span class="kwd">gcd</span>(t1, m22, t1)
+  <span class="kwd">divx</span>(m11, t1, m11)
+  <span class="kwd">divx</span>(m12, t1, m12)
+  <span class="kwd">divx</span>(m22, t1, m22)
+<span class="kwa">end</span>
+
+<span class="slc">-- Generate successive digits of PI.</span>
+<span class="kwa">local function</span> <span class="kwd">pidigits</span>(N)
+  <span class="kwa">local</span> <span class="kwb">write</span> = io.<span class="kwb">write</span>
+  <span class="kwa">local</span> <span class="kwb">floor</span> = math.<span class="kwb">floor</span>
+  <span class="kwa">local</span> k = <span class="num">1</span>
+  <span class="kwa">local</span> m11, m12, m22 = <span class="kwd">init</span>(<span class="num">1</span>), <span class="kwd">init</span>(<span class="num">0</span>), <span class="kwd">init</span>(<span class="num">1</span>)
+  t1, t2 = <span class="kwd">init</span>(<span class="num">0</span>), <span class="kwd">init</span>(<span class="num">0</span>)
+  <span class="kwa">local</span> i = <span class="num">0</span>
+  <span class="kwa">local</span> r = <span class="num">256</span>
+  <span class="kwa">while</span> i &lt; N <span class="kwa">do</span>
+    <span class="kwa">local</span> d = <span class="kwd">digit</span>(m11, m12, m22)
+    <span class="kwa">if</span> d <span class="kwa">then</span>
+      <span class="kwb">write</span>(d)
+      <span class="kwd">extract</span>(m11, m12, m22, d)
+      i = i + <span class="num">1</span>
+      <span class="kwa">if</span> i == r <span class="kwa">then</span> <span class="kwd">reduce</span>(m11, m12, m22); r = <span class="kwb">floor</span>(<span class="num">1.0625</span>*r) <span class="kwa">end</span>
+      <span class="kwa">if</span> i % <span class="num">10</span> == <span class="num">0</span> <span class="kwa">then</span> <span class="kwb">write</span>(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>, i, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>) <span class="kwa">end</span>
+    <span class="kwa">else</span>
+      <span class="kwd">produce</span>(m11, m12, m22, k)
+      k = k + <span class="num">1</span>
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+  <span class="kwa">if</span> i % <span class="num">10</span> ~= <span class="num">0</span> <span class="kwa">then</span> <span class="kwb">write</span>(<span class="kwb">string</span>.<span class="kwd">rep</span>(<span class="str">&quot; &quot;</span>, <span class="num">10</span> - N % <span class="num">10</span>), <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>, N, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>) <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">local</span> N = <span class="kwb">tonumber</span>(arg <span class="kwa">and</span> arg[<span class="num">1</span>]) <span class="kwa">or</span> <span class="num">27</span>
+<span class="kwd">pidigits</span>(N)

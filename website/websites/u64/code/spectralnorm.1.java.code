@@ -1,0 +1,77 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> </span>
+<span class="com"> contributed by Java novice Jarkko Miettinen</span>
+<span class="com"> modified ~3 lines of the original C#-version </span>
+<span class="com"> by Isaac Gouy</span>
+<span class="com"> */</span>
+ 
+<span class="kwa">import</span> java.text.DecimalFormat;
+<span class="kwa">import</span> java.text.NumberFormat; 
+
+<span class="kwa">public class</span> spectralnorm
+{
+   
+   <span class="kwa">private static final</span> NumberFormat formatter = <span class="kwa">new</span> <span class="kwd">DecimalFormat</span>(<span class="str">&quot;#.000000000&quot;</span>);
+   
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) {
+      <span class="kwb">int</span> n = <span class="num">100</span>;
+      <span class="kwa">if</span> (args.length &gt; <span class="num">0</span>) n = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+      
+      System.out.<span class="kwd">println</span>(formatter.<span class="kwd">format</span>(<span class="kwa">new</span> <span class="kwd">spectralnorm</span>().<span class="kwd">Approximate</span>(n)));
+   }
+   
+   <span class="kwa">private final</span> <span class="kwb">double</span> <span class="kwd">Approximate</span>(<span class="kwb">int</span> n) {
+      <span class="slc">// create unit vector</span>
+      <span class="kwb">double</span>[] u = <span class="kwa">new</span> <span class="kwb">double</span>[n];
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; i++) u[i] =  <span class="num">1</span>;
+      
+      <span class="slc">// 20 steps of the power method</span>
+      <span class="kwb">double</span>[] v = <span class="kwa">new</span> <span class="kwb">double</span>[n];
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; i++) v[i] = <span class="num">0</span>;
+      
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;<span class="num">10</span>; i++) {
+         <span class="kwd">MultiplyAtAv</span>(n,u,v);
+         <span class="kwd">MultiplyAtAv</span>(n,v,u);
+      }
+      
+      <span class="slc">// B=AtA         A multiplied by A transposed</span>
+      <span class="slc">// v.Bv /(v.v)   eigenvalue of v</span>
+      <span class="kwb">double</span> vBv = <span class="num">0</span>, vv = <span class="num">0</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; i++) {
+         vBv += u[i]*v[i];
+         vv  += v[i]*v[i];
+      }
+      
+      <span class="kwa">return</span> Math.<span class="kwd">sqrt</span>(vBv/vv);
+   }
+   
+   
+   <span class="com">/* return element i,j of infinite matrix A */</span>
+   <span class="kwa">private final</span> <span class="kwb">double</span> <span class="kwd">A</span>(<span class="kwb">int</span> i, <span class="kwb">int</span> j){
+      <span class="kwa">return</span> <span class="num">1.0</span>/((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span> +i+<span class="num">1</span>);
+   }
+   
+   <span class="com">/* multiply vector v by matrix A */</span>
+   <span class="kwa">private final</span> <span class="kwb">void</span> <span class="kwd">MultiplyAv</span>(<span class="kwb">int</span> n, <span class="kwb">double</span>[] v, <span class="kwb">double</span>[] Av){
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; i++){
+         Av[i] = <span class="num">0</span>;
+         <span class="kwa">for</span> (<span class="kwb">int</span> j=<span class="num">0</span>; j&lt;n; j++) Av[i] += <span class="kwd">A</span>(i,j)*v[j];
+      }
+   }
+   
+   <span class="com">/* multiply vector v by matrix A transposed */</span>
+   <span class="kwa">private final</span> <span class="kwb">void</span> <span class="kwd">MultiplyAtv</span>(<span class="kwb">int</span> n, <span class="kwb">double</span>[] v, <span class="kwb">double</span>[] Atv){
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;n;i++){
+         Atv[i] = <span class="num">0</span>;
+         <span class="kwa">for</span> (<span class="kwb">int</span> j=<span class="num">0</span>; j&lt;n; j++) Atv[i] += <span class="kwd">A</span>(j,i)*v[j];
+      }
+   }
+   
+   <span class="com">/* multiply vector v by matrix A and then by matrix A transposed */</span>
+   <span class="kwa">private final</span> <span class="kwb">void</span> <span class="kwd">MultiplyAtAv</span>(<span class="kwb">int</span> n, <span class="kwb">double</span>[] v, <span class="kwb">double</span>[] AtAv){
+      <span class="kwb">double</span>[] u = <span class="kwa">new</span> <span class="kwb">double</span>[n];
+      <span class="kwd">MultiplyAv</span>(n,v,u);
+      <span class="kwd">MultiplyAtv</span>(n,u,AtAv);
+   }
+}

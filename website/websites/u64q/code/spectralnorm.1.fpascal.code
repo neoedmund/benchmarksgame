@@ -1,0 +1,65 @@
+<span class="com">{ The Computer Language Benchmarks Game</span>
+<span class="com">  http://benchmarksgame.alioth.debian.org</span>
+<span class="com"></span>
+<span class="com">  contributed by Ian Osgood</span>
+<span class="com">  modified by Vincent Snijders</span>
+<span class="com">}</span>
+
+<span class="kwa">program</span> spectralNorm;
+
+
+<span class="kwa">var</span> n,i : <span class="kwb">integer</span>;
+    u,v,tmp : <span class="kwa">array of</span> <span class="kwb">double</span>;
+    vBv,vv : <span class="kwb">double</span>;
+
+<span class="kwa">function</span> <span class="kwd">A</span>(i,j : <span class="kwb">integer</span>): <span class="kwb">double</span>; <span class="kwa">inline</span>;
+<span class="kwa">begin</span>
+  A := <span class="num">1</span> / ((i+j)*(i+j+<span class="num">1</span>) <span class="kwa">div</span> <span class="num">2</span> + i+<span class="num">1</span>);
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">mulAv</span>(<span class="kwa">var</span> v, Av : <span class="kwa">array of</span> <span class="kwb">double</span>);
+<span class="kwa">var</span> i,j : <span class="kwb">integer</span>;
+<span class="kwa">begin</span>
+  <span class="kwc">for</span> i := <span class="kwd">low</span>(Av) <span class="kwc">to</span> <span class="kwd">high</span>(Av) <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    Av[i] := <span class="num">0.0</span>;
+    <span class="kwc">for</span> j := <span class="kwd">low</span>(v) <span class="kwc">to</span> <span class="kwd">high</span>(v) <span class="kwc">do</span>
+      Av[i] := Av[i] + <span class="kwd">A</span>(i,j) * v[j];
+  <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">mulAtv</span>(<span class="kwa">var</span> v, Atv : <span class="kwa">array of</span> <span class="kwb">double</span>);
+<span class="kwa">var</span> i,j : <span class="kwb">integer</span>;
+<span class="kwa">begin</span>
+  <span class="kwc">for</span> i := <span class="kwd">low</span>(Atv) <span class="kwc">to</span> <span class="kwd">high</span>(Atv) <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    Atv[i] := <span class="num">0.0</span>;
+    <span class="kwc">for</span> j := <span class="kwd">low</span>(v) <span class="kwc">to</span> <span class="kwd">high</span>(v) <span class="kwc">do</span>
+      Atv[i] := Atv[i] + <span class="kwd">A</span>(j,i) * v[j];
+  <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">mulAtAv</span>(<span class="kwa">var</span> v, AtAv : <span class="kwa">array of</span> <span class="kwb">double</span>);
+<span class="kwa">begin</span>
+  <span class="kwd">mulAv</span>(v, tmp);
+  <span class="kwd">mulAtv</span>(tmp, AtAv);
+<span class="kwa">end</span>;
+
+<span class="kwa">begin</span>
+  <span class="kwd">Val</span>(<span class="kwd">paramstr</span>(<span class="num">1</span>), n, i);
+  <span class="kwd">SetLength</span>(u, n);
+  <span class="kwd">SetLength</span>(v, n);
+  <span class="kwd">SetLength</span>(tmp, n);
+
+  <span class="kwc">for</span> i := <span class="kwd">low</span>(u) <span class="kwc">to</span> <span class="kwd">high</span>(u) <span class="kwc">do</span> u[i] := <span class="num">1.0</span>;
+
+  <span class="kwc">for</span> i := <span class="num">1</span> <span class="kwc">to</span> <span class="num">10</span> <span class="kwc">do</span> <span class="kwa">begin</span> <span class="kwd">mulAtAv</span>(u,v); <span class="kwd">mulAtAv</span>(v,u) <span class="kwa">end</span>;
+
+  <span class="kwc">for</span> i := <span class="kwd">low</span>(u) <span class="kwc">to</span> <span class="kwd">high</span>(u) <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    vBv := vBv + u[i]*v[i];
+    vv  := vv  + v[i]*v[i];
+  <span class="kwa">end</span>;
+
+  <span class="kwd">writeln</span>(<span class="kwd">sqrt</span>(vBv/vv):<span class="num">0</span>:<span class="num">9</span>);
+<span class="kwa">end</span>.

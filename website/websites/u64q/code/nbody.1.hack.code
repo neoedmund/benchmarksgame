@@ -1,0 +1,155 @@
+&lt;?hh
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   </span>
+<span class="com">   PHP as HHVM/Hack by Isaac Gouy</span>
+<span class="com">*/</span>
+
+
+<span class="kwa">function</span> <span class="kwd">Advance</span>(&amp;$bodies, $dt) {
+   $m = <span class="kwd">sizeof</span>($bodies);
+   <span class="kwa">for</span> ($i=<span class="num">0</span>; $i&lt;$m; $i++) {
+      <span class="kwa">for</span> ($j=$i+<span class="num">1</span>; $j&lt;$m; $j++) {
+         $dx = $bodies[$i]-&gt;x - $bodies[$j]-&gt;x;
+         $dy = $bodies[$i]-&gt;y - $bodies[$j]-&gt;y;
+         $dz = $bodies[$i]-&gt;z - $bodies[$j]-&gt;z;
+
+         $distance = <span class="kwd">sqrt</span>($dx*$dx + $dy*$dy + $dz*$dz);
+         $mag = $dt / ($distance * $distance * $distance);
+
+         $bodies[$i]-&gt;vx -= $dx * $bodies[$j]-&gt;mass * $mag;
+         $bodies[$i]-&gt;vy -= $dy * $bodies[$j]-&gt;mass * $mag;
+         $bodies[$i]-&gt;vz -= $dz * $bodies[$j]-&gt;mass * $mag;
+
+         $bodies[$j]-&gt;vx += $dx * $bodies[$i]-&gt;mass * $mag;
+         $bodies[$j]-&gt;vy += $dy * $bodies[$i]-&gt;mass * $mag;
+         $bodies[$j]-&gt;vz += $dz * $bodies[$i]-&gt;mass * $mag;
+      }
+   }
+   
+   <span class="kwa">for</span> ($i=<span class="num">0</span>; $i&lt;$m; $i++) {      
+      $bodies[$i]-&gt;x += $dt * $bodies[$i]-&gt;vx;
+      $bodies[$i]-&gt;y += $dt * $bodies[$i]-&gt;vy;
+      $bodies[$i]-&gt;z += $dt * $bodies[$i]-&gt;vz;
+   }
+}
+
+
+<span class="kwa">function</span> <span class="kwd">Energy</span>(&amp;$bodies) {
+   $m = <span class="kwd">sizeof</span>($bodies);
+   $e = <span class="num">0.0</span>;
+   <span class="kwa">for</span> ($i=<span class="num">0</span>; $i&lt;$m; $i++) {
+      $e += <span class="num">0.5</span> * $bodies[$i]-&gt;mass *
+         ( $bodies[$i]-&gt;vx * $bodies[$i]-&gt;vx
+         + $bodies[$i]-&gt;vy * $bodies[$i]-&gt;vy
+         + $bodies[$i]-&gt;vz * $bodies[$i]-&gt;vz );
+
+      <span class="kwa">for</span> ($j=$i+<span class="num">1</span>; $j&lt;$m; $j++) {
+         $dx = $bodies[$i]-&gt;x - $bodies[$j]-&gt;x;
+         $dy = $bodies[$i]-&gt;y - $bodies[$j]-&gt;y;
+         $dz = $bodies[$i]-&gt;z - $bodies[$j]-&gt;z;
+
+         $distance = <span class="kwd">sqrt</span>($dx*$dx + $dy*$dy + $dz*$dz);
+         $e -= ($bodies[$i]-&gt;mass * $bodies[$j]-&gt;mass) / $distance;
+      }
+   }
+   <span class="kwa">return</span> $e;
+}
+
+
+<span class="kwd">define</span>(<span class="str">&quot;PI&quot;</span>, <span class="num">3.141592653589793</span>);
+<span class="kwd">define</span>(<span class="str">&quot;SOLAR_MASS&quot;</span>, <span class="num">4</span> * PI * PI);
+<span class="kwd">define</span>(<span class="str">&quot;DAYS_PER_YEAR&quot;</span>, <span class="num">365.24</span>);
+
+<span class="kwa">class</span> Body {
+   <span class="kwa">var</span> $x, $y, $z, $vx, $vy, $vz, $mass;
+ 
+   <span class="kwa">function</span> <span class="kwd">NewBody</span>($x, $y, $z, $vx, $vy, $vz, $mass){
+      $b = <span class="kwa">new</span> Body;
+      $b-&gt;x = $x;
+      $b-&gt;y = $y;
+      $b-&gt;z = $z;
+      $b-&gt;vx = $vx;
+      $b-&gt;vy = $vy;
+      $b-&gt;vz = $vz;
+      $b-&gt;mass = $mass;        
+      <span class="kwa">return</span> $b;                               
+   } 
+      
+   <span class="kwa">function</span> <span class="kwd">Jupiter</span>(){ 
+      <span class="kwa">return</span> Body::<span class="kwd">NewBody</span>(  
+           <span class="num">4.84143144246472090E+00</span>
+         , -<span class="num">1.16032004402742839E+00</span>
+         , -<span class="num">1.03622044471123109E-01</span>
+         , <span class="num">1.66007664274403694E-03</span> * DAYS_PER_YEAR
+         , <span class="num">7.69901118419740425E-03</span> * DAYS_PER_YEAR
+         , -<span class="num">6.90460016972063023E-05</span> * DAYS_PER_YEAR
+         , <span class="num">9.54791938424326609E-04</span> * SOLAR_MASS 
+      );   
+   }
+   
+   <span class="kwa">function</span> <span class="kwd">Saturn</span>(){ 
+      <span class="kwa">return</span> Body::<span class="kwd">NewBody</span>(  
+           <span class="num">8.34336671824457987E+00</span>
+         , <span class="num">4.12479856412430479E+00</span>
+         , -<span class="num">4.03523417114321381E-01</span>
+         , -<span class="num">2.76742510726862411E-03</span> * DAYS_PER_YEAR
+         , <span class="num">4.99852801234917238E-03</span> * DAYS_PER_YEAR
+         , <span class="num">2.30417297573763929E-05</span> * DAYS_PER_YEAR
+         , <span class="num">2.85885980666130812E-04</span> * SOLAR_MASS
+      );   
+   }   
+   
+   <span class="kwa">function</span> <span class="kwd">Uranus</span>(){ 
+      <span class="kwa">return</span> Body::<span class="kwd">NewBody</span>(  
+           <span class="num">1.28943695621391310E+01</span>
+         , -<span class="num">1.51111514016986312E+01</span>
+         , -<span class="num">2.23307578892655734E-01</span>
+         , <span class="num">2.96460137564761618E-03</span> * DAYS_PER_YEAR
+         , <span class="num">2.37847173959480950E-03</span> * DAYS_PER_YEAR
+         , -<span class="num">2.96589568540237556E-05</span> * DAYS_PER_YEAR
+         , <span class="num">4.36624404335156298E-05</span> * SOLAR_MASS
+      );   
+   }    
+   
+   <span class="kwa">function</span> <span class="kwd">Neptune</span>(){ 
+      <span class="kwa">return</span> Body::<span class="kwd">NewBody</span>(  
+           <span class="num">1.53796971148509165E+01</span>
+         , -<span class="num">2.59193146099879641E+01</span>
+         , <span class="num">1.79258772950371181E-01</span>
+         , <span class="num">2.68067772490389322E-03</span> * DAYS_PER_YEAR
+         , <span class="num">1.62824170038242295E-03</span> * DAYS_PER_YEAR
+         , -<span class="num">9.51592254519715870E-05</span> * DAYS_PER_YEAR
+         , <span class="num">5.15138902046611451E-05</span> * SOLAR_MASS
+      );   
+   }   
+   
+   <span class="kwa">function</span> <span class="kwd">Sun</span>(){ 
+      <span class="kwa">return</span> Body::<span class="kwd">NewBody</span>(<span class="num">0.0</span>, <span class="num">0.0</span>, <span class="num">0.0</span>, <span class="num">0.0</span>, <span class="num">0.0</span>, <span class="num">0.0</span>, SOLAR_MASS);   
+   }   
+   
+   <span class="kwa">function</span> <span class="kwd">OffsetMomentum</span>(&amp;$bodies){ 
+      $px = <span class="num">0.0</span>;
+      $py = <span class="num">0.0</span>;
+      $pz = <span class="num">0.0</span>;
+      <span class="kwa">foreach</span> ($bodies <span class="kwa">as</span> $each) {
+         $px += $each-&gt;vx * $each-&gt;mass;
+         $py += $each-&gt;vy * $each-&gt;mass;
+         $pz += $each-&gt;vz * $each-&gt;mass;
+      }      
+      $bodies[<span class="num">0</span>]-&gt;vx = -$px / SOLAR_MASS;
+      $bodies[<span class="num">0</span>]-&gt;vy = -$py / SOLAR_MASS;
+      $bodies[<span class="num">0</span>]-&gt;vz = -$pz / SOLAR_MASS;                                       
+   }      
+}
+
+
+$bodies = <span class="kwa">array</span>( Body::<span class="kwd">Sun</span>(), Body::<span class="kwd">Jupiter</span>(), 
+                 Body::<span class="kwd">Saturn</span>(), Body::<span class="kwd">Uranus</span>(), Body::<span class="kwd">Neptune</span>() );                 
+Body::<span class="kwd">OffsetMomentum</span>($bodies);
+
+$n = $argv[<span class="num">1</span>];
+<span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%0</span><span class="str">.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">Energy</span>($bodies));
+<span class="kwa">for</span> ($i=<span class="num">0</span>; $i&lt;$n; $i++){ <span class="kwd">Advance</span>($bodies,<span class="num">0.01</span>); }
+<span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%0</span><span class="str">.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">Energy</span>($bodies));
+

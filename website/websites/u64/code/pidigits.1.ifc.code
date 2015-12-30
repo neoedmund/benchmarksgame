@@ -1,0 +1,278 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">! contributed by Steve Decker</span>
+<span class="slc">! compilation:</span>
+<span class="slc">!    g95 -O3 -funroll-loops -fomit-frame-pointer pidigits.f90</span>
+<span class="slc">!    ifort -O -ip pidigits.f90</span>
+
+<span class="kwa">module</span> big_int_mod
+  <span class="kwa">implicit none</span>
+  <span class="kwa">save</span>
+  
+  <span class="kwa">integer</span>, <span class="kwa">parameter</span>, private :: Pwr = <span class="num">15</span>, Base = <span class="num">2</span>**Pwr, maxDigs = <span class="num">2558</span>
+
+  <span class="kwa">type</span> big_int
+     private
+     <span class="kwa">integer</span> :: sigDigs
+     <span class="kwa">logical</span> :: sign
+     <span class="kwa">integer</span>, <span class="kwa">dimension</span>(maxDigs) :: digits
+  <span class="kwa">end type</span> big_int
+
+  <span class="kwa">interface</span> <span class="kwd">assignment</span> (=)
+     <span class="kwa">module</span> procedure int_to_big_int
+  <span class="kwa">end interface</span>
+  
+  <span class="kwa">interface</span> <span class="kwd">operator</span> (*)
+     <span class="kwa">module</span> procedure big_int_times_int
+  <span class="kwa">end interface</span>
+  
+  <span class="kwa">interface</span> <span class="kwd">operator</span> (+)
+     <span class="kwa">module</span> procedure big_int_plus_big_int
+  <span class="kwa">end interface</span>
+
+  <span class="kwa">interface</span> <span class="kwd">operator</span> (/)
+     <span class="kwa">module</span> procedure big_int_div_big_int
+  <span class="kwa">end interface</span>
+
+<span class="kwa">contains</span>
+  
+  <span class="kwa">subroutine</span> <span class="kwd">int_to_big_int</span>(bi, n)
+    <span class="kwa">type</span>(big_int), <span class="kwd">intent</span>(inout) :: bi
+    <span class="kwa">integer</span>,       <span class="kwd">intent</span>(in)    :: n
+
+    <span class="kwa">integer</span> :: i
+
+    <span class="kwa">if</span> (n &gt; <span class="num">0</span>) <span class="kwa">then</span>
+       bi = <span class="kwd">big_int</span>(<span class="num">1</span>, .true., (/ n, (<span class="num">0</span>, i = <span class="num">2</span>, maxDigs) /) )
+    <span class="kwa">else</span>
+       bi = <span class="kwd">big_int</span>(<span class="num">0</span>, .true., <span class="num">0</span>)
+    <span class="kwa">end if</span>
+  <span class="kwa">end subroutine</span> int_to_big_int
+  
+  <span class="kwa">function</span> <span class="kwd">big_int_times_int</span>(bi, n) <span class="kwd">result</span>(c)
+    <span class="kwa">type</span>(big_int), <span class="kwd">intent</span>(in) :: bi
+    <span class="kwa">integer</span>,       <span class="kwd">intent</span>(in) :: n
+    <span class="kwa">type</span>(big_int) :: c
+
+    <span class="kwa">integer</span> :: m, i, curDig, k, j, carry
+    
+    c = <span class="kwd">big_int</span>(<span class="num">0</span>, .true., <span class="num">0</span>)
+    <span class="kwa">if</span> (n == <span class="num">0</span> .or. bi%sigDigs == <span class="num">0</span>) <span class="kwa">return</span>
+    c%sign = n &gt;= <span class="num">0</span> .eqv. bi%sign
+    m = <span class="kwd">abs</span>(n)
+
+    <span class="kwa">do</span> i = <span class="num">1</span>, maxDigs
+       curDig = <span class="kwd">mod</span>(m,Base)
+       k = <span class="num">1</span>
+       carry = <span class="num">0</span>
+       <span class="kwa">do</span> j = i, i + bi%sigDigs + <span class="num">1</span>
+          c%<span class="kwd">digits</span>(j) = c%<span class="kwd">digits</span>(j) + curDig * bi%<span class="kwd">digits</span>(k) + carry
+          carry = <span class="kwd">ibits</span>(c%<span class="kwd">digits</span>(j),Pwr,Pwr+<span class="num">1</span>)
+          c%<span class="kwd">digits</span>(j) = <span class="kwd">mod</span>(c%<span class="kwd">digits</span>(j),Base)
+          k = k + <span class="num">1</span>
+       <span class="kwa">end do</span>
+       m = <span class="kwd">ibits</span>(m,Pwr,Pwr+<span class="num">1</span>)
+       <span class="kwa">if</span> (m == <span class="num">0</span>) exit
+    <span class="kwa">end do</span>
+    <span class="kwa">do</span> j = i + bi%sigDigs, <span class="num">1</span>, -<span class="num">1</span>
+       c%sigDigs = j
+       <span class="kwa">if</span> (c%<span class="kwd">digits</span>(j) /= <span class="num">0</span>) exit
+    <span class="kwa">end do</span>
+  <span class="kwa">end function</span> big_int_times_int
+
+  <span class="kwa">function</span> <span class="kwd">big_int_plus_big_int</span>(bi1, bi2) <span class="kwd">result</span>(c)
+    <span class="kwa">type</span>(big_int), target, <span class="kwd">intent</span>(in) :: bi1, bi2
+    <span class="kwa">type</span>(big_int) :: c
+    
+    <span class="kwa">integer</span> :: i, carry, n
+    <span class="kwa">type</span>(big_int), <span class="kwa">pointer</span> :: a, b
+
+    c = <span class="kwd">big_int</span>(<span class="num">0</span>, .true., <span class="num">0</span>)
+
+    <span class="kwa">if</span> (bi1%sigDigs == <span class="num">0</span>) <span class="kwa">then</span>
+       c = bi2
+       <span class="kwa">return</span>
+    <span class="kwa">else if</span> (bi2%sigDigs == <span class="num">0</span>) <span class="kwa">then</span>
+       c = bi1
+       <span class="kwa">return</span>
+    <span class="kwa">end if</span>
+
+    <span class="kwa">if</span> (bi1%sign .eqv. bi2%sign) <span class="kwa">then</span>
+       c%sign = bi1%sign
+       carry = <span class="num">0</span>
+       n = <span class="kwd">max</span>(bi1%sigDigs, bi2%sigDigs) + <span class="num">1</span>
+       <span class="kwa">do</span> i = <span class="num">1</span>, n
+          c%<span class="kwd">digits</span>(i) = bi1%<span class="kwd">digits</span>(i) + bi2%<span class="kwd">digits</span>(i) + carry
+          carry = <span class="kwd">ibits</span>(c%<span class="kwd">digits</span>(i),Pwr,Pwr+<span class="num">1</span>)
+          c%<span class="kwd">digits</span>(i) = <span class="kwd">mod</span>(c%<span class="kwd">digits</span>(i),Base)
+       <span class="kwa">end do</span>
+    <span class="kwa">else</span>
+       <span class="kwa">if</span> (<span class="kwd">greater_in_mag</span>(bi1, bi2)) <span class="kwa">then</span>
+          a =&gt; bi1
+          b =&gt; bi2
+       <span class="kwa">else if</span> (<span class="kwd">greater_in_mag</span>(bi2, bi1)) <span class="kwa">then</span>
+          a =&gt; bi2
+          b =&gt; bi1
+       <span class="kwa">else</span>
+          <span class="kwa">return</span>
+       <span class="kwa">end if</span>
+
+       n = <span class="kwd">max</span>(a%sigDigs, b%sigDigs)
+       c%sign = a%sign
+       <span class="kwa">do</span> i = <span class="num">1</span>, n
+          <span class="kwa">if</span> (a%<span class="kwd">digits</span>(i) &lt; b%<span class="kwd">digits</span>(i)) <span class="kwa">then</span>
+             a%<span class="kwd">digits</span>(i) = a%<span class="kwd">digits</span>(i) + Base
+             a%<span class="kwd">digits</span>(i+<span class="num">1</span>) = a%<span class="kwd">digits</span>(i+<span class="num">1</span>) - <span class="num">1</span>
+          <span class="kwa">end if</span>
+          c%<span class="kwd">digits</span>(i) = a%<span class="kwd">digits</span>(i) - b%<span class="kwd">digits</span>(i)
+       <span class="kwa">end do</span>
+    <span class="kwa">end if</span>
+
+    <span class="kwa">do</span> i = n, <span class="num">1</span>, -<span class="num">1</span>
+       c%sigDigs = i
+       <span class="kwa">if</span> (c%<span class="kwd">digits</span>(i) /= <span class="num">0</span>) exit
+    <span class="kwa">end do</span>
+  <span class="kwa">end function</span> big_int_plus_big_int
+
+  <span class="kwa">function</span> <span class="kwd">big_int_div_big_int</span>(a, b) <span class="kwd">result</span>(c)
+    <span class="kwa">type</span>(big_int), <span class="kwd">intent</span>(in) :: a, b
+    <span class="kwa">integer</span>                   :: c
+
+    <span class="kwa">integer</span> :: k, carry, n, j
+    <span class="kwa">type</span>(big_int) :: accumulator
+
+    c = <span class="num">0</span>
+    <span class="kwa">if</span> (a%sigDigs == <span class="num">0</span>) <span class="kwa">return</span>
+
+    accumulator = <span class="kwd">big_int</span>(<span class="num">0</span>, .true., <span class="num">0</span>)
+    <span class="kwa">do</span> k = <span class="num">0</span>, Base-<span class="num">1</span>
+       carry = <span class="num">0</span>
+       n = <span class="kwd">max</span>(accumulator%sigDigs, b%sigDigs) + <span class="num">1</span>
+       <span class="kwa">do</span> j = <span class="num">1</span>, n
+          accumulator%<span class="kwd">digits</span>(j) =  &amp;
+               accumulator%<span class="kwd">digits</span>(j) + b%<span class="kwd">digits</span>(j) + carry
+          carry = <span class="kwd">ibits</span>(accumulator%<span class="kwd">digits</span>(j),Pwr,Pwr+<span class="num">1</span>)
+          accumulator%<span class="kwd">digits</span>(j) = <span class="kwd">mod</span>(accumulator%<span class="kwd">digits</span>(j),Base)
+       <span class="kwa">end do</span>
+       <span class="kwa">do</span> j = n, <span class="num">1</span>, -<span class="num">1</span>
+          accumulator%sigDigs = j
+          <span class="kwa">if</span> (accumulator%<span class="kwd">digits</span>(j) /= <span class="num">0</span>) exit
+       <span class="kwa">end do</span>
+       <span class="kwa">if</span> (<span class="kwd">greater_in_mag</span>(accumulator, a)) <span class="kwa">then</span>
+          c = k
+          exit
+       <span class="kwa">end if</span>
+    <span class="kwa">end do</span>
+  <span class="kwa">end function</span> big_int_div_big_int
+  
+  <span class="kwa">logical function</span> <span class="kwd">greater_in_mag</span>(a, b)
+    <span class="kwa">type</span>(big_int), <span class="kwd">intent</span>(in) :: a, b
+
+    <span class="kwa">integer</span> :: i
+
+    greater_in_mag = .false.
+    <span class="kwa">do</span> i = <span class="kwd">max</span>(a%sigDigs, b%sigDigs), <span class="num">1</span>, -<span class="num">1</span>
+       <span class="kwa">if</span> (a%<span class="kwd">digits</span>(i) &gt; b%<span class="kwd">digits</span>(i)) <span class="kwa">then</span>
+          greater_in_mag = .true.
+          exit
+       <span class="kwa">else if</span> (a%<span class="kwd">digits</span>(i) &lt; b%<span class="kwd">digits</span>(i)) <span class="kwa">then</span>
+          exit
+       <span class="kwa">end if</span>
+    <span class="kwa">end do</span>
+  <span class="kwa">end function</span> greater_in_mag
+<span class="kwa">end module</span> big_int_mod
+
+<span class="kwa">module</span> pi_mod
+  <span class="kwa">use</span> big_int_mod
+  <span class="kwa">implicit none</span>
+
+<span class="kwa">contains</span>
+
+  <span class="kwa">function</span> <span class="kwd">lfts</span>(k)
+    <span class="kwa">integer</span>, <span class="kwd">intent</span>(in)     :: k
+    <span class="kwa">integer</span>, <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>) :: lfts
+
+    lfts = <span class="kwd">reshape</span>( (/ k, <span class="num">0</span>, <span class="num">4</span>*k + <span class="num">2</span>, <span class="num">2</span>*k + <span class="num">1</span> /), (/ <span class="num">2</span>, <span class="num">2</span> /) )
+  <span class="kwa">end function</span> lfts
+
+  <span class="kwa">function</span> <span class="kwd">comp1</span>(a, b)
+    <span class="kwa">integer</span>,       <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>), <span class="kwd">intent</span>(in) :: a
+    <span class="kwa">type</span>(big_int), <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>), <span class="kwd">intent</span>(in) :: b
+    <span class="kwa">type</span>(big_int), <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>) :: comp1
+
+    <span class="kwd">comp1</span>(<span class="num">1</span>,<span class="num">1</span>) = <span class="kwd">b</span>(<span class="num">1</span>,<span class="num">1</span>)*<span class="kwd">a</span>(<span class="num">1</span>,<span class="num">1</span>) + <span class="kwd">b</span>(<span class="num">2</span>,<span class="num">1</span>)*<span class="kwd">a</span>(<span class="num">1</span>,<span class="num">2</span>)
+    <span class="kwd">comp1</span>(<span class="num">2</span>,<span class="num">1</span>) = <span class="kwd">b</span>(<span class="num">1</span>,<span class="num">1</span>)*<span class="kwd">a</span>(<span class="num">2</span>,<span class="num">1</span>) + <span class="kwd">b</span>(<span class="num">2</span>,<span class="num">1</span>)*<span class="kwd">a</span>(<span class="num">2</span>,<span class="num">2</span>)
+    <span class="kwd">comp1</span>(<span class="num">1</span>,<span class="num">2</span>) = <span class="kwd">b</span>(<span class="num">1</span>,<span class="num">2</span>)*<span class="kwd">a</span>(<span class="num">1</span>,<span class="num">1</span>) + <span class="kwd">b</span>(<span class="num">2</span>,<span class="num">2</span>)*<span class="kwd">a</span>(<span class="num">1</span>,<span class="num">2</span>)
+    <span class="kwd">comp1</span>(<span class="num">2</span>,<span class="num">2</span>) = <span class="kwd">b</span>(<span class="num">1</span>,<span class="num">2</span>)*<span class="kwd">a</span>(<span class="num">2</span>,<span class="num">1</span>) + <span class="kwd">b</span>(<span class="num">2</span>,<span class="num">2</span>)*<span class="kwd">a</span>(<span class="num">2</span>,<span class="num">2</span>)
+  <span class="kwa">end function</span> comp1
+
+  <span class="kwa">function</span> <span class="kwd">comp2</span>(a, b)
+    <span class="kwa">type</span>(big_int), <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>), <span class="kwd">intent</span>(in) :: a
+    <span class="kwa">integer</span>,       <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>), <span class="kwd">intent</span>(in) :: b
+    <span class="kwa">type</span>(big_int), <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>) :: comp2
+    
+    <span class="kwd">comp2</span>(<span class="num">1</span>,<span class="num">1</span>) = <span class="kwd">a</span>(<span class="num">1</span>,<span class="num">1</span>)*<span class="kwd">b</span>(<span class="num">1</span>,<span class="num">1</span>) + <span class="kwd">a</span>(<span class="num">1</span>,<span class="num">2</span>)*<span class="kwd">b</span>(<span class="num">2</span>,<span class="num">1</span>)
+    <span class="kwd">comp2</span>(<span class="num">2</span>,<span class="num">1</span>) = <span class="kwd">a</span>(<span class="num">2</span>,<span class="num">1</span>)*<span class="kwd">b</span>(<span class="num">1</span>,<span class="num">1</span>) + <span class="kwd">a</span>(<span class="num">2</span>,<span class="num">2</span>)*<span class="kwd">b</span>(<span class="num">2</span>,<span class="num">1</span>)
+    <span class="kwd">comp2</span>(<span class="num">1</span>,<span class="num">2</span>) = <span class="kwd">a</span>(<span class="num">1</span>,<span class="num">1</span>)*<span class="kwd">b</span>(<span class="num">1</span>,<span class="num">2</span>) + <span class="kwd">a</span>(<span class="num">1</span>,<span class="num">2</span>)*<span class="kwd">b</span>(<span class="num">2</span>,<span class="num">2</span>)
+    <span class="kwd">comp2</span>(<span class="num">2</span>,<span class="num">2</span>) = <span class="kwd">a</span>(<span class="num">2</span>,<span class="num">1</span>)*<span class="kwd">b</span>(<span class="num">1</span>,<span class="num">2</span>) + <span class="kwd">a</span>(<span class="num">2</span>,<span class="num">2</span>)*<span class="kwd">b</span>(<span class="num">2</span>,<span class="num">2</span>)
+  <span class="kwa">end function</span> comp2
+  
+  <span class="kwa">function</span> <span class="kwd">prod</span>(z, n)
+    <span class="kwa">type</span>(big_int), <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>), <span class="kwd">intent</span>(in) :: z
+    <span class="kwa">integer</span>,                       <span class="kwd">intent</span>(in) :: n
+    <span class="kwa">type</span>(big_int), <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>) :: prod
+
+    prod = <span class="kwd">comp1</span>(<span class="kwd">reshape</span>( (/ <span class="num">10</span>, <span class="num">0</span>, -<span class="num">10</span>*n, <span class="num">1</span> /), (/ <span class="num">2</span>, <span class="num">2</span> /) ), z)
+  <span class="kwa">end function</span> prod
+  
+  <span class="kwa">logical function</span> <span class="kwd">safe</span>(z, n)
+    <span class="kwa">type</span>(big_int), <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>), <span class="kwd">intent</span>(in) :: z
+    <span class="kwa">integer</span>,                       <span class="kwd">intent</span>(in) :: n
+
+    safe = n == (<span class="kwd">z</span>(<span class="num">1</span>,<span class="num">1</span>) * <span class="num">4</span> + <span class="kwd">z</span>(<span class="num">1</span>,<span class="num">2</span>)) / (<span class="kwd">z</span>(<span class="num">2</span>,<span class="num">1</span>) * <span class="num">4</span> + <span class="kwd">z</span>(<span class="num">2</span>,<span class="num">2</span>))
+  <span class="kwa">end function</span> safe
+
+  <span class="kwa">integer function</span> <span class="kwd">next</span>(z)
+    <span class="kwa">type</span>(big_int), <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>), <span class="kwd">intent</span>(in) :: z
+    
+    next = (<span class="kwd">z</span>(<span class="num">1</span>,<span class="num">1</span>) * <span class="num">3</span> + <span class="kwd">z</span>(<span class="num">1</span>,<span class="num">2</span>)) / (<span class="kwd">z</span>(<span class="num">2</span>,<span class="num">1</span>) * <span class="num">3</span> + <span class="kwd">z</span>(<span class="num">2</span>,<span class="num">2</span>))
+  <span class="kwa">end function</span> next
+<span class="kwa">end module</span> pi_mod
+
+<span class="kwa">program</span> pidigits
+  <span class="kwa">use</span> pi_mod
+  <span class="kwa">implicit none</span>
+
+  <span class="kwa">character</span>(len=<span class="num">12</span>), <span class="kwa">parameter</span>  :: proForma = <span class="str">&quot;          &quot;</span> // <span class="kwd">achar</span>(<span class="num">9</span>) // <span class="str">&quot;:&quot;</span>
+  <span class="kwa">type</span>(big_int), <span class="kwa">dimension</span>(<span class="num">2</span>,<span class="num">2</span>) :: z
+  <span class="kwa">integer</span>           :: num, y, i = <span class="num">1</span>, j = <span class="num">1</span>, k = <span class="num">1</span>
+  <span class="kwa">character</span>(len=<span class="num">17</span>) :: outLine = proForma
+  <span class="kwa">character</span>(len=<span class="num">4</span>)  :: argv
+
+  <span class="kwa">call</span> <span class="kwd">get_command_argument</span>(<span class="num">1</span>, argv)
+  <span class="kwa">read</span>(argv, *) num
+
+  <span class="kwd">z</span>(<span class="num">1</span>,<span class="num">1</span>) = <span class="num">1</span>; <span class="kwd">z</span>(<span class="num">2</span>,<span class="num">1</span>) = <span class="num">0</span>; <span class="kwd">z</span>(<span class="num">1</span>,<span class="num">2</span>) = <span class="num">0</span>; <span class="kwd">z</span>(<span class="num">2</span>,<span class="num">2</span>) = <span class="num">1</span>
+
+  <span class="kwa">do</span>
+     y = <span class="kwd">next</span>(z)
+     <span class="kwa">if</span> (<span class="kwd">safe</span>(z, y)) <span class="kwa">then</span>
+        <span class="kwa">write</span>(unit=<span class="kwd">outLine</span>(k:k), fmt=<span class="str">&quot;(i1)&quot;</span>) y
+        <span class="kwa">if</span> (k &lt; <span class="num">10</span> .and. i &lt; num) <span class="kwa">then</span>
+           k = k + <span class="num">1</span>
+        <span class="kwa">else</span>
+           k = <span class="num">1</span>
+           <span class="kwa">write</span>(unit=<span class="kwd">outLine</span>(<span class="num">13</span>:<span class="num">17</span>), fmt=<span class="str">&quot;(i0)&quot;</span>) i
+           <span class="kwa">write</span>(*, <span class="str">&quot;(a)&quot;</span>) <span class="kwd">trim</span>(outLine)
+           outLine = proForma
+        <span class="kwa">end if</span>
+        <span class="kwa">if</span> (i == num) exit
+        z = <span class="kwd">prod</span>(z, y)
+        i = i + <span class="num">1</span>
+     <span class="kwa">else</span>
+        z = <span class="kwd">comp2</span>(z, <span class="kwd">lfts</span>(j))
+        j = j + <span class="num">1</span>
+     <span class="kwa">end if</span>
+  <span class="kwa">end do</span>
+<span class="kwa">end program</span> pidigits

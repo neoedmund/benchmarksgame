@@ -1,0 +1,130 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Sebastien Loisel</span>
+<span class="com"> * Modified by Alex Belits</span>
+<span class="com"> */</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;math.h&gt;</span>
+
+<span class="kwb">double</span> *A_global=NULL;
+<span class="kwb">int</span> N_global;
+
+<span class="kwb">double</span> <span class="kwd">eval_A</span>(<span class="kwb">int</span> i, <span class="kwb">int</span> j) { <span class="kwa">return</span> <span class="num">1.0</span>/((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span>+i+<span class="num">1</span>); }
+
+<span class="kwb">int</span> <span class="kwd">prepare_A</span>(<span class="kwb">int</span> N)
+{
+  <span class="kwb">int</span> i,j;
+
+  N_global=N;
+  A_global=(<span class="kwb">double</span>*)<span class="kwd">malloc</span>(N*N*<span class="kwa">sizeof</span>(<span class="kwb">double</span>));
+
+  <span class="kwa">if</span>(A_global==NULL) <span class="kwa">return</span> -<span class="num">1</span>;
+
+  <span class="kwa">for</span>(i=<span class="num">0</span>;i&lt;N;i++)
+    {
+      <span class="kwa">for</span>(j=<span class="num">0</span>;j&lt;N;j++)
+	{
+	  A_global[i*N+j]=<span class="kwd">eval_A</span>(i,j);
+	}
+    }
+  <span class="kwa">return</span> <span class="num">0</span>;
+}
+
+<span class="kwb">double</span> <span class="kwd">get_A</span>(<span class="kwb">int</span> i, <span class="kwb">int</span> j) { <span class="kwa">return</span> A_global[i*N_global+j]; }
+
+<span class="kwb">void</span> <span class="kwd">eval_A_times_u</span>(<span class="kwb">int</span> N, <span class="kwb">const double</span> u[], <span class="kwb">double</span> Au[])
+{
+  <span class="kwb">int</span> i,j,n2;
+  <span class="kwb">double</span> t0,t1;
+
+  n2=N&amp;~<span class="num">1</span>;
+  <span class="kwa">for</span>(i=<span class="num">0</span>;i&lt;n2;i+=<span class="num">2</span>)
+    {
+      t0=<span class="num">0</span>;
+      t1=<span class="num">0</span>;
+      <span class="kwa">for</span>(j=<span class="num">0</span>;j&lt;N;j++)
+	{
+	  t0+=<span class="kwd">get_A</span>(i,j)*u[j];
+	  t1+=<span class="kwd">get_A</span>(i+<span class="num">1</span>,j)*u[j];
+	}
+      Au[i]=t0;
+      Au[i+<span class="num">1</span>]=t1;
+    }
+
+  <span class="kwa">if</span>(i!=N)
+    {
+      t0=<span class="num">0</span>;
+      <span class="kwa">for</span>(j=<span class="num">0</span>;j&lt;N;j++)
+        {
+	  t0+=<span class="kwd">get_A</span>(i,j)*u[j];
+	}
+      Au[i]=t0;
+    }
+}
+
+<span class="kwb">void</span> <span class="kwd">eval_At_times_u</span>(<span class="kwb">int</span> N, <span class="kwb">const double</span> u[], <span class="kwb">double</span> Au[])
+{
+  <span class="kwb">int</span> i,j,n4;
+  <span class="kwb">double</span> t0,t1,t2,t3;
+
+  n4=N&amp;~<span class="num">3</span>;
+  <span class="kwa">for</span>(i=<span class="num">0</span>;i&lt;n4;i+=<span class="num">4</span>)
+    {
+      t0=<span class="num">0</span>;
+      t1=<span class="num">0</span>;
+      t2=<span class="num">0</span>;
+      t3=<span class="num">0</span>;
+      <span class="kwa">for</span>(j=<span class="num">0</span>;j&lt;N;j++)
+        {
+	  t0+=<span class="kwd">get_A</span>(j,i)*u[j];
+	  t1+=<span class="kwd">get_A</span>(j,i+<span class="num">1</span>)*u[j];
+	  t2+=<span class="kwd">get_A</span>(j,i+<span class="num">2</span>)*u[j];
+	  t3+=<span class="kwd">get_A</span>(j,i+<span class="num">3</span>)*u[j];
+        }
+      Au[i]=t0;
+      Au[i+<span class="num">1</span>]=t1;
+      Au[i+<span class="num">2</span>]=t2;
+      Au[i+<span class="num">3</span>]=t3;
+    }
+
+  <span class="kwa">for</span>(;i&lt;N;i++)
+    {
+      t0=<span class="num">0</span>;
+      <span class="kwa">for</span>(j=<span class="num">0</span>;j&lt;N;j++)
+        {
+	  t0+=<span class="kwd">get_A</span>(j,i)*u[j];
+	}
+      Au[i]=t0;
+    }
+}
+
+<span class="kwb">void</span> <span class="kwd">eval_AtA_times_u</span>(<span class="kwb">int</span> N, <span class="kwb">const double</span> u[], <span class="kwb">double</span> AtAu[])
+{ <span class="kwb">double</span> v[N]; <span class="kwd">eval_A_times_u</span>(N,u,v); <span class="kwd">eval_At_times_u</span>(N,v,AtAu); }
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[])
+{
+  <span class="kwb">int</span> i;
+  <span class="kwb">int</span> N = ((argc == <span class="num">2</span>) ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">2000</span>);
+  <span class="kwb">double</span> u[N],v[N],vBv,vv;
+
+  <span class="kwa">if</span>(<span class="kwd">prepare_A</span>(N)){
+    <span class="kwd">printf</span>(<span class="str">&quot;Insufficient memory</span><span class="esc">\n</span><span class="str">&quot;</span>);
+    <span class="kwa">return</span> <span class="num">1</span>;
+  }
+
+  <span class="kwa">for</span>(i=<span class="num">0</span>;i&lt;N;i++) u[i]=<span class="num">1</span>;
+  <span class="kwa">for</span>(i=<span class="num">0</span>;i&lt;<span class="num">10</span>;i++)
+    {
+      <span class="kwd">eval_AtA_times_u</span>(N,u,v);
+      <span class="kwd">eval_AtA_times_u</span>(N,v,u);
+    }
+  vBv=vv=<span class="num">0</span>;
+  <span class="kwa">for</span>(i=<span class="num">0</span>;i&lt;N;i++) { vBv+=u[i]*v[i]; vv+=v[i]*v[i]; }
+  <span class="kwd">printf</span>(<span class="str">&quot;%0.9f</span><span class="esc">\n</span><span class="str">&quot;</span>,<span class="kwd">sqrt</span>(vBv/vv));
+  <span class="kwd">free</span>(A_global);
+  <span class="kwa">return</span> <span class="num">0</span>;
+}
+

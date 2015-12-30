@@ -1,0 +1,157 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Pascal Obry on 2005/04/07</span>
+
+<span class="kwa">package</span> Fasta_Pck <span class="kwa">is</span>
+
+   <span class="kwa">type</span> Real <span class="kwa">is new</span> <span class="kwb">Long_Float</span>;
+
+   <span class="kwa">type</span> Aminoacid <span class="kwa">is record</span>
+      C : <span class="kwb">Character</span>;
+      P : Real;
+   <span class="kwa">end record</span>;
+
+   <span class="kwa">type</span> Aminoacid_Set <span class="kwa">is array</span> (<span class="kwb">Positive</span> <span class="kwa">range</span> &lt;&gt;) <span class="kwa">of</span> Aminoacid;
+
+   <span class="kwa">procedure</span> Make_Cumulative (Gene_List : <span class="kwa">in out</span> Aminoacid_Set);
+
+   <span class="kwa">function</span> Select_Random (Gene_List : <span class="kwa">in</span> Aminoacid_Set) <span class="kwa">return</span> <span class="kwb">Character</span>;
+
+   <span class="kwa">procedure</span> Make_Random_Fasta
+     (Id, Desc : <span class="kwa">in</span> <span class="kwb">String</span>; Gene_List : <span class="kwa">in</span> Aminoacid_Set; N : <span class="kwa">in</span> <span class="kwb">Positive</span>);
+
+   <span class="kwa">procedure</span> Make_Repeat_Fasta (Id, Desc, S : <span class="kwa">in</span> <span class="kwb">String</span>; N : <span class="kwa">in</span> <span class="kwb">Positive</span>);
+
+<span class="kwa">end</span> Fasta_Pck;
+
+<span class="kwa">with</span> Ada.Text_IO; <span class="kwa">use</span> Ada.Text_IO;
+
+<span class="kwa">package body</span> Fasta_Pck <span class="kwa">is</span>
+
+   Line_Length : <span class="kwa">constant</span> := <span class="num">60</span>;
+
+   Last        : <span class="kwb">Natural</span> := <span class="num">42</span>;
+
+   <span class="kwa">function</span> Gen_Random (Max : <span class="kwa">in</span> Real) <span class="kwa">return</span> Real;
+   <span class="kwa">pragma</span> Inline (Gen_Random);
+
+   <span class="kwa">function</span> Gen_Random (Max : <span class="kwa">in</span> Real) <span class="kwa">return</span> Real <span class="kwa">is</span>
+      IM : <span class="kwa">constant</span> := <span class="num">139</span>_968;
+      IA : <span class="kwa">constant</span> :=   <span class="num">3</span>_877;
+      IC : <span class="kwa">constant</span> :=  <span class="num">29</span>_573;
+   <span class="kwa">begin</span>
+      Last := (Last * IA + IC) <span class="kwa">mod</span> IM;
+      <span class="kwa">return</span> (Max * Real (Last)) / Real (IM);
+   <span class="kwa">end</span> Gen_Random;
+
+   <span class="kwa">procedure</span> Make_Cumulative (Gene_List : <span class="kwa">in out</span> Aminoacid_Set) <span class="kwa">is</span>
+      C : Real := Gene_List (Gene_List<span class="kwd">'First</span>).P;
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> K <span class="kwa">in</span> Gene_List<span class="kwd">'First</span> + <span class="num">1</span> .. Gene_List<span class="kwd">'Last</span> <span class="kwa">loop</span>
+         C := C + Gene_List (K).P;
+         Gene_List (K).P := C;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Make_Cumulative;
+
+   <span class="kwa">function</span> Select_Random (Gene_List : <span class="kwa">in</span> Aminoacid_Set) <span class="kwa">return</span> <span class="kwb">Character</span> <span class="kwa">is</span>
+      R         : Real := Gen_Random (<span class="num">1.0</span>);
+      I, Lo, Hi : <span class="kwb">Integer</span>;
+   <span class="kwa">begin</span>
+      <span class="kwa">if</span> R &lt; Gene_List (Gene_List<span class="kwd">'First</span>).P <span class="kwa">then</span>
+         <span class="kwa">return</span> Gene_List (Gene_List<span class="kwd">'First</span>).C;
+      <span class="kwa">end if</span>;
+
+      Lo := <span class="num">0</span>;
+      Hi := Gene_List<span class="kwd">'Last</span>;
+
+      <span class="kwa">while</span> Hi &gt; Lo + <span class="num">1</span> <span class="kwa">loop</span>
+         I := (Hi + Lo) / <span class="num">2</span>;
+         <span class="kwa">if</span> R &lt; Gene_List (I).P <span class="kwa">then</span>
+            Hi := I;
+         <span class="kwa">else</span>
+            Lo := I;
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+
+      <span class="kwa">return</span> Gene_List (Hi).C;
+   <span class="kwa">end</span> Select_Random;
+
+   <span class="kwa">procedure</span> Make_Random_Fasta
+     (Id, Desc : <span class="kwa">in</span> <span class="kwb">String</span>; Gene_List : <span class="kwa">in</span> Aminoacid_Set; N : <span class="kwa">in</span> <span class="kwb">Positive</span>)
+   <span class="kwa">is</span>
+      Todo : <span class="kwb">Integer</span> := N;
+      M    : <span class="kwb">Integer</span>;
+      Pick : <span class="kwb">String</span> (<span class="num">1</span> .. Line_Length);
+   <span class="kwa">begin</span>
+      Put_Line (<span class="str">&quot;&gt;&quot;</span> &amp; Id &amp; <span class="str">' '</span> &amp; Desc);
+
+      <span class="kwa">while</span> Todo &gt; <span class="num">0</span> <span class="kwa">loop</span>
+         M := <span class="kwb">Natural</span><span class="kwd">'Min</span> (Todo, Line_Length);
+
+         <span class="kwa">for</span> K <span class="kwa">in</span> <span class="num">1</span> .. M <span class="kwa">loop</span>
+            Pick (K) := Select_Random (Gene_List);
+         <span class="kwa">end loop</span>;
+
+         Put_Line (Pick (<span class="num">1</span> .. M));
+         Todo := Todo - Line_Length;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Make_Random_Fasta;
+
+   <span class="kwa">procedure</span> Make_Repeat_Fasta (Id, Desc, S : <span class="kwa">in</span> <span class="kwb">String</span>; N : <span class="kwa">in</span> <span class="kwb">Positive</span>) <span class="kwa">is</span>
+      Todo : <span class="kwb">Integer</span> := N;
+      K    : <span class="kwb">Positive</span> := S<span class="kwd">'First</span>;
+      M    : <span class="kwb">Natural</span>;
+   <span class="kwa">begin</span>
+      Put_Line (<span class="str">&quot;&gt;&quot;</span> &amp; Id &amp; <span class="str">' '</span> &amp; Desc);
+
+      <span class="kwa">while</span> Todo &gt; <span class="num">0</span> <span class="kwa">loop</span>
+         M := <span class="kwb">Natural</span><span class="kwd">'Min</span> (Todo, Line_Length);
+
+         <span class="kwa">while</span> M &gt;= S<span class="kwd">'Length</span> - K + S<span class="kwd">'First</span> <span class="kwa">loop</span>
+            Put (S (K .. S<span class="kwd">'Last</span>));
+            M := M - (S<span class="kwd">'Length</span> - K + S<span class="kwd">'First</span>);
+            K := S<span class="kwd">'First</span>;
+         <span class="kwa">end loop</span>;
+
+         Put_Line (S (K .. K + M - S<span class="kwd">'First</span>));
+         K := K + M - S<span class="kwd">'First</span> + <span class="num">1</span>;
+
+         Todo := Todo - Line_Length;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Make_Repeat_Fasta;
+
+<span class="kwa">end</span> Fasta_Pck;
+
+<span class="kwa">with</span> Ada.Command_Line; <span class="kwa">use</span> Ada.Command_Line;
+<span class="kwa">with</span> Fasta_Pck;        <span class="kwa">use</span> Fasta_Pck;
+
+<span class="kwa">procedure</span> Fasta <span class="kwa">is</span>
+   Homosapiens : Aminoacid_Set :=
+                   ((<span class="str">'a'</span>, <span class="num">0.3029549426680</span>), (<span class="str">'c'</span>, <span class="num">0.1979883004921</span>),
+                    (<span class="str">'g'</span>, <span class="num">0.1975473066391</span>), (<span class="str">'t'</span>, <span class="num">0.3015094502008</span>));
+   Iub         : Aminoacid_Set :=
+                   ((<span class="str">'a'</span>, <span class="num">0.27</span>), (<span class="str">'c'</span>, <span class="num">0.12</span>), (<span class="str">'g'</span>, <span class="num">0.12</span>), (<span class="str">'t'</span>, <span class="num">0.27</span>),
+                    (<span class="str">'B'</span>, <span class="num">0.02</span>), (<span class="str">'D'</span>, <span class="num">0.02</span>), (<span class="str">'H'</span>, <span class="num">0.02</span>), (<span class="str">'K'</span>, <span class="num">0.02</span>),
+                    (<span class="str">'M'</span>, <span class="num">0.02</span>), (<span class="str">'N'</span>, <span class="num">0.02</span>), (<span class="str">'R'</span>, <span class="num">0.02</span>), (<span class="str">'S'</span>, <span class="num">0.02</span>),
+                    (<span class="str">'V'</span>, <span class="num">0.02</span>), (<span class="str">'W'</span>, <span class="num">0.02</span>), (<span class="str">'Y'</span>, <span class="num">0.02</span>));
+   Alu         : <span class="kwa">constant</span> <span class="kwb">String</span> :=
+                    <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span> &amp;
+                    <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span> &amp;
+                    <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span> &amp;
+                    <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span> &amp;
+                    <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span> &amp;
+                    <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span> &amp;
+                    <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+   N           : <span class="kwa">constant</span> <span class="kwb">Positive</span> := <span class="kwb">Positive</span><span class="kwd">'Value</span> (Argument (<span class="num">1</span>));
+
+<span class="kwa">begin</span>
+   Make_Cumulative (Iub);
+   Make_Cumulative (Homosapiens);
+
+   Make_Repeat_Fasta (<span class="str">&quot;ONE&quot;</span>, <span class="str">&quot;Homo sapiens alu&quot;</span>, alu, N * <span class="num">2</span>);
+   Make_Random_Fasta (<span class="str">&quot;TWO&quot;</span>, <span class="str">&quot;IUB ambiguity codes&quot;</span>, Iub, N * <span class="num">3</span>);
+   Make_Random_Fasta
+     (<span class="str">&quot;THREE&quot;</span>, <span class="str">&quot;Homo sapiens frequency&quot;</span>, Homosapiens, N * <span class="num">5</span>);
+<span class="kwa">end</span> Fasta;

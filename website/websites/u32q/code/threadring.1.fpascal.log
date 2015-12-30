@@ -1,0 +1,25 @@
+
+Fri, 25 Apr 2014 02:25:34 GMT
+
+MAKE:
+mv threadring.fpascal threadring.pas
+/usr/local/src/fpc-2.6.4.i386-linux/bin/fpc -FuInclude/fpascal -XXs -Oppentiumm -Cppentiumm -O3 -Cfsse2  -oFPASCAL_RUN threadring.pas
+Free Pascal Compiler version 2.6.4 [2014/03/03] for i386
+Copyright (c) 1993-2014 by Florian Klaempfl and others
+Target OS: Linux for i386
+Compiling threadring.pas
+threadring.pas(12,3) Fatal: Can't find unit PThreads used by thread_ring
+Fatal: Compilation aborted
+Error: /usr/local/src/fpc-2.6.4.i386-linux/bin/ppc386 returned an error exitcode (normal if you did not specify a source file to be compiled)
+make: [threadring.fpascal_run] Error 1 (ignored)
+mv FPASCAL_RUN threadring.fpascal_run
+mv: cannot stat ‘FPASCAL_RUN’: No such file or directory
+make: [threadring.fpascal_run] Error 1 (ignored)
+rm threadring.pas
+0.06s to complete and log all make actions
+
+COMMAND LINE:
+./threadring.fpascal_run 500000
+
+MAKE ERROR 
+

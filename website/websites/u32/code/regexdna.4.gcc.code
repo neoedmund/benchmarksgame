@@ -1,0 +1,268 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Based on C contribution of Mike Pall</span>
+<span class="slc">// Contributed by The Anh Tran</span>
+
+<span class="ppc">#define _GNU_SOURCE</span>
+<span class="ppc">#include &lt;omp.h&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+<span class="ppc">#include &lt;pcre.h&gt;</span>
+
+<span class="ppc">#include &lt;assert.h&gt;</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;memory.h&gt;</span>
+
+
+<span class="slc">// read all redirected data from stdin</span>
+<span class="slc">// strip DNA headers and newline characters</span>
+<span class="kwb">char</span>*
+<span class="kwd">ReadInput_StripHeader</span>(   <span class="kwb">size_t</span> *file_size, <span class="kwb">size_t</span> *strip_size )
+{
+   <span class="slc">// get input size</span>
+   *file_size = <span class="kwd">ftell</span>(stdin);
+   <span class="kwd">fseek</span>(stdin, <span class="num">0</span>, SEEK_END);
+   *file_size = <span class="kwd">ftell</span>(stdin) - *file_size;
+   <span class="kwd">fseek</span>(stdin, <span class="num">0</span>, SEEK_SET);
+    *strip_size = <span class="num">0</span>;
+
+   <span class="slc">// load original content into memory</span>
+   <span class="kwb">char</span>* input = (<span class="kwb">char</span>*)<span class="kwd">malloc</span>(*file_size +<span class="num">1</span>);
+   <span class="kwa">assert</span>(input != <span class="num">0</span>);
+   {
+      <span class="kwb">size_t</span> sz = <span class="kwd">fread</span>(input, <span class="num">1</span>, *file_size, stdin);
+      <span class="kwa">assert</span>(sz == *file_size);
+      input[*file_size] = <span class="num">0</span>;
+   }
+
+   <span class="slc">// alloc space for regex_replace</span>
+   <span class="kwb">char</span>* output = (<span class="kwb">char</span>*)<span class="kwd">malloc</span>(*file_size);
+   <span class="kwa">assert</span>(output != <span class="num">0</span>);
+
+
+   <span class="kwb">const char</span>*   re_error;
+   <span class="kwb">int</span>         re_erroff;
+
+   <span class="slc">// compile pattern</span>
+   pcre* re = <span class="kwd">pcre_compile</span>(<span class="str">&quot;&gt;.*</span><span class="esc">\\</span><span class="str">n|</span><span class="esc">\\</span><span class="str">n&quot;</span>, <span class="num">0</span>, &amp;re_error, &amp;re_erroff, <span class="num">0</span>);
+   pcre_extra*   re_extra = <span class="kwd">pcre_study</span>(re, <span class="num">0</span>, &amp;re_error);
+   <span class="kwa">assert</span>(re != <span class="num">0</span>);
+
+   <span class="kwb">int</span>         position;
+   <span class="kwb">int</span>         match[<span class="num">3</span>];
+
+   <span class="slc">// regex_replace</span>
+   <span class="kwa">for</span>(   position = <span class="num">0</span>;
+         <span class="kwd">pcre_exec</span>(re, re_extra, input, *file_size, position, <span class="num">0</span>, match, <span class="num">3</span>) &gt;= <span class="num">0</span>;
+         position = match[<span class="num">1</span>]   )
+   {
+      <span class="kwb">int</span> char_to_copy = match[<span class="num">0</span>] - position;
+      <span class="kwd">memcpy</span>(output + (*strip_size), input + position, char_to_copy);
+      *strip_size += char_to_copy;
+   }
+
+   <span class="slc">// copy remain part</span>
+   <span class="kwb">int</span> char_to_copy = *file_size - position;
+   <span class="kwd">memcpy</span>(output + (*strip_size), input + position, char_to_copy);
+   *strip_size += char_to_copy;
+      
+   <span class="kwd">free</span>(input);
+   <span class="kwd">pcre_free</span>(re_extra);
+   <span class="kwd">pcre_free</span>(re);
+   
+   <span class="kwa">return</span> output;
+}
+
+
+
+<span class="kwb">void</span> 
+<span class="kwd">Count_Patterns</span>(<span class="kwb">char const</span>* input, <span class="kwb">size_t</span> input_len, <span class="kwb">char</span>* result)
+{
+   <span class="kwb">static char const</span>* ptns[] = 
+   {
+      <span class="str">&quot;agggtaaa|tttaccct&quot;</span>,   
+      <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,   
+      <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,   
+      <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,   
+      <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,   
+      <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,   
+      <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,   
+      <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,   
+      <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>
+   };
+   <span class="kwb">static const int</span> n_ptns = <span class="kwa">sizeof</span>(ptns) / <span class="kwa">sizeof</span>(ptns[<span class="num">0</span>]);
+   <span class="kwb">static size_t</span> counters[<span class="num">9</span>];
+
+   <span class="kwb">int</span> i;
+   <span class="ppc">#pragma omp for schedule(dynamic, 1) nowait</span>
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; n_ptns; ++i)
+   {
+      <span class="kwb">const char</span>*   re_error   = <span class="num">0</span>;
+      <span class="kwb">int</span>         re_erroff   = <span class="num">0</span>;
+
+      pcre*       re          = <span class="kwd">pcre_compile</span>(ptns[i], <span class="num">0</span>, &amp;re_error, &amp;re_erroff, <span class="num">0</span>);
+      pcre_extra*   re_extra    = <span class="kwd">pcre_study</span>(re, <span class="num">0</span>, &amp;re_error);
+      <span class="kwa">assert</span>(re != <span class="num">0</span>);
+   
+      <span class="kwb">int</span>         position, count;
+      <span class="kwb">int</span>         match[<span class="num">3</span>];
+
+      <span class="slc">// regex_search</span>
+      <span class="kwa">for</span>(   position = count = <span class="num">0</span>;
+            <span class="kwd">pcre_exec</span>(re, re_extra, input, input_len, position, <span class="num">0</span>, match, <span class="num">3</span>) &gt;= <span class="num">0</span>;
+            position = match[<span class="num">1</span>]   )
+         ++count;
+         
+      counters[i] = count;
+      <span class="kwd">pcre_free</span>(re_extra);
+      <span class="kwd">pcre_free</span>(re);
+   }
+
+   <span class="slc">// we want the last thread, reaching this code block, to print result</span>
+   <span class="kwb">static size_t</span> thread_passed = <span class="num">0</span>;
+   <span class="kwa">if</span> (<span class="kwd">__sync_add_and_fetch</span>(&amp;thread_passed, <span class="num">1</span>) == (<span class="kwb">size_t</span>)<span class="kwd">omp_get_num_threads</span>() )
+   {
+      <span class="kwb">int</span> plen = <span class="num">0</span>;
+      <span class="kwb">int</span> i;
+
+      <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; n_ptns; ++i)
+         plen += <span class="kwd">sprintf</span>(result + plen, <span class="str">&quot;%s %d</span><span class="esc">\n</span><span class="str">&quot;</span>, ptns[i], counters[i]);
+
+      thread_passed = <span class="num">0</span>;
+   }
+}
+
+
+<span class="kwc">typedef</span> <span class="kwb">struct</span> IUB_T
+{
+   <span class="kwb">const char</span>*   iub;
+   <span class="kwb">int</span>         len;
+} IUB;
+
+ 
+IUB <span class="kwb">const</span> iub_table[] = 
+{
+   {<span class="num">0</span>}, 
+   {<span class="str">&quot;(c|g|t)&quot;</span>,   <span class="num">7</span>}, 
+   {<span class="num">0</span>}, 
+   {<span class="str">&quot;(a|g|t)&quot;</span>,   <span class="num">7</span>}, 
+   {<span class="num">0</span>}, {<span class="num">0</span>}, {<span class="num">0</span>}, 
+   {<span class="str">&quot;(a|c|t)&quot;</span>,   <span class="num">7</span>}, 
+   {<span class="num">0</span>}, {<span class="num">0</span>}, 
+   {<span class="str">&quot;(g|t)&quot;</span>,   <span class="num">5</span>}, 
+   {<span class="num">0</span>}, 
+   {<span class="str">&quot;(a|c)&quot;</span>,   <span class="num">5</span>}, 
+   {<span class="str">&quot;(a|c|g|t)&quot;</span>,   <span class="num">9</span>}, 
+   {<span class="num">0</span>}, {<span class="num">0</span>}, {<span class="num">0</span>}, 
+   {<span class="str">&quot;(a|g)&quot;</span>,   <span class="num">5</span>}, 
+   {<span class="str">&quot;(c|t)&quot;</span>,   <span class="num">5</span>}, 
+   {<span class="num">0</span>}, {<span class="num">0</span>}, 
+   {<span class="str">&quot;(a|c|g)&quot;</span>,   <span class="num">7</span>}, 
+   {<span class="str">&quot;(a|t)&quot;</span>,   <span class="num">5</span>}, 
+   {<span class="num">0</span>}, 
+   {<span class="str">&quot;(c|t)&quot;</span>,   <span class="num">5</span>}
+};
+<span class="kwb">int const</span> n_iub = <span class="kwa">sizeof</span>(iub_table)/<span class="kwa">sizeof</span>(iub_table[<span class="num">0</span>]);
+
+
+<span class="kwb">void</span>
+<span class="kwd">Replace_Patterns</span>(<span class="kwb">char const</span>* input, <span class="kwb">size_t</span> input_len, <span class="kwb">size_t</span>* repl_len)
+{
+   <span class="ppc">#pragma omp single nowait</span>
+   {
+      <span class="slc">// input_len * 1.5</span>
+      <span class="kwb">char</span>*      output       = (<span class="kwb">char</span>*)<span class="kwd">malloc</span>(input_len + (input_len &gt;&gt; <span class="num">1</span>));
+      <span class="kwa">assert</span>(output != <span class="num">0</span>);
+      
+      <span class="kwb">const char</span>*   re_error   = <span class="num">0</span>;
+      <span class="kwb">int</span>         re_erroff   = <span class="num">0</span>;
+
+      pcre*       re          = <span class="kwd">pcre_compile</span>(<span class="str">&quot;[BDHKMNRSVWY]&quot;</span>, <span class="num">0</span>, &amp;re_error, &amp;re_erroff, <span class="num">0</span>);
+      pcre_extra*   re_extra    = <span class="kwd">pcre_study</span>(re, <span class="num">0</span>, &amp;re_error);
+      <span class="kwa">assert</span>(re != <span class="num">0</span>);
+   
+      <span class="kwb">int</span>         position;
+      <span class="kwb">int</span>         match[<span class="num">3</span>];
+      <span class="kwb">int</span>         replace_len   = <span class="num">0</span>;
+
+      <span class="slc">// regex_replace</span>
+      <span class="kwa">for</span>(   position = <span class="num">0</span>;
+            <span class="kwd">pcre_exec</span>(re, re_extra, input, input_len, position, <span class="num">0</span>, match, <span class="num">3</span>) &gt;= <span class="num">0</span>;
+            position = match[<span class="num">1</span>]   )
+      {
+         <span class="kwb">int</span> char_to_copy = match[<span class="num">0</span>] - position;
+         <span class="kwd">memcpy</span>(output + replace_len, input + position, char_to_copy);
+         replace_len += char_to_copy;
+
+         IUB <span class="kwb">const</span>* i_r = iub_table + (input[match[<span class="num">0</span>]] - <span class="str">'A'</span>); 
+
+         char_to_copy = i_r-&gt;len;
+         <span class="kwd">memcpy</span>(output + replace_len, i_r-&gt;iub, char_to_copy);
+         replace_len += char_to_copy;
+         
+      }
+   
+      <span class="slc">// copy remain part</span>
+      <span class="kwb">int</span> char_to_copy = input_len - position;
+      <span class="kwd">memcpy</span>(output + replace_len, input + position, char_to_copy);
+      replace_len += char_to_copy;
+
+      <span class="kwd">free</span>(output);
+      <span class="kwd">pcre_free</span>(re_extra);
+      <span class="kwd">pcre_free</span>(re);
+
+      *repl_len = replace_len;
+   }
+}
+
+
+
+<span class="slc">// Detect single - multi thread benchmark</span>
+<span class="kwb">int</span> 
+<span class="kwd">GetThreadCount</span>()
+{
+   cpu_set_t cs;
+   <span class="kwb">int</span> count = <span class="num">0</span>;
+   <span class="kwb">int</span> i;
+
+   <span class="kwd">CPU_ZERO</span>(&amp;cs);
+   <span class="kwd">sched_getaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(cs), &amp;cs);
+
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; CPU_SETSIZE; ++i)
+   {
+      <span class="kwa">if</span> (<span class="kwd">CPU_ISSET</span>(i, &amp;cs))
+      ++count;
+   }
+   <span class="kwa">return</span> count;
+}
+
+
+<span class="kwb">int</span> 
+<span class="kwd">main</span>()
+{
+   <span class="kwb">size_t</span> initial_length = <span class="num">0</span>;
+   <span class="kwb">size_t</span> striped_length = <span class="num">0</span>;
+   <span class="kwb">size_t</span> replace_length = <span class="num">0</span>;
+   
+   <span class="kwb">char</span>* input = <span class="kwd">ReadInput_StripHeader</span> (&amp;initial_length, &amp;striped_length);
+
+   
+   <span class="kwb">char</span> match_result[<span class="num">1024</span>];
+   <span class="ppc">#pragma omp parallel default(shared) num_threads(GetThreadCount())</span>
+   {
+      <span class="kwd">Count_Patterns</span>   (input, striped_length, match_result);
+      <span class="kwd">Replace_Patterns</span>(input, striped_length, &amp;replace_length);
+   }
+   
+   <span class="kwd">printf</span>(<span class="str">&quot;%s</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">&quot;</span>, 
+      match_result,
+      initial_length,
+      striped_length,
+      replace_length );
+
+   <span class="kwd">free</span>(input);
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+

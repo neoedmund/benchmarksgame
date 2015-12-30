@@ -1,0 +1,119 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Branimir Maksimovic</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;cstring&gt;</span>
+<span class="ppc">#include &lt;algorithm&gt;</span>
+<span class="ppc">#include &lt;immintrin.h&gt;</span>
+
+<span class="kwb">int</span> checksum;
+<span class="kwb">int</span> maxflips;
+<span class="kwc">typedef</span> <span class="kwb">unsigned char</span> int_t;
+
+<span class="kwb">void</span> <span class="kwd">reverse</span>(int_t* p,<span class="kwb">int</span> n)
+{
+   <span class="kwb">static</span> <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">16</span>))) <span class="kwb">unsigned long long</span> w[<span class="num">11</span>][<span class="num">2</span>] =
+   {   {<span class="num">0x0706050403020001</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll}, 
+      {<span class="num">0x0706050403000102</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0706050400010203</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0706050001020304</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0706000102030405</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0700010203040506</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0001020304050607</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0102030405060708</span>ll,<span class="num">0x0f0e0d0c0b0a0900</span>ll},
+      {<span class="num">0x0203040506070809</span>ll,<span class="num">0x0f0e0d0c0b0a0001</span>ll},
+      {<span class="num">0x030405060708090a</span>ll,<span class="num">0x0f0e0d0c0b000102</span>ll},
+      {<span class="num">0x0405060708090a0b</span>ll,<span class="num">0x0f0e0d0c00010203</span>ll},
+   };
+   
+   __m128i a,b;
+   b = <span class="kwd">_mm_load_si128</span>((__m128i*)&amp;w[n-<span class="num">2</span>][<span class="num">0</span>]);
+   a = <span class="kwd">_mm_load_si128</span>((__m128i*)p);
+   a = <span class="kwd">_mm_shuffle_epi8</span>(a,b);
+   <span class="kwd">_mm_store_si128</span>((__m128i*)p,a);
+}
+
+<span class="kwb">void</span> <span class="kwd">rotate</span>(int_t* p, <span class="kwb">int</span> n)
+{
+   <span class="kwb">static</span> <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">16</span>))) <span class="kwb">unsigned long long</span> w[<span class="num">11</span>][<span class="num">2</span>] =
+   {   {<span class="num">0x0706050403020001</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll}, 
+      {<span class="num">0x0706050403000201</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0706050400030201</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0706050004030201</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0706000504030201</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0700060504030201</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0007060504030201</span>ll,<span class="num">0x0f0e0d0c0b0a0908</span>ll},
+      {<span class="num">0x0807060504030201</span>ll,<span class="num">0x0f0e0d0c0b0a0900</span>ll},
+      {<span class="num">0x0807060504030201</span>ll,<span class="num">0x0f0e0d0c0b0a0009</span>ll},
+      {<span class="num">0x0807060504030201</span>ll,<span class="num">0x0f0e0d0c0b000a09</span>ll},
+      {<span class="num">0x0807060504030201</span>ll,<span class="num">0x0f0e0d0c000b0a09</span>ll},
+   };
+   
+   __m128i a,b;
+   b = <span class="kwd">_mm_load_si128</span>((__m128i*)&amp;w[n-<span class="num">1</span>][<span class="num">0</span>]);
+   a = <span class="kwd">_mm_load_si128</span>((__m128i*)p);
+   a = <span class="kwd">_mm_shuffle_epi8</span>(a,b);
+   <span class="kwd">_mm_store_si128</span>((__m128i*)p,a);
+}
+
+<span class="kwb">bool</span> <span class="kwd">next_permutation</span>(int_t* beg, <span class="kwb">int</span> n, int_t* c)
+{
+   <span class="kwb">int</span> i = <span class="num">1</span>;
+   <span class="kwa">while</span>(i&lt;n)
+   {
+      <span class="kwd">rotate</span>(beg,i);
+      <span class="kwa">if</span>(c[i]&gt;=i)c[i++]=<span class="num">0</span>;
+      <span class="kwa">else break</span>;
+   }
+   <span class="kwa">if</span>(i&gt;=n)<span class="kwa">return false</span>;
+   ++c[i];
+   <span class="kwa">return true</span>;
+}
+
+<span class="kwb">struct</span> next{
+      <span class="kwd">next</span>():<span class="kwd">n</span>(<span class="num">0</span>){}
+      int_t <span class="kwc">operator</span> ()(){ <span class="kwa">return</span> ++n;}
+      int_t n;
+};
+
+<span class="kwb">void</span> <span class="kwd">fannkuch</span>(<span class="kwb">int</span> n)
+{
+   checksum = <span class="num">0</span>;
+   maxflips = <span class="num">0</span>;
+   <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">16</span>))) int_t perm[<span class="num">16</span>];
+   <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">16</span>))) int_t tperm[<span class="num">16</span>];
+   <span class="kwb">int</span> permcount = <span class="num">0</span>;
+   
+   int_t count[<span class="num">16</span>]={<span class="num">0</span>};
+   
+   std::<span class="kwd">generate</span>(perm,perm+n,<span class="kwd">next</span>());
+   <span class="kwa">do</span>
+   {
+      std::<span class="kwd">copy</span>(perm,perm+n,tperm);
+      <span class="kwb">int</span> flips = <span class="num">0</span>;
+      <span class="kwa">while</span>(tperm[<span class="num">0</span>] != <span class="num">1</span>)
+      {
+         <span class="kwd">reverse</span>(tperm,tperm[<span class="num">0</span>]);
+         ++flips;
+      }
+      checksum += (permcount%<span class="num">2</span> == <span class="num">0</span>)?flips:-flips;
+      maxflips = std::<span class="kwd">max</span>(maxflips,flips);
+   }<span class="kwa">while</span>(++permcount,<span class="kwd">next_permutation</span>(perm,n,count));
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>** argv)
+{
+   <span class="kwb">int</span> n = <span class="num">7</span>;
+   <span class="kwa">if</span>(argc &gt; <span class="num">1</span>)n = <span class="kwd">atoi</span>(argv[<span class="num">1</span>]);
+   <span class="kwa">if</span>(n &lt; <span class="num">3</span> || n &gt; <span class="num">12</span>)
+   {
+      <span class="kwd">printf</span>(<span class="str">&quot;n should be between 3 and 12</span><span class="esc">\n</span><span class="str">&quot;</span>);
+      <span class="kwa">return</span> <span class="num">0</span>;
+   }
+   <span class="kwd">fannkuch</span>(n);
+   <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\n</span><span class="str">Pfannkuchen(%d) = %d</span><span class="esc">\n</span><span class="str">&quot;</span>,checksum,n,maxflips);
+}

@@ -1,0 +1,195 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Branimir Maksimovic</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;bufio&quot;</span>
+   <span class="str">&quot;bytes&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;sort&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+)
+
+<span class="kwa">var</span> (
+   toNum [<span class="num">256</span>]<span class="kwb">byte</span>
+   toChar [<span class="num">256</span>]<span class="kwb">byte</span>
+)
+
+<span class="kwa">func</span> <span class="kwd">InitTables</span> () {
+   toNum[<span class="str">'A'</span>] = <span class="num">0</span>
+   toNum[<span class="str">'C'</span>] = <span class="num">1</span>
+   toNum[<span class="str">'T'</span>] = <span class="num">2</span>
+   toNum[<span class="str">'G'</span>] = <span class="num">3</span>
+   toNum[<span class="str">'a'</span>] = <span class="num">0</span>
+   toNum[<span class="str">'c'</span>] = <span class="num">1</span>
+   toNum[<span class="str">'t'</span>] = <span class="num">2</span>
+   toNum[<span class="str">'g'</span>] = <span class="num">3</span>
+   
+   toChar[<span class="num">0</span>] = <span class="str">'A'</span>
+   toChar[<span class="num">1</span>] = <span class="str">'C'</span>
+   toChar[<span class="num">2</span>] = <span class="str">'T'</span>
+   toChar[<span class="num">3</span>] = <span class="str">'G'</span>
+}
+<span class="kwa">const</span> SIZE = <span class="num">1</span>&lt;&lt;<span class="num">16</span>
+<span class="kwa">type</span> HTable <span class="kwa">struct</span> {
+   table *[SIZE]*Node
+}
+<span class="kwa">type</span> Node <span class="kwa">struct</span> {
+   data T
+   next *Node
+}
+<span class="kwa">func</span> <span class="kwd">NewTable</span>() HTable {
+   <span class="kwa">return</span> HTable{ &amp;[SIZE]*Node{} }
+}
+<span class="kwa">func</span> (t* HTable) <span class="kwd">Get</span>(input T) (*T,<span class="kwb">bool</span>) {
+   hash := input.<span class="kwd">Hash</span>()
+   slot := hash &amp; (SIZE-<span class="num">1</span>)
+   n := t.table[slot] 
+   <span class="kwa">if</span> n == <span class="kwb">nil</span> {
+      n = &amp;Node{ input,<span class="kwb">nil</span> }
+      t.table[slot] = n
+      <span class="kwa">return</span> &amp;n.data,<span class="kwb">false</span>
+   }
+   <span class="kwa">for</span> ;n != <span class="kwb">nil</span>;n=n.next {
+      <span class="kwa">if</span> n.data.<span class="kwd">Equal</span>(input) {
+         <span class="kwa">return</span> &amp;n.data,<span class="kwb">true</span>
+      }
+   } 
+   n = &amp;Node{ input, t.table[slot] }
+   t.table[slot] = n
+   <span class="kwa">return</span> &amp;n.data,<span class="kwb">false</span>
+}
+<span class="kwa">func</span> (t* HTable) <span class="kwd">ForEach</span>(f <span class="kwa">func</span>(T)) {
+   <span class="kwa">for</span> _,v := <span class="kwa">range</span> t.table {
+      <span class="kwa">for</span> ;v != <span class="kwb">nil</span>;v = v.next {
+         <span class="kwd">f</span>(v.data)
+      }
+   }
+}
+
+<span class="kwa">type</span> T <span class="kwa">struct</span> { 
+   data <span class="kwb">uint64</span>
+   count <span class="kwb">int</span>
+   size <span class="kwb">byte</span>
+}
+<span class="kwa">func</span> <span class="kwd">Pack</span>(input <span class="kwb">string</span>) T {
+   t := T{<span class="num">0</span>,<span class="num">0</span>,<span class="kwb">byte</span>(<span class="kwb">len</span>(input))}
+   <span class="kwa">for</span> i := <span class="num">0</span> ; i &lt; <span class="kwb">int</span>(t.size); i++ {
+      t.data &lt;&lt;= <span class="num">2</span>
+      t.data |= <span class="kwb">uint64</span>(toNum[input[i]])
+   }
+   <span class="kwa">return</span> t
+}
+<span class="kwa">func</span> (t* T) <span class="kwd">String</span>() <span class="kwb">string</span> {
+   rc := []<span class="kwb">byte</span>{}
+   tmp := t.data
+   <span class="kwa">for</span> i:=<span class="num">0</span> ;i &lt; <span class="kwb">int</span>(t.size); i++ {
+      rc = <span class="kwd">append</span>(rc, toChar[tmp &amp; <span class="num">3</span>])
+      tmp &gt;&gt;= <span class="num">2</span>
+   }
+   <span class="kwa">for</span> i:=<span class="num">0</span>;i&lt;<span class="kwb">len</span>(rc)/<span class="num">2</span>;i++ {
+      tmp := rc[i]
+      rc[i] = rc[<span class="kwb">len</span>(rc)-i-<span class="num">1</span>] 
+      rc[<span class="kwb">len</span>(rc) - i -<span class="num">1</span>] = tmp
+   }
+   <span class="kwa">return</span> <span class="kwb">string</span>(rc)
+}
+<span class="kwa">func</span> (t *T) <span class="kwd">Hash</span>() <span class="kwb">uint64</span> {
+   <span class="kwa">return</span> t.data
+}
+<span class="kwa">func</span> (t *T) <span class="kwd">Equal</span>(in T) <span class="kwb">bool</span> {
+   <span class="kwa">return</span> t.data == in.data
+}
+
+<span class="kwa">func</span> <span class="kwd">calculate</span>(input <span class="kwb">string</span>,size <span class="kwb">int</span>,begin <span class="kwb">int</span>, step <span class="kwb">int</span>,snd <span class="kwa">chan</span> HTable){
+   rc := <span class="kwd">NewTable</span>()
+   <span class="kwa">for</span> i := begin;i&lt;<span class="kwb">len</span>(input)+<span class="num">1</span>-size;i+=step {
+      d,_ := rc.<span class="kwd">Get</span>(<span class="kwd">Pack</span>(input[i:i+size]))
+      d.count++
+   }
+   snd &lt;- rc
+}
+
+<span class="kwa">func</span> <span class="kwd">Tcalculate</span>(input <span class="kwb">string</span>,size <span class="kwb">int</span>) (rc HTable){
+   <span class="kwa">var</span> futures [<span class="num">8</span>]<span class="kwa">chan</span> HTable
+   rc = <span class="kwd">NewTable</span>()
+   <span class="kwa">for</span> i := <span class="num">0</span>;i&lt;<span class="num">8</span>; i++ {
+      futures[i] = <span class="kwb">make</span>(<span class="kwa">chan</span> HTable)
+      <span class="kwa">go</span> <span class="kwd">calculate</span>(input,size,i,<span class="num">8</span>,futures[i])
+   }
+   <span class="kwa">var</span> res [<span class="num">8</span>]HTable
+   <span class="kwa">for</span> i := <span class="num">0</span>;i&lt;<span class="num">8</span>;i++ {
+      res[i] = &lt;- futures[i]
+      f := <span class="kwa">func</span>(in T) {
+         d,ok := rc.<span class="kwd">Get</span>(in)
+         <span class="kwa">if</span> ok {
+            d.count += in.count
+         }
+      }
+      res[i].<span class="kwd">ForEach</span>(f)
+   }
+   <span class="kwa">return</span>
+}
+
+<span class="kwa">func</span> <span class="kwd">WriteFrequencies</span>(input <span class="kwb">string</span>,size <span class="kwb">int</span>){
+   <span class="kwa">var</span> sum <span class="kwb">int</span> = <span class="kwb">len</span>(input) + <span class="num">1</span> - size
+   frequencies := <span class="kwd">Tcalculate</span>(input,size)
+   freq, mfreq := []<span class="kwb">int</span>{},<span class="kwa">map</span>[<span class="kwb">int</span>]*T{}
+   f := <span class="kwa">func</span>(in T) {
+      freq = <span class="kwd">append</span>(freq,in.count)
+      mfreq[in.count]=&amp;in
+   }
+   frequencies.<span class="kwd">ForEach</span>(f)
+   sort.<span class="kwd">Sort</span>(sort.<span class="kwd">Reverse</span>(sort.<span class="kwd">IntSlice</span>(freq)))
+   <span class="kwa">for</span> _,k := <span class="kwa">range</span> freq {
+      <span class="kwa">var</span> val <span class="kwb">float64</span>
+      <span class="kwa">if</span> sum == <span class="num">0</span> {
+         val = <span class="num">0.0</span>
+      } <span class="kwa">else</span> {
+         val = <span class="kwb">float64</span>(<span class="num">100</span>*k)/<span class="kwb">float64</span>(sum)
+      }
+      fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">%.3f</span><span class="esc">\n</span><span class="str">&quot;</span>,mfreq[k].<span class="kwd">String</span>(),val)
+   }
+   fmt.<span class="kwd">Println</span>()
+}
+
+<span class="kwa">func</span> <span class="kwd">WriteCount</span>(input <span class="kwb">string</span>,label <span class="kwb">string</span>) {
+   frequencies := <span class="kwd">Tcalculate</span>(input,<span class="kwb">len</span>(label))
+   d,_ := frequencies.<span class="kwd">Get</span>(<span class="kwd">Pack</span>(label))
+   fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">%s</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>,d.count,label)
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   runtime.<span class="kwd">GOMAXPROCS</span>(<span class="num">4</span>)
+   <span class="kwd">InitTables</span>()
+   
+   in := bufio.<span class="kwd">NewScanner</span>(os.Stdin)
+   three := []<span class="kwb">byte</span>(<span class="str">&quot;&gt;THREE&quot;</span>)
+   <span class="kwa">for</span> {
+      in.<span class="kwd">Scan</span>()
+      <span class="kwa">if</span> bytes.<span class="kwd">HasPrefix</span>(in.<span class="kwd">Bytes</span>(), three) {
+         <span class="kwa">break</span>
+      }
+   }
+
+   input := <span class="kwb">make</span>([]<span class="kwb">byte</span>,<span class="num">0</span>,<span class="num">125000000</span>)
+   <span class="kwa">for</span> in.<span class="kwd">Scan</span>() {
+      input = <span class="kwd">append</span>(input,in.<span class="kwd">Bytes</span>()...)
+   }
+   sinput := <span class="kwb">string</span>(input)
+   input = <span class="kwb">nil</span>
+
+   <span class="kwd">WriteFrequencies</span>(sinput,<span class="num">1</span>)
+   <span class="kwd">WriteFrequencies</span>(sinput,<span class="num">2</span>)
+   
+   <span class="kwd">WriteCount</span>(sinput, <span class="str">&quot;GGT&quot;</span>)
+   <span class="kwd">WriteCount</span>(sinput, <span class="str">&quot;GGTA&quot;</span>)
+   <span class="kwd">WriteCount</span>(sinput, <span class="str">&quot;GGTATT&quot;</span>)
+   <span class="kwd">WriteCount</span>(sinput, <span class="str">&quot;GGTATTTTAATT&quot;</span>)
+   <span class="kwd">WriteCount</span>(sinput, <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>)
+}

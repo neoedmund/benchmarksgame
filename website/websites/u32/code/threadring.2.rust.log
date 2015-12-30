@@ -1,0 +1,12 @@
+
+Thu, 10 Dec 2015 19:04:42 GMT
+
+MAKE:
+/usr/local/src/rust-1.5.0/bin/rustc -C opt-level=3 -C target-cpu=core2  threadring.rs -o threadring.rust-2.rust_run
+2.36s to complete and log all make actions
+
+COMMAND LINE:
+./threadring.rust-2.rust_run 50000000
+
+PROGRAM OUTPUT:
+292

@@ -1,0 +1,246 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; By Jon Smith (rev 3)</span>
+<span class="slc">;;; Fixed a bug in my use of write-sequence, which wasn't apparent on </span>
+<span class="slc">;;; my machine, for whatever reason.</span>
+<span class="slc">;;; Based off of java implementation. </span>
+<span class="slc">;;;</span>
+<span class="slc">;;; To compile</span>
+<span class="slc">;;; sbcl --load fasta.lisp --eval &quot;(save-lisp-and-die \&quot;fasta.core\&quot; :purify t :toplevel (lambda () (main) (quit)))&quot;</span>
+<span class="slc">;;; To run</span>
+<span class="slc">;;; sbcl --noinform --core fastab.core %A</span>
+<span class="slc">;(setf *efficiency-note-cost-threshold* 1)</span>
+
+(<span class="kwa">defmacro</span> define-constant (<span class="kwa">name</span> value &amp;optional doc)
+  `(<span class="kwa">defconstant</span> ,name (<span class="kwa">if</span> (<span class="kwa">boundp</span> ',name) (<span class="kwa">symbol-value</span> ',name) ,value)
+     ,&#64;(<span class="kwa">when</span> doc (<span class="kwa">list</span> doc))))
+
+(<span class="kwa">declaim</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)))
+
+(<span class="kwa">defconstant</span> line-length <span class="num">60</span>)
+(<span class="kwa">defconstant</span> out-buffer-size (* <span class="num">256 1024</span>))
+(<span class="kwa">defconstant</span> lookup-size (* <span class="num">4 1024</span>))
+(<span class="kwa">defconstant</span> lookup-scale (<span class="kwa">the</span> double-float (* <span class="num">1.0</span>d0 (<span class="kwa">-</span> lookup-size <span class="num">1</span>))))
+(<span class="kwa">defconstant</span> lim (<span class="kwa">-</span> out-buffer-size (* <span class="num">2</span> line-length) <span class="num">1</span>))
+
+(<span class="kwa">eval-when</span> (:load-toplevel :compile-toplevel :execute)
+
+  (<span class="kwa">deftype</span> cbyte () '(<span class="kwa">unsigned-byte</span> <span class="num">8</span>))
+
+  (<span class="kwa">defmacro</span> cbyte (<span class="kwa">form</span>)
+    (<span class="kwa">cond</span> ((<span class="kwa">stringp</span> form)
+	   (<span class="kwa">map</span> '(<span class="kwa">simple-array</span> cbyte (*)) #'char-code form))
+	  ((<span class="kwa">characterp</span> form)
+	   (<span class="kwa">char-code</span> form))))
+  
+
+  (<span class="kwa">defstruct</span> freq 
+    (<span class="kwa">c</span> <span class="num">0</span> :type cbyte)
+    (<span class="kwa">m</span> <span class="num">0.0</span>d0 :type double-float))
+
+  (<span class="kwa">defmacro</span> frequify (&amp;rest freq-pairs)
+    `(<span class="kwa">frequify-fn</span> ',(<span class="kwa">mapcar</span> (<span class="kwa">lambda</span> (<span class="kwa">s</span>)
+			      (<span class="kwa">destructuring-bind</span> (<span class="kwa">b</span> f) s
+				(<span class="kwa">list</span> (<span class="kwa">char-code</span> b) f)))
+			    freq-pairs)))
+
+  (<span class="kwa">defun</span> frequify-fn (<span class="kwa">parsed-freq-pairs</span>)
+    (<span class="kwa">declare</span> (<span class="kwa">type</span> list parsed-freq-pairs))
+    (<span class="kwa">let</span> ((<span class="kwa">i</span> <span class="num">0</span>)
+	  (<span class="kwa">array</span> (<span class="kwa">make-array</span> (<span class="kwa">length</span> parsed-freq-pairs))))
+      (<span class="kwa">dolist</span> (<span class="kwa">pair</span> parsed-freq-pairs)
+	(<span class="kwa">destructuring-bind</span> (<span class="kwa">byte</span> double) pair
+	  (<span class="kwa">let</span> ((<span class="kwa">fr</span> (<span class="kwa">make-freq</span> :c byte :m double)))
+	    (<span class="kwa">setf</span> (<span class="kwa">aref</span> array i) fr)))
+	(<span class="kwa">incf</span> i))
+      array))
+
+  (<span class="kwa">defun</span> sum-and-scale (<span class="kwa">a</span>)
+    (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">simple-array</span> freq (*)) a)) 
+    (<span class="kwa">let</span> ((<span class="kwa">p</span> <span class="num">0.0</span>d0))
+      (<span class="kwa">loop</span> for i from <span class="num">0</span> below (<span class="kwa">length</span> a)
+	 do (<span class="kwa">setf</span> (<span class="kwa">freq-m</span> (<span class="kwa">aref</span> a i))
+		  (* (<span class="kwa">incf</span> p (<span class="kwa">freq-m</span> (<span class="kwa">aref</span> a i))) lookup-scale)))
+      (<span class="kwa">setf</span> (<span class="kwa">freq-m</span> (<span class="kwa">aref</span> a (<span class="kwa">-</span> (<span class="kwa">length</span> a) <span class="num">1</span>))) lookup-scale))
+    a)
+
+  (<span class="kwa">defun</span> random-fasta-make-lookup (<span class="kwa">a</span>)
+    (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">simple-array</span> freq (*)) a))
+    (<span class="kwa">let</span> ((<span class="kwa">lookup-byte</span> (<span class="kwa">make-array</span> lookup-size
+				   :element-type 'cbyte
+				   :initial-element <span class="num">0</span>))
+	  (<span class="kwa">lookup-float</span> (<span class="kwa">make-array</span> lookup-size
+				    :element-type 'double-float
+				    :initial-element <span class="num">0.0</span>d0)))
+      
+      (<span class="kwa">let</span> ((<span class="kwa">j</span> <span class="num">0</span>))
+	(<span class="kwa">loop</span> for i from <span class="num">0</span> below lookup-size
+	   do (<span class="kwa">loop</span> while (&lt; (<span class="kwa">freq-m</span> (<span class="kwa">aref</span> a j)) (* <span class="num">1.0</span>d0 i))  do (<span class="kwa">incf</span> j))
+	   do (<span class="kwa">setf</span> (<span class="kwa">aref</span> lookup-float i) (<span class="kwa">freq-m</span> (<span class="kwa">aref</span> a j)))
+	   do (<span class="kwa">setf</span> (<span class="kwa">aref</span> lookup-byte i) (<span class="kwa">freq-c</span> (<span class="kwa">aref</span> a j)))))
+      (<span class="kwa">list</span> lookup-float lookup-byte)))
+
+(<span class="kwa">defmacro</span> fx (<span class="kwa">a</span>)
+    `(<span class="kwa">the</span> fixnum ,a)))
+
+(<span class="kwa">defconstant</span> IM <span class="num">139968</span>)
+(<span class="kwa">defconstant</span> IA <span class="num">3877</span>)
+(<span class="kwa">defconstant</span> IC <span class="num">29573</span>)
+(<span class="kwa">defconstant</span> scale (/ lookup-scale IM))
+
+(<span class="kwa">define-constant</span> rand-array 
+  (<span class="kwa">let</span> ((<span class="kwa">a</span> (<span class="kwa">make-array</span> IM :initial-element <span class="num">0.0</span>d0 :element-type 'double-float))
+	(<span class="kwa">last</span> <span class="num">42</span>))
+    (<span class="kwa">labels</span> ((<span class="kwa">random-next-sub</span> ()
+			      (* scale (<span class="kwa">setf</span> last (<span class="kwa">mod</span> (+ (* last IA) IC) IM)))))
+      (<span class="kwa">dotimes</span> (<span class="kwa">i</span> <span class="num">139968</span>)
+	(<span class="kwa">setf</span> (<span class="kwa">aref</span> a i) (<span class="kwa">random-next-sub</span>)))
+      a)))
+
+(<span class="kwa">define-constant</span> ai-array 
+    (<span class="kwa">let</span> ((<span class="kwa">a</span> (<span class="kwa">make-array</span> IM :initial-element <span class="num">0</span> :element-type 'fixnum)))
+      (<span class="kwa">dotimes</span> (<span class="kwa">i</span> <span class="num">139968</span>)
+	(<span class="kwa">setf</span> (<span class="kwa">aref</span> a i) (<span class="kwa">truncate</span> (<span class="kwa">aref</span> rand-array i))))
+      a))
+
+(<span class="kwa">defparameter</span> *c* <span class="num">0</span>)
+(<span class="kwa">declaim</span> (<span class="kwa">type</span> fixnum *c*))
+
+(<span class="kwa">defmacro</span> random-next (<span class="kwa">c</span>)
+  (<span class="kwa">assert</span> (<span class="kwa">symbolp</span> c))
+  (<span class="kwa">let</span> ((<span class="kwa">g</span> (<span class="kwa">gensym</span>)))
+    `(<span class="kwa">if</span> (= ,c <span class="num">139968</span>)
+	 (<span class="kwa">progn</span>
+	   (<span class="kwa">setf</span> ,c <span class="num">1</span>)
+	   (<span class="kwa">values</span> ,(<span class="kwa">aref</span> rand-array <span class="num">0</span>) ,(<span class="kwa">aref</span> ai-array <span class="num">0</span>)))
+	 (<span class="kwa">let</span> ((,g ,c)) 
+	   (<span class="kwa">incf</span> ,c)
+	   (<span class="kwa">values</span> (<span class="kwa">aref</span> rand-array ,g) (<span class="kwa">aref</span> ai-array ,g))))))
+
+(<span class="kwa">define-constant</span> ALU (<span class="kwa">map</span> '(<span class="kwa">simple-array</span> cbyte (*)) #'char-code 
+			  (<span class="kwa">concatenate</span> 'string
+				       <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>
+				       <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>
+				       <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>
+				       <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>
+				       <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>
+				       <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>
+				       <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>)))
+
+
+
+(<span class="kwa">define-constant</span> IUB (<span class="kwa">random-fasta-make-lookup</span>
+		      (<span class="kwa">sum-and-scale</span>
+		       (<span class="kwa">frequify</span> 
+			(#<span class="esc">\a</span> <span class="num">0.27</span>d0) (#\c <span class="num">0.12</span>d0) (#\g <span class="num">0.12</span>d0) (#<span class="esc">\t</span> <span class="num">0.27</span>d0)
+			(#\B <span class="num">0.02</span>d0) (#\D <span class="num">0.02</span>d0) (#\H <span class="num">0.02</span>d0) (#\K <span class="num">0.02</span>d0)
+			(#\M <span class="num">0.02</span>d0) (#\N <span class="num">0.02</span>d0) (#\R <span class="num">0.02</span>d0) (#\S <span class="num">0.02</span>d0)
+			(#\V <span class="num">0.02</span>d0) (#\W <span class="num">0.02</span>d0) (#\Y <span class="num">0.02</span>d0)))))
+
+(<span class="kwa">define-constant</span> homo-sapiens 
+    (<span class="kwa">random-fasta-make-lookup</span> 
+     (<span class="kwa">sum-and-scale</span> 
+      (<span class="kwa">frequify</span> 
+       (#<span class="esc">\a</span> <span class="num">0.3029549426680</span>d0)
+       (#\c <span class="num">0.1979883004921</span>d0)
+       (#\g <span class="num">0.1975473066391</span>d0)
+       (#<span class="esc">\t</span> <span class="num">0.3015094502008</span>d0)))))
+
+(<span class="kwa">define-constant</span> out-buf (<span class="kwa">make-array</span> out-buffer-size :element-type 'cbyte))
+
+(<span class="kwa">let</span> ((<span class="kwa">ct</span> <span class="num">0</span>))
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum ct))
+
+  (<span class="kwa">let</span> (<span class="kwa">out</span>)
+    (<span class="kwa">defun</span> set-out (<span class="kwa">stream</span>)
+      (<span class="kwa">setf</span> out stream))
+
+    (<span class="kwa">defun</span> out-check-flush ()
+      (<span class="kwa">when</span> (&gt;= ct lim)
+	(<span class="kwa">write-sequence</span> out-buf out :start <span class="num">0</span> :end ct) (<span class="kwa">setf</span> ct <span class="num">0</span>)))
+
+    (<span class="kwa">defun</span> out-close ()
+      (<span class="kwa">write-sequence</span> out-buf out :start <span class="num">0</span> :end ct)
+      (<span class="kwa">setf</span> ct <span class="num">0</span>)
+      (<span class="kwa">close</span> out)
+      ))
+
+  (<span class="kwa">defun</span> random-fasta-add-line (<span class="kwa">bytes</span> lookup-float lookup-byte)
+    (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum bytes)
+	     (<span class="kwa">type</span> (<span class="kwa">simple-array</span> double-float (#.lookup-size)) lookup-float)
+	     (<span class="kwa">type</span> (<span class="kwa">simple-array</span> cbyte (#.lookup-size)) lookup-byte))
+    (<span class="kwa">out-check-flush</span>)
+    (<span class="kwa">let</span> ((<span class="kwa">lct</span> ct)
+	  (<span class="kwa">c</span> *c*))
+      (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum lct)
+	       (<span class="kwa">type</span> fixnum c))
+      (<span class="kwa">loop</span> while (&lt; lct (<span class="kwa">fx</span> (+ ct bytes)))
+	 do (<span class="kwa">multiple-value-bind</span> (<span class="kwa">r</span> ai) (<span class="kwa">random-next</span> c)
+	      (<span class="kwa">loop</span> while (&lt; (<span class="kwa">aref</span> lookup-float ai) r)
+		 do (<span class="kwa">incf</span> ai))
+	      (<span class="kwa">setf</span> (<span class="kwa">aref</span> out-buf lct) (<span class="kwa">aref</span> lookup-byte ai))
+	      (<span class="kwa">incf</span> lct)))
+
+      (<span class="kwa">setf</span> (<span class="kwa">aref</span> out-buf lct) (<span class="kwa">cbyte</span> #\NEWLINE))
+      (<span class="kwa">incf</span> lct)
+      (<span class="kwa">setf</span> ct lct)
+      (<span class="kwa">setf</span> *c* c)
+      (<span class="kwa">values</span>)))
+
+  (<span class="kwa">defun</span> random-fasta-make (<span class="kwa">desc</span> lookup-float lookup-byte n)
+    (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">simple-array</span> cbyte (*)) desc)
+	     (<span class="kwa">type</span> fixnum n))
+    (<span class="kwa">let</span> ((<span class="kwa">len</span> (<span class="kwa">length</span> desc)))
+      (<span class="kwa">replace</span> out-buf desc :start1 ct :start2 <span class="num">0</span> :end1 (<span class="kwa">fx</span> (<span class="kwa">incf</span> ct len)) :end2 len))
+    (<span class="kwa">setf</span> (<span class="kwa">aref</span> out-buf ct) (<span class="kwa">cbyte</span> #\NEWLINE))
+    (<span class="kwa">incf</span> ct)
+    (<span class="kwa">loop</span> while (&gt; n <span class="num">0</span>)
+       do (<span class="kwa">let</span> ((<span class="kwa">bytes</span> (<span class="kwa">min</span> line-length n)))
+	    (<span class="kwa">random-fasta-add-line</span> bytes lookup-float lookup-byte)
+	    (<span class="kwa">decf</span> n bytes)))
+    (<span class="kwa">values</span>))
+
+  (<span class="kwa">defun</span> repeat-fasta-make (<span class="kwa">desc</span> n)
+    (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">simple-array</span> cbyte (*)) desc)
+	     (<span class="kwa">type</span> fixnum n))
+    (<span class="kwa">replace</span> out-buf desc :start1 ct :end2 (<span class="kwa">length</span> desc))
+    (<span class="kwa">incf</span> ct (<span class="kwa">length</span> desc))
+    (<span class="kwa">setf</span> (<span class="kwa">aref</span> out-buf ct) (<span class="kwa">cbyte</span> #\NEWLINE))
+    (<span class="kwa">incf</span> ct)
+    (<span class="kwa">let</span> ((<span class="kwa">buf</span> (<span class="kwa">make-array</span> (+ (<span class="kwa">length</span> alu) line-length))))
+      (<span class="kwa">loop</span> for i of-type fixnum from <span class="num">0</span> below (<span class="kwa">length</span> buf) by (<span class="kwa">length</span> alu)
+	 do (<span class="kwa">replace</span> buf alu :start1 i :end2 (<span class="kwa">min</span> (<span class="kwa">length</span> alu) (<span class="kwa">-</span> (<span class="kwa">length</span> buf) <span class="num">1</span>))))
+      (<span class="kwa">let</span> ((<span class="kwa">pos</span> <span class="num">0</span>))
+	(<span class="kwa">loop</span> while (&gt; n <span class="num">0</span>)
+	   do (<span class="kwa">let</span> ((<span class="kwa">bytes</span> (<span class="kwa">min</span> line-length n)))
+		(<span class="kwa">out-check-flush</span>)
+		(<span class="kwa">replace</span> out-buf buf :start2 pos :start1 ct :end2 (<span class="kwa">the</span> fixnum (+ pos bytes)))
+		(<span class="kwa">incf</span> ct bytes)
+		(<span class="kwa">setf</span> (<span class="kwa">aref</span> out-buf ct) (<span class="kwa">cbyte</span> #\NEWLINE))
+		(<span class="kwa">incf</span> ct)
+		(<span class="kwa">setf</span> pos (<span class="kwa">mod</span> (<span class="kwa">the</span> fixnum (+ pos bytes)) (<span class="kwa">length</span> alu)))
+		(<span class="kwa">decf</span> n bytes)))))
+    (<span class="kwa">values</span>)))
+
+(<span class="kwa">defun</span> main (&amp;optional in-n)
+  (<span class="kwa">let</span> ((<span class="kwa">n</span> (<span class="kwa">or</span> in-n
+	       (<span class="kwa">ignore-errors</span>
+		 (<span class="kwa">parse-integer</span> (<span class="kwa">car</span> (<span class="kwa">last</span> #+sbcl sb-ext:*posix-argv*
+					   #+cmu  extensions:*command-line-strings*
+					   #+gcl  si::*command-args*
+					   #+clisp nil)))))))
+    (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum n))
+    (<span class="kwa">set-out</span> (<span class="kwa">open</span> #p<span class="str">&quot;/dev/stdout&quot;</span> :direction :output :if-exists :append :element-type 'cbyte))
+    (<span class="kwa">unwind-protect</span> (<span class="kwa">progn</span>
+		      (<span class="kwa">repeat-fasta-make</span> (<span class="kwa">cbyte</span> <span class="str">&quot;&gt;ONE Homo sapiens alu&quot;</span>) (<span class="kwa">the</span> fixnum (* n <span class="num">2</span>)))
+		      (<span class="kwa">random-fasta-make</span> (<span class="kwa">cbyte</span> <span class="str">&quot;&gt;TWO IUB ambiguity codes&quot;</span>) 
+					 (<span class="kwa">first</span> IUB)
+					 (<span class="kwa">second</span> IUB)
+					 (<span class="kwa">the</span> fixnum (* n <span class="num">3</span>)))
+		      (<span class="kwa">random-fasta-make</span> 
+		       (<span class="kwa">cbyte</span> <span class="str">&quot;&gt;THREE Homo sapiens frequency&quot;</span>)
+		       (<span class="kwa">first</span> homo-sapiens)
+		       (<span class="kwa">second</span> homo-sapiens)
+		       (<span class="kwa">the</span> fixnum (* n <span class="num">5</span>))))
+      (<span class="kwa">out-close</span>))))

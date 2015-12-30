@@ -1,0 +1,108 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc"># contributed by Jonathan DePeri 2010/5</span>
+<span class="slc"># based on an earlier version by Jesse Millikan</span>
+<span class="slc"># uses Perl interpreter threads with pthreads-like cond_wait and cond_signal</span>
+<span class="slc"># Modified by Andrew Rodland, August 2010</span>
+
+<span class="kwa">use</span> threads;
+<span class="kwa">use</span> threads::shared;
+
+<span class="kwc">my</span> <span class="kwb">%color</span> = (
+  blue =&gt; <span class="num">1</span>,
+  red =&gt; <span class="num">2</span>,
+  yellow =&gt; <span class="num">4</span>,
+);
+
+<span class="kwc">my</span> <span class="kwb">&#64;colors</span>;
+<span class="kwb">&#64;colors</span>[<span class="kwc">values</span> <span class="kwb">%color</span>] = <span class="kwc">keys</span> <span class="kwb">%color</span>;
+
+<span class="kwc">my</span> <span class="kwb">&#64;complement</span>;
+<span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$triple</span> (
+  [<span class="kwc">qw</span>(blue blue blue)],
+  [<span class="kwc">qw</span>(red red red)],
+  [<span class="kwc">qw</span>(yellow yellow yellow)],
+  [<span class="kwc">qw</span>(blue red yellow)],
+  [<span class="kwc">qw</span>(blue yellow red)],
+  [<span class="kwc">qw</span>(red blue yellow)],
+  [<span class="kwc">qw</span>(red yellow blue)],
+  [<span class="kwc">qw</span>(yellow red blue)],
+  [<span class="kwc">qw</span>(yellow blue red)],
+) {
+  <span class="kwb">$complement</span>[ <span class="kwb">$color</span>{<span class="kwb">$triple</span>-&gt;[<span class="num">0</span>]} | <span class="kwb">$color</span>{<span class="kwb">$triple</span>-&gt;[<span class="num">1</span>]} ] = <span class="kwb">$color</span>{<span class="kwb">$triple</span>-&gt;[<span class="num">2</span>]};
+}
+
+<span class="kwc">my</span> <span class="kwb">&#64;numbers</span> = <span class="kwc">qw</span>(zero one two three four five six seven eight nine);
+
+<span class="kwa">sub</span> display_complements
+{
+  <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$i</span> (<span class="num">1</span>, <span class="num">2</span>, <span class="num">4</span>) {
+    <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$j</span> (<span class="num">1</span>, <span class="num">2</span>, <span class="num">4</span>) {
+      <span class="kwc">print</span> <span class="str">&quot;</span><span class="ipl">$colors</span><span class="str">[</span><span class="ipl">$i</span><span class="str">] +</span> <span class="ipl">$colors</span><span class="str">[</span><span class="ipl">$j</span><span class="str">] -&gt;</span> <span class="ipl">$colors</span><span class="str">[</span> <span class="ipl">$complement</span><span class="str">[</span><span class="ipl">$i</span> <span class="str">|</span> <span class="ipl">$j</span><span class="str">] ]</span><span class="esc">\n</span><span class="str">&quot;</span>;
+    }
+  }
+  <span class="kwc">print</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+}
+
+<span class="kwa">sub</span> num2words {
+  <span class="kwc">join</span> <span class="str">' '</span>, <span class="str">''</span>, <span class="kwc">map</span> <span class="kwb">$numbers</span>[<span class="kwb">$_</span>], <span class="kwc">split</span> <span class="kwd">//</span>, <span class="kwc">shift</span>;
+}
+
+<span class="kwc">my</span> <span class="kwb">&#64;creatures</span> : shared;
+<span class="kwc">my</span> <span class="kwb">$meetings</span> : shared;
+<span class="kwc">my</span> <span class="kwb">$first</span> : shared = <span class="kwc">undef</span>;
+<span class="kwc">my</span> <span class="kwb">$second</span> : shared = <span class="kwc">undef</span>;
+<span class="kwc">my</span> <span class="kwb">&#64;met</span> : shared;
+<span class="kwc">my</span> <span class="kwb">&#64;met_self</span> : shared;
+
+<span class="kwa">sub</span> chameneos
+{
+   <span class="kwc">my</span> <span class="kwb">$id</span> = <span class="kwc">shift</span>;
+
+   <span class="kwa">while</span> (<span class="num">1</span>) {
+      <span class="kwc">lock</span> <span class="kwb">$meetings</span>;
+      <span class="kwa">last unless</span> <span class="kwb">$meetings</span>;
+
+      <span class="kwa">if</span> (<span class="kwc">defined</span> <span class="kwb">$first</span>) {
+         cond_signal <span class="kwb">$meetings</span>;
+         <span class="kwb">$creatures</span>[<span class="kwb">$first</span>] = <span class="kwb">$creatures</span>[<span class="kwb">$id</span>] = <span class="kwb">$complement</span>[<span class="kwb">$creatures</span>[<span class="kwb">$first</span>] | <span class="kwb">$creatures</span>[<span class="kwb">$id</span>]];
+         <span class="kwb">$met_self</span>[<span class="kwb">$first</span>]++ <span class="kwa">if</span> (<span class="kwb">$first</span> == <span class="kwb">$id</span>);
+         <span class="kwb">$met</span>[<span class="kwb">$first</span>]++;  <span class="kwb">$met</span>[<span class="kwb">$id</span>]++;
+         <span class="kwb">$meetings</span> --;
+         <span class="kwc">undef</span> <span class="kwb">$first</span>;
+      } <span class="kwa">else</span> {
+         <span class="kwb">$first</span> = <span class="kwb">$id</span>;
+         cond_wait <span class="kwb">$meetings</span>;
+      }
+   }
+}
+
+<span class="kwa">sub</span> pall_mall
+{
+   <span class="kwc">my</span> <span class="kwb">$N</span> = <span class="kwc">shift</span>;
+   <span class="kwb">&#64;creatures</span> = <span class="kwc">map</span> <span class="kwb">$color</span>{<span class="kwb">$_</span>}, <span class="kwb">&#64;_</span>;
+   <span class="kwc">my</span> <span class="kwb">&#64;threads</span>;
+
+   <span class="kwc">print</span> <span class="str">&quot; &quot;</span>, <span class="kwc">join</span>(<span class="str">&quot; &quot;</span>, <span class="kwb">&#64;_</span>);
+
+   <span class="kwb">$meetings</span> = <span class="kwb">$N</span>;
+   <span class="kwa">for</span> (<span class="num">0</span> .. <span class="kwb">$#creatures</span>) {
+      <span class="kwb">$met</span>[<span class="kwb">$_</span>] = <span class="kwb">$met_self</span>[<span class="kwb">$_</span>] = <span class="num">0</span>;
+      <span class="kwc">push</span> <span class="kwb">&#64;threads</span>, threads-&gt;<span class="kwd">create</span>(\&amp;chameneos, <span class="kwb">$_</span>);
+   }
+   <span class="kwa">for</span> (<span class="kwb">&#64;threads</span>) {
+     <span class="kwb">$_</span>-&gt;<span class="kwc">join</span>();
+   }
+
+   <span class="kwb">$meetings</span> = <span class="num">0</span>;
+   <span class="kwa">for</span> (<span class="num">0</span> .. <span class="kwb">$#creatures</span>) {
+      <span class="kwc">print</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str"></span><span class="ipl">$met</span><span class="str">[</span><span class="ipl">$_</span><span class="str">]&quot;</span>, num2words(<span class="kwb">$met_self</span>[<span class="kwb">$_</span>]);
+      <span class="kwb">$meetings</span> += <span class="kwb">$met</span>[<span class="kwb">$_</span>];
+     }
+   <span class="kwc">print</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>, num2words(<span class="kwb">$meetings</span>), <span class="str">&quot;</span><span class="esc">\n\n</span><span class="str">&quot;</span>;
+}
+
+
+display_complements();
+pall_mall(<span class="kwb">$ARGV</span>[<span class="num">0</span>], <span class="kwc">qw</span>(blue red yellow));
+pall_mall(<span class="kwb">$ARGV</span>[<span class="num">0</span>], <span class="kwc">qw</span>(blue red yellow red yellow blue red yellow red blue));

@@ -1,0 +1,133 @@
+<span class="slc"># The Computer Language Benchmarks game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by David Pyke</span>
+<span class="slc"># tweaked by Danny Sauer</span>
+
+<span class="kwa">use</span> constant IM =&gt; <span class="num">139968</span>;
+<span class="kwa">use</span> constant IA =&gt; <span class="num">3877</span>;
+<span class="kwa">use</span> constant IC =&gt; <span class="num">29573</span>;
+
+<span class="kwa">use</span> constant LINELENGTH =&gt; <span class="num">60</span>;
+
+<span class="kwc">my</span> <span class="kwb">$LAST</span> = <span class="num">42</span>;
+<span class="kwa">sub</span> gen_random ($) {
+    <span class="kwa">return</span> ( (<span class="kwb">$_</span>[<span class="num">0</span>] * (<span class="kwb">$LAST</span> = (<span class="kwb">$LAST</span> * IA + IC) % IM)) / IM );
+}
+
+<span class="kwa">sub</span> makeCumulative($){
+    <span class="kwc">my</span>(<span class="kwb">$genelist</span>) = <span class="kwb">&#64;_</span>;
+    <span class="kwb">$cp</span> = <span class="num">0.0</span>;
+
+    <span class="kwa">foreach</span> (&#64;<span class="kwb">$genelist</span>){
+        <span class="kwb">$_</span>-&gt;[<span class="num">1</span>] = <span class="kwb">$cp</span> += <span class="kwb">$_</span>-&gt;[<span class="num">1</span>];
+    }
+}
+
+<span class="kwa">sub</span> selectRandom($){
+    <span class="kwc">my</span>(<span class="kwb">$genelist</span>) = <span class="kwb">&#64;_</span>;
+    <span class="kwb">$r</span> = gen_random (<span class="num">1</span>);
+
+    <span class="kwa">foreach</span> (&#64;<span class="kwb">$genelist</span>){
+        <span class="kwa">if</span> (<span class="kwb">$r</span> &lt; <span class="kwb">$_</span>-&gt;[<span class="num">1</span>]){ <span class="kwa">return</span> <span class="kwb">$_</span>-&gt;[<span class="num">0</span>]; }
+    }
+}
+
+
+<span class="kwa">sub</span> makeRandomFasta($$$$){
+<span class="slc">#void makeRandomFasta (const char * id, const char * desc, const struct aminoacids * genelist, int count, int n) {</span>
+    <span class="kwc">my</span>(<span class="kwb">$id</span>,<span class="kwb">$desc</span>,<span class="kwb">$n</span>,<span class="kwb">$genelist</span>) = <span class="kwb">&#64;_</span>;
+
+    <span class="kwc">print</span> <span class="str">&quot;&gt;</span><span class="ipl">$id</span> <span class="str"></span><span class="ipl">$desc</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>;
+    <span class="kwb">$pick</span>=<span class="str">''</span>;
+
+    <span class="slc"># print whole lines</span>
+    <span class="kwa">foreach</span> (<span class="num">1</span> .. <span class="kwc">int</span>(<span class="kwb">$n</span> / LINELENGTH) ){
+        <span class="kwa">foreach</span> (<span class="num">1</span> ..  LINELENGTH ){
+            <span class="kwb">$pick</span> .= selectRandom(<span class="kwb">$genelist</span>);
+        }
+        <span class="kwc">print</span> <span class="str">&quot;</span><span class="ipl">$pick</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>;
+        <span class="kwb">$pick</span> = <span class="str">''</span>;
+    }
+    <span class="slc">#print remaining line (if required)</span>
+    <span class="kwa">if</span> (<span class="kwb">$n</span> % LINELENGTH){
+        <span class="kwa">foreach</span> (<span class="num">1</span> ..  <span class="kwb">$n</span> % LINELENGTH ){
+            <span class="kwb">$pick</span> .= selectRandom(<span class="kwb">$genelist</span>);
+        }
+        <span class="kwc">print</span> <span class="str">&quot;</span><span class="ipl">$pick</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>;
+    }
+}
+
+<span class="kwa">sub</span> makeRepeatFasta($$$$){
+<span class="slc">#void makeRepeatFasta (const char * id, const char * desc, const char * s, int n) {</span>
+    <span class="slc"># we want to print $n characters of $s (repeated if nessary) with newlines every LINELENGTH</span>
+    <span class="kwc">my</span>(<span class="kwb">$id</span>,<span class="kwb">$desc</span>,<span class="kwb">$s</span>,<span class="kwb">$n</span>) = <span class="kwb">&#64;_</span>;
+
+    <span class="kwc">print</span> <span class="str">&quot;&gt;</span><span class="ipl">$id</span> <span class="str"></span><span class="ipl">$desc</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>;
+
+    <span class="slc"># what we need, and the extra (if any) will be discarded.</span>
+    <span class="kwa">foreach</span> (<span class="num">1</span> .. <span class="kwc">int</span>(<span class="kwb">$n</span> / LINELENGTH) ){
+        <span class="kwa">while</span> (<span class="kwc">length</span> <span class="kwb">$ss</span> &lt; LINELENGTH){
+            <span class="kwb">$ss</span> .= <span class="kwb">$s</span>;
+        }
+        <span class="kwc">print substr</span>(<span class="kwb">$ss</span>,<span class="num">0</span>,LINELENGTH), <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+        <span class="kwb">$ss</span> = <span class="kwc">substr</span>(<span class="kwb">$ss</span>,LINELENGTH);
+    }
+    <span class="slc">#final_line</span>
+    <span class="kwa">while</span> (<span class="kwc">length</span> <span class="kwb">$ss</span> &lt; LINELENGTH){
+        <span class="kwb">$ss</span> .= <span class="kwb">$s</span>;
+    }
+    <span class="kwc">print substr</span>(<span class="kwb">$ss</span>, <span class="num">0</span>, (<span class="kwb">$n</span> % LINELENGTH)), <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+<span class="kwc">print</span> STDERR <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+}
+
+
+<span class="kwc">my</span> <span class="kwb">$iub</span> = [
+    [ <span class="str">'a'</span>, <span class="num">0.27</span> ],
+    [ <span class="str">'c'</span>, <span class="num">0.12</span> ],
+    [ <span class="str">'g'</span>, <span class="num">0.12</span> ],
+    [ <span class="str">'t'</span>, <span class="num">0.27</span> ],
+    [ <span class="str">'B'</span>, <span class="num">0.02</span> ],
+    [ <span class="str">'D'</span>, <span class="num">0.02</span> ],
+    [ <span class="str">'H'</span>, <span class="num">0.02</span> ],
+    [ <span class="str">'K'</span>, <span class="num">0.02</span> ],
+    [ <span class="str">'M'</span>, <span class="num">0.02</span> ],
+    [ <span class="str">'N'</span>, <span class="num">0.02</span> ],
+    [ <span class="str">'R'</span>, <span class="num">0.02</span> ],
+    [ <span class="str">'S'</span>, <span class="num">0.02</span> ],
+    [ <span class="str">'V'</span>, <span class="num">0.02</span> ],
+    [ <span class="str">'W'</span>, <span class="num">0.02</span> ],
+    [ <span class="str">'Y'</span>, <span class="num">0.02</span> ]
+];
+
+<span class="kwc">my</span> <span class="kwb">$homosapiens</span> = [
+    [ <span class="str">'a'</span>, <span class="num">0.3029549426680</span> ],
+    [ <span class="str">'c'</span>, <span class="num">0.1979883004921</span> ],
+    [ <span class="str">'g'</span>, <span class="num">0.1975473066391</span> ],
+    [ <span class="str">'t'</span>, <span class="num">0.3015094502008</span> ]
+];
+
+<span class="kwb">$alu</span> =
+    <span class="str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG'</span> .
+    <span class="str">'GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA'</span> .
+    <span class="str">'CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT'</span> .
+    <span class="str">'ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA'</span> .
+    <span class="str">'GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG'</span> .
+    <span class="str">'AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC'</span> .
+    <span class="str">'AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span>;
+
+<span class="slc">######################################################################</span>
+<span class="slc">#main</span>
+
+<span class="kwc">my</span> <span class="kwb">$n</span> = (<span class="kwb">$ARGV</span>[<span class="num">0</span>] || <span class="num">1000</span>) ;
+
+makeCumulative <span class="kwb">$iub</span>;
+makeCumulative <span class="kwb">$homosapiens</span>;
+
+makeRepeatFasta (<span class="str">'ONE'</span>, <span class="str">'Homo sapiens alu'</span>, <span class="kwb">$alu</span>, <span class="kwb">$n</span>*<span class="num">2</span>);
+makeRandomFasta (<span class="str">'TWO'</span>, <span class="str">'IUB ambiguity codes'</span>, <span class="kwb">$n</span>*<span class="num">3</span>, <span class="kwb">$iub</span>);
+makeRandomFasta (<span class="str">'THREE'</span>, <span class="str">'Homo sapiens frequency'</span>, <span class="kwb">$n</span>*<span class="num">5</span>, <span class="kwb">$homosapiens</span>);
+
+<span class="kwa">exit</span> <span class="num">0</span>;
+
+<span class="slc">#END OF FILE</span>

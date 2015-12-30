@@ -1,0 +1,76 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by K P anonymous</span>
+<span class="com"> * fixed by Andrew Martin</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;bufio&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+)
+
+<span class="kwa">const</span> lineSize = <span class="num">60</span>
+
+<span class="kwa">var</span> complement = [<span class="num">256</span>]<span class="kwb">uint8</span>{
+   <span class="str">'A'</span>: <span class="str">'T'</span>, <span class="str">'a'</span>: <span class="str">'T'</span>,
+   <span class="str">'C'</span>: <span class="str">'G'</span>, <span class="str">'c'</span>: <span class="str">'G'</span>,
+   <span class="str">'G'</span>: <span class="str">'C'</span>, <span class="str">'g'</span>: <span class="str">'C'</span>,
+   <span class="str">'T'</span>: <span class="str">'A'</span>, <span class="str">'t'</span>: <span class="str">'A'</span>,
+   <span class="str">'U'</span>: <span class="str">'A'</span>, <span class="str">'u'</span>: <span class="str">'A'</span>,
+   <span class="str">'M'</span>: <span class="str">'K'</span>, <span class="str">'m'</span>: <span class="str">'K'</span>,
+   <span class="str">'R'</span>: <span class="str">'Y'</span>, <span class="str">'r'</span>: <span class="str">'Y'</span>,
+   <span class="str">'W'</span>: <span class="str">'W'</span>, <span class="str">'w'</span>: <span class="str">'W'</span>,
+   <span class="str">'S'</span>: <span class="str">'S'</span>, <span class="str">'s'</span>: <span class="str">'S'</span>,
+   <span class="str">'Y'</span>: <span class="str">'R'</span>, <span class="str">'y'</span>: <span class="str">'R'</span>,
+   <span class="str">'K'</span>: <span class="str">'M'</span>, <span class="str">'k'</span>: <span class="str">'M'</span>,
+   <span class="str">'V'</span>: <span class="str">'B'</span>, <span class="str">'v'</span>: <span class="str">'B'</span>,
+   <span class="str">'H'</span>: <span class="str">'D'</span>, <span class="str">'h'</span>: <span class="str">'D'</span>,
+   <span class="str">'D'</span>: <span class="str">'H'</span>, <span class="str">'d'</span>: <span class="str">'H'</span>,
+   <span class="str">'B'</span>: <span class="str">'V'</span>, <span class="str">'b'</span>: <span class="str">'V'</span>,
+   <span class="str">'N'</span>: <span class="str">'N'</span>, <span class="str">'n'</span>: <span class="str">'N'</span>,
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   in := bufio.<span class="kwd">NewReaderSize</span>(os.Stdin, <span class="num">1</span>&lt;&lt;<span class="num">18</span>)
+   buf := <span class="kwb">make</span>([]<span class="kwb">byte</span>, <span class="num">1</span>&lt;&lt;<span class="num">20</span>)
+   line, err := in.<span class="kwd">ReadSlice</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+   <span class="kwa">for</span> err == <span class="kwb">nil</span> {
+      os.Stdout.<span class="kwd">Write</span>(line)
+
+      <span class="slc">// Accumulate reversed complement in buf[w:]</span>
+      nchar := <span class="num">0</span>
+      w := <span class="kwb">len</span>(buf)
+      <span class="kwa">for</span> {
+         line, err = in.<span class="kwd">ReadSlice</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+         <span class="kwa">if</span> err != <span class="kwb">nil</span> || line[<span class="num">0</span>] == <span class="str">'&gt;'</span> {
+            <span class="kwa">break</span>
+         }
+         line = line[<span class="num">0</span> : <span class="kwb">len</span>(line)-<span class="num">1</span>]
+         nchar += <span class="kwb">len</span>(line)
+         <span class="kwa">if</span> <span class="kwb">len</span>(line)+nchar/lineSize+<span class="num">128</span> &gt;= w {
+            nbuf := <span class="kwb">make</span>([]<span class="kwb">byte</span>, <span class="kwb">len</span>(buf)*<span class="num">5</span>)
+            <span class="kwd">copy</span>(nbuf[<span class="kwb">len</span>(nbuf)-<span class="kwb">len</span>(buf):], buf)
+            w += <span class="kwb">len</span>(nbuf) - <span class="kwb">len</span>(buf)
+            buf = nbuf
+         }
+
+         <span class="kwa">for</span> i, c := <span class="kwa">range</span> line {
+            buf[w-i-<span class="num">1</span>] = complement[c]
+         }
+         w -= <span class="kwb">len</span>(line)
+      }
+
+      <span class="slc">// Copy down to beginning of buffer, inserting newlines.</span>
+      <span class="slc">// The loop left room for the newlines and 128 bytes of padding.</span>
+      i := <span class="num">0</span>
+      <span class="kwa">for</span> j := w; j &lt; <span class="kwb">len</span>(buf); j += lineSize {
+         i += <span class="kwd">copy</span>(buf[i:i+lineSize], buf[j:])
+         buf[i] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>
+         i++
+      }
+      os.Stdout.<span class="kwd">Write</span>(buf[<span class="num">0</span>:i])
+   }
+}

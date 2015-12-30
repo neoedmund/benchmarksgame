@@ -1,0 +1,107 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game </span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Benedikt Nordhoff</span>
+<span class="com"> * parallelized adaptation of Scala version #4 by Rex Kerr (Java version #4 by Anthony Donnefort)</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> akka.actor._
+<span class="kwa">object</span> revcomp <span class="kwa">extends</span> App {  
+  <span class="kwa">val</span> table = <span class="kwa">new</span> Array[Byte](<span class="num">128</span>)
+  <span class="kwa">for</span> (i &lt;- <span class="num">0</span> to <span class="num">127</span>) { <span class="kwd">table</span>(i) = i.toByte }
+  <span class="kwa">for</span> ((i,o) &lt;- <span class="str">&quot;ACGTUMRWSYKVHDB&quot;</span>.toList zip <span class="str">&quot;TGCAAKYWSRMBDHVN&quot;</span>.toList) {
+    <span class="kwd">table</span>(i) = o.toByte
+    <span class="kwd">table</span>(i.toLower) = o.toByte
+  }
+  <span class="kwa">val</span> system = ActorSystem.<span class="kwd">create</span>(<span class="str">&quot;MySystem&quot;</span>);
+  <span class="kwa">val</span> mainActor = system.<span class="kwd">actorOf</span>(Props[Reader])
+}
+
+<span class="slc">//Messages</span>
+<span class="kwa">case class</span> <span class="kwd">Parse</span>(ar: Array[Byte],len:Int)
+<span class="kwa">case class</span> <span class="kwd">Part</span>(ar:Array[Byte],start:Int,len:Int)
+<span class="kwa">case object</span> Reverse
+<span class="kwa">case object</span> Done
+<span class="kwa">case object</span> Write
+<span class="kwa">case class</span> <span class="kwd">Next</span>(ref: ActorRef)
+
+<span class="slc">// Reads from stdio and forwards to Parser</span>
+<span class="kwa">class</span> Reader <span class="kwa">extends</span> Actor {
+    <span class="kwa">override def</span> preStart{
+    <span class="kwa">val</span> parser = context.<span class="kwd">actorOf</span>(Props[Parser])
+    <span class="kwa">val</span> SIZE = <span class="num">8192</span>*<span class="num">10000</span>    
+    <span class="kwa">var</span> n = <span class="num">0</span>
+    <span class="kwa">do</span> {
+      <span class="kwa">val</span> input = <span class="kwa">new</span> Array[Byte](SIZE)
+      n = System.<span class="kwa">in</span>.<span class="kwd">read</span>(input)
+      <span class="kwa">if</span> (n &gt; <span class="num">0</span>) {
+        parser ! <span class="kwd">Parse</span>(input,n)        
+      }
+    } <span class="kwa">while</span> (n != -<span class="num">1</span>)
+    parser ! Done
+  }
+  <span class="kwa">def</span> receive = {<span class="kwa">case</span> _ =&gt;}
+}
+
+<span class="slc">// Receives chunks from reader, looks for '&gt;' and forwards chunks to Reverser</span>
+<span class="kwa">class</span> Parser <span class="kwa">extends</span> Actor {
+  <span class="kwa">var</span> cr:ActorRef = null
+  <span class="kwa">def</span> receive = {
+    <span class="kwa">case</span> <span class="kwd">Parse</span>(ar,len) =&gt; 
+      <span class="kwa">var</span> i = <span class="num">0</span>
+        <span class="kwa">var</span> i0 = <span class="num">0</span>
+        <span class="kwa">while</span> (i &lt; len) {
+          <span class="kwa">if</span> (<span class="kwd">ar</span>(i)==<span class="str">'&gt;'</span>) {
+            <span class="kwa">if</span> (i&gt;i0) cr ! <span class="kwd">Part</span>(ar,i0,i-i0)
+            <span class="kwa">val</span> nr = context.<span class="kwd">actorOf</span>(Props[Reverser])
+            <span class="kwa">if</span>(cr != null) {
+              cr ! Reverse
+              cr ! <span class="kwd">Next</span>(nr)
+            } <span class="kwa">else</span> {nr ! Write}
+            cr = nr
+            i0 = i
+          }
+          i += <span class="num">1</span>
+        }
+        <span class="kwa">if</span> (i0&lt;len) cr ! <span class="kwd">Part</span>(ar,i0,len-i0)
+    <span class="kwa">case</span> Done =&gt; cr ! Reverse; cr ! <span class="kwd">Next</span>(self)
+    <span class="kwa">case</span> Write =&gt; context.system.shutdown
+  }
+}
+
+<span class="slc">// Puts chucks together and reverses stuff</span>
+<span class="kwa">class</span> Reverser <span class="kwa">extends</span> java.io.ByteArrayOutputStream with Actor {
+  <span class="kwa">var</span> next:ActorRef = null
+  <span class="kwa">var</span> done = false
+  <span class="kwa">var</span> wdone = false
+  <span class="kwa">def</span> receive = {
+    <span class="kwa">case</span> <span class="kwd">Part</span>(ar,start,len) =&gt; <span class="kwd">write</span>(ar,start,len)
+    <span class="kwa">case</span> Reverse =&gt; doReverse
+    <span class="kwa">case</span> Write =&gt; <span class="kwa">if</span>(done) doWrite <span class="kwa">else</span> {done = true}
+    <span class="kwa">case</span> <span class="kwd">Next</span>(ref) =&gt; next = ref; <span class="kwa">if</span>(wdone) {next ! Write;context.<span class="kwd">stop</span>(self)} <span class="kwa">else</span> {wdone = true}
+  }
+  <span class="kwa">def</span> doReverse {
+    <span class="kwa">if</span> (count &gt; <span class="num">0</span>) {
+      <span class="kwa">val</span> table = revcomp.table
+      <span class="kwa">var</span> begin = <span class="num">0</span>
+      <span class="kwa">var</span> end = count-<span class="num">1</span>
+      <span class="kwa">while</span> (<span class="kwd">buf</span>(begin) != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> &amp;&amp; begin &lt; count) { begin += <span class="num">1</span> }
+      <span class="kwa">while</span> (begin &lt;= end) {
+        <span class="kwa">if</span> (<span class="kwd">buf</span>(begin) == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) begin += <span class="num">1</span>
+        <span class="kwa">if</span> (<span class="kwd">buf</span>(end) == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) end -= <span class="num">1</span>
+        <span class="kwa">if</span> (begin&lt;=end) {
+          <span class="kwa">val</span> temp = <span class="kwd">buf</span>(begin)
+          <span class="kwd">buf</span>(begin) = <span class="kwd">table</span>(<span class="kwd">buf</span>(end))
+          <span class="kwd">buf</span>(end) = <span class="kwd">table</span>(temp)
+          begin += <span class="num">1</span>
+          end -= <span class="num">1</span>
+        }
+      }
+      <span class="kwa">if</span>(done) doWrite <span class="kwa">else</span> done = true
+    }
+  }
+  <span class="kwa">def</span> doWrite {
+    System.out.<span class="kwd">write</span>(buf,<span class="num">0</span>,count)
+    <span class="kwa">if</span>(wdone) {next ! Write;context.<span class="kwd">stop</span>(self)} <span class="kwa">else</span> wdone = true
+  }    
+} 

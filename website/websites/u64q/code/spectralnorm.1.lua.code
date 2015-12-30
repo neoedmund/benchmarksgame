@@ -1,0 +1,43 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- contributed by Mike Pall</span>
+
+<span class="kwa">local function</span> <span class="kwd">A</span>(i, j)
+  <span class="kwa">local</span> ij = i+j-<span class="num">1</span>
+  <span class="kwa">return</span> <span class="num">1.0</span> / (ij * (ij-<span class="num">1</span>) * <span class="num">0.5</span> + i)
+<span class="kwa">end</span>
+
+<span class="kwa">local function</span> <span class="kwd">Av</span>(x, y, N)
+  <span class="kwa">for</span> i=<span class="num">1</span>,N <span class="kwa">do</span>
+    <span class="kwa">local</span> a = <span class="num">0</span>
+    <span class="kwa">for</span> j=<span class="num">1</span>,N <span class="kwa">do</span> a = a + x[j] * <span class="kwd">A</span>(i, j) <span class="kwa">end</span>
+    y[i] = a
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">local function</span> <span class="kwd">Atv</span>(x, y, N)
+  <span class="kwa">for</span> i=<span class="num">1</span>,N <span class="kwa">do</span>
+    <span class="kwa">local</span> a = <span class="num">0</span>
+    <span class="kwa">for</span> j=<span class="num">1</span>,N <span class="kwa">do</span> a = a + x[j] * <span class="kwd">A</span>(j, i) <span class="kwa">end</span>
+    y[i] = a
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">local function</span> <span class="kwd">AtAv</span>(x, y, t, N)
+  <span class="kwd">Av</span>(x, t, N)
+  <span class="kwd">Atv</span>(t, y, N)
+<span class="kwa">end</span>
+
+<span class="kwa">local</span> N = <span class="kwb">tonumber</span>(arg <span class="kwa">and</span> arg[<span class="num">1</span>]) <span class="kwa">or</span> <span class="num">100</span>
+<span class="kwa">local</span> u, v, t = {}, {}, {}
+<span class="kwa">for</span> i=<span class="num">1</span>,N <span class="kwa">do</span> u[i] = <span class="num">1</span> <span class="kwa">end</span>
+
+<span class="kwa">for</span> i=<span class="num">1</span>,<span class="num">10</span> <span class="kwa">do</span> <span class="kwd">AtAv</span>(u, v, t, N) <span class="kwd">AtAv</span>(v, u, t, N) <span class="kwa">end</span>
+
+<span class="kwa">local</span> vBv, vv = <span class="num">0</span>, <span class="num">0</span>
+<span class="kwa">for</span> i=<span class="num">1</span>,N <span class="kwa">do</span>
+  <span class="kwa">local</span> ui, vi = u[i], v[i]
+  vBv = vBv + ui*vi
+  vv = vv + vi*vi
+<span class="kwa">end</span>
+io.<span class="kwb">write</span>(<span class="kwb">string</span>.<span class="kwb">format</span>(<span class="str">&quot;%0.9f</span><span class="esc">\n</span><span class="str">&quot;</span>, math.<span class="kwb">sqrt</span>(vBv / vv)))

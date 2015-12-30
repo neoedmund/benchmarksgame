@@ -1,0 +1,144 @@
+<span class="com">{ The Computer Language Benchmarks Game</span>
+<span class="com">  http://benchmarksgame.alioth.debian.org</span>
+<span class="com"></span>
+<span class="com">  contributed by Ian Osgood</span>
+<span class="com">  modified by Vincent Snijders</span>
+<span class="com">  modified by Steve Fisher</span>
+<span class="com">}</span>
+
+<span class="com">{$mode objfpc}</span>
+
+<span class="kwa">const</span>
+  ALU : AnsiString =
+  <span class="str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG'</span> +
+  <span class="str">'GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA'</span> +
+  <span class="str">'CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT'</span> +
+  <span class="str">'ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA'</span> +
+  <span class="str">'GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG'</span> +
+  <span class="str">'AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC'</span> +
+  <span class="str">'AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span>;
+
+  codes = <span class="str">'acgtBDHKMNRSVWY'</span>;
+
+  IUB : <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.14</span>] <span class="kwa">of</span> <span class="kwb">double</span> = ( <span class="num">0.27</span>, <span class="num">0.12</span>, <span class="num">0.12</span>, <span class="num">0.27</span>, <span class="num">0.02</span>,
+  <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span> );
+
+  HomoSap : <span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.3</span>] <span class="kwa">of</span> <span class="kwb">double</span> = ( <span class="num">0.3029549426680</span>,
+  <span class="num">0.1979883004921</span>, <span class="num">0.1975473066391</span>,  <span class="num">0.3015094502008</span> );
+
+  <span class="slc">//  Width of ouput lines.</span>
+  width = <span class="num">60</span>;
+
+<span class="kwa">type</span>
+  TGene = <span class="kwa">record</span>
+    prob: <span class="kwb">double</span>;
+    code: <span class="kwb">char</span>;
+  <span class="kwa">end</span>;
+  PGene = ^TGene;
+
+<span class="kwa">var</span>
+  n : <span class="kwb">longint</span>;
+  Genes: <span class="kwa">array of</span> TGene;
+  text_buf: <span class="kwa">array</span>[<span class="num">0</span>..<span class="num">$ffff</span>] <span class="kwa">of</span> <span class="kwb">byte</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">fasta_repeat</span>( n: <span class="kwb">integer</span> );
+<span class="kwa">var</span>
+  source_alu: ansistring;
+  here: <span class="kwb">integer</span>;
+<span class="kwa">begin</span>
+  source_alu := alu + alu[<span class="num">1</span> .. width];
+  here := <span class="num">1</span>;
+  <span class="kwc">repeat</span>
+    <span class="kwd">writeln</span>( source_alu[ here .. here + width - <span class="num">1</span>] );
+    here += width;
+    <span class="kwc">if</span> here &gt; <span class="kwd">length</span>( alu ) <span class="kwc">then</span>
+      here -= <span class="kwd">length</span>( alu );
+    n -= width
+  <span class="kwc">until</span> n &lt;= width;
+  <span class="kwd">writeln</span>( source_alu[ here .. here + n - <span class="num">1</span>] )
+<span class="kwa">end</span>;
+
+
+<span class="kwa">function</span> <span class="kwd">gen_random</span>(limit : <span class="kwb">integer</span>): <span class="kwb">double</span>;
+<span class="kwa">const</span>
+  seed : <span class="kwb">integer</span> = <span class="num">42</span>;
+  IM = <span class="num">139968</span>;
+  IA = <span class="num">3877</span>;
+  IC = <span class="num">29573</span>;
+<span class="kwa">begin</span>
+  seed := (seed * IA + IC) <span class="kwa">mod</span> IM;
+  result := limit * seed * (<span class="num">1</span> / IM)
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">init_genes</span>(<span class="kwa">const</span> probs: <span class="kwa">array of</span> <span class="kwb">double</span>);
+<span class="kwa">var</span>
+  i : <span class="kwb">integer</span>;
+  sum_prob: <span class="kwb">double</span>;
+<span class="kwa">begin</span>
+  <span class="kwd">setLength</span>(Genes, <span class="kwd">length</span>(probs));
+  sum_prob := <span class="num">0.0</span>;
+  <span class="kwc">for</span> i := <span class="num">0</span> <span class="kwc">to</span> <span class="kwd">high</span>(probs) <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    sum_prob += probs[i];
+    Genes[i].prob := sum_prob;
+    Genes[i].code := codes[i+<span class="num">1</span>]
+  <span class="kwa">end</span>
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">fasta_random</span>(n : <span class="kwb">integer</span>; <span class="kwa">const</span> probs: <span class="kwa">array of</span> <span class="kwb">double</span>);
+
+  <span class="kwa">function</span> choose_code : <span class="kwb">char</span>; <span class="kwa">inline</span>;
+  <span class="kwa">var</span> r : <span class="kwb">double</span>;
+      gene: PGene;
+  <span class="kwa">begin</span>
+    r := <span class="kwd">gen_random</span>(<span class="num">1</span>);
+    gene := &#64;Genes[ <span class="num">0</span> ];
+    <span class="kwc">while</span> r &gt;= gene^.prob <span class="kwc">do</span>
+      <span class="kwd">inc</span>(gene);
+   result := gene^.code
+  <span class="kwa">end</span>;
+
+  <span class="kwa">procedure</span> <span class="kwd">do_one_line</span>( size: <span class="kwb">integer</span> ); <span class="kwa">inline</span>;
+  <span class="kwa">var</span>
+    line : <span class="kwa">string</span>;
+    p, p_limit : pchar;
+  <span class="kwa">begin</span>
+    <span class="kwd">SetLength</span>(line, size);
+    p := &#64;line[<span class="num">1</span>];
+    p_limit := &#64;line[size];
+    <span class="kwc">while</span> p &lt;= p_limit <span class="kwc">do</span>
+    <span class="kwa">begin</span>
+      p^ := choose_code;
+      <span class="kwd">inc</span>(p)
+    <span class="kwa">end</span>;
+    <span class="kwd">writeln</span>( line )
+  <span class="kwa">end</span>;
+
+<span class="kwa">begin</span>
+  <span class="slc">// Make gene array.</span>
+  <span class="kwd">init_genes</span>(probs);
+
+  <span class="kwc">while</span> n &gt; width <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    <span class="kwd">do_one_line</span>( width );
+    n -= width
+  <span class="kwa">end</span>;
+
+  <span class="kwd">do_one_line</span>( n )
+<span class="kwa">end</span>;
+
+
+<span class="kwa">begin</span>
+  <span class="kwd">SetTextBuf</span>(output, text_buf);
+  <span class="kwd">val</span>(<span class="kwd">paramstr</span>(<span class="num">1</span>), n);
+
+  <span class="kwd">writeln</span>(<span class="str">'&gt;ONE Homo sapiens alu'</span>);
+  <span class="kwd">fasta_repeat</span>(n*<span class="num">2</span>);
+
+  <span class="kwd">writeln</span>(<span class="str">'&gt;TWO IUB ambiguity codes'</span>);
+  <span class="kwd">fasta_random</span>(n*<span class="num">3</span>, IUB);
+
+  <span class="kwd">writeln</span>(<span class="str">'&gt;THREE Homo sapiens frequency'</span>);
+  <span class="kwd">fasta_random</span>(n*<span class="num">5</span>, HomoSap)
+<span class="kwa">end</span>.
+

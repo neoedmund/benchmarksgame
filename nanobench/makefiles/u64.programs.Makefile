@@ -1,5 +1,5 @@
 # The Computer Language Benchmarks Game
-# $Id: u64.programs.Makefile,v 1.6 2013/11/04 16:12:57 igouy-guest Exp $
+# $Id: u64.programs.Makefile,v 1.13 2015/08/26 19:16:16 igouy-guest Exp $
 
 # ASSUME each program will build in a clean empty tmpdir
 # ASSUME there's a symlink to the program source in tmpdir
@@ -594,7 +594,7 @@ SBCL_TRACE :=
 
 %.scala_run: %.scala $(SCALAC)
 	-mv $< $(TEST).scala
-	-$(SCALAC) -optimise -target:jvm-1.7 $(TEST).scala
+	-$(SCALAC) -optimise -target:jvm-1.8 $(TEST).scala
 
 
 ########################################
@@ -611,10 +611,16 @@ SBCL_TRACE :=
 ########################################
 
 %.rs: %.rust $(RUST)
-	-@mv $< $@
+	-@mv $< $(TEST).rs
 
 %.rust_run: %.rs $(RUST)
-	-$(RUST) --opt-level=3 $< -o $@
+	-$(RUST) -C opt-level=3 -C target-cpu=core2 $(RUSTLOPTS) $(TEST).rs -o $@
 
 
+########################################
+# Hack
+########################################
+
+%.hack_run: %.hack $(HHVM)
+	-/usr/bin/hh_client
 

@@ -1,0 +1,44 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by TeXitoi</span>
+
+<span class="kwa">use</span> std::sync::mpsc::{channel, Sender, Receiver};
+<span class="kwa">use</span> std::thread;
+
+<span class="kwa">fn</span> start(n_tasks: i32, token: i32) {
+    <span class="kwa">let</span> (tx, <span class="kwa">mut</span> rx) = channel();
+    tx.send(token).unwrap();
+    <span class="kwa">let mut</span> guards = Vec::with_capacity(n_tasks <span class="kwa">as</span> usize);
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">2</span> .. n_tasks + <span class="num">1</span> {
+        <span class="kwa">let</span> (tx, next_rx) = channel();
+        <span class="kwa">let</span> cur_rx = std::mem::replace(&amp;<span class="kwa">mut</span> rx, next_rx);
+        guards.push(thread::spawn(<span class="kwa">move</span>|| roundtrip(i, tx, cur_rx)));
+    }
+    guards.push(thread::spawn(<span class="kwa">move</span>|| roundtrip(<span class="num">1</span>, tx, rx)));
+    <span class="kwa">for</span> g <span class="kwa">in</span> guards { g.join().unwrap(); }
+}
+
+<span class="kwa">fn</span> roundtrip(id: i32, tx: Sender&lt;i32&gt;, rx: Receiver&lt;i32&gt;) {
+    <span class="kwa">for</span> token <span class="kwa">in</span> rx.iter() {
+        <span class="kwa">if</span> token == <span class="num">1</span> {
+            println!(<span class="str">&quot;{}&quot;</span>, id);
+            <span class="kwa">break</span>;
+        }
+        tx.send(token - <span class="num">1</span>).unwrap();
+    }
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> args = &amp;<span class="kwa">mut</span> std::env::args_os();
+    <span class="kwa">let</span> token = args.skip(<span class="num">1</span>).next()
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">1000</span>);
+    <span class="kwa">let</span> n_tasks = args.next()
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">503</span>);
+    start(n_tasks, token);
+}

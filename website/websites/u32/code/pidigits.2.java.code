@@ -1,0 +1,165 @@
+<span class="com">/**</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Mike Pall</span>
+<span class="com"> * java port by Stefan Krause</span>
+<span class="com">*/</span>
+
+
+<span class="kwa">public class</span> pidigits {
+   
+   <span class="kwa">final</span> GmpInteger q = <span class="kwa">new</span> <span class="kwd">GmpInteger</span>(), r = <span class="kwa">new</span> <span class="kwd">GmpInteger</span>(),
+   s = <span class="kwa">new</span> <span class="kwd">GmpInteger</span>(), t = <span class="kwa">new</span> <span class="kwd">GmpInteger</span>(); 
+   <span class="kwa">final</span> GmpInteger u = <span class="kwa">new</span> <span class="kwd">GmpInteger</span>(), v = <span class="kwa">new</span> <span class="kwd">GmpInteger</span>(),
+   w = <span class="kwa">new</span> <span class="kwd">GmpInteger</span>(); 
+
+   <span class="kwb">int</span> i, k, c; 
+   <span class="kwb">int</span> digit;
+   <span class="kwb">int</span> d;
+   StringBuffer strBuf = <span class="kwa">new</span> <span class="kwd">StringBuffer</span>(<span class="num">20</span>);
+   <span class="kwa">final</span> <span class="kwb">int</span> n;
+   
+   <span class="kwa">private</span> <span class="kwd">pidigits</span>(<span class="kwb">int</span> n)
+   {
+      <span class="kwa">this</span>.n=n;
+   }
+   
+   <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">compose_r</span>(<span class="kwb">int</span> bq, <span class="kwb">int</span> br, <span class="kwb">int</span> bs, <span class="kwb">int</span> bt)
+   {
+     u.<span class="kwd">mul</span>(r, bs);
+     r.<span class="kwd">mul</span>(r, bq);
+     v.<span class="kwd">mul</span>(t, br);
+     r.<span class="kwd">add</span>(r, v);
+     t.<span class="kwd">mul</span>(t, bt);
+     t.<span class="kwd">add</span>(t, u);
+     s.<span class="kwd">mul</span>(s, bt);
+     u.<span class="kwd">mul</span>(q, bs);
+     s.<span class="kwd">add</span>(s, u);
+     q.<span class="kwd">mul</span>(q, bq);
+   }
+
+   <span class="com">/* Compose matrix with numbers on the left. */</span>
+   <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">compose_l</span>(<span class="kwb">int</span> bq, <span class="kwb">int</span> br, <span class="kwb">int</span> bs, <span class="kwb">int</span> bt)
+   {
+     r.<span class="kwd">mul</span>(r, bt);
+     u.<span class="kwd">mul</span>(q, br);
+     r.<span class="kwd">add</span>(r, u);
+     u.<span class="kwd">mul</span>(t, bs);
+     t.<span class="kwd">mul</span>(t, bt);
+     v.<span class="kwd">mul</span>(s, br);
+     t.<span class="kwd">add</span>(t, v);
+     s.<span class="kwd">mul</span>(s, bq);
+     s.<span class="kwd">add</span>(s, u);
+     q.<span class="kwd">mul</span>(q, bq);
+   }
+
+   <span class="com">/* Extract one digit. */</span>
+   <span class="kwa">private</span> <span class="kwb">int</span> <span class="kwd">extract</span>(<span class="kwb">int</span> j)
+   {
+     u.<span class="kwd">mul</span>(q, j);
+     u.<span class="kwd">add</span>(u, r);
+     v.<span class="kwd">mul</span>(s, j);
+     v.<span class="kwd">add</span>(v, t);
+     w.<span class="kwd">div</span>(u, v);
+     <span class="kwa">return</span> w.<span class="kwd">intValue</span>();
+   }
+
+   <span class="com">/* Print one digit. Returns 1 for the last digit. */</span>
+   <span class="kwa">private</span> <span class="kwb">boolean</span> <span class="kwd">prdigit</span>(<span class="kwb">int</span> y)
+   {
+      strBuf.<span class="kwd">append</span>(y);
+      <span class="kwa">if</span> (++i % <span class="num">10</span> == <span class="num">0</span> || i == n) {
+         <span class="kwa">if</span> (i%<span class="num">10</span>!=<span class="num">0</span>) <span class="kwa">for</span> (<span class="kwb">int</span> j=<span class="num">10</span>-(i%<span class="num">10</span>);j&gt;<span class="num">0</span>;j--) { strBuf.<span class="kwd">append</span>(<span class="str">&quot; &quot;</span>); }
+         strBuf.<span class="kwd">append</span>(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>);
+         strBuf.<span class="kwd">append</span>(i);
+         System.out.<span class="kwd">println</span>(strBuf);
+         strBuf = <span class="kwa">new</span> <span class="kwd">StringBuffer</span>(<span class="num">20</span>);
+      }
+      <span class="kwa">return</span> i == n;
+   }
+
+   <span class="com">/* Generate successive digits of PI. */</span>
+   <span class="kwb">void</span> <span class="kwd">pidigits</span>()
+   {
+     <span class="kwb">int</span> k = <span class="num">1</span>;
+     d = <span class="num">0</span>;
+     i = <span class="num">0</span>;
+     q.<span class="kwd">set</span>(<span class="num">1</span>);
+     r.<span class="kwd">set</span>(<span class="num">0</span>);
+     s.<span class="kwd">set</span>(<span class="num">0</span>);
+     t.<span class="kwd">set</span>(<span class="num">1</span>);
+     <span class="kwa">for</span> (;;) {
+       <span class="kwb">int</span> y = <span class="kwd">extract</span>(<span class="num">3</span>);
+       <span class="kwa">if</span> (y == <span class="kwd">extract</span>(<span class="num">4</span>)) {
+         <span class="kwa">if</span> (<span class="kwd">prdigit</span>(y)) <span class="kwa">return</span>;
+         <span class="kwd">compose_r</span>(<span class="num">10</span>, -<span class="num">10</span>*y, <span class="num">0</span>, <span class="num">1</span>);
+       } <span class="kwa">else</span> {
+         <span class="kwd">compose_l</span>(k, <span class="num">4</span>*k+<span class="num">2</span>, <span class="num">0</span>, <span class="num">2</span>*k+<span class="num">1</span>);
+         k++;
+       }
+     }
+   }
+      
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) {
+      pidigits m = <span class="kwa">new</span> <span class="kwd">pidigits</span>(Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]));
+      m.<span class="kwd">pidigits</span>();
+   }
+}
+
+
+
+<span class="kwa">class</span> GmpInteger {
+   
+   <span class="slc">// Public methods</span>
+   
+   <span class="kwa">public</span> <span class="kwd">GmpInteger</span>() {
+      <span class="kwd">mpz_init</span>();
+   }
+
+   <span class="kwa">public</span> <span class="kwd">GmpInteger</span>(<span class="kwb">int</span> value) {
+      <span class="kwa">this</span>();
+      <span class="kwd">mpz_set_si</span>(pointer, value);
+   }
+   
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">set</span>(<span class="kwb">int</span> value) { <span class="kwd">mpz_set_si</span>(pointer, value); }
+
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">mul</span>(GmpInteger src, <span class="kwb">int</span> val) { <span class="kwd">mpz_mul_si</span>(pointer, src.pointer, val); }
+   
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">add</span>(GmpInteger op1, GmpInteger op2) { <span class="kwd">mpz_add</span>(pointer, op1.pointer, op2.pointer); }
+   
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">div</span>(GmpInteger op1, GmpInteger op2) { <span class="kwd">mpz_tdiv_q</span>(pointer, op1.pointer, op2.pointer); }
+   
+   <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">intValue</span>() { <span class="kwa">return</span> <span class="kwd">mpz_get_si</span>(pointer); }
+   
+   <span class="kwa">public</span> <span class="kwb">double</span> <span class="kwd">doubleValue</span>() { <span class="kwa">return</span> <span class="kwd">mpz_get_d</span>(pointer); } 
+
+   <span class="slc">// Non public stuff</span>
+   
+   <span class="kwa">static</span> {
+      System.<span class="kwd">loadLibrary</span>(<span class="str">&quot;jgmplib&quot;</span>);
+   }
+   <span class="kwa">private</span> <span class="kwb">long</span> pointer;
+   
+   <span class="kwa">protected</span> <span class="kwb">void</span> <span class="kwd">finalize</span>()  {
+      <span class="kwd">mpz_clear</span>(pointer);
+   }
+   
+   <span class="kwa">private native</span> <span class="kwb">void</span> <span class="kwd">mpz_init</span>();
+
+   <span class="kwa">private native</span> <span class="kwb">void</span> <span class="kwd">mpz_clear</span>(<span class="kwb">long</span> src);
+
+   <span class="kwa">private static native</span> <span class="kwb">void</span> <span class="kwd">mpz_mul_si</span>(<span class="kwb">long</span> dest, <span class="kwb">long</span> src,
+         <span class="kwb">int</span> val);
+
+   <span class="kwa">private static native</span> <span class="kwb">void</span> <span class="kwd">mpz_add</span>(<span class="kwb">long</span> dest, <span class="kwb">long</span> src,
+         <span class="kwb">long</span> src2);
+
+   <span class="kwa">private static native</span> <span class="kwb">void</span> <span class="kwd">mpz_tdiv_q</span>(<span class="kwb">long</span> dest, <span class="kwb">long</span> src,
+         <span class="kwb">long</span> src2);
+
+   <span class="kwa">private static native</span> <span class="kwb">void</span> <span class="kwd">mpz_set_si</span>(<span class="kwb">long</span> src, <span class="kwb">int</span> value);
+
+   <span class="kwa">private static native</span> <span class="kwb">int</span> <span class="kwd">mpz_get_si</span>(<span class="kwb">long</span> src);
+
+   <span class="kwa">private static native</span> <span class="kwb">double</span> <span class="kwd">mpz_get_d</span>(<span class="kwb">long</span> src);
+}

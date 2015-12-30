@@ -1,0 +1,9 @@
+
+Wed, 21 Oct 2015 23:40:01 GMT
+
+COMMAND LINE:
+/usr/local/src/vw8.1pul/bin/linuxx86_64/vwlinuxx86_64 /usr/local/src/vw8.1pul/image/benchmarks.im -nogui -evaluate "Tests fannkuchredux" -a 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

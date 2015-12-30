@@ -1,0 +1,8 @@
+
+Thu, 22 Oct 2015 01:47:57 GMT
+
+COMMAND LINE:
+/usr/local/src/vw8.1pul/bin/linux86/vwlinux86 /usr/local/src/vw8.1pul/image/benchmarks.im -nogui -evaluate "Tests spectralnorm2" -a 5500
+
+PROGRAM OUTPUT:
+1.274224153

@@ -1,0 +1,189 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Pascal Obry on 2005/03/21</span>
+
+<span class="kwa">with</span> Ada.Numerics; <span class="kwa">use</span> Ada.Numerics;
+<span class="kwa">with</span> Ada.Numerics.Generic_Elementary_Functions;
+
+<span class="kwa">package</span> Nbody_Pck <span class="kwa">is</span>
+
+   <span class="kwa">type</span> Real <span class="kwa">is Digits</span> <span class="num">15</span>;
+
+   <span class="kwa">package</span> Math <span class="kwa">is new</span> Ada.Numerics.Generic_Elementary_Functions (Real);
+
+   Solar_Mass    : <span class="kwa">constant</span> Real := <span class="num">4.0</span> * Pi * Pi;
+   Days_Per_Year : <span class="kwa">constant</span> Real := <span class="num">365.24</span>;
+
+   <span class="kwa">type</span> Data <span class="kwa">is record</span>
+      X, Y, Z    : Real;
+      Vx, Vy, Vz : Real;
+      Mass       : Real;
+   <span class="kwa">end record</span>;
+
+   <span class="kwa">type</span> Body_Name <span class="kwa">is</span> (Sun, Jupiter, Saturn, Uranus, Neptune);
+
+   Bodies : <span class="kwa">array</span> (Body_Name) <span class="kwa">of</span> Data :=
+              (Jupiter =&gt; (X    =&gt; <span class="num">4.84143144246472090e+00</span>,
+                           Y    =&gt; -<span class="num">1.16032004402742839e+00</span>,
+                           Z    =&gt; -<span class="num">1.03622044471123109e-01</span>,
+                           Vx   =&gt; <span class="num">1.66007664274403694e-03</span> * Days_Per_Year,
+                           Vy   =&gt; <span class="num">7.69901118419740425e-03</span> * Days_Per_Year,
+                           Vz   =&gt; -<span class="num">6.90460016972063023e-05</span> * Days_Per_Year,
+                           Mass =&gt; <span class="num">9.54791938424326609e-04</span> * Solar_Mass),
+
+               Saturn  =&gt; (X    =&gt; <span class="num">8.34336671824457987e+00</span>,
+                           Y    =&gt; <span class="num">4.12479856412430479e+00</span>,
+                           Z    =&gt; -<span class="num">4.03523417114321381e-01</span>,
+                           Vx   =&gt; -<span class="num">2.76742510726862411e-03</span> * Days_Per_Year,
+                           Vy   =&gt; <span class="num">4.99852801234917238e-03</span> * Days_Per_Year,
+                           Vz   =&gt; <span class="num">2.30417297573763929e-05</span> * Days_Per_Year,
+                           Mass =&gt; <span class="num">2.85885980666130812e-04</span> * Solar_Mass),
+
+               Uranus  =&gt; (X    =&gt; <span class="num">1.28943695621391310e+01</span>,
+                           y    =&gt; -<span class="num">1.51111514016986312e+01</span>,
+                           Z    =&gt; -<span class="num">2.23307578892655734e-01</span>,
+                           Vx   =&gt; <span class="num">2.96460137564761618e-03</span> * Days_Per_Year,
+                           Vy   =&gt; <span class="num">2.37847173959480950e-03</span> * Days_Per_Year,
+                           Vz   =&gt; -<span class="num">2.96589568540237556e-05</span> * Days_Per_Year,
+                           Mass =&gt; <span class="num">4.36624404335156298e-05</span> * Solar_Mass),
+
+               Neptune =&gt; (X    =&gt; <span class="num">1.53796971148509165e+01</span>,
+                           Y    =&gt; -<span class="num">2.59193146099879641e+01</span>,
+                           Z    =&gt; <span class="num">1.79258772950371181e-01</span>,
+                           Vx   =&gt; <span class="num">2.68067772490389322e-03</span> * Days_Per_Year,
+                           Vy   =&gt; <span class="num">1.62824170038242295e-03</span> * Days_Per_Year,
+                           Vz   =&gt; -<span class="num">9.51592254519715870e-05</span> * Days_Per_Year,
+                           Mass =&gt; <span class="num">5.15138902046611451e-05</span> * Solar_Mass),
+
+               Sun     =&gt; (X    =&gt; <span class="num">0.0</span>,
+                           Y    =&gt; <span class="num">0.0</span>,
+                           Z    =&gt; <span class="num">0.0</span>,
+                           Vx   =&gt; <span class="num">0.0</span>,
+                           Vy   =&gt; <span class="num">0.0</span>,
+                           Vz   =&gt; <span class="num">0.0</span>,
+                           Mass =&gt; Solar_Mass));
+
+   <span class="kwa">procedure</span> Offset_Momentum
+     (Planet     : <span class="kwa">in out</span> Data;
+      Px, Py, Pz : <span class="kwa">in</span>     Real);
+
+   <span class="kwa">function</span> Energy <span class="kwa">return</span> Real;
+
+   <span class="kwa">procedure</span> Advance (Dt : <span class="kwa">in</span> Real);
+
+<span class="kwa">end</span> Nbody_Pck;
+
+<span class="slc">-- The Great Computer Language Shootout</span>
+<span class="slc">-- http://shootout.alioth.debian.org</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Pascal Obry on 2005/03/21</span>
+
+<span class="kwa">package body</span> Nbody_Pck <span class="kwa">is</span>
+
+   <span class="kwa">procedure</span> Offset_Momentum
+     (Planet     : <span class="kwa">in out</span> Data;
+      Px, Py, Pz : <span class="kwa">in</span>     Real) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      Planet.Vx := -Px / Solar_Mass;
+      Planet.Vy := -Py / Solar_Mass;
+      Planet.Vz := -Pz / Solar_Mass;
+   <span class="kwa">end</span> Offset_Momentum;
+
+   <span class="kwa">function</span> Energy <span class="kwa">return</span> Real <span class="kwa">is</span>
+      Dx, Dy, Dz, Distance : Real;
+      E                    : Real := <span class="num">0.0</span>;
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> I <span class="kwa">in</span> Bodies<span class="kwd">'Range</span> <span class="kwa">loop</span>
+        E := E + <span class="num">0.5</span> * Bodies (I).Mass
+          * (Bodies (I).Vx * Bodies (I).Vx
+               + Bodies (I).Vy * Bodies (I).Vy
+               + Bodies (I).Vz * Bodies (I).Vz);
+
+        <span class="kwa">if</span> I /= Body_Name<span class="kwd">'Last</span> <span class="kwa">then</span>
+           <span class="kwa">for</span> J <span class="kwa">in</span> Body_Name<span class="kwd">'Succ</span> (I) .. Body_Name<span class="kwd">'Last</span> <span class="kwa">loop</span>
+              Dx := Bodies (I).X - Bodies (J).X;
+              Dy := Bodies (I).Y - Bodies (J).Y;
+              Dz := Bodies (I).Z - Bodies (J).Z;
+
+              Distance := Math.Sqrt (Dx * Dx + Dy * Dy + Dz * Dz);
+              E := E - (Bodies (I).Mass * Bodies (J).Mass) / Distance;
+           <span class="kwa">end loop</span>;
+        <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+      <span class="kwa">return</span> E;
+   <span class="kwa">end</span> Energy;
+
+   <span class="kwa">procedure</span> Advance (Dt : <span class="kwa">in</span> Real) <span class="kwa">is</span>
+      Dx, Dy, Dz, Distance, Mag : Real;
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> I <span class="kwa">in</span> Body_Name<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         <span class="kwa">if</span> I /= Body_Name<span class="kwd">'Last</span> <span class="kwa">then</span>
+            <span class="kwa">for</span> J <span class="kwa">in</span> Body_Name<span class="kwd">'Succ</span> (I) .. Body_Name<span class="kwd">'Last</span> <span class="kwa">loop</span>
+               Dx := Bodies (I).X - Bodies (J).X;
+               Dy := Bodies (I).Y - Bodies (J).Y;
+               Dz := Bodies (I).Z - Bodies (J).Z;
+
+               Distance := Math.Sqrt (Dx * Dx + Dy * Dy + Dz * Dz);
+               Mag := Dt / (Distance ** <span class="num">3</span>);
+
+               Bodies (I).Vx := Bodies (I).Vx - Dx * Bodies (J).Mass * Mag;
+               Bodies (I).Vy := Bodies (I).Vy - Dy * Bodies (J).Mass * Mag;
+               Bodies (I).Vz := Bodies (I).Vz - Dz * Bodies (J).Mass * Mag;
+
+               Bodies (J).Vx := Bodies (J).Vx + Dx * Bodies (I).Mass * Mag;
+               Bodies (J).Vy := Bodies (J).Vy + Dy * Bodies (I).Mass * Mag;
+               Bodies (J).Vz := Bodies (J).Vz + Dz * Bodies (I).Mass * Mag;
+            <span class="kwa">end loop</span>;
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+
+      <span class="kwa">for</span> I <span class="kwa">in</span> Body_Name<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         Bodies (I).X := Bodies (I).X + Dt * Bodies (I).Vx;
+         Bodies (I).Y := Bodies (I).Y + Dt * Bodies (I).Vy;
+         Bodies (I).Z := Bodies (I).Z + Dt * Bodies (I).Vz;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Advance;
+
+<span class="kwa">end</span> Nbody_Pck;
+
+<span class="slc">-- The Great Computer Language Shootout</span>
+<span class="slc">-- http://shootout.alioth.debian.org</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Pascal Obry on 2005/03/21</span>
+
+<span class="kwa">with</span> Ada.Command_Line; <span class="kwa">use</span> Ada.Command_Line;
+<span class="kwa">with</span> Ada.Text_IO;      <span class="kwa">use</span> Ada.Text_IO;
+<span class="kwa">with</span> Nbody_Pck;        <span class="kwa">use</span> Nbody_Pck;
+
+<span class="kwa">procedure</span> Nbody <span class="kwa">is</span>
+
+   <span class="kwa">package</span> RIO <span class="kwa">is new</span> Float_Io (Real);
+
+   <span class="kwa">procedure</span> Put
+     (Item : Real; Fore : Field := <span class="num">0</span>; Aft : Field := <span class="num">9</span>;
+      Exp  : Field := <span class="num">0</span>) <span class="kwa">renames</span> RIO.Put;
+
+   N : <span class="kwa">constant</span> <span class="kwb">Integer</span> := <span class="kwb">Integer</span><span class="kwd">'Value</span> (Argument (<span class="num">1</span>));
+
+   Px, Py, Pz : Real := <span class="num">0.0</span>;
+
+<span class="kwa">begin</span>
+   <span class="kwa">for</span> I <span class="kwa">in</span> Body_Name<span class="kwd">'Range</span> <span class="kwa">loop</span>
+      Px := Px + Bodies (I).Vx * Bodies (I).Mass;
+      Py := Py + Bodies (I).Vy * Bodies (I).Mass;
+      Pz := Pz + Bodies (I).Vz * Bodies (I).Mass;
+   <span class="kwa">end loop</span>;
+
+   Offset_Momentum (Bodies (Sun), Px, Py, Pz);
+
+   Put (Energy);
+   New_Line;
+
+   <span class="kwa">for</span> K <span class="kwa">in</span> <span class="num">1</span> .. N <span class="kwa">loop</span>
+      Advance (<span class="num">0.01</span>);
+   <span class="kwa">end loop</span>;
+
+   Put (Energy);
+   New_Line;
+<span class="kwa">end</span> Nbody;

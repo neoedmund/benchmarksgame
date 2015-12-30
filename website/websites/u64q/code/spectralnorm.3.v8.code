@@ -1,0 +1,56 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="kwc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by Ian Osgood</span>
+<span class="slc">// Optimized by Roy Williams</span>
+
+<span class="kwa">function</span> <span class="kwd">A</span>(i,j) {
+  <span class="kwa">return</span> <span class="num">1</span>/(((i+j)*(i+j+<span class="num">1</span>)&gt;&gt;&gt;<span class="num">1</span>)+i+<span class="num">1</span>);
+}
+
+<span class="kwa">function</span> <span class="kwd">Au</span>(u,v) {
+    <span class="kwa">var</span> n = u.length;
+  <span class="kwa">for</span> (<span class="kwa">var</span> i=<span class="num">0</span>; i&lt;n; ++i) {
+    <span class="kwa">var</span> t = <span class="num">0</span>;
+    <span class="kwa">for</span> (<span class="kwa">var</span> j=<span class="num">0</span>; j&lt;n; ++j)
+      t += <span class="kwd">A</span>(i,j) * u[j];
+    v[i] = t;
+  }
+}
+
+<span class="kwa">function</span> <span class="kwd">Atu</span>(u,v) {
+  <span class="kwa">var</span> n = u.length;
+  <span class="kwa">for</span> (<span class="kwa">var</span> i=<span class="num">0</span>; i&lt;n; ++i) {
+    <span class="kwa">var</span> t = <span class="num">0</span>;
+    <span class="kwa">for</span> (<span class="kwa">var</span> j=<span class="num">0</span>; j&lt;n; ++j)
+      t += <span class="kwd">A</span>(j,i) * u[j];
+    v[i] = t;
+  }
+}
+
+<span class="kwa">function</span> <span class="kwd">AtAu</span>(u,v,w) {
+  <span class="kwd">Au</span>(u,w);
+  <span class="kwd">Atu</span>(w,v);
+}
+
+<span class="kwa">function</span> <span class="kwd">spectralnorm</span>(n) {
+  <span class="kwa">var</span> storage_ = <span class="kwa">new</span> <span class="kwd">ArrayBuffer</span>(n * <span class="num">24</span>);
+  <span class="kwa">var</span> u = <span class="kwa">new</span> <span class="kwd">Float64Array</span>(storage_, <span class="num">0</span>, n),
+      v = <span class="kwa">new</span> <span class="kwd">Float64Array</span>(storage_, <span class="num">8</span>*n, n),
+      w = <span class="kwa">new</span> <span class="kwd">Float64Array</span>(storage_, <span class="num">16</span>*n, n);
+  <span class="kwa">var</span> i, vv=<span class="num">0</span>, vBv=<span class="num">0</span>;
+  <span class="kwa">for</span> (i=<span class="num">0</span>; i&lt;n; ++i) {
+    u[i] = <span class="num">1</span>; v[i] = w[i] = <span class="num">0</span>; 
+  }
+  <span class="kwa">for</span> (i=<span class="num">0</span>; i&lt;<span class="num">10</span>; ++i) {
+    <span class="kwd">AtAu</span>(u,v,w);
+    <span class="kwd">AtAu</span>(v,u,w);
+  }
+  <span class="kwa">for</span> (i=<span class="num">0</span>; i&lt;n; ++i) {
+    vBv += u[i]*v[i];
+    vv  += v[i]*v[i];
+  }
+  <span class="kwa">return</span> Math.<span class="kwd">sqrt</span>(vBv/vv);
+}
+
+<span class="kwd">print</span>(<span class="kwd">spectralnorm</span>(arguments[<span class="num">0</span>]).<span class="kwd">toFixed</span>(<span class="num">9</span>));

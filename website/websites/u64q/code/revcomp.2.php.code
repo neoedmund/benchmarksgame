@@ -1,0 +1,36 @@
+&lt;?php
+<span class="slc">#</span>
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># reverse complement in PHP</span>
+<span class="slc"># contributed by Danny Sauer</span>
+<span class="slc"># modified by Craig Russell</span>
+<span class="slc">#</span>
+
+
+<span class="kwd">ob_implicit_flush</span>(<span class="num">1</span>);
+<span class="kwd">ob_start</span>(NULL, <span class="num">4096</span>);
+
+$seq = <span class="str">''</span>;
+
+<span class="slc"># read in the file, a line at a time</span>
+<span class="kwa">do</span> {
+    $str = <span class="kwd">trim</span>(<span class="kwd">fgets</span>(STDIN));
+    <span class="kwa">if</span>( $str[<span class="num">0</span>] == <span class="str">'&gt;'</span> ){
+        <span class="slc"># if we're on a comment line, print the previous seq and move on</span>
+		<span class="kwa">if</span>($seq != <span class="str">''</span>){
+		   <span class="kwa">echo</span> <span class="kwd">wordwrap</span>( <span class="kwd">strrev</span>( <span class="kwd">strtr</span>(<span class="kwd">strtoupper</span>($seq),
+			  <span class="str">'CGATMKRYVBHD'</span>, <span class="str">'GCTAKMYRBVDH'</span>) ), <span class="num">60</span>, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>, true ), <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+		   $seq = <span class="str">''</span>;
+		}
+        <span class="kwa">echo</span> $str, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+    }<span class="kwa">else</span>{
+        <span class="slc"># otherwise, just append to the sequence</span>
+        $seq .= $str;
+    }
+} <span class="kwa">while</span>( !<span class="kwd">feof</span>(STDIN) );
+<span class="kwa">if</span>($seq != <span class="str">''</span>){
+	<span class="kwa">echo</span> <span class="kwd">wordwrap</span>( <span class="kwd">strrev</span>( <span class="kwd">strtr</span>(<span class="kwd">strtoupper</span>($seq),
+	   <span class="str">'CGATMKRYVBHD'</span>, <span class="str">'GCTAKMYRBVDH'</span>) ), <span class="num">60</span>, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>, true ), <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+}

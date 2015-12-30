@@ -1,0 +1,96 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">contributed by Seth Heeren</span>
+<span class="com">*/</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;string&gt;</span>
+
+<span class="kwa">using</span> std::string;
+<span class="kwa">using</span> std::cin;
+<span class="kwa">using</span> std::cout;
+<span class="kwa">using</span> std::getline;
+<span class="kwa">using</span> std::endl;
+
+<span class="kwc">template</span> &lt;typename Ch&gt; <span class="kwc">inline</span> Ch <span class="kwd">complement</span>(Ch c)
+{
+    <span class="kwa">switch</span> (c)
+    {
+        <span class="slc">// IDEA: Reorder branches after profiling?</span>
+        <span class="slc">// IDEA: (gcc probably compiles the switch into a jump table)</span>
+        <span class="kwa">case</span> <span class="str">'t'</span>: <span class="kwa">case</span> <span class="str">'T'</span>:             <span class="slc">//  7707842</span>
+        <span class="kwa">case</span> <span class="str">'u'</span>: <span class="kwa">case</span> <span class="str">'U'</span>: <span class="kwa">return</span> <span class="str">'A'</span>; <span class="slc">//</span>
+        <span class="kwa">case</span> <span class="str">'a'</span>: <span class="kwa">case</span> <span class="str">'A'</span>: <span class="kwa">return</span> <span class="str">'T'</span>; <span class="slc">//  7592592</span>
+        <span class="kwa">case</span> <span class="str">'g'</span>: <span class="kwa">case</span> <span class="str">'G'</span>: <span class="kwa">return</span> <span class="str">'C'</span>; <span class="slc">//  5552804</span>
+        <span class="kwa">case</span> <span class="str">'c'</span>: <span class="kwa">case</span> <span class="str">'C'</span>: <span class="kwa">return</span> <span class="str">'G'</span>; <span class="slc">//  5442702</span>
+        <span class="kwa">case</span> <span class="str">'v'</span>: <span class="kwa">case</span> <span class="str">'V'</span>: <span class="kwa">return</span> <span class="str">'B'</span>; <span class="slc">//   205714</span>
+        <span class="kwa">case</span> <span class="str">'s'</span>: <span class="kwa">case</span> <span class="str">'S'</span>: <span class="kwa">return</span> <span class="str">'S'</span>; <span class="slc">//   200078</span>
+        <span class="kwa">case</span> <span class="str">'h'</span>: <span class="kwa">case</span> <span class="str">'H'</span>: <span class="kwa">return</span> <span class="str">'D'</span>; <span class="slc">//   197260</span>
+        <span class="kwa">case</span> <span class="str">'w'</span>: <span class="kwa">case</span> <span class="str">'W'</span>: <span class="kwa">return</span> <span class="str">'W'</span>; <span class="slc">//   194442</span>
+        <span class="kwa">case</span> <span class="str">'r'</span>: <span class="kwa">case</span> <span class="str">'R'</span>: <span class="kwa">return</span> <span class="str">'Y'</span>; <span class="slc">//   194442</span>
+        <span class="kwa">case</span> <span class="str">'m'</span>: <span class="kwa">case</span> <span class="str">'M'</span>: <span class="kwa">return</span> <span class="str">'K'</span>; <span class="slc">//   174716</span>
+        <span class="kwa">case</span> <span class="str">'y'</span>: <span class="kwa">case</span> <span class="str">'Y'</span>: <span class="kwa">return</span> <span class="str">'R'</span>; <span class="slc">//   157808</span>
+        <span class="kwa">case</span> <span class="str">'k'</span>: <span class="kwa">case</span> <span class="str">'K'</span>: <span class="kwa">return</span> <span class="str">'M'</span>; <span class="slc">//   154990</span>
+        <span class="kwa">case</span> <span class="str">'b'</span>: <span class="kwa">case</span> <span class="str">'B'</span>: <span class="kwa">return</span> <span class="str">'V'</span>; <span class="slc">//   146536</span>
+        <span class="kwa">case</span> <span class="str">'d'</span>: <span class="kwa">case</span> <span class="str">'D'</span>: <span class="kwa">return</span> <span class="str">'H'</span>; <span class="slc">//   132446</span>
+        <span class="kwa">case</span> <span class="str">'n'</span>: <span class="kwa">case</span> <span class="str">'N'</span>: <span class="kwa">return</span> <span class="str">'N'</span>; <span class="slc">//   129628</span>
+    }
+    <span class="kwa">throw</span> <span class="str">&quot;parse error&quot;</span>; <span class="slc">// TODO proper exception</span>
+}
+
+<span class="kwc">template</span> &lt;typename Out&gt;
+<span class="kwc">inline</span> <span class="kwb">static void</span> <span class="kwd">print_reverse</span>(std::string <span class="kwb">const</span>&amp; sequence, Out&amp; out)
+{
+    <span class="kwc">auto</span> <span class="kwb">const</span> rend = sequence.<span class="kwd">rend</span>();
+    <span class="kwb">size_t</span> count = <span class="num">0</span>;
+    <span class="kwa">for</span> (<span class="kwc">auto</span> i = sequence.<span class="kwd">rbegin</span>(); i != rend; ++i)
+    {
+        *out++ = *i; <span class="slc">// TODO: buffer writes and append line by line?</span>
+        <span class="kwa">if</span> (<span class="num">0</span> == ++count % <span class="num">60</span>)
+            *out++ = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+    }
+    <span class="kwa">if</span> (count % <span class="num">60</span>)
+        *out++ = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>()
+{
+    string sequence, line;
+    sequence.<span class="kwd">reserve</span>(<span class="num">12000</span>); <span class="slc">// arbitrary heuristic preallocation</span>
+
+    cin.<span class="kwd">unsetf</span>(std::ios::skipws);
+    std::cin.<span class="kwd">tie</span>(<span class="kwc">nullptr</span>);
+    std::cout.<span class="kwd">tie</span>(<span class="kwc">nullptr</span>);
+
+    <span class="kwc">auto</span> out = std::ostreambuf_iterator&lt;<span class="kwb">char</span>&gt;(std::cout);
+    <span class="kwa">while</span> (<span class="kwd">getline</span>(cin, line))
+    {
+        <span class="kwb">const bool</span> is_header = (line[<span class="num">0</span>] == <span class="str">'&gt;'</span>);
+
+        <span class="kwa">if</span> (is_header)
+        {
+            <span class="kwa">if</span> (!sequence.<span class="kwd">empty</span>())
+            {
+                <span class="kwa">for</span> (<span class="kwc">auto</span>&amp; c : sequence)
+                    c = <span class="kwd">complement</span>(c);
+                <span class="kwd">print_reverse</span>(sequence, out);
+            }
+            <span class="slc">// clear, (retain allocated capacity)</span>
+            sequence.<span class="kwd">resize</span>(<span class="num">0</span>);
+
+            <span class="slc">// print header line</span>
+            cout &lt;&lt; line &lt;&lt; endl;
+        }
+        <span class="kwa">else</span>
+        {
+            sequence.<span class="kwd">append</span>(line);
+        }
+    }
+
+    <span class="kwa">if</span> (!sequence.<span class="kwd">empty</span>())
+    {
+        <span class="kwa">for</span> (<span class="kwc">auto</span>&amp; c : sequence)
+            c = <span class="kwd">complement</span>(c);
+        <span class="kwd">print_reverse</span>(sequence, out);
+    }
+}

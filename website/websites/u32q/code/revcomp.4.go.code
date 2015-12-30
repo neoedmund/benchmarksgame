@@ -1,0 +1,119 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by The Go Authors.</span>
+<span class="com"> * modified by Dirk Moerenhout.</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;bufio&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+)
+
+<span class="kwa">const</span> lineSize = <span class="num">60</span>
+<span class="kwa">const</span> NCPU = <span class="num">4</span>
+
+<span class="kwa">var</span> complement = [<span class="num">256</span>]<span class="kwb">uint8</span>{
+   <span class="str">'A'</span>: <span class="str">'T'</span>, <span class="str">'a'</span>: <span class="str">'T'</span>,
+   <span class="str">'C'</span>: <span class="str">'G'</span>, <span class="str">'c'</span>: <span class="str">'G'</span>,
+   <span class="str">'G'</span>: <span class="str">'C'</span>, <span class="str">'g'</span>: <span class="str">'C'</span>,
+   <span class="str">'T'</span>: <span class="str">'A'</span>, <span class="str">'t'</span>: <span class="str">'A'</span>,
+   <span class="str">'U'</span>: <span class="str">'A'</span>, <span class="str">'u'</span>: <span class="str">'A'</span>,
+   <span class="str">'M'</span>: <span class="str">'K'</span>, <span class="str">'m'</span>: <span class="str">'K'</span>,
+   <span class="str">'R'</span>: <span class="str">'Y'</span>, <span class="str">'r'</span>: <span class="str">'Y'</span>,
+   <span class="str">'W'</span>: <span class="str">'W'</span>, <span class="str">'w'</span>: <span class="str">'W'</span>,
+   <span class="str">'S'</span>: <span class="str">'S'</span>, <span class="str">'s'</span>: <span class="str">'S'</span>,
+   <span class="str">'Y'</span>: <span class="str">'R'</span>, <span class="str">'y'</span>: <span class="str">'R'</span>,
+   <span class="str">'K'</span>: <span class="str">'M'</span>, <span class="str">'k'</span>: <span class="str">'M'</span>,
+   <span class="str">'V'</span>: <span class="str">'B'</span>, <span class="str">'v'</span>: <span class="str">'B'</span>,
+   <span class="str">'H'</span>: <span class="str">'D'</span>, <span class="str">'h'</span>: <span class="str">'D'</span>,
+   <span class="str">'D'</span>: <span class="str">'H'</span>, <span class="str">'d'</span>: <span class="str">'H'</span>,
+   <span class="str">'B'</span>: <span class="str">'V'</span>, <span class="str">'b'</span>: <span class="str">'V'</span>,
+   <span class="str">'N'</span>: <span class="str">'N'</span>, <span class="str">'n'</span>: <span class="str">'N'</span>,
+}
+
+<span class="kwa">func</span> <span class="kwd">createoutput</span>(buf []<span class="kwb">byte</span>, obuf []<span class="kwb">byte</span>, c <span class="kwa">chan</span> <span class="kwb">int</span>) {
+   lines:=<span class="kwb">len</span>(buf)/<span class="num">60</span>
+   bufpos:=<span class="kwb">len</span>(buf)-<span class="num">1</span>
+   <span class="kwa">for</span> obufpos := <span class="num">0</span>; obufpos &lt; lines*<span class="num">61</span>; obufpos++ {
+      <span class="kwa">for</span> end := obufpos+<span class="num">60</span>; obufpos &lt; end; obufpos++ {
+         obuf[obufpos] = complement[buf[bufpos]]
+         bufpos--
+      }
+      obuf[obufpos] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>
+   }
+   c &lt;- <span class="num">1</span>
+}
+
+<span class="kwa">func</span> <span class="kwd">dumpoutput</span>(obuf []<span class="kwb">byte</span>, d <span class="kwa">chan</span> <span class="kwb">int</span>) {
+   os.Stdout.<span class="kwd">Write</span>(obuf)
+   d &lt;- <span class="num">1</span>
+} 
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   runtime.<span class="kwd">GOMAXPROCS</span>(NCPU)
+   d := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">int</span>, <span class="num">1</span>)
+   d &lt;- <span class="num">1</span>
+   in := bufio.<span class="kwd">NewReader</span>(os.Stdin)
+   buf := <span class="kwb">make</span>([]<span class="kwb">byte</span>,<span class="num">0</span>,<span class="num">64</span>*<span class="num">1024</span>*<span class="num">1024</span>)
+   line, err := in.<span class="kwd">ReadSlice</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+   <span class="kwa">for</span> err == <span class="kwb">nil</span> {
+      title := <span class="kwb">make</span>([]<span class="kwb">byte</span>, <span class="kwb">len</span>(line))
+      <span class="kwd">copy</span>(title, line)
+      <span class="kwa">for</span> {
+         line, err = in.<span class="kwd">ReadSlice</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+         <span class="kwa">if</span> err != <span class="kwb">nil</span> || line[<span class="num">0</span>] == <span class="str">'&gt;'</span> {
+            <span class="kwa">break</span>
+         }
+         <span class="kwa">if</span> <span class="kwb">len</span>(buf)+<span class="num">60</span>&gt;<span class="kwb">cap</span>(buf) {
+            nbuf := <span class="kwb">make</span>([]<span class="kwb">byte</span>, <span class="kwb">len</span>(buf), <span class="kwb">cap</span>(buf)+<span class="num">64</span>*<span class="num">1024</span>*<span class="num">1024</span>)
+            <span class="kwd">copy</span>(nbuf, buf)
+            buf = nbuf
+         }
+         buf = <span class="kwd">append</span>(buf, line[<span class="num">0</span>: <span class="kwb">len</span>(line)-<span class="num">1</span>]...)
+      }
+      
+      lines := <span class="kwb">len</span>(buf)/<span class="num">60</span>
+      charsleft := <span class="kwb">len</span>(buf)%60
+      obuf := <span class="kwb">make</span>([]<span class="kwb">byte</span>, <span class="kwb">len</span>(buf)+lines+<span class="num">1</span> )
+
+      c := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">int</span>, NCPU)
+      obufstart:=<span class="num">0</span>;
+      bufend:=<span class="kwb">len</span>(buf)
+      linesperthread:=lines/NCPU
+      <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; NCPU; i++ {
+         <span class="kwa">if</span> i==<span class="num">3</span> {
+            linesperthread+=lines%NCPU
+         }
+         bufstart:=bufend-linesperthread*<span class="num">60</span>
+         obufend:=obufstart+linesperthread*<span class="num">61</span>
+         <span class="kwa">go</span> <span class="kwd">createoutput</span>(buf[bufstart:bufend], obuf[obufstart:obufend], c)
+         bufend=bufstart
+         obufstart=obufend
+      }
+      <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; NCPU; i++ {
+         &lt;-c
+      }
+      
+      &lt;-d
+      os.Stdout.<span class="kwd">Write</span>(title)
+
+      <span class="kwa">if</span> charsleft &gt; <span class="num">0</span> {
+         obufpos := lines * <span class="num">61</span>
+         <span class="kwa">for</span> bufpos := charsleft-<span class="num">1</span>; bufpos &gt;= <span class="num">0</span>; bufpos-- {
+            obuf[obufpos] = complement[buf[bufpos]]
+            obufpos++
+         }
+         obuf[obufpos] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>
+         <span class="kwa">go</span> <span class="kwd">dumpoutput</span>(obuf, d)
+         os.Stdout.<span class="kwd">Write</span>(obuf)
+      } <span class="kwa">else</span> {
+         <span class="kwa">go</span> <span class="kwd">dumpoutput</span>(obuf[<span class="num">0</span>:<span class="kwb">len</span>(obuf)-<span class="num">1</span>], d)
+      }
+      buf=buf[<span class="num">0</span>:<span class="num">0</span>]
+   }
+   &lt;-d
+}

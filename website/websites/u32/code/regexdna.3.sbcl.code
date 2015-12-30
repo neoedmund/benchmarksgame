@@ -1,0 +1,190 @@
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; Contributed by: Witali Kusnezow 2009-03-02</span>
+
+(<span class="kwa">eval-when</span> (:compile-toplevel :load-toplevel :execute)
+  (<span class="kwa">require</span> :asdf)
+  (<span class="kwa">require</span> :cl-ppcre)
+
+#+sb-thread
+(<span class="kwa">progn</span>
+  (<span class="kwa">define-alien-routine</span> sysconf long (<span class="kwa">name</span> int))
+  (<span class="kwa">use-package</span> :sb-thread)))
+
+(<span class="kwa">eval-when</span> (:compile-toplevel)
+(<span class="kwa">setf</span> cl-ppcre:*regex-char-code-limit* <span class="num">128</span>))
+
+(<span class="kwa">defconstant</span>  +regex-list+
+  '(<span class="str">&quot;agggtaaa|tttaccct&quot;</span>
+    <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>
+    <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>
+    <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>
+    <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>
+    <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>
+    <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>
+    <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>
+    <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>))
+
+(<span class="kwa">defconstant</span>  +alternatives+
+  '((<span class="str">&quot;B&quot;</span> <span class="str">&quot;(c|g|t)&quot;</span>)  (<span class="str">&quot;D&quot;</span> <span class="str">&quot;(a|g|t)&quot;</span>)
+    (<span class="str">&quot;H&quot;</span> <span class="str">&quot;(a|c|t)&quot;</span>)  (<span class="str">&quot;K&quot;</span> <span class="str">&quot;(g|t)&quot;</span>)
+    (<span class="str">&quot;M&quot;</span> <span class="str">&quot;(a|c)&quot;</span>)    (<span class="str">&quot;N&quot;</span> <span class="str">&quot;(a|c|g|t)&quot;</span>)
+    (<span class="str">&quot;R&quot;</span> <span class="str">&quot;(a|g)&quot;</span>)    (<span class="str">&quot;S&quot;</span> <span class="str">&quot;(c|t)&quot;</span>)
+    (<span class="str">&quot;V&quot;</span> <span class="str">&quot;(a|c|g)&quot;</span>)  (<span class="str">&quot;W&quot;</span> <span class="str">&quot;(a|t)&quot;</span>)
+    (<span class="str">&quot;Y&quot;</span> <span class="str">&quot;(c|t)&quot;</span>)))
+
+#+sb-thread
+(<span class="kwa">progn</span>
+  (<span class="kwa">defconstant</span>  +cpu-count+ (<span class="kwa">sysconf</span> <span class="num">84</span>))
+  (<span class="kwa">defvar</span> *mutex* (<span class="kwa">make-mutex</span>))
+  (<span class="kwa">defvar</span> *aux-mutex* (<span class="kwa">make-mutex</span>))
+
+  (<span class="kwa">defmacro</span> bg  (&amp;body body) `(<span class="kwa">make-thread</span> (<span class="kwa">lambda</span> () ,&#64;body)))
+  (<span class="kwa">defmacro</span> join-all (&amp;body body)
+	`(<span class="kwa">mapcar</span>
+	  #'join-thread
+	  (<span class="kwa">loop</span> for item in (<span class="kwa">list</span> ,&#64;body)
+		 append (<span class="kwa">if</span> (<span class="kwa">consp</span> item) item (<span class="kwa">list</span> item))))))
+
+(<span class="kwa">defun</span> read-all
+    (<span class="kwa">stream</span> &amp;aux (<span class="kwa">buf-size</span> (* <span class="num">1024 1024</span>))
+     (<span class="kwa">size</span> <span class="num">0</span>)
+     (<span class="kwa">buf-list</span>
+      (<span class="kwa">loop</span>
+         for buf = (<span class="kwa">make-string</span> buf-size :element-type 'base-char)
+         for len = (<span class="kwa">read-sequence</span> buf stream)
+         do (<span class="kwa">incf</span> size len)
+         collect (<span class="kwa">if</span> (&lt; len buf-size) (<span class="kwa">subseq</span> buf <span class="num">0</span> len) buf)
+         while (= len buf-size))))
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum size))
+  (<span class="kwa">loop</span> with res-string = (<span class="kwa">make-string</span> size :element-type 'base-char)
+     with i of-type fixnum = <span class="num">0</span>
+     for str in buf-list
+     do (<span class="kwa">setf</span> (<span class="kwa">subseq</span> res-string i) (<span class="kwa">the</span> simple-base-string str))
+     (<span class="kwa">incf</span> i (<span class="kwa">length</span> (<span class="kwa">the</span> simple-base-string str)))
+     finally (<span class="kwa">return</span> res-string)))
+
+(<span class="kwa">defun</span> length-to-replace (<span class="kwa">match</span>)
+  (<span class="kwa">loop</span> for x in match
+     sum (<span class="kwa">-</span> (<span class="kwa">the</span> fixnum (<span class="kwa">cdr</span> x))
+            (<span class="kwa">the</span> fixnum (<span class="kwa">car</span> x))) of-type fixnum))
+
+(<span class="kwa">defun</span> replace-aux
+    (<span class="kwa">match</span> replacement target-string result-string
+     &amp;key (<span class="kwa">match-begin</span> <span class="num">0</span>) (<span class="kwa">match-end</span> -<span class="num">1</span>)
+     (<span class="kwa">match-length</span> (<span class="kwa">length</span> match))
+     &amp;aux
+     (<span class="kwa">len</span> (<span class="kwa">length</span> replacement))
+     (<span class="kwa">first-match</span> (<span class="kwa">if</span> (<span class="kwa">zerop</span> match-begin) '(<span class="kwa">0</span> . <span class="num">0</span>) (<span class="kwa">nth</span> (<span class="kwa">1-</span> match-begin) match)))
+     (<span class="kwa">target-start</span> (<span class="kwa">cdr</span> first-match))
+     (<span class="kwa">result-start</span> (+ (<span class="kwa">the</span> fixnum (* len match-begin))
+                    (<span class="kwa">-</span> target-start
+                       (<span class="kwa">the</span> fixnum (<span class="kwa">length-to-replace</span> (<span class="kwa">subseq</span> match <span class="num">0</span> match-begin)))))))
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum match-begin match-end match-length target-start result-start len)
+           (<span class="kwa">type</span> list match)
+           (<span class="kwa">type</span> simple-base-string result-string target-string)
+           (<span class="kwa">type</span> vector replacement))
+  (<span class="kwa">loop</span> with (<span class="kwa">i</span> j) of-type fixnum = (<span class="kwa">list</span> result-start target-start)
+     with mmatch = (<span class="kwa">if</span> (&gt; match-begin match-end)
+                       match (<span class="kwa">subseq</span> match match-begin match-end))
+     for pair in mmatch
+     do (<span class="kwa">setf</span> (<span class="kwa">subseq</span> result-string i) (<span class="kwa">subseq</span> target-string j (<span class="kwa">car</span> pair))
+              i (+ i (<span class="kwa">-</span> (<span class="kwa">the</span> fixnum (<span class="kwa">car</span> pair)) j))
+              (<span class="kwa">subseq</span> result-string i) replacement
+              j (<span class="kwa">cdr</span> pair)
+              i (+ i len))
+     finally (<span class="kwa">if</span> (<span class="kwa">or</span> (<span class="kwa">minusp</span> match-end) (&lt;= match-length match-end))
+                 (<span class="kwa">setf</span> (<span class="kwa">subseq</span> result-string i ) (<span class="kwa">subseq</span> target-string j))))
+  nil)
+
+#+sb-thread
+(<span class="kwa">defun</span> parts
+    (<span class="kwa">parts-num</span> len
+     &amp;aux
+     (<span class="kwa">ranges</span> (<span class="kwa">loop</span> with (<span class="kwa">step</span> rest) of-type fixnum =  (<span class="kwa">multiple-value-list</span> (<span class="kwa">floor</span> len parts-num))
+                with i of-type fixnum = <span class="num">0</span> while (&lt; i len)
+                collect i into res of-type fixnum
+                do (<span class="kwa">incf</span> i step)(<span class="kwa">if</span> (<span class="kwa">plusp</span> rest) (<span class="kwa">progn</span> (<span class="kwa">incf</span> i) (<span class="kwa">decf</span> rest)) )
+                finally (<span class="kwa">return</span> (<span class="kwa">append</span> res (<span class="kwa">list</span> len))))
+             ))
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum len parts-num)
+           (<span class="kwa">type</span> list ranges))
+  (<span class="kwa">mapcar</span> #'cons ranges (<span class="kwa">subseq</span> ranges <span class="num">1</span>)))
+
+(<span class="kwa">defun</span> replace-all
+    (<span class="kwa">regexp</span> replacement target-string
+     &amp;aux (<span class="kwa">rmatch</span> '()) (<span class="kwa">match</span> '())
+     (<span class="kwa">result-string</span> (<span class="kwa">make-string</span> <span class="num">0</span> :element-type 'base-char)))
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> simple-base-string result-string target-string)
+           (<span class="kwa">type</span> vector replacement))
+  (<span class="kwa">cl-ppcre</span>:do-scans
+      (<span class="kwa">match-start</span> match-end reg-starts reg-ends regexp target-string nil)
+    (<span class="kwa">push</span> (<span class="kwa">cons</span> match-start match-end) rmatch))
+  (<span class="kwa">if</span> rmatch
+      (<span class="kwa">progn</span>
+        (<span class="kwa">setf</span> match (<span class="kwa">reverse</span> rmatch)
+              result-string (<span class="kwa">make-string</span>
+                             (+ (<span class="kwa">-</span> (<span class="kwa">length</span> target-string)
+                                   (<span class="kwa">length-to-replace</span> match))
+                                (<span class="kwa">the</span> fixnum (* (<span class="kwa">length</span> replacement)
+                                               (<span class="kwa">length</span> match)))) :element-type 'base-char))
+        #-sb-thread
+        (<span class="kwa">replace-aux</span> match replacement target-string result-string)
+        #+sb-thread
+        (<span class="kwa">mapcar</span> #'join-thread
+                (<span class="kwa">loop</span> with len of-type fixnum = (<span class="kwa">length</span> match)
+				   with parts-list  = (<span class="kwa">parts</span> +cpu-count+ len)
+                   with current of-type fixnum = <span class="num">0</span>
+                   repeat +cpu-count+
+                   collect
+					 (<span class="kwa">bg</span> (<span class="kwa">let</span> (<span class="kwa">range</span>)
+                           (<span class="kwa">with-mutex</span> (*mutex*)
+                             (<span class="kwa">setf</span> range (<span class="kwa">nth</span> current parts-list))
+                             (<span class="kwa">incf</span> current))
+                           (<span class="kwa">replace-aux</span> match replacement target-string result-string
+                                        :match-begin (<span class="kwa">car</span> range) :match-end (<span class="kwa">cdr</span> range)
+                                        :match-length len)))))
+        result-string)
+      target-string))
+
+(<span class="kwa">defun</span> main (&amp;optional (<span class="kwa">stream</span> *standard-input*)
+             &amp;aux (<span class="kwa">sequence</span> (<span class="kwa">read-all</span> stream))
+             (<span class="kwa">size</span> (<span class="kwa">length</span> sequence)))
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> simple-base-string sequence))
+  (<span class="kwa">setf</span> sequence (<span class="kwa">replace-all</span> <span class="str">&quot;&gt;[^</span><span class="esc">\\</span><span class="str">n]*</span><span class="esc">\\</span><span class="str">n|</span><span class="esc">\\</span><span class="str">n&quot;</span> <span class="str">&quot;&quot;</span> sequence))
+
+  #-sb-thread
+  (<span class="kwa">progn</span>
+    (<span class="kwa">loop</span> for regex in +regex-list+ do
+         (<span class="kwa">format</span> t <span class="str">&quot;~a ~a~%&quot;</span> regex
+                 (/ (<span class="kwa">length</span>
+                     (<span class="kwa">the</span> list
+                       (<span class="kwa">cl-ppcre</span>:all-matches regex sequence))) <span class="num">2</span>)))
+    (<span class="kwa">format</span> t <span class="str">&quot;~%~a~%~a~%&quot;</span> size (<span class="kwa">length</span> sequence))
+    (<span class="kwa">loop</span> for pair in +alternatives+ do
+         (<span class="kwa">setf</span> sequence (<span class="kwa">replace-all</span>  (<span class="kwa">car</span> pair) (<span class="kwa">cadr</span> pair) sequence )))
+    (<span class="kwa">format</span> t <span class="str">&quot;~a~%&quot;</span> (<span class="kwa">length</span> sequence)))
+  #+sb-thread
+  (<span class="kwa">let</span>* ((<span class="kwa">len</span> (<span class="kwa">length</span> +regex-list+))
+         (<span class="kwa">result</span> (<span class="kwa">make-list</span> (<span class="kwa">1</span>+ len))))
+    (<span class="kwa">join-all</span>
+	 (<span class="kwa">loop</span> with idx of-type fixnum = <span class="num">0</span>
+		repeat len
+		collect
+          (<span class="kwa">bg</span> (<span class="kwa">let</span> (<span class="kwa">reg</span> cur)
+                (<span class="kwa">with-mutex</span> (*aux-mutex*)
+                  (<span class="kwa">setf</span> cur idx reg (<span class="kwa">nth</span> cur +regex-list+))
+                  (<span class="kwa">incf</span> idx))
+              (<span class="kwa">setf</span> (<span class="kwa">nth</span> cur result)
+                    (<span class="kwa">format</span> nil <span class="str">&quot;~a ~a&quot;</span> reg
+                            (/ (<span class="kwa">length</span>
+                                (<span class="kwa">the</span> list
+                                  (<span class="kwa">cl-ppcre</span>:all-matches reg sequence))) <span class="num">2</span>))))))
+	 (<span class="kwa">bg</span> (<span class="kwa">loop</span> with seq = (<span class="kwa">copy-seq</span> sequence)
+            for pair in +alternatives+ do
+              (<span class="kwa">setf</span> seq (<span class="kwa">replace-all</span>  (<span class="kwa">car</span> pair) (<span class="kwa">cadr</span> pair) seq ))
+            finally (<span class="kwa">setf</span> (<span class="kwa">nth</span> len result)
+                          (<span class="kwa">format</span> nil <span class="str">&quot;~%~a~%~a~%~a&quot;</span> size (<span class="kwa">length</span> sequence) (<span class="kwa">length</span> seq))))))
+    (<span class="kwa">format</span> t <span class="str">&quot;~{~a~%~}&quot;</span> result))
+  )

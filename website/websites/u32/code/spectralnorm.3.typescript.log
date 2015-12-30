@@ -1,0 +1,20 @@
+
+Fri, 25 Dec 2015 00:47:26 GMT
+
+MAKE:
+mv spectralnorm.typescript-3.typescript spectralnorm.typescript-3.ts
+/usr/local/src/node-v5.1.0-linux-x86/bin/tsc -t ES6 spectralnorm.typescript-3.ts
+spectralnorm.typescript-3.ts(15,22): error TS2345: Argument of type 'Float64Array' is not assignable to parameter of type 'number[]'.
+  Property 'push' is missing in type 'Float64Array'.
+spectralnorm.typescript-3.ts(16,22): error TS2345: Argument of type 'Float64Array' is not assignable to parameter of type 'number[]'.
+spectralnorm.typescript-3.ts(50,19): error TS2345: Argument of type 'Float64Array' is not assignable to parameter of type 'number[]'.
+spectralnorm.typescript-3.ts(51,18): error TS2345: Argument of type 'Float64Array' is not assignable to parameter of type 'number[]'.
+/home/dunham/benchmarksgame/nanobench/makefiles/u32.programs.Makefile:627: recipe for target 'spectralnorm.typescript-3.typescript_run' failed
+make: [spectralnorm.typescript-3.typescript_run] Error 2 (ignored)
+2.71s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/node-v5.1.0-linux-x86/bin/node --use_strict spectralnorm.typescript-3.js 5500
+
+PROGRAM OUTPUT:
+1.274224153

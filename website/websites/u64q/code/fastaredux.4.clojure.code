@@ -1,0 +1,162 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; contributed by Bill James</span>
+<span class="slc">;; speed improvements by Andy Fingerhut</span>
+<span class="slc">;; ported to Clojure 1.3 by Marko Kocic</span>
+
+(ns fastaredux
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+
+
+(<span class="kwa">def</span> width (int  <span class="num">60</span>))
+(<span class="kwa">def</span> lookup-size (int <span class="num">222000</span>))
+
+
+(<span class="kwa">def</span> alu (str <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>
+                <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>
+                <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>
+                <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>
+                <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>
+                <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>
+                <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>))
+
+(<span class="kwa">def</span> codes <span class="str">&quot;acgtBDHKMNRSVWY&quot;</span>)
+
+(<span class="kwa">def</span> iub [<span class="num">0.27 0.12 0.12 0.27 0.02 0.02 0.02 0.02</span>
+           <span class="num">0.02 0.02 0.02 0.02 0.02 0.02 0.02</span>])
+
+(<span class="kwa">def</span> homosapiens [<span class="num">0.3029549426680 0.1979883004921</span>
+                   <span class="num">0.1975473066391 0.3015094502008</span>])
+
+
+(<span class="kwa">defn</span> find-index [f coll]
+  (<span class="kwb">loop</span> [i (int <span class="num">0</span>)
+         s (seq coll)]
+    (<span class="kwc">if</span> (f (<span class="kwd">first</span> s))
+      i
+      (<span class="kwb">recur</span> (unchecked-inc-int i) (<span class="kwd">rest</span> s)))))
+
+
+(<span class="kwa">def</span> random-seed (int-array [<span class="num">42</span>]))
+(<span class="kwc">let</span> [scale (double (/ lookup-size <span class="num">139968</span>))]
+  (<span class="kwa">defn</span> gen-random-fast []
+    (<span class="kwc">let</span> [^ints random-seed random-seed
+          IM (int <span class="num">139968</span>)
+          IA (int <span class="num">3877</span>)
+          IC (int <span class="num">29573</span>)
+          zero (int <span class="num">0</span>)
+          new-seed (unchecked-remainder-int
+                    (unchecked-add-int
+                     (unchecked-multiply-int
+                      (aget random-seed zero) IA) IC) IM)
+          <span class="slc">;; I had the (aset random-seed zero new-seed) in the body of</span>
+          <span class="slc">;; the let before, but strangely the Clojure compiler</span>
+          <span class="slc">;; generated an unnecessary call to Integer.valueOf() to</span>
+          <span class="slc">;; convert aset's return value to an Integer and then</span>
+          <span class="slc">;; discard that value.  By assigning the return value of</span>
+          <span class="slc">;; aset to throwaway-val, the compiler actually generates</span>
+          <span class="slc">;; faster code.</span>
+          throwaway-val (int (aset random-seed zero new-seed))]
+      (int (* new-seed scale)))))
+
+
+<span class="slc">;; Takes a vector of probabilities.</span>
+(<span class="kwa">defn</span> make-cumulative [v]
+  (vec (<span class="kwd">map</span> #(reduce + (subvec v <span class="num">0</span> %)) (<span class="kwd">range</span> <span class="num">1</span> (inc (count v))))))
+
+
+<span class="slc">;; Takes a vector of cumulative probabilities.</span>
+(<span class="kwa">defn</span> make-lookup-table [v]
+  (<span class="kwc">let</span> [sz (int lookup-size)
+        lookup-scale (- sz <span class="num">0.0001</span>)
+        ^ints a (int-array sz)]
+    (<span class="kwb">dotimes</span> [i sz]
+      (aset a i (int (find-index #(&lt;= (/ i lookup-scale) %) v))))
+    a))
+
+
+(<span class="kwa">defn</span> cycle-bytes [source source-size n
+                   ^java.io.BufferedOutputStream ostream]
+  (<span class="kwc">let</span> [source-size (int source-size)
+        width+<span class="num">1</span> (inc width)
+        buffer-size (int (* width+<span class="num">1 4096</span>))
+        buffer (byte-array buffer-size (byte <span class="num">10</span>))]
+    (<span class="kwb">loop</span> [i (int <span class="num">0</span>)
+           j (int <span class="num">0</span>)
+           n (int n)]
+      (System/arraycopy source i buffer j width)
+      (<span class="kwc">if</span> (&gt; n width)
+        (<span class="kwb">recur</span> (unchecked-remainder-int
+                (unchecked-add-int i width) source-size)
+               (<span class="kwc">let</span> [j (unchecked-add-int j width+<span class="num">1</span>)]
+                      (<span class="kwc">if</span> (== j buffer-size)
+                        (do (.write ostream buffer) (int <span class="num">0</span>))
+                        j))
+               (unchecked-subtract-int n width))
+        (do
+          (aset buffer (+ j n) (byte <span class="num">10</span>))
+          (.write ostream buffer (int <span class="num">0</span>) (+ j n <span class="num">1</span>)))))))
+
+
+(<span class="kwa">defn</span> fasta-repeat [n ^java.io.BufferedOutputStream ostream]
+  (<span class="kwc">let</span> [source (.getBytes (str alu alu))]
+    (cycle-bytes source (count alu) n ostream)))
+
+
+(<span class="kwa">defn</span> fasta-random [probs n ^java.io.BufferedOutputStream ostream]
+  (<span class="kwc">let</span> [codes (.getBytes (str codes))
+        lookup-table (ints (make-lookup-table
+                            (make-cumulative probs)))
+        width-1 (int (dec width))
+        num-lines-in-buffer (int <span class="num">2000</span>)
+        buf-size (int (* num-lines-in-buffer (inc width)))
+        buffer (byte-array buf-size)]
+    (<span class="kwb">loop</span> [n (int n)      <span class="slc">;; The number of characters left to generate.</span>
+           j width  <span class="slc">;; The number of characters left to</span>
+                          <span class="slc">;; generate on the current line of output</span>
+                          <span class="slc">;; before printing a newline.</span>
+           i (int <span class="num">0</span>)]     <span class="slc">;; Number of characters put in buffer so far.</span>
+      (<span class="kwc">if</span> (zero? n)
+        (do
+          (.write ostream buffer (int <span class="num">0</span>) i)
+          (<span class="kwc">when</span> (not= (aget buffer (dec i)) (byte <span class="num">10</span>))
+            (aset buffer (int <span class="num">0</span>) (byte <span class="num">10</span>))
+            (.write ostream buffer (int <span class="num">0</span>) (int <span class="num">1</span>))))
+        <span class="slc">;; else</span>
+        (<span class="kwc">let</span> [rand-byte (aget codes (aget lookup-table (gen-random-fast)))]
+          (<span class="kwc">if</span> (== i buf-size)
+            (do
+              <span class="slc">;; buffer is full.  write it and start over.</span>
+              (.write ostream buffer (int <span class="num">0</span>) buf-size)
+              (aset buffer (int <span class="num">0</span>) rand-byte)
+              (<span class="kwb">recur</span> (unchecked-dec n) width-1 (int <span class="num">1</span>)))
+            (do
+              (aset buffer i rand-byte)
+              (<span class="kwc">if</span> (== j (int <span class="num">1</span>))
+                <span class="slc">;; then</span>
+                (do
+                  (aset buffer (unchecked-inc-int i) (byte <span class="num">10</span>)) <span class="slc">;; add newline</span>
+                  (<span class="kwb">recur</span> (unchecked-dec-int n) (int width) (unchecked-add-int i <span class="num">2</span>)))
+                <span class="slc">;; else</span>
+                (<span class="kwb">recur</span> (unchecked-dec-int n) (unchecked-dec-int j)
+                       (unchecked-inc-int i))))))))))
+
+
+(<span class="kwa">defn</span> write-line [s ^java.io.BufferedOutputStream stream]
+  (.write stream (.getBytes (str s <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>))))
+
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [n (Integer/parseInt (nth args <span class="num">0</span>))
+        ostream (java.io.BufferedOutputStream. System/out)
+        start-time (System/currentTimeMillis)]
+    (write-line <span class="str">&quot;&gt;ONE Homo sapiens alu&quot;</span> ostream)
+    (fasta-repeat (* n <span class="num">2</span>) ostream)
+    (write-line <span class="str">&quot;&gt;TWO IUB ambiguity codes&quot;</span> ostream)
+    (fasta-random iub (* n <span class="num">3</span>) ostream)
+    (write-line <span class="str">&quot;&gt;THREE Homo sapiens frequency&quot;</span> ostream)
+    (fasta-random homosapiens (* n <span class="num">5</span>) ostream)
+    (.flush ostream)))

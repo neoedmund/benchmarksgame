@@ -1,0 +1,14 @@
+
+Sat, 26 Dec 2015 05:56:55 GMT
+
+COMMAND LINE:
+/usr/local/src/ruby/bin/ruby -W0 pidigits.yarv-2.yarv 2000
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+/usr/local/src/ruby/lib/ruby/2.3.0/rubygems/core_ext/kernel_require.rb:55:in `require': cannot load such file -- gmp (LoadError)
+	from /usr/local/src/ruby/lib/ruby/2.3.0/rubygems/core_ext/kernel_require.rb:55:in `require'
+	from pidigits.yarv-2.yarv:9:in `<main>'

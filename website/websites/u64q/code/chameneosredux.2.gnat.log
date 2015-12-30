@@ -1,0 +1,39 @@
+
+Fri, 23 Oct 2015 02:51:48 GMT
+
+MAKE:
+/usr/bin/gnatchop -r -w chameneosredux.gnat-2.gnat
+splitting chameneosredux.gnat-2.gnat into:
+   chameneosredux.adb
+   chameneos.ads
+   chameneos-creatures.ads
+   chameneos-games.ads
+   chameneos-meetings.ads
+   cache_aligned_storage_pools.ads
+   chameneos-countdown.ads
+   chameneos-processors.ads
+   x86_atomic_swap_utils.ads
+   chameneos.adb
+   chameneos-creatures.adb
+   chameneos-games.adb
+   chameneos-meetings.adb
+   chameneos-countdown.adb
+   cache_aligned_storage_pools.adb
+   chameneos-processors.adb
+   x86_atomic_swap_utils.adb
+/usr/bin/gnatmake -O3 -fomit-frame-pointer -march=native -msse3 -mfpmath=sse -gnatNp -f chameneosredux.adb -o chameneosredux.gnat-2.gnat_run 
+gcc-4.9 -c -O3 -fomit-frame-pointer -march=native -msse3 -mfpmath=sse -gnatNp chameneosredux.adb
+chameneosredux.gnat-2.gnat:429:46: "CPU_Set" is not visible
+chameneosredux.gnat-2.gnat:429:46: multiple use clauses cause hiding
+chameneosredux.gnat-2.gnat:429:46: hidden declaration at s-tasinf.ads:79
+chameneosredux.gnat-2.gnat:429:46: hidden declaration at s-osinte.ads:559
+gnatmake: "chameneosredux.adb" compilation error
+/home/dunham/benchmarksgame/nanobench/makefiles/u64q.programs.Makefile:31: recipe for target 'chameneosredux.gnat-2.gnat_run' failed
+make: [chameneosredux.gnat-2.gnat_run] Error 4 (ignored)
+0.13s to complete and log all make actions
+
+COMMAND LINE:
+./chameneosredux.gnat-2.gnat_run 60000
+
+MAKE ERROR 
+

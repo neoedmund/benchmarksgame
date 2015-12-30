@@ -1,0 +1,17 @@
+
+Wed, 12 Aug 2015 19:36:10 GMT
+
+MAKE:
+mv nbody.fsharp nbody.fs
+/usr/local/bin/fsharpc --target:exe --platform:x64 -O  -o nbody.fsharp_run.exe nbody.fs
+F# Compiler for F# 4.0 (Open Source Edition)
+Freely distributed under the Apache 2.0 Open Source License
+rm nbody.fs
+4.51s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/mono --llvm nbody.fsharp_run.exe 50000000
+
+PROGRAM OUTPUT:
+-0.169075164
+-0.169059907

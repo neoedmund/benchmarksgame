@@ -1,0 +1,437 @@
+
+Sat, 05 Sep 2015 06:11:39 GMT
+
+MAKE:
+cp: ‘nbody.sbcl-2.sbcl’ and ‘./nbody.sbcl-2.sbcl’ are the same file
+SBCL built with: /usr/local/bin/sbcl --userinit /dev/null --batch --eval '(load "nbody.sbcl-2.sbcl_compile")'
+### START nbody.sbcl-2.sbcl_compile
+(handler-bind ((sb-ext:defconstant-uneql      (lambda (c) (abort c))))      (load (compile-file "nbody.sbcl-2.sbcl" ))) (save-lisp-and-die "sbcl.core" :purify t)
+### END nbody.sbcl-2.sbcl_compile
+
+; compiling file "/home/dunham/benchmarksgame/bench/nbody/nbody.sbcl-2.sbcl" (written 23 JAN 2013 08:19:16 PM):
+; compiling (DECLAIM (OPTIMIZE # ...))
+; compiling (DEFCONSTANT +DAYS-PER-YEAR+ ...)
+; compiling (DEFCONSTANT +SOLAR-MASS+ ...)
+; compiling (DEFSTRUCT (BODY # ...) ...)
+; file: /home/dunham/benchmarksgame/bench/nbody/nbody.sbcl-2.sbcl
+; in: DEFSTRUCT BODY
+;     (DEFSTRUCT
+;         (BODY (:TYPE (VECTOR DOUBLE-FLOAT)) (:CONC-NAME NIL)
+;          (:CONSTRUCTOR MAKE-BODY (X Y Z VX VY VZ MASS)))
+;       X
+;       Y
+;       Z
+;       VX
+;       VY
+;       VZ
+;       MASS)
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK THE ELT AREF SB-KERNEL:HAIRY-DATA-VECTOR-REF 
+; --> MULTIPLE-VALUE-BIND MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G9)
+;       (DECLARE (IGNORE #:G9))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY))
+;       (SB-KERNEL:DATA-VECTOR-REF ARRAY SB-INT:INDEX))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK SETF SB-KERNEL:%SETELT SETF LET* FUNCALL SB-C::%FUNCALL 
+; --> (SETF AREF) SB-KERNEL:HAIRY-DATA-VECTOR-SET MULTIPLE-VALUE-BIND 
+; --> MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G18)
+;       (DECLARE (IGNORE #:G18))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY)
+;                (TYPE DOUBLE-FLOAT SB-C::NEW-VALUE))
+;       (SB-KERNEL:DATA-VECTOR-SET ARRAY SB-INT:INDEX SB-C::NEW-VALUE))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK THE ELT AREF SB-KERNEL:HAIRY-DATA-VECTOR-REF 
+; --> MULTIPLE-VALUE-BIND MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G23)
+;       (DECLARE (IGNORE #:G23))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY))
+;       (SB-KERNEL:DATA-VECTOR-REF ARRAY SB-INT:INDEX))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK SETF SB-KERNEL:%SETELT SETF LET* FUNCALL SB-C::%FUNCALL 
+; --> (SETF AREF) SB-KERNEL:HAIRY-DATA-VECTOR-SET MULTIPLE-VALUE-BIND 
+; --> MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G32)
+;       (DECLARE (IGNORE #:G32))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY)
+;                (TYPE DOUBLE-FLOAT SB-C::NEW-VALUE))
+;       (SB-KERNEL:DATA-VECTOR-SET ARRAY SB-INT:INDEX SB-C::NEW-VALUE))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK THE ELT AREF SB-KERNEL:HAIRY-DATA-VECTOR-REF 
+; --> MULTIPLE-VALUE-BIND MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G37)
+;       (DECLARE (IGNORE #:G37))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY))
+;       (SB-KERNEL:DATA-VECTOR-REF ARRAY SB-INT:INDEX))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK SETF SB-KERNEL:%SETELT SETF LET* FUNCALL SB-C::%FUNCALL 
+; --> (SETF AREF) SB-KERNEL:HAIRY-DATA-VECTOR-SET MULTIPLE-VALUE-BIND 
+; --> MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G46)
+;       (DECLARE (IGNORE #:G46))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY)
+;                (TYPE DOUBLE-FLOAT SB-C::NEW-VALUE))
+;       (SB-KERNEL:DATA-VECTOR-SET ARRAY SB-INT:INDEX SB-C::NEW-VALUE))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK THE ELT AREF SB-KERNEL:HAIRY-DATA-VECTOR-REF 
+; --> MULTIPLE-VALUE-BIND MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G51)
+;       (DECLARE (IGNORE #:G51))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY))
+;       (SB-KERNEL:DATA-VECTOR-REF ARRAY SB-INT:INDEX))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK SETF SB-KERNEL:%SETELT SETF LET* FUNCALL SB-C::%FUNCALL 
+; --> (SETF AREF) SB-KERNEL:HAIRY-DATA-VECTOR-SET MULTIPLE-VALUE-BIND 
+; --> MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G60)
+;       (DECLARE (IGNORE #:G60))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY)
+;                (TYPE DOUBLE-FLOAT SB-C::NEW-VALUE))
+;       (SB-KERNEL:DATA-VECTOR-SET ARRAY SB-INT:INDEX SB-C::NEW-VALUE))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK THE ELT AREF SB-KERNEL:HAIRY-DATA-VECTOR-REF 
+; --> MULTIPLE-VALUE-BIND MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G65)
+;       (DECLARE (IGNORE #:G65))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY))
+;       (SB-KERNEL:DATA-VECTOR-REF ARRAY SB-INT:INDEX))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK SETF SB-KERNEL:%SETELT SETF LET* FUNCALL SB-C::%FUNCALL 
+; --> (SETF AREF) SB-KERNEL:HAIRY-DATA-VECTOR-SET MULTIPLE-VALUE-BIND 
+; --> MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G74)
+;       (DECLARE (IGNORE #:G74))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY)
+;                (TYPE DOUBLE-FLOAT SB-C::NEW-VALUE))
+;       (SB-KERNEL:DATA-VECTOR-SET ARRAY SB-INT:INDEX SB-C::NEW-VALUE))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK THE ELT AREF SB-KERNEL:HAIRY-DATA-VECTOR-REF 
+; --> MULTIPLE-VALUE-BIND MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G79)
+;       (DECLARE (IGNORE #:G79))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY))
+;       (SB-KERNEL:DATA-VECTOR-REF ARRAY SB-INT:INDEX))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK SETF SB-KERNEL:%SETELT SETF LET* FUNCALL SB-C::%FUNCALL 
+; --> (SETF AREF) SB-KERNEL:HAIRY-DATA-VECTOR-SET MULTIPLE-VALUE-BIND 
+; --> MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G88)
+;       (DECLARE (IGNORE #:G88))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY)
+;                (TYPE DOUBLE-FLOAT SB-C::NEW-VALUE))
+;       (SB-KERNEL:DATA-VECTOR-SET ARRAY SB-INT:INDEX SB-C::NEW-VALUE))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK THE ELT AREF SB-KERNEL:HAIRY-DATA-VECTOR-REF 
+; --> MULTIPLE-VALUE-BIND MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G93)
+;       (DECLARE (IGNORE #:G93))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY))
+;       (SB-KERNEL:DATA-VECTOR-REF ARRAY SB-INT:INDEX))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; --> PROGN DEFUN PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; --> FUNCTION BLOCK SETF SB-KERNEL:%SETELT SETF LET* FUNCALL SB-C::%FUNCALL 
+; --> (SETF AREF) SB-KERNEL:HAIRY-DATA-VECTOR-SET MULTIPLE-VALUE-BIND 
+; --> MULTIPLE-VALUE-CALL 
+; ==>
+;   #'(LAMBDA (&OPTIONAL (ARRAY) (SB-INT:INDEX) &REST #:G102)
+;       (DECLARE (IGNORE #:G102))
+;       (DECLARE (TYPE (SIMPLE-ARRAY DOUBLE-FLOAT 1) ARRAY)
+;                (TYPE DOUBLE-FLOAT SB-C::NEW-VALUE))
+;       (SB-KERNEL:DATA-VECTOR-SET ARRAY SB-INT:INDEX SB-C::NEW-VALUE))
+; 
+; note: doing float to pointer coercion (cost 13) to "<return value>"
+
+; compiling (DEFTYPE BODY ...)
+; compiling (DEFPARAMETER *JUPITER* ...)
+; compiling (DEFPARAMETER *SATURN* ...)
+; compiling (DEFPARAMETER *URANUS* ...)
+; compiling (DEFPARAMETER *NEPTUNE* ...)
+; compiling (DEFPARAMETER *SUN* ...)
+; compiling (DECLAIM (INLINE APPLYFORCES))
+; compiling (DEFUN APPLYFORCES ...)
+; compiling (DEFUN ADVANCE ...)
+; compiling (DEFUN ENERGY ...)
+; file: /home/dunham/benchmarksgame/bench/nbody/nbody.sbcl-2.sbcl
+; in: DEFUN ENERGY
+;     (DEFUN ENERGY (SYSTEM)
+;       (LET ((E 0.0d0))
+;         (DECLARE (DOUBLE-FLOAT E))
+;         (LOOP FOR (A . REST) ON SYSTEM
+;               DO (INCF E (* 0.5d0 # #)) (DOLIST (B REST)
+;                                           (LET* #
+;                                             #)))
+;         E))
+; --> PROGN SB-IMPL::%DEFUN SB-IMPL::%DEFUN SB-INT:NAMED-LAMBDA 
+; ==>
+;   #'(SB-INT:NAMED-LAMBDA ENERGY
+;         (SYSTEM)
+;       (BLOCK ENERGY
+;         (LET ((E 0.0d0))
+;           (DECLARE (DOUBLE-FLOAT E))
+;           (LOOP FOR (A . REST) ON SYSTEM
+;                 DO (INCF E #) (DOLIST # #))
+;           E)))
+; 
+; note: doing float to pointer coercion (cost 13) from E to "<return value>"
+
+; compiling (DEFUN OFFSET-MOMENTUM ...)
+; file: /home/dunham/benchmarksgame/bench/nbody/nbody.sbcl-2.sbcl
+; in: DEFUN OFFSET-MOMENTUM
+;     (- PX)
+; ==>
+;   (SB-KERNEL:%NEGATE (THE NUMBER PX))
+; 
+; note: unable to
+;   Eliminate %negate/%negate of rationals
+; due to type uncertainty:
+;   The first argument is a NUMBER, not a RATIONAL.
+
+;     (/ (- PX) +SOLAR-MASS+)
+; 
+; note: unable to
+;   convert to multiplication by reciprocal
+; due to type uncertainty:
+;   The first argument is a NUMBER, not a DOUBLE-FLOAT.
+
+;     (- PY)
+; ==>
+;   (SB-KERNEL:%NEGATE (THE NUMBER PY))
+; 
+; note: unable to
+;   Eliminate %negate/%negate of rationals
+; due to type uncertainty:
+;   The first argument is a NUMBER, not a RATIONAL.
+
+;     (/ (- PY) +SOLAR-MASS+)
+; 
+; note: unable to
+;   convert to multiplication by reciprocal
+; due to type uncertainty:
+;   The first argument is a NUMBER, not a DOUBLE-FLOAT.
+
+;     (- PZ)
+; ==>
+;   (SB-KERNEL:%NEGATE (THE NUMBER PZ))
+; 
+; note: unable to
+;   Eliminate %negate/%negate of rationals
+; due to type uncertainty:
+;   The first argument is a NUMBER, not a RATIONAL.
+
+;     (/ (- PZ) +SOLAR-MASS+)
+; 
+; note: unable to
+;   convert to multiplication by reciprocal
+; due to type uncertainty:
+;   The first argument is a NUMBER, not a DOUBLE-FLOAT.
+
+;     (INCF PX (* (VX P) (MASS P)))
+; --> SETQ THE 
+; ==>
+;   (+ (* (VX P) (MASS P)) PX)
+; 
+; note: forced to do GENERIC-+ (cost 10)
+;       unable to do inline float arithmetic (cost 2) because:
+;       The second argument is a NUMBER, not a DOUBLE-FLOAT.
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES DOUBLE-FLOAT
+;                                                                &REST T).
+;       unable to do inline float arithmetic (cost 4) because:
+;       The second argument is a NUMBER, not a (COMPLEX DOUBLE-FLOAT).
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES
+;                                                         (COMPLEX DOUBLE-FLOAT)
+;                                                         &REST T).
+
+;     (INCF PY (* (VY P) (MASS P)))
+; --> SETQ THE 
+; ==>
+;   (+ (* (VY P) (MASS P)) PY)
+; 
+; note: forced to do GENERIC-+ (cost 10)
+;       unable to do inline float arithmetic (cost 2) because:
+;       The second argument is a NUMBER, not a DOUBLE-FLOAT.
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES DOUBLE-FLOAT
+;                                                                &REST T).
+;       unable to do inline float arithmetic (cost 4) because:
+;       The second argument is a NUMBER, not a (COMPLEX DOUBLE-FLOAT).
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES
+;                                                         (COMPLEX DOUBLE-FLOAT)
+;                                                         &REST T).
+
+;     (INCF PZ (* (VZ P) (MASS P)))
+; --> SETQ THE 
+; ==>
+;   (+ (* (VZ P) (MASS P)) PZ)
+; 
+; note: forced to do GENERIC-+ (cost 10)
+;       unable to do inline float arithmetic (cost 2) because:
+;       The second argument is a NUMBER, not a DOUBLE-FLOAT.
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES DOUBLE-FLOAT
+;                                                                &REST T).
+;       unable to do inline float arithmetic (cost 4) because:
+;       The second argument is a NUMBER, not a (COMPLEX DOUBLE-FLOAT).
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES
+;                                                         (COMPLEX DOUBLE-FLOAT)
+;                                                         &REST T).
+
+;     (- PX)
+; ==>
+;   (SB-KERNEL:%NEGATE (THE NUMBER PX))
+; 
+; note: forced to do GENERIC-NEGATE (cost 10)
+;       unable to do inline fixnum arithmetic (cost 1) because:
+;       The first argument is a NUMBER, not a FIXNUM.
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES FIXNUM &REST T).
+;       unable to do inline float arithmetic (cost 1) because:
+;       The first argument is a NUMBER, not a SINGLE-FLOAT.
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES SINGLE-FLOAT
+;                                                                &REST T).
+;       etc.
+
+;     (/ (- PX) +SOLAR-MASS+)
+; 
+; note: forced to do static-fun Two-arg-/ (cost 53)
+;       unable to do inline float arithmetic (cost 19) because:
+;       The first argument is a NUMBER, not a DOUBLE-FLOAT.
+
+;     (- PY)
+; ==>
+;   (SB-KERNEL:%NEGATE (THE NUMBER PY))
+; 
+; note: forced to do GENERIC-NEGATE (cost 10)
+;       unable to do inline fixnum arithmetic (cost 1) because:
+;       The first argument is a NUMBER, not a FIXNUM.
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES FIXNUM &REST T).
+;       unable to do inline float arithmetic (cost 1) because:
+;       The first argument is a NUMBER, not a SINGLE-FLOAT.
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES SINGLE-FLOAT
+;                                                                &REST T).
+;       etc.
+
+;     (/ (- PY) +SOLAR-MASS+)
+; 
+; note: forced to do static-fun Two-arg-/ (cost 53)
+;       unable to do inline float arithmetic (cost 19) because:
+;       The first argument is a NUMBER, not a DOUBLE-FLOAT.
+
+;     (- PZ)
+; ==>
+;   (SB-KERNEL:%NEGATE (THE NUMBER PZ))
+; 
+; note: forced to do GENERIC-NEGATE (cost 10)
+;       unable to do inline fixnum arithmetic (cost 1) because:
+;       The first argument is a NUMBER, not a FIXNUM.
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES FIXNUM &REST T).
+;       unable to do inline float arithmetic (cost 1) because:
+;       The first argument is a NUMBER, not a SINGLE-FLOAT.
+;       The result is a (VALUES NUMBER &OPTIONAL), not a (VALUES SINGLE-FLOAT
+;                                                                &REST T).
+;       etc.
+
+;     (/ (- PZ) +SOLAR-MASS+)
+; 
+; note: forced to do static-fun Two-arg-/ (cost 53)
+;       unable to do inline float arithmetic (cost 19) because:
+;       The first argument is a NUMBER, not a DOUBLE-FLOAT.
+
+;     (INCF PX (* (VX P) (MASS P)))
+; --> SETQ THE 
+; ==>
+;   (+ (* (VX P) (MASS P)) PX)
+; 
+; note: doing float to pointer coercion (cost 13), for:
+;       the first argument of GENERIC-+
+
+;     (INCF PY (* (VY P) (MASS P)))
+; --> SETQ THE 
+; ==>
+;   (+ (* (VY P) (MASS P)) PY)
+; 
+; note: doing float to pointer coercion (cost 13), for:
+;       the first argument of GENERIC-+
+
+;     (INCF PZ (* (VZ P) (MASS P)))
+; --> SETQ THE 
+; ==>
+;   (+ (* (VZ P) (MASS P)) PZ)
+; 
+; note: doing float to pointer coercion (cost 13), for:
+;       the first argument of GENERIC-+
+
+; compiling (DEFUN NBODY ...)
+; compiling (DEFUN MAIN ...); 
+; compilation unit finished
+;   printed 33 notes
+
+
+; /home/dunham/benchmarksgame_onecore/nbody/tmp/nbody.sbcl-2.fasl written
+; compilation finished in 0:00:00.132
+[undoing binding stack and other enclosing state... done]
+[saving current Lisp image into sbcl.core:
+writing 4944 bytes from the read-only space at 0x20000000
+writing 3168 bytes from the static space at 0x20100000
+writing 46497792 bytes from the dynamic space at 0x1000000000
+done]
+### START nbody.sbcl-2.sbcl_run
+(main) (quit)
+### END nbody.sbcl-2.sbcl_run
+
+0.47s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/sbcl --dynamic-space-size 500 --noinform --core sbcl.core --userinit /dev/null --load nbody.sbcl-2.sbcl_run 50000000
+
+PROGRAM OUTPUT:
+-0.169075164
+-0.169059907

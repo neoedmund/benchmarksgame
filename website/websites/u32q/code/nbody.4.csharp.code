@@ -1,0 +1,160 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Isaac Gouy, optimization and use of more C# idioms by Robert F. Tobler</span>
+<span class="com">   simdified by Konrad M. Kruczynski and Jaroslaw M. Gliwinski</span>
+<span class="com">*/</span>
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> Mono.Simd;
+
+<span class="kwa">namespace</span> NBody
+{
+   <span class="kwa">class</span> NBody
+   {
+      <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(String[] args)
+      {
+         var n = args.Length &gt; <span class="num">0</span> ? Int32.<span class="kwd">Parse</span>(args[<span class="num">0</span>]) : <span class="num">10000</span>;
+         var bodies = <span class="kwa">new</span> <span class="kwd">NBodySystem</span>();
+         var dtdt = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">0.01</span>);
+         Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;{0:f9}&quot;</span>, bodies.<span class="kwd">Energy</span>());
+         <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; n; i++) bodies.<span class="kwd">Advance</span>(<span class="kwa">ref</span> dtdt);
+         Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;{0:f9}&quot;</span>, bodies.<span class="kwd">Energy</span>());
+      }
+   }
+
+   <span class="kwa">class</span> Body
+   {
+      <span class="kwa">public</span> Vector2d Pxy;
+      <span class="kwa">public</span> Vector2d Pz0;
+      <span class="kwa">public</span> Vector2d Vxy;
+      <span class="kwa">public</span> Vector2d Vz0;
+      <span class="kwa">public</span> Vector2d MassMass;
+
+   }
+
+   <span class="kwa">class</span> Pair
+   {
+      <span class="kwa">public</span> Body Bi, Bj;
+   }
+
+   <span class="kwa">class</span> NBodySystem
+   {
+      <span class="kwa">private readonly</span> Body[] bodies;
+      <span class="kwa">private readonly</span> Pair[] pairs;
+
+      <span class="kwb">const double</span> Pi = <span class="num">3.141592653589793</span>;
+      <span class="kwb">const double</span> SolarMass = <span class="num">4</span> * Pi * Pi;
+      <span class="kwb">const double</span> DaysPerYear = <span class="num">365.24</span>;
+
+      <span class="kwa">public</span> <span class="kwd">NBodySystem</span>()
+      {
+         bodies = <span class="kwa">new</span>[] {
+                        <span class="kwa">new</span> Body
+                           { <span class="slc">// Sun</span>
+                              MassMass = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(SolarMass, SolarMass)
+                           },
+                        <span class="kwa">new</span> Body
+                           { <span class="slc">// Jupiter</span>
+                              Pxy = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">4.84143144246472090e+00</span>, -<span class="num">1.16032004402742839e+00</span>),
+                              Pz0 = <span class="kwa">new</span> <span class="kwd">Vector2d</span>( -<span class="num">1.03622044471123109e-01</span>, <span class="num">0</span>),
+                              Vxy = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">1.66007664274403694e-03</span> * DaysPerYear,  <span class="num">7.69901118419740425e-03</span> * DaysPerYear),
+                              Vz0 = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(-<span class="num">6.90460016972063023e-05</span> * DaysPerYear, <span class="num">0</span>),
+                              MassMass = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">9.54791938424326609e-04</span> * SolarMass)
+                           },
+                        <span class="kwa">new</span> Body
+                           { <span class="slc">// Saturn</span>
+                              Pxy = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">8.34336671824457987e+00</span>, <span class="num">4.12479856412430479e+00</span>),
+                              Pz0 = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(-<span class="num">4.03523417114321381e-01</span>, <span class="num">0</span>),
+                              Vxy = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(-<span class="num">2.76742510726862411e-03</span> * DaysPerYear, <span class="num">4.99852801234917238e-03</span> * DaysPerYear),
+                              Vz0 = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">2.30417297573763929e-05</span> * DaysPerYear, <span class="num">0</span>),
+                              MassMass = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">2.85885980666130812e-04</span> * SolarMass)
+                           },
+                        <span class="kwa">new</span> Body
+                           { <span class="slc">// Uranus</span>
+                              Pxy = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">1.28943695621391310e+01</span>, -<span class="num">1.51111514016986312e+01</span>),
+                              Pz0 = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(-<span class="num">2.23307578892655734e-01</span>, <span class="num">0</span>),
+                              Vxy = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">2.96460137564761618e-03</span> * DaysPerYear, <span class="num">2.37847173959480950e-03</span> * DaysPerYear),
+                              Vz0 = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(-<span class="num">2.96589568540237556e-05</span> * DaysPerYear, <span class="num">0</span>),
+                              MassMass = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">4.36624404335156298e-05</span> * SolarMass)
+                           },
+                        <span class="kwa">new</span> Body
+                           { <span class="slc">// Neptune</span>
+                              Pxy = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">1.53796971148509165e+01</span>, -<span class="num">2.59193146099879641e+01</span>),
+                              Pz0 = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">1.79258772950371181e-01</span>, <span class="num">0</span>),
+                              Vxy = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">2.68067772490389322e-03</span> * DaysPerYear, <span class="num">1.62824170038242295e-03</span> * DaysPerYear),
+                              Vz0 = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(-<span class="num">9.51592254519715870e-05</span> * DaysPerYear, <span class="num">0</span>),
+                              MassMass = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">5.15138902046611451e-05</span> * SolarMass)
+                           },
+                     };
+
+         pairs = <span class="kwa">new</span> Pair[bodies.Length * (bodies.Length - <span class="num">1</span>) / <span class="num">2</span>];
+         var pi = <span class="num">0</span>;
+         <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; bodies.Length - <span class="num">1</span>; i++)
+         {
+            <span class="kwa">for</span> (var j = i + <span class="num">1</span>; j &lt; bodies.Length; j++)
+            {
+               pairs[pi++] = <span class="kwa">new</span> Pair { Bi = bodies[i], Bj = bodies[j] };
+            }
+         }
+
+         var pxy = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">0</span>);
+         var pz0 = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">0</span>);
+         <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; bodies.Length; i++ )
+         {
+            var b = bodies[i];
+            pxy += b.Vxy * b.MassMass;
+            pz0 += b.Vz0 * b.MassMass;
+         }
+         var sol = bodies[<span class="num">0</span>];
+         var minusOne = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(-<span class="num">1</span>);
+         var solarMass = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(SolarMass);
+         sol.Vxy = minusOne * pxy / solarMass;
+         sol.Vz0 = minusOne * pz0 / solarMass;
+      }
+
+      <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">Advance</span>(<span class="kwa">ref</span> Vector2d dtdt)
+      {
+         <span class="kwa">foreach</span> (var p <span class="kwa">in</span> pairs)
+         {
+            var bi = p.Bi;
+            var bj = p.Bj;
+            var dxdy = bi.Pxy - bj.Pxy;
+            var dzd0 = bi.Pz0 - bj.Pz0;
+            var distvec = (dxdy * dxdy).<span class="kwd">HorizontalAdd</span>(dzd0 * dzd0);
+            var d2 = distvec.<span class="kwd">HorizontalAdd</span>(distvec);
+            var mag = dtdt / (d2.<span class="kwd">Sqrt</span>() * d2);
+            bi.Vxy -= dxdy * bj.MassMass * mag;
+            bj.Vxy += dxdy * bi.MassMass * mag;
+            bi.Vz0 -= dzd0 * bj.MassMass * mag;
+            bj.Vz0 += dzd0 * bi.MassMass * mag;
+         }
+         <span class="kwa">foreach</span>(var b <span class="kwa">in</span> bodies)
+         {
+            b.Pxy += dtdt * b.Vxy;
+            b.Pz0 += dtdt * b.Vz0;
+         }
+         
+      }
+
+      <span class="kwa">public</span> <span class="kwb">double</span> <span class="kwd">Energy</span>()
+      {
+         var half = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">0.5</span>);
+         var e = <span class="kwa">new</span> <span class="kwd">Vector2d</span>(<span class="num">0.0</span>);
+         <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; bodies.Length; i++)
+         {
+            var bi = bodies[i];
+            var sq = (bi.Vxy*bi.Vxy).<span class="kwd">HorizontalAdd</span>(bi.Vz0*bi.Vz0);
+            e += half * bi.MassMass * sq.<span class="kwd">HorizontalAdd</span>(sq);
+            <span class="kwa">for</span> (var j = i + <span class="num">1</span>; j &lt; bodies.Length; j++)
+            {
+               var bj = bodies[j];
+               var dxdy = bi.Pxy - bj.Pxy;
+               var dzd0 = bi.Pz0 - bj.Pz0;
+               var sqvec = (dxdy * dxdy).<span class="kwd">HorizontalAdd</span>(dzd0 * dzd0);
+               e -= (bi.MassMass * bj.MassMass) / (sqvec.<span class="kwd">HorizontalAdd</span>(sqvec)).<span class="kwd">Sqrt</span>();
+            }
+         }
+         <span class="kwa">return</span> e.X;
+      }
+   }
+}

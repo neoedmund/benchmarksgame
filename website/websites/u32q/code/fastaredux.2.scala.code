@@ -1,0 +1,135 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">  contributed by Rex Kerr</span>
+<span class="com">  based on Scala version by Isaac Gouy</span>
+<span class="com">  with optimization tricks from C version by Petr Prokhorenkov</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> java.io._
+
+<span class="kwa">object</span> fastaredux {
+  <span class="kwa">val</span> ALU =
+    <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span> +
+    <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span> +
+    <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span> +
+    <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span> +
+    <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span> +
+    <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span> +
+    <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>
+
+  <span class="kwa">val</span> IUBs = <span class="str">&quot;acgtBDHKMNRSVWY&quot;</span>
+  <span class="kwa">val</span> IUBp = (
+    <span class="kwd">Array</span>(<span class="num">0.27</span>,<span class="num">0.12</span>,<span class="num">0.12</span>,<span class="num">0.27</span>) ++ Array.<span class="kwd">fill</span>(<span class="num">11</span>)(<span class="num">0.02</span>)
+  ).<span class="kwd">scanLeft</span>(<span class="num">0.0</span>)(_ + _).tail
+
+  <span class="kwa">val</span> HSs = <span class="str">&quot;acgt&quot;</span>
+  <span class="kwa">val</span> HSp = <span class="kwd">Array</span>(
+    <span class="num">0.3029549426680</span>, <span class="num">0.1979883004921</span>, <span class="num">0.1975473066391</span>, <span class="num">0.3015094502008</span>
+  ).<span class="kwd">scanLeft</span>(<span class="num">0.0</span>)(_ + _).tail
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) = {
+    <span class="kwa">val</span> n = <span class="kwd">args</span>(<span class="num">0</span>).toInt
+    <span class="kwa">val</span> s = <span class="kwa">new</span> <span class="kwd">FastaOutputStream</span>(System.out)
+
+    s.<span class="kwd">writeRepeating</span>(ALU, n*<span class="num">2</span>, <span class="str">&quot;ONE Homo sapiens alu&quot;</span>)
+    s.<span class="kwd">writeRandom</span>(IUBs, IUBp, n*<span class="num">3</span>, <span class="str">&quot;TWO IUB ambiguity codes&quot;</span>)
+    s.<span class="kwd">writeRandom</span>(HSs, HSp, n*<span class="num">5</span>, <span class="str">&quot;THREE Homo sapiens frequency&quot;</span>)
+
+    s.close
+  }
+}
+
+
+<span class="slc">// extend the Java BufferedOutputStream class</span>
+<span class="kwa">class</span> <span class="kwd">FastaOutputStream</span>(out: OutputStream) <span class="kwa">extends</span> <span class="kwd">BufferedOutputStream</span>(out) {
+  <span class="kwa">private val</span> TableSize = <span class="num">4096</span>
+  <span class="kwa">private val</span> N = <span class="num">60</span>
+  <span class="kwa">private val</span> chunk = <span class="kwa">new</span> Array[Byte](N+<span class="num">1</span>)
+  <span class="kwa">private val</span> nl = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>.toByte
+
+  <span class="slc">// Tail-recursive; can check by prepending &#64;annotation.tailrec</span>
+  <span class="kwa">private def</span> <span class="kwd">writeRep</span>(seq: Array[Byte], n: Int, off: Int = <span class="num">0</span>) {
+    <span class="kwa">if</span> (n &gt; N) {
+      <span class="kwa">val</span> remains = seq.length - off
+      <span class="slc">// Assume seq.length &gt;= N!</span>
+      <span class="kwa">if</span> (remains&gt;=N) {
+        <span class="kwd">write</span>(seq,off,N); <span class="kwd">write</span>(nl)
+        <span class="kwd">writeRep</span>(seq, n-N, <span class="kwa">if</span> (remains==N) <span class="num">0</span> <span class="kwa">else</span> off+N)
+      }
+      <span class="kwa">else</span> {
+        <span class="kwd">write</span>(seq,off,remains); <span class="kwd">write</span>(seq,<span class="num">0</span>,N-remains); <span class="kwd">write</span>(nl)
+        <span class="kwd">writeRep</span>(seq, n-N, <span class="num">0</span>+N-remains)
+      }
+    }
+    <span class="kwa">else</span> {
+      <span class="kwa">for</span> (i &lt;- <span class="num">0</span> until n) <span class="kwd">write</span>(<span class="kwd">seq</span>((i+off)%seq.length))
+      <span class="kwd">write</span>(nl)
+    }
+  }
+  <span class="kwa">def</span> <span class="kwd">writeRepeating</span>(seq: String, n: Int, desc: String) {
+    <span class="kwd">write</span>( (<span class="str">&quot;&gt;&quot;</span>+desc+<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>).getBytes )
+    <span class="kwd">writeRep</span>(seq.getBytes,n)
+  }
+
+  <span class="slc">// Tail-recursive (check with &#64;annotation.tailrec)</span>
+  <span class="kwa">private def</span> <span class="kwd">writeRand</span>(tab: Table, n: Int) {
+    <span class="kwa">val</span> m = <span class="kwa">if</span> (n &lt; N) { <span class="kwd">chunk</span>(n) = nl; n } <span class="kwa">else</span> N
+    <span class="kwa">var</span> i = <span class="num">0</span>
+    <span class="kwa">while</span> (i&lt;m) {
+      <span class="kwd">chunk</span>(i) = tab.next
+      i += <span class="num">1</span>
+    }
+    <span class="kwd">write</span>(chunk,<span class="num">0</span>,m+<span class="num">1</span>)
+    <span class="kwa">if</span> (n &gt; N) <span class="kwd">writeRand</span>(tab, n-N)
+  }
+  <span class="kwa">def</span> <span class="kwd">writeRandom</span>(seq: String, dist: Array[Double], n: Int, desc: String) {
+    <span class="kwd">write</span>( (<span class="str">&quot;&gt;&quot;</span>+desc+<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>).getBytes )
+    <span class="kwd">chunk</span>(N) = nl
+    <span class="kwa">val</span> tab = <span class="kwa">new</span> <span class="kwd">Table</span>(seq.getBytes, dist, TableSize)
+    <span class="kwd">writeRand</span>(tab,n)
+  }
+
+  <span class="slc">// Constant time lookup table, assumes (1/size) &lt; p(rarest entry)</span>
+  <span class="kwa">private class</span> <span class="kwd">Table</span>(bytes: Array[Byte], dist: Array[Double], size: Int) {
+    <span class="kwa">abstract class</span> X { <span class="kwa">def</span> <span class="kwd">pick</span>(d: Double): Byte }
+    <span class="kwa">class</span> <span class="kwd">B</span>(b: Byte) <span class="kwa">extends</span> X { <span class="kwa">def</span> <span class="kwd">pick</span>(d: Double) = b }
+    <span class="kwa">class</span> <span class="kwd">P</span>(b0 : Byte, p: Double, b1: Byte) <span class="kwa">extends</span> X {
+      <span class="kwa">def</span> <span class="kwd">pick</span>(d: Double) = <span class="kwa">if</span> (d &lt; p) b0 <span class="kwa">else</span> b1
+    }
+
+    <span class="kwa">def</span> <span class="kwd">seek</span>(p: Double): Int = {
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwa">while</span> (i+<span class="num">1</span>&lt;dist.length &amp;&amp; p &gt;= <span class="kwd">dist</span>(i)) i += <span class="num">1</span>
+      i
+    }
+    <span class="kwa">var</span> lastj = -<span class="num">1</span>
+    <span class="kwa">var</span> lastX = null:X
+    <span class="kwa">val</span> lookup: Array[X] = (<span class="num">0</span> until size).<span class="kwd">map</span>(i =&gt; {
+      <span class="kwa">val</span> (j0,j1) = (<span class="kwd">seek</span>(i.toDouble/size), <span class="kwd">seek</span>((i+<span class="num">1</span>).toDouble/size))
+      <span class="kwa">if</span> (j0==j1) {
+        <span class="kwa">if</span> (lastj==j0) lastX
+        <span class="kwa">else</span> {
+          lastX = <span class="kwa">new</span> <span class="kwd">B</span>(<span class="kwd">bytes</span>(j0))
+          lastj = j0
+          lastX
+        }
+      }
+      <span class="kwa">else</span> {
+        lastj = -<span class="num">1</span>
+        <span class="kwa">new</span> <span class="kwd">P</span>(<span class="kwd">bytes</span>(j0),<span class="kwd">dist</span>(j0),<span class="kwd">bytes</span>(j1))
+      }
+    }).toArray
+    
+    <span class="kwa">def</span> next = {
+      <span class="kwa">val</span> p = RandomNumber.next
+      <span class="kwd">lookup</span>((p*size).toInt).<span class="kwd">pick</span>(p)
+    }
+  }
+
+  <span class="kwa">private object</span> RandomNumber {
+    <span class="kwa">val</span> (im,ia,ic) = (<span class="num">139968</span>,<span class="num">3877</span>,<span class="num">29573</span>)
+    <span class="kwa">val</span> scale = <span class="num">1.0</span>/im
+    <span class="kwa">var</span> seed = <span class="num">42</span>
+    <span class="kwa">def</span> next = { seed = (seed * ia + ic) % im; seed*scale }
+  }
+}

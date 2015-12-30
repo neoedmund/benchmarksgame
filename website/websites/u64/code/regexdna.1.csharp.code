@@ -1,0 +1,81 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * </span>
+<span class="com"> * contributed by Isaac Gouy */</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.Text.RegularExpressions;
+
+<span class="kwa">class</span> regexdna
+{
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(<span class="kwb">string</span>[] args){
+                   
+      <span class="slc">// read FASTA sequence</span>
+      String sequence = Console.In.<span class="kwd">ReadToEnd</span>();
+      <span class="kwb">int</span> initialLength = sequence.Length;
+
+      <span class="slc">// remove FASTA sequence descriptions and new-lines</span>
+      Regex r = <span class="kwa">new</span> <span class="kwd">Regex</span>(<span class="str">&quot;&gt;.*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;</span>, RegexOptions.Compiled);
+      sequence = r.<span class="kwd">Replace</span>(sequence,<span class="str">&quot;&quot;</span>);
+      <span class="kwb">int</span> codeLength = sequence.Length;
+
+
+      <span class="slc">// regex match</span>
+      <span class="kwb">string</span>[] variants = {
+         <span class="str">&quot;agggtaaa|tttaccct&quot;</span>
+         ,<span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>
+         ,<span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>
+         ,<span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>
+         ,<span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>
+         ,<span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>
+         ,<span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>
+         ,<span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>
+         ,<span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>
+      }; 
+
+      <span class="kwb">int</span> count;
+      <span class="kwa">foreach</span> (<span class="kwb">string</span> v <span class="kwa">in</span> variants){
+         count = <span class="num">0</span>;
+         r = <span class="kwa">new</span> <span class="kwd">Regex</span>(v, RegexOptions.Compiled);
+
+         <span class="kwa">for</span> (Match m = r.<span class="kwd">Match</span>(sequence); m.Success; m = m.<span class="kwd">NextMatch</span>()) count++;
+         Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="ipl">{0} {1}</span><span class="str">&quot;</span>, v, count);
+      }
+
+
+      <span class="slc">// regex substitution</span>
+      IUB[] codes = {
+          <span class="kwa">new</span> <span class="kwd">IUB</span>(<span class="str">&quot;B&quot;</span>, <span class="str">&quot;(c|g|t)&quot;</span>)
+         ,<span class="kwa">new</span> <span class="kwd">IUB</span>(<span class="str">&quot;D&quot;</span>, <span class="str">&quot;(a|g|t)&quot;</span>)
+         ,<span class="kwa">new</span> <span class="kwd">IUB</span>(<span class="str">&quot;H&quot;</span>, <span class="str">&quot;(a|c|t)&quot;</span>)
+         ,<span class="kwa">new</span> <span class="kwd">IUB</span>(<span class="str">&quot;K&quot;</span>, <span class="str">&quot;(g|t)&quot;</span>)
+         ,<span class="kwa">new</span> <span class="kwd">IUB</span>(<span class="str">&quot;M&quot;</span>, <span class="str">&quot;(a|c)&quot;</span>)
+         ,<span class="kwa">new</span> <span class="kwd">IUB</span>(<span class="str">&quot;N&quot;</span>, <span class="str">&quot;(a|c|g|t)&quot;</span>)
+         ,<span class="kwa">new</span> <span class="kwd">IUB</span>(<span class="str">&quot;R&quot;</span>, <span class="str">&quot;(a|g)&quot;</span>)
+         ,<span class="kwa">new</span> <span class="kwd">IUB</span>(<span class="str">&quot;S&quot;</span>, <span class="str">&quot;(c|g)&quot;</span>)
+         ,<span class="kwa">new</span> <span class="kwd">IUB</span>(<span class="str">&quot;V&quot;</span>, <span class="str">&quot;(a|c|g)&quot;</span>)
+         ,<span class="kwa">new</span> <span class="kwd">IUB</span>(<span class="str">&quot;W&quot;</span>, <span class="str">&quot;(a|t)&quot;</span>)
+         ,<span class="kwa">new</span> <span class="kwd">IUB</span>(<span class="str">&quot;Y&quot;</span>, <span class="str">&quot;(c|t)&quot;</span>)
+      }; 
+
+      <span class="kwa">foreach</span> (IUB iub <span class="kwa">in</span> codes) {
+         r = <span class="kwa">new</span> <span class="kwd">Regex</span>(iub.code, RegexOptions.Compiled);
+         sequence = r.<span class="kwd">Replace</span>(sequence,iub.alternatives);
+      }
+      Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str"></span><span class="ipl">{0}</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">{1}</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">{2}</span><span class="str">&quot;</span>, 
+         initialLength, codeLength, sequence.Length);
+   }
+
+
+   <span class="kwb">struct</span> IUB 
+   {
+      <span class="kwa">public</span> <span class="kwb">string</span> code;
+      <span class="kwa">public</span> <span class="kwb">string</span> alternatives;
+
+      <span class="kwa">public</span> <span class="kwd">IUB</span>(<span class="kwb">string</span> code, <span class="kwb">string</span> alternatives) {
+         <span class="kwa">this</span>.code = code;
+         <span class="kwa">this</span>.alternatives = alternatives;
+      }
+   }
+}
+

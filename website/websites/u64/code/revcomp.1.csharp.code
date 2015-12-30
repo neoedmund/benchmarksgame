@@ -1,0 +1,100 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Robert F. Tobler to process large blocks of byte arrays</span>
+<span class="com">*/</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.IO;
+<span class="kwa">using</span> System.Collections.Generic;
+
+<span class="kwa">static class</span> revcomp
+{
+   <span class="kwb">struct</span> Block {
+      <span class="kwa">public</span> <span class="kwb">byte</span>[] Data; <span class="kwa">public</span> <span class="kwb">int</span> Count;
+      <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">Read</span>(BinaryReader r) {
+         Data = r.<span class="kwd">ReadBytes</span>(<span class="num">16384</span>); Count++; <span class="kwa">return</span> Data.Length;
+      }
+      <span class="kwa">public</span> Index <span class="kwd">IndexOf</span>(<span class="kwb">byte</span> b, <span class="kwb">int</span> o) {
+         <span class="kwa">return new</span> Index { Block = Count, Pos = Array.<span class="kwd">IndexOf</span>(Data, b, o) };
+      }
+   }
+
+   <span class="kwb">struct</span> Index {
+      <span class="kwa">public</span> <span class="kwb">int</span> Block; <span class="kwa">public</span> <span class="kwb">int</span> Pos;
+      <span class="kwa">public static readonly</span> Index None = <span class="kwa">new</span> Index { Block = -<span class="num">1</span>, Pos = -<span class="num">1</span> };
+      <span class="kwa">public</span> <span class="kwb">bool</span> <span class="kwd">InBlock</span>(Block b) { <span class="kwa">return</span> Block == b.Count; }
+   }
+
+   <span class="kwb">const byte</span> Gt = (<span class="kwb">byte</span>)<span class="str">'&gt;'</span>;
+   <span class="kwb">const byte</span> Lf = (<span class="kwb">byte</span>)<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(<span class="kwb">string</span>[] args) {
+      <span class="kwd">InitComplements</span>();
+      var seq = <span class="kwa">new</span> List&lt;<span class="kwb">byte</span>[]&gt;();
+      var b = <span class="kwa">new</span> Block { Count = -<span class="num">1</span> };
+      Index line = Index.None, start = Index.None, end = Index.None;
+      <span class="kwa">using</span> (var r = <span class="kwa">new</span> <span class="kwd">BinaryReader</span>(Console.<span class="kwd">OpenStandardInput</span>())) {
+         <span class="kwa">using</span> (var w = Console.<span class="kwd">OpenStandardOutput</span>()) {
+            <span class="kwa">while</span> (b.<span class="kwd">Read</span>(r) &gt; <span class="num">0</span>) {
+               seq.<span class="kwd">Add</span>(b.Data);
+               <span class="kwa">if</span> (line.Pos &lt; <span class="num">0</span>) line = b.<span class="kwd">IndexOf</span>(Gt, <span class="num">0</span>);
+               <span class="kwa">while</span> (line.Pos &gt;= <span class="num">0</span>) {
+                  <span class="kwa">if</span> (start.Pos &lt; <span class="num">0</span>) {
+                     var off = line.<span class="kwd">InBlock</span>(b) ? line.Pos : <span class="num">0</span>;
+                     start = b.<span class="kwd">IndexOf</span>(Lf, off);
+                     <span class="kwa">if</span> (start.Pos &lt; <span class="num">0</span>) {
+                         w.<span class="kwd">Write</span>(b.Data, off, b.Data.Length - off);
+                         seq.<span class="kwd">Clear</span>(); <span class="kwa">break</span>;
+                     }
+                     w.<span class="kwd">Write</span>(b.Data, off, start.Pos + <span class="num">1</span> - off);
+                  }
+                  <span class="kwa">if</span> (end.Pos &lt; <span class="num">0</span>) {
+                     end = b.<span class="kwd">IndexOf</span>(Gt, start.<span class="kwd">InBlock</span>(b) ? start.Pos : <span class="num">0</span>);
+                     <span class="kwa">if</span> (end.Pos &lt; <span class="num">0</span>) <span class="kwa">break</span>;
+                  }
+                  w.<span class="kwd">Reverse</span>(start.Pos, end.Pos, seq);
+                  <span class="kwa">if</span> (seq.Count &gt; <span class="num">1</span>) seq.<span class="kwd">RemoveRange</span>(<span class="num">0</span>, seq.Count - <span class="num">1</span>);
+                  line = end; end = Index.None; start = Index.None;
+               }
+            }
+            <span class="kwa">if</span> (start.Pos &gt;= <span class="num">0</span> &amp;&amp; end.Pos &lt; <span class="num">0</span>)
+               w.<span class="kwd">Reverse</span>(start.Pos, seq[seq.Count -<span class="num">1</span>].Length, seq);
+         }
+      }
+   }
+
+   <span class="kwb">const string</span> Seq = <span class="str">&quot;ABCDGHKMRTVYabcdghkmrtvy&quot;</span>;
+   <span class="kwb">const string</span> Rev = <span class="str">&quot;TVGHCDMKYABRTVGHCDMKYABR&quot;</span>;
+   <span class="kwa">static</span> <span class="kwb">byte</span>[] comp = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">256</span>];
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">InitComplements</span>() {
+      <span class="kwa">for</span> (<span class="kwb">byte</span> i = <span class="num">0</span>; i &lt; <span class="num">255</span>; i++) comp[i] = i;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; Seq.Length; i++)
+         comp[(<span class="kwb">byte</span>)Seq[i]] = (<span class="kwb">byte</span>)Rev[i];
+      comp[Lf] = <span class="num">0</span>;  comp[(<span class="kwb">byte</span>)<span class="str">' '</span>] = <span class="num">0</span>;
+   }
+
+   <span class="kwb">const int</span> LineLen = <span class="num">61</span>;
+   <span class="kwb">const int</span> BufSize = LineLen * <span class="num">269</span>;
+   <span class="kwa">static</span> <span class="kwb">byte</span>[] buf = <span class="kwa">new</span> <span class="kwb">byte</span>[BufSize];
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">Reverse</span>(<span class="kwa">this</span> Stream w, <span class="kwb">int</span> si, <span class="kwb">int</span> ei, List&lt;<span class="kwb">byte</span>[]&gt; bl) {
+      <span class="kwb">int</span> bi = <span class="num">0</span>, line = LineLen - <span class="num">1</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> ri = bl.Count-<span class="num">1</span>; ri &gt;= <span class="num">0</span>; ri--) {
+         var b = bl[ri]; <span class="kwb">int</span> off = ri == <span class="num">0</span> ? si : <span class="num">0</span>;
+         <span class="kwa">for</span> (<span class="kwb">int</span> i = (ri == bl.Count-<span class="num">1</span> ? ei : b.Length)-<span class="num">1</span>; i &gt;= off; i--) {
+            var c = comp[b[i]]; <span class="kwa">if</span> (c &gt; <span class="num">0</span>) buf[bi++] = c;
+            <span class="kwa">if</span> (bi == line) {
+               buf[bi++] = Lf; line += LineLen;
+               <span class="kwa">if</span> (bi == BufSize) {
+                  w.<span class="kwd">Write</span>(buf, <span class="num">0</span>, BufSize); bi = <span class="num">0</span>; line = LineLen - <span class="num">1</span>;
+               }
+            }
+         }
+      }
+      <span class="kwa">if</span> (bi &gt; <span class="num">0</span>) {
+          <span class="kwa">if</span> (buf[bi-<span class="num">1</span>] != Lf) buf[bi++] = Lf; w.<span class="kwd">Write</span>(buf, <span class="num">0</span>, bi);
+      }
+   }
+}

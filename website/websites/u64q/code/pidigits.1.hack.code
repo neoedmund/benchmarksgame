@@ -1,0 +1,119 @@
+&lt;?hh 
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   </span>
+<span class="com">   contributed by Isaac Gouy </span>
+<span class="com">   PHP as HHVM/Hack by Isaac Gouy</span>
+<span class="com">   </span>
+<span class="com">   php -q pidigits.php 27</span>
+<span class="com">*/</span>
+
+
+<span class="kwa">class</span> Transformation {
+   <span class="kwa">var</span> $q, $r, $s, $t, $k;
+
+   <span class="kwa">function</span> <span class="kwd">Transformation</span>($q, $r, $s, $t){
+      $this-&gt;q = $q;
+      $this-&gt;r = $r;      
+      $this-&gt;s = $s;
+      $this-&gt;t = $t;               
+   }
+   
+   <span class="kwa">function</span> <span class="kwd">Unity</span>(){
+      <span class="kwa">return new</span> <span class="kwd">Transformation</span>(<span class="str">&quot;1&quot;</span>, <span class="str">&quot;0&quot;</span>, <span class="str">&quot;0&quot;</span>, <span class="str">&quot;1&quot;</span>);              
+   }   
+   
+   <span class="kwa">function</span> <span class="kwd">Zero</span>(){
+      <span class="kwa">return new</span> <span class="kwd">Transformation</span>(<span class="str">&quot;0&quot;</span>, <span class="str">&quot;0&quot;</span>, <span class="str">&quot;0&quot;</span>, <span class="str">&quot;0&quot;</span>);              
+   }      
+   
+      
+   <span class="kwa">function</span> <span class="kwd">Compose</span>($a){
+      $qq = <span class="kwd">bcmul</span>($this-&gt;q, $a-&gt;q);
+      $qrrt = <span class="kwd">bcadd</span>(<span class="kwd">bcmul</span>($this-&gt;q, $a-&gt;r), <span class="kwd">bcmul</span>($this-&gt;r, $a-&gt;t));
+      $sqts = <span class="kwd">bcadd</span>(<span class="kwd">bcmul</span>($this-&gt;s, $a-&gt;q), <span class="kwd">bcmul</span>($this-&gt;t, $a-&gt;s));
+      $srtt = <span class="kwd">bcadd</span>(<span class="kwd">bcmul</span>($this-&gt;s, $a-&gt;r), <span class="kwd">bcmul</span>($this-&gt;t, $a-&gt;t));   
+      <span class="kwa">return new</span> <span class="kwd">Transformation</span>($qq, $qrrt, $sqts, $srtt);
+   }
+   
+   <span class="kwa">function</span> <span class="kwd">Extract</span>($j){
+      $bigj = <span class="kwd">strval</span>($j);
+      $qjr = <span class="kwd">bcadd</span>(<span class="kwd">bcmul</span>($this-&gt;q, $bigj), $this-&gt;r);
+      $sjt = <span class="kwd">bcadd</span>(<span class="kwd">bcmul</span>($this-&gt;s, $bigj), $this-&gt;t);
+      $d = <span class="kwd">bcdiv</span>($qjr, $sjt);
+      <span class="kwa">return</span> <span class="kwd">floor</span>($d);
+   }
+      
+   <span class="kwa">function</span> <span class="kwd">Next</span>(){ 
+      $this-&gt;k = $this-&gt;k + <span class="num">1</span>;
+      $this-&gt;q = <span class="kwd">strval</span>($this-&gt;k);
+      $this-&gt;r = <span class="kwd">strval</span>(<span class="num">4</span>*$this-&gt;k + <span class="num">2</span>);
+      $this-&gt;s = <span class="str">&quot;0&quot;</span>;
+      $this-&gt;t = <span class="kwd">strval</span>(<span class="num">2</span>*$this-&gt;k + <span class="num">1</span>);
+      <span class="kwa">return</span> $this;      
+   }                
+}
+
+
+
+<span class="kwa">class</span> PiDigitStream {
+   <span class="kwa">var</span> $z, $x, $inverse;
+
+   <span class="kwa">function</span> <span class="kwd">PiDigitStream</span>(){
+      $this-&gt;z = Transformation::<span class="kwd">Unity</span>();
+      $this-&gt;x = Transformation::<span class="kwd">Zero</span>();      
+      $this-&gt;inverse = Transformation::<span class="kwd">Zero</span>();   
+   }
+   
+   <span class="kwa">function</span> <span class="kwd">Produce</span>($j){
+      $i = $this-&gt;inverse;
+      $i-&gt;q = <span class="str">&quot;10&quot;</span>;
+      $i-&gt;r = <span class="kwd">strval</span>(-<span class="num">10</span>*$j);
+      $i-&gt;s = <span class="str">&quot;0&quot;</span>;
+      $i-&gt;t = <span class="str">&quot;1&quot;</span>;
+      <span class="kwa">return</span> $i-&gt;<span class="kwd">Compose</span>($this-&gt;z);
+   }   
+
+   <span class="kwa">function</span> <span class="kwd">Consume</span>($a){
+      <span class="kwa">return</span> $this-&gt;z -&gt;<span class="kwd">Compose</span>($a);  
+   }
+   
+   <span class="kwa">function</span> <span class="kwd">Digit</span>(){
+      <span class="kwa">return</span> $this-&gt;z -&gt;<span class="kwd">Extract</span>(<span class="num">3</span>);  
+   }  
+   
+   <span class="kwa">function</span> <span class="kwd">IsSafe</span>($j){
+      <span class="kwa">return</span> $j == ($this-&gt;z -&gt;<span class="kwd">Extract</span>(<span class="num">4</span>));  
+   }    
+
+   <span class="kwa">function</span> <span class="kwd">Next</span>(){
+      $y = $this-&gt;<span class="kwd">Digit</span>();
+      <span class="kwa">if</span> ($this-&gt;<span class="kwd">IsSafe</span>($y)){
+         $this-&gt;z = $this-&gt;<span class="kwd">Produce</span>($y);
+         <span class="kwa">return</span> $y;
+      } <span class="kwa">else</span> {
+         $this-&gt;z = $this-&gt;<span class="kwd">Consume</span>($this-&gt;x -&gt;<span class="kwd">Next</span>());
+         <span class="kwa">return</span> $this-&gt;<span class="kwd">Next</span>();      
+      }
+   } 
+}
+
+
+$n = $argv[<span class="num">1</span>];
+$i = <span class="num">0</span>;
+$length = <span class="num">10</span>;
+$pidigit = <span class="kwa">new</span> PiDigitStream;
+
+<span class="kwa">while</span> ($n &gt; <span class="num">0</span>){
+   <span class="kwa">if</span> ($n &lt; $length){
+      <span class="kwa">for</span> ($j=<span class="num">0</span>; $j&lt;$n; $j++) <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str">&quot;</span>,$pidigit-&gt;<span class="kwd">Next</span>());
+      <span class="kwa">for</span> ($j=$n; $j&lt;$length; $j++)  <span class="kwa">print</span> <span class="str">&quot; &quot;</span>;
+      $i += $n;
+   } <span class="kwa">else</span> {
+      <span class="kwa">for</span> ($j=<span class="num">0</span>; $j&lt;$length; $j++) <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str">&quot;</span>,$pidigit-&gt;<span class="kwd">Next</span>());
+      $i += $length;   
+   }
+   <span class="kwa">print</span> <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:</span><span class="ipl">$i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>;
+   $n -= $length;
+}
+

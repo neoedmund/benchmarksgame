@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="index,follow,archive" />
+<meta name="description" content="Smalltalk VW programs vs Java programs (performance on 64-bit Ubuntu quad core)." />
+<title>Smalltalk VW&nbsp;vs&nbsp;Java (64-bit Ubuntu quad core) | Computer Language Benchmarks Game </title>
+<style><!--
+a{color:black;text-decoration:none}article{padding: 0 0 2.9em}article,div,header{margin:auto;width:92%}body{font:100% Droid Sans,Ubuntu,Verdana,sans-serif;margin:0;-webkit-text-size-adjust:100%}h1,h2,h3,nav li a{font-family:Ubuntu Mono,Consolas,Menlo,monospace}div,header{max-width:31em}h1{font-size:1.4em;font-weight:bold;margin:0;padding:.4em}h1,h1 a{color:white}h2,h3{margin:1.5em 0 0}h2{font-size:1.4em;font-weight:normal}h3{font-size:1.2em}li{display:inline-block}nav li{list-style-type:none}nav li a{display:block;font-size:1.2em;margin:.5em .5em 0;padding:.5em .5em .3em}nav ul{clear:left;margin:-0.3em 0 1.5em;text-align:center}p{color:#333;line-height:1.4;margin:.3em 0 0}p a{border-bottom:.15em dotted #aaa}
+#u64,#u64q{background-color:#c90016}#u32{background-color:#ffb515}#u32q{background-color:#ff6309}.best{font-weight:bold}.message{font-size:.8em}table{color:#333;margin:1.3em auto 0;text-align:right}tbody:after{content:"-";display:block;line-height:2.6em;visibility:hidden}tbody:last-child{text-align:left}td{border-bottom:.15em dotted #eee;padding:.7em 0 0 1em}td a,th a{display:block}td:first-child,th:first-child{text-align:left;padding-left:0}td:nth-child(6),th:nth-child(6){display:table-cell}th{font-weight:normal;padding:0 0 0 1em}
+@media only screen{th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5),th:nth-child(6),td:nth-child(6){display:none}}@media only screen and (min-width:28em){th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){display:table-cell}}@media only screen and (min-width:41em){th:nth-child(6),td:nth-child(6){display:table-cell}}@media only screen and (min-width:60em){article,footer,header{font-size:1.25em}}
+--></style>
+<link rel="shortcut icon" href="./favicon.ico">
+<header id="top">
+  <h1 id="u64q"><a href="http://benchmarksgame.alioth.debian.org/">The&nbsp;Computer&nbsp;Language<br>Benchmarks&nbsp;Game</a></h1>
+</header>
+<article>
+  <div>
+    <h2>Smalltalk VW programs versus Java</h2>
+    <aside>
+      <p><a href="./measurements.php?lang=vw">all the Smalltalk VW program measurements</a>
+    </aside>
+  </div>
+  <section>
+    <div>
+      <h3>by benchmark task performance</h3>
+    </div>
+    <table>
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=pidigits">pidigits</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=pidigits&amp;lang=vw&amp;id=4">Smalltalk&nbsp;VW</a>
+        <td>11.35
+        <td>53,816
+        <td>652
+        <td>11.34
+        <td class="message">0%&nbsp;100%&nbsp;1%&nbsp;1%
+      <tr>
+        <td><a href="./program.php?test=pidigits&amp;lang=java&amp;id=2">Java</a>
+        <td>3.12
+        <td>33,528
+        <td>938
+        <td>3.22
+        <td class="message">3%&nbsp;2%&nbsp;80%&nbsp;21%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=nbody">n-body</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=nbody&amp;lang=vw&amp;id=1">Smalltalk&nbsp;VW</a>
+        <td>193.94
+        <td>55,520
+        <td>1652
+        <td>193.86
+        <td class="message">33%&nbsp;1%&nbsp;68%&nbsp;0%
+      <tr>
+        <td><a href="./program.php?test=nbody&amp;lang=java&amp;id=2">Java</a>
+        <td>22.66
+        <td>30,036
+        <td>1424
+        <td>22.68
+        <td class="message">97%&nbsp;3%&nbsp;0%&nbsp;1%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fastaredux">fasta-redux</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fastaredux&amp;lang=vw&amp;id=1">Smalltalk&nbsp;VW</a>
+        <td>31.81
+        <td>53,420
+        <td>1772
+        <td>31.80
+        <td class="message">100%&nbsp;1%&nbsp;1%&nbsp;0%
+      <tr>
+        <td><a href="./program.php?test=fastaredux&amp;lang=java&amp;id=3">Java</a>
+        <td>2.59
+        <td>29,940
+        <td>1443
+        <td>2.65
+        <td class="message">1%&nbsp;76%&nbsp;1%&nbsp;25%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=binarytrees">binary-trees</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=binarytrees&amp;lang=vw&amp;id=1">Smalltalk&nbsp;VW</a>
+        <td>82.84
+        <td>330,808
+        <td>722
+        <td>82.75
+        <td class="message">100%&nbsp;0%&nbsp;1%&nbsp;0%
+      <tr>
+        <td><a href="./program.php?test=binarytrees&amp;lang=java&amp;id=6">Java</a>
+        <td>5.75
+        <td>354,364
+        <td>583
+        <td>8.17
+        <td class="message">41%&nbsp;48%&nbsp;37%&nbsp;19%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=spectralnorm">spectral-norm</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=spectralnorm&amp;lang=vw&amp;id=2">Smalltalk&nbsp;VW</a>
+        <td>91.07
+        <td>55,628
+        <td>438
+        <td>91.03
+        <td class="message">1%&nbsp;0%&nbsp;1%&nbsp;100%
+      <tr>
+        <td><a href="./program.php?test=spectralnorm&amp;lang=java&amp;id=2">Java</a>
+        <td>4.28
+        <td>32,696
+        <td>950
+        <td>16.53
+        <td class="message">96%&nbsp;96%&nbsp;96%&nbsp;99%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fasta">fasta</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fasta&amp;lang=vw&amp;id=1">Smalltalk&nbsp;VW</a>
+        <td>47.88
+        <td>54,228
+        <td>1315
+        <td>47.86
+        <td class="message">0%&nbsp;1%&nbsp;100%&nbsp;0%
+      <tr>
+        <td><a href="./program.php?test=fasta&amp;lang=java&amp;id=5">Java</a>
+        <td>2.19
+        <td>39,368
+        <td>2457
+        <td>5.60
+        <td class="message">58%&nbsp;72%&nbsp;66%&nbsp;61%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=revcomp">reverse-complement</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=revcomp&amp;lang=vw&amp;id=1">Smalltalk&nbsp;VW</a>
+        <td>30.70
+        <td>406,024
+        <td>754
+        <td>30.68
+        <td class="message">100%&nbsp;0%&nbsp;1%&nbsp;1%
+      <tr>
+        <td><a href="./program.php?test=revcomp&amp;lang=java&amp;id=3">Java</a>
+        <td>1.27
+        <td>315,296
+        <td>1661
+        <td>2.68
+        <td class="message">41%&nbsp;48%&nbsp;34%&nbsp;92%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=knucleotide">k-nucleotide</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=knucleotide&amp;lang=vw&amp;id=5">Smalltalk&nbsp;VW</a>
+        <td>314.12
+        <td>384,776
+        <td>1153
+        <td>313.74
+        <td class="message">75%&nbsp;24%&nbsp;0%&nbsp;2%
+      <tr>
+        <td><a href="./program.php?test=knucleotide&amp;lang=java&amp;id=7">Java</a>
+        <td>11.29
+        <td>1,118,288
+        <td>1844
+        <td>38.66
+        <td class="message">83%&nbsp;97%&nbsp;82%&nbsp;82%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=fannkuchredux">fannkuch-redux</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=fannkuchredux&amp;lang=vw&amp;id=1">Smalltalk&nbsp;VW</a>
+        <td>710.39
+        <td>53,616
+        <td>838
+        <td>710.20
+        <td class="message">2%&nbsp;64%&nbsp;1%&nbsp;35%
+      <tr>
+        <td><a href="./program.php?test=fannkuchredux&amp;lang=java&amp;id=1">Java</a>
+        <td>17.41
+        <td>33,032
+        <td>1282
+        <td>68.64
+        <td class="message">98%&nbsp;98%&nbsp;99%&nbsp;99%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=regexdna">regex-dna</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=regexdna&amp;lang=vw&amp;id=1">Smalltalk&nbsp;VW</a>
+        <td>650.88
+        <td>375,164
+        <td>584
+        <td>650.62
+        <td class="message">1%&nbsp;96%&nbsp;1%&nbsp;4%
+      <tr>
+        <td><a href="./program.php?test=regexdna&amp;lang=java&amp;id=5">Java</a>
+        <td>8.24
+        <td>761,724
+        <td>929
+        <td>24.70
+        <td class="message">68%&nbsp;73%&nbsp;77%&nbsp;83%
+      <tbody>
+      <tr>
+        <th colspan="3"><a href="./performance.php?test=mandelbrot">mandelbrot</a>
+        <th colspan="3">
+      <tr>
+        <th>
+        <th>secs
+        <th>KB
+        <th>gz
+        <th>cpu
+        <th>cpu load
+      <tr>
+        <td><a href="./program.php?test=mandelbrot&amp;lang=vw&amp;id=2">Smalltalk&nbsp;VW</a>
+        <td>580.98
+        <td>53,628
+        <td>467
+        <td>580.81
+        <td class="message">72%&nbsp;1%&nbsp;11%&nbsp;18%
+      <tr>
+        <td><a href="./program.php?test=mandelbrot&amp;lang=java&amp;id=2">Java</a>
+        <td>6.27
+        <td>88,992
+        <td>796
+        <td>24.24
+        <td class="message">96%&nbsp;97%&nbsp;97%&nbsp;98%
+      <tbody>
+      <tr>
+        <td>Smalltalk&nbsp;VW
+        <td colspan="5" class="message"><p>VisualWorks&#174; Personal Use Edition Release 8.1 of July 24, 2015
+
+      <tr>
+        <td>Java
+        <td colspan="5" class="message"><p>java version "1.8.0_45"<br/>
+Java(TM) SE Runtime Environment (build 1.8.0_45-b14)<br/>
+Java HotSpot(TM) 64-Bit Server VM (build 25.45-b02, mixed mode)
+
+      </table>
+      <nav>
+        <ul>
+          <li class="best">vs Java
+          <li><a href="./compare.php?lang=vw&amp;lang2=python3">vs Python</a>
+        </ul>
+      </nav>
+  </section>
+</article>
+<script>
+window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+ga('create', 'UA-37137205-1', 'auto');
+ga('send', 'pageview');
+</script>
+<script async src='//www.google-analytics.com/analytics.js'></script>
+

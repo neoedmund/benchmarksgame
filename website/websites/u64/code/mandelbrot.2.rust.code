@@ -1,0 +1,158 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Contributed by Rodrigo Corsi (Rust 1.0.0)</span>
+
+<span class="kwa">use</span> std::io;
+<span class="kwa">use</span> std::thread;
+<span class="kwa">use</span> std::sync::Arc;
+
+<span class="kwa">const</span> LIMIT: f64 = <span class="num">4</span>f64; <span class="slc">//2*2</span>
+<span class="kwa">const</span> ITER : u16 = <span class="num">50</span>; <span class="slc">// Benchmark parameter</span>
+
+<span class="kwa">struct</span> Mandelbrot {
+    bytes_per_row: usize,
+    initial_r: Vec&lt;f64&gt;,
+    initial_i: Vec&lt;f64&gt;
+}
+
+<span class="kwa">impl</span> Mandelbrot {
+    <span class="kwa">fn</span> new(size: usize) -&gt; Mandelbrot {
+        <span class="kwa">let mut</span> initial_r = Vec::with_capacity(size);
+        <span class="kwa">let mut</span> initial_i = Vec::with_capacity(size);
+
+        <span class="kwa">let</span> inv = <span class="num">2.0</span>f64 / size <span class="kwa">as</span> f64;
+
+        <span class="kwa">for</span> xy <span class="kwa">in</span> <span class="num">0</span>..size {
+            <span class="kwa">let</span> i = inv * xy <span class="kwa">as</span> f64;
+            initial_r.push(i-<span class="num">1.5</span>f64);
+            initial_i.push(i-<span class="num">1.0</span>f64);
+        }
+
+        Mandelbrot {
+            bytes_per_row: (size &gt;&gt; <span class="num">3</span>),
+            initial_r: initial_r,
+            initial_i: initial_i
+        }
+    }
+
+    <span class="slc">// This func is responsible for rendering a chunk of pixels</span>
+    <span class="kwa">fn</span> render_chunk(&amp;<span class="kwa">self</span>, start: usize, end: usize) -&gt; Vec&lt;u8&gt; {
+        <span class="kwa">let mut</span> xb: usize;
+        <span class="kwa">let mut</span> res: u8;
+        <span class="kwa">let mut</span> b: u8;
+        <span class="kwa">let mut</span> zr1: f64;
+        <span class="kwa">let mut</span> zr2: f64;
+        <span class="kwa">let mut</span> zi1: f64;
+        <span class="kwa">let mut</span> zi2: f64;
+        <span class="kwa">let mut</span> tr1: f64;
+        <span class="kwa">let mut</span> tr2: f64;
+        <span class="kwa">let mut</span> ti1: f64;
+        <span class="kwa">let mut</span> ti2: f64;
+        <span class="kwa">let mut</span> cr1: f64;
+        <span class="kwa">let mut</span> cr2: f64;
+        <span class="kwa">let mut</span> ci: f64;
+        <span class="kwa">let</span> nums = vec![<span class="num">0</span>,<span class="num">2</span>,<span class="num">4</span>,<span class="num">6</span>];
+
+        <span class="kwa">let mut</span> field: Vec&lt;u8&gt; = Vec::with_capacity(end-start);
+
+        <span class="kwa">for</span> y0 <span class="kwa">in</span> start..end {
+            ci = <span class="kwa">self</span>.initial_i[y0];
+
+            <span class="kwa">for</span> x <span class="kwa">in</span> <span class="num">0</span>..<span class="kwa">self</span>.bytes_per_row {
+                res=<span class="num">0</span>;
+
+                <span class="kwa">for</span> i <span class="kwa">in</span> &amp;nums {
+                    xb = x&lt;&lt;<span class="num">3</span>;
+                    cr1=<span class="kwa">self</span>.initial_r[xb+i];
+                    cr2=<span class="kwa">self</span>.initial_r[xb+i+<span class="num">1</span>];
+
+                    zr1=cr1;
+                    zi1=ci;
+
+                    zr2=cr2;
+                    zi2=ci;
+
+                    b = <span class="num">0</span>;
+
+                    <span class="kwa">for</span> _ <span class="kwa">in</span> <span class="num">0</span>..ITER{
+                        tr1 = zr1*zr1;
+                        ti1 = zi1*zi1;
+                        zi1 = <span class="num">2</span>f64*zr1*zi1+ci;
+                        zr1 = tr1-ti1+cr1;
+
+                        <span class="kwa">if</span> tr1+ti1&gt;LIMIT {
+                            b|=<span class="num">2</span>;
+                            <span class="kwa">if</span> b==<span class="num">3</span> {
+                                <span class="kwa">break</span>;
+                            }
+                        }
+
+                        tr2 = zr2*zr2;
+                        ti2 = zi2*zi2;
+                        zi2 = <span class="num">2</span>f64*zr2*zi2+ci;
+                        zr2 = tr2-ti2+cr2; 
+
+                        <span class="kwa">if</span> tr2+ti2&gt;LIMIT {
+                            b|=<span class="num">1</span>;
+                            <span class="kwa">if</span> b==<span class="num">3</span> {
+                                <span class="kwa">break</span>;
+                            }
+                        }
+                    }
+                    res= (res&lt;&lt;<span class="num">2</span>) | b;
+                }
+                field.push(res^-<span class="num">1</span>);
+            }
+        }
+        <span class="kwa">return</span> field;
+    }
+}
+
+<span class="kwa">fn</span> run&lt;W: io::Write&gt;(writer: &amp;<span class="kwa">mut</span> W) -&gt; io::Result&lt;()&gt; {
+    <span class="kwa">let</span> size = std::env::args_os().nth(<span class="num">1</span>)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">200</span>);
+
+    <span class="kwa">let</span> workers = <span class="num">16</span>; <span class="slc">//std::os::num_cpus()*4;</span>
+
+    <span class="kwa">let</span> mandelbrot = Mandelbrot::new(size);
+
+    try!(writeln!(writer, <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">{} {}&quot;</span>, size, size));
+
+    <span class="kwa">let</span> arc_mandel = Arc::new(mandelbrot);
+    <span class="kwa">let</span> chunk = size / workers;
+    
+    <span class="kwa">let</span> last_chunk = <span class="kwa">if</span> size % workers != <span class="num">0</span> {
+        chunk + size % workers
+    } <span class="kwa">else</span> {
+        chunk
+    };
+
+    <span class="kwa">let</span> messages = (<span class="num">0</span>..workers).map(|w| {
+        <span class="kwa">let</span> mclone = arc_mandel.clone();
+        thread::spawn(<span class="kwa">move</span> || {
+            <span class="kwa">let</span> _chunk = <span class="kwa">if</span> w+<span class="num">1</span> == workers {
+                last_chunk
+            }<span class="kwa">else</span>{
+                chunk
+            };
+
+            <span class="kwa">let</span> start = w * chunk;
+            <span class="kwa">let</span> end = start+_chunk;
+            <span class="kwa">return</span> mclone.render_chunk(start, end);
+
+        })
+    }).collect::&lt;Vec&lt;_&gt;&gt;();
+
+    <span class="kwa">for</span> message <span class="kwa">in</span> messages.into_iter() {
+        try!(writer.write_all(&amp;message.join().unwrap()));
+    }
+
+    writer.flush()
+}
+
+<span class="kwa">fn</span> main() {
+    run(&amp;<span class="kwa">mut</span> io::stdout()).unwrap()
+}

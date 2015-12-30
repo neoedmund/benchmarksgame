@@ -1,0 +1,22 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- contributed by Bryan O'Sullivan</span>
+<span class="slc">-- modified by Eugene Kirpichov: pidgits only generates</span>
+<span class="slc">-- the result string instead of printing it. For some</span>
+<span class="slc">-- reason, this gives a speedup.</span>
+
+<span class="kwd">import</span> System.Environment
+
+pidgits n = <span class="num">0</span> % (<span class="num">0</span> # (<span class="num">1</span>,<span class="num">0</span>,<span class="num">1</span>)) <span class="kwd">where</span>
+ i%ds
+  | i &gt;= n = []
+  | <span class="kwa">True</span> = (<span class="kwc">concat</span> h ++ <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span> ++ <span class="kwc">show</span> j ++ <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>) ++ j%t
+  <span class="kwd">where</span> k = i+<span class="num">10</span>; j = <span class="kwc">min</span> n k
+        (h,t) | k &gt; n = (<span class="kwc">take</span> (n`<span class="kwc">mod</span>`<span class="num">10</span>) ds ++ <span class="kwc">replicate</span> (k-n) <span class="str">&quot; &quot;</span>,[])
+              | <span class="kwa">True</span> = <span class="kwc">splitAt</span> <span class="num">10</span> ds
+ j # s | n&gt;a || r+n&gt;=d = k # t
+     | <span class="kwa">True</span> = <span class="kwc">show</span> q : k # (n*<span class="num">10</span>,(a-(q*d))*<span class="num">10</span>,d)
+  <span class="kwd">where</span> k = j+<span class="num">1</span>; t&#64;(n,a,d)=k&amp;s; (q,r)=(n*<span class="num">3</span>+a)`<span class="kwc">divMod</span>`d
+ j&amp;(n,a,d) = (n*j,(a+n*<span class="num">2</span>)*y,d*y) <span class="kwd">where</span> y=(j*<span class="num">2</span>+<span class="num">1</span>)
+
+main = <span class="kwc">putStr</span>.pidgits.<span class="kwc">read</span>.<span class="kwc">head</span> =&lt;&lt; <span class="kwc">getArgs</span>

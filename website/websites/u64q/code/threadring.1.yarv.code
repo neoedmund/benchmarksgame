@@ -1,0 +1,60 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org</span>
+<span class="slc"># contributed by Klaus Friedel</span>
+<span class="slc">#</span>
+
+<span class="slc">#require &quot;thread&quot;</span>
+
+THREAD_COUNT = <span class="num">503</span>
+
+<span class="kwa">class</span> Receiver
+  <span class="kwb">&#64;next</span>
+  <span class="kwb">&#64;mailbox</span>
+
+  <span class="kwa">def</span> <span class="kwd">initialize</span>(name<span class="opt">)</span>
+    <span class="kwb">&#64;name</span> = name
+    <span class="kwb">&#64;mailbox</span> = Queue.new
+  <span class="kwa">end</span>
+
+  <span class="kwa">def next</span>=(n<span class="opt">)</span>
+    <span class="kwb">&#64;next</span> = n
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> <span class="kwd">put</span>(msg<span class="opt">)</span>
+    <span class="kwb">&#64;mailbox</span>.<span class="kwd">push</span>(msg<span class="opt">)</span>
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> messageloop
+    <span class="kwa">while true</span>
+      hopsRemaining = <span class="kwb">&#64;mailbox</span>.pop
+      <span class="kwa">if</span>(hopsRemaining == <span class="num">0</span><span class="opt">)</span>
+        print <span class="kwb">&#64;name</span>, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>
+        <span class="kwd">exit</span>(<span class="num">0</span><span class="opt">)</span>
+      <span class="kwa">end</span>
+      <span class="kwb">&#64;next</span>.<span class="kwd">put</span>(hopsRemaining - <span class="num">1</span><span class="opt">)</span>
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="slc">##########</span>
+<span class="slc">#  Main  #</span>
+<span class="slc">##########</span>
+receivers = []
+<span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..THREAD_COUNT-1
+  receivers[i] = Receiver.<span class="kwd">new</span>(i+<span class="num">1</span><span class="opt">)</span>
+  <span class="kwa">if</span>(i &gt; <span class="num">0</span><span class="opt">)</span>
+    receivers[i-1].<span class="kwa">next</span> = receivers[i]
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+<span class="slc">#close the ring</span>
+receivers[THREAD_COUNT-1].<span class="kwa">next</span> = receivers[<span class="num">0</span>]
+
+<span class="slc"># start the threads</span>
+<span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..THREAD_COUNT-1
+  Thread.<span class="kwd">start</span>(i<span class="opt">)</span>{|k| receivers[k].messageloop}
+<span class="kwa">end</span>
+
+receivers[<span class="num">0</span>].<span class="kwd">put</span>(<span class="kwc">ARGV</span>[<span class="num">0</span>].to_i<span class="opt">)</span>
+
+sleep
+

@@ -1,0 +1,43 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="kwc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by Jesse Millikan</span>
+<span class="slc">// Base on the Ruby version by jose fco. gonzalez</span>
+
+<span class="kwa">var</span> l, input = <span class="str">&quot;&quot;</span>, ilen, clen, 
+ seqs = [
+  <span class="kwc">/agggtaaa|tttaccct/ig</span>,
+  <span class="kwc">/[cgt]gggtaaa|tttaccc[acg]/ig</span>,
+  <span class="kwc">/a[act]ggtaaa|tttacc[agt]t/ig</span>,
+  <span class="kwc">/ag[act]gtaaa|tttac[agt]ct/ig</span>,
+  <span class="kwc">/agg[act]taaa|ttta[agt]cct/ig</span>,
+  <span class="kwc">/aggg[acg]aaa|ttt[cgt]ccct/ig</span>,
+  <span class="kwc">/agggt[cgt]aa|tt[acg]accct/ig</span>,
+  <span class="kwc">/agggta[cgt]a|t[acg]taccct/ig</span>,
+  <span class="kwc">/agggtaa[cgt]|[acg]ttaccct/ig</span>],
+ subs = { 
+  B: <span class="str">'(c|g|t)'</span>, D: <span class="str">'(a|g|t)'</span>, H: <span class="str">'(a|c|t)'</span>, K: <span class="str">'(g|t)'</span>, 
+  M: <span class="str">'(a|c)'</span>, N: <span class="str">'(a|c|g|t)'</span>, R: <span class="str">'(a|g)'</span>, S: <span class="str">'(c|t)'</span>, 
+  V: <span class="str">'(a|c|g)'</span>, W: <span class="str">'(a|t)'</span>, Y: <span class="str">'(c|t)'</span> }
+ 
+<span class="slc">// readline strips the newline...</span>
+<span class="kwa">while</span>(l = <span class="kwd">readline</span>()) input += l + <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>
+ilen = input.length
+
+<span class="slc">// There is no in-place substitution</span>
+input = input.<span class="kwd">replace</span>(<span class="kwc">/&gt;.*\n|\n/g</span>,<span class="str">&quot;&quot;</span>)
+clen = input.length
+
+<span class="kwa">for</span>(i <span class="kwa">in</span> seqs)
+ <span class="kwd">print</span>(seqs[i].source, (input.<span class="kwd">match</span>(seqs[i]) || []).length)
+ <span class="slc">// match returns null if no matches, so replace with empty</span>
+
+<span class="kwa">for</span>(k <span class="kwa">in</span> subs)
+ input = input.<span class="kwd">replace</span>(k, subs[k], <span class="str">&quot;g&quot;</span>)
+ <span class="slc">// search string, replacement string, flags</span>
+
+<span class="kwd">print</span>()
+<span class="kwd">print</span>(ilen)
+<span class="kwd">print</span>(clen)
+<span class="kwd">print</span>(input.length)
+

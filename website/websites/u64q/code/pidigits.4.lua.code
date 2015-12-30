@@ -1,0 +1,136 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- Contributed by Wim Couwenberg</span>
+
+
+<span class="slc">-- This is a pure lua implementation of the spigot algorithm for calculating</span>
+<span class="slc">-- the digits of pi.  It combines the production step and the calculation of</span>
+<span class="slc">-- the image of the interval [3, 4] into a single computation.  This is based</span>
+<span class="slc">-- on the fact that for any integer n &gt;= 1 the following equation between</span>
+<span class="slc">-- matrix products holds:</span>
+<span class="slc">--</span>
+<span class="slc">--              [ n  4*n + 2][4  3]   [4  3][2*n - 1  n - 1]</span>
+<span class="slc">--              [ 0  2*n + 1][1  1] = [1  1][   2     n + 2]</span>
+<span class="slc">--</span>
+<span class="slc">-- 1 September 2008</span>
+
+
+<span class="slc">-- the requested number of digits</span>
+<span class="kwa">local</span> N = <span class="kwb">tonumber</span>(...)
+
+<span class="slc">-- Large numbers are expanded in base 2^exp.  Assumption: arithmetic in the Lua</span>
+<span class="slc">-- interpreter is based on IEEE doubles and we don't need more than 4*N</span>
+<span class="slc">-- productions to obtain the first N digits of pi.</span>
+<span class="kwa">local</span> <span class="kwb">exp</span> = <span class="num">50</span> - math.<span class="kwb">ceil</span>(math.<span class="kwb">log</span>(N)/math.<span class="kwb">log</span>(<span class="num">2</span>))
+<span class="kwa">local</span> base = <span class="num">2</span>^<span class="kwb">exp</span>
+
+<span class="slc">-- hardwiring the base in the large number computations (instead of using it as</span>
+<span class="slc">-- an upvalue) saves quite some time!  Therefore the core algorithms are</span>
+<span class="slc">-- compiled dynamically for the base that is computed above.  (Idea courtesy of</span>
+<span class="slc">-- Mike Pall.)</span>
+<span class="kwa">local</span> algo = <span class="str">[[</span>
+<span class="str">local function produce(n1, n2, d, n)</span>
+<span class="str">    local c1, c2, c3 = 0, 0, 0</span>
+<span class="str">    local f = 2*n + 1</span>
+<span class="str">    local m11, m12 = 2*n - 1, n - 1</span>
+<span class="str">    local      m22 =          n + 2</span>
+<span class="str">    for i = 1, #n1 do</span>
+<span class="str">        local n1i, n2i = n1[i], n2[i]</span>
+<span class="str">        local x = m11*n1i + 2*n2i + c1</span>
+<span class="str">        if x &lt; base then</span>
+<span class="str">            n1[i], c1 = x, 0</span>
+<span class="str">        else</span>
+<span class="str">            c1 = x%base</span>
+<span class="str">            n1[i], c1 = c1, (x - c1)/base</span>
+<span class="str">        end</span>
+<span class="str">        x = m12*n1i + m22*n2i + c2</span>
+<span class="str">        if x &lt; base then</span>
+<span class="str">            n2[i], c2 = x, 0</span>
+<span class="str">        else</span>
+<span class="str">            c2 = x%base</span>
+<span class="str">            n2[i], c2 = c2, (x - c2)/base</span>
+<span class="str">        end</span>
+<span class="str">        x = f*d[i] + c3</span>
+<span class="str">        if x &lt; base then</span>
+<span class="str">            d[i], c3 = x, 0</span>
+<span class="str">        else</span>
+<span class="str">            c3 = x%base</span>
+<span class="str">            d[i], c3 = c3, (x - c3)/base</span>
+<span class="str">        end</span>
+<span class="str">    end</span>
+<span class="str">    if c1 ~= 0 or c3 ~= 0 then</span>
+<span class="str">        local nn1 = #n1 + 1</span>
+<span class="str">        n1[nn1], n2[nn1], d[nn1] = c1, c2, c3</span>
+<span class="str">    end</span>
+<span class="str">end</span>
+<span class="str"></span>
+<span class="str">local function extract(n1, n2, d, n)</span>
+<span class="str">    local c1, c2 = 0, 0</span>
+<span class="str">    local f = -10*n</span>
+<span class="str">    for i = 1, #n1 do</span>
+<span class="str">        local fdi = f*d[i]</span>
+<span class="str">        local x = 10*n1[i] + fdi + c1</span>
+<span class="str">        if x &lt; base and x &gt;= 0 then</span>
+<span class="str">            n1[i], c1 = x, 0</span>
+<span class="str">        else</span>
+<span class="str">            c1 = x%base</span>
+<span class="str">            n1[i], c1 = c1, (x - c1)/base</span>
+<span class="str">        end</span>
+<span class="str">        x = 10*n2[i] + fdi + c2</span>
+<span class="str">        if x &lt; base and x &gt;= 0 then</span>
+<span class="str">            n2[i], c2 = x, 0</span>
+<span class="str">        else</span>
+<span class="str">            c2 = x%base</span>
+<span class="str">            n2[i], c2 = c2, (x - c2)/base</span>
+<span class="str">        end</span>
+<span class="str">    end</span>
+<span class="str">    if c1 ~= 0 then</span>
+<span class="str">        local nn = #n1 + 1</span>
+<span class="str">        n1[nn], n2[nn], d[nn] = c1, c2, 0</span>
+<span class="str">    end</span>
+<span class="str">end</span>
+<span class="str"></span>
+<span class="str">return produce, extract</span>
+<span class="str">]]</span>
+
+<span class="kwa">local</span> produce, extract = <span class="kwd">loadstring</span>(<span class="kwb">string</span>.<span class="kwb">gsub</span>(algo, <span class="str">&quot;base&quot;</span>, <span class="kwb">tostring</span>(base)))()
+
+<span class="kwa">local function</span> <span class="kwd">digit</span>(n1, n2, d)
+    <span class="kwa">local</span> nn = #n1
+    <span class="kwa">local</span> dnn = d[nn]
+    <span class="kwa">if</span> dnn ~= <span class="num">0</span> <span class="kwa">then</span>
+        <span class="kwa">local</span> n1nn, n2nn = n1[nn], n2[nn]
+        <span class="kwa">local</span> r1, r2 = n1nn%dnn, n2nn%dnn
+        <span class="kwa">local</span> p1, p2 = (n1nn - r1)/dnn, (n2nn - r2)/dnn
+        <span class="kwa">if</span> p1 == p2 <span class="kwa">and</span> p1 &lt;= r1 <span class="kwa">and</span> p2 &lt;= r2 <span class="kwa">then return</span> p1 <span class="kwa">end</span>
+    <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="slc">-- first approximants are 4/1 and 3/1</span>
+<span class="slc">-- these are expressed in large numbers n1/d, n2/d</span>
+<span class="kwa">local</span> n1 = {<span class="num">4</span>}
+<span class="kwa">local</span> n2 = {<span class="num">3</span>}
+<span class="kwa">local</span> d  = {<span class="num">1</span>}
+
+<span class="slc">-- next production step index </span>
+<span class="kwa">local</span> n = <span class="num">1</span>
+
+<span class="slc">-- here goes...</span>
+<span class="kwa">local</span> <span class="kwb">write</span> = io.<span class="kwb">write</span>
+<span class="kwa">local</span> digits = <span class="num">0</span>
+<span class="kwa">while</span> digits &lt; N <span class="kwa">do</span>
+    <span class="kwa">local</span> g = <span class="kwd">digit</span>(n1, n2, d)
+    <span class="kwa">if</span> g <span class="kwa">then</span>
+        <span class="kwb">write</span>(g)
+        <span class="kwd">extract</span>(n1, n2, d, g)
+        digits = digits + <span class="num">1</span>
+        <span class="kwa">if</span> digits%<span class="num">10</span> == <span class="num">0</span> <span class="kwa">then</span> <span class="kwb">write</span>(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>, digits, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>) <span class="kwa">end</span>
+    <span class="kwa">else</span>
+        <span class="kwd">produce</span>(n1, n2, d, n)
+        n = n + <span class="num">1</span>
+    <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">if</span> N%<span class="num">10</span> ~= <span class="num">0</span> <span class="kwa">then</span>
+    <span class="kwb">write</span>(<span class="kwb">string</span>.<span class="kwd">rep</span>(<span class="str">&quot; &quot;</span>, <span class="num">10</span> - N%<span class="num">10</span>), <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>, N, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)
+<span class="kwa">end</span>

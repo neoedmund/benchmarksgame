@@ -1,0 +1,140 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Mr Ledrug</span>
+<span class="com">*/</span>
+
+<span class="ppc">#define _GNU_SOURCE</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+<span class="ppc">#include &lt;unistd.h&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;stdint.h&gt;</span>
+
+<span class="ppc">#define MAX_ITER 50</span>
+<span class="kwc">typedef</span> <span class="kwb">uint8_t</span> byte;
+
+<span class="kwb">size_t</span> w, h, row_bytes;
+<span class="kwb">int</span> ncpus;
+byte *buf;
+
+<span class="kwb">double</span> xmin = -<span class="num">1.5</span>, xmax = <span class="num">.5</span>, ymin = -<span class="num">1</span>, ymax = <span class="num">1</span>;
+<span class="kwb">double</span> dx, dy;
+
+<span class="kwb">void</span> <span class="kwd">calc_row</span>(<span class="kwb">size_t</span> row) {
+   byte *pos = buf + row * row_bytes;
+
+   <span class="kwb">double</span> cx, cy = ymin + row * dy;
+
+   byte mask = <span class="num">1</span> &lt;&lt; <span class="num">7</span>;
+   <span class="kwb">size_t</span> i, row_bits = row_bytes * <span class="num">8</span>;
+
+   <span class="kwb">int</span> bound = <span class="num">0</span>;
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; row_bits; i++) {
+      cx = xmin + i * dx;
+      <span class="kwb">double</span> zx = cx, zy = cy;
+
+      <span class="kwb">int</span> iter;
+      <span class="kwa">if</span> (bound) {
+         <span class="kwb">double</span> p = cx - <span class="num">1</span>;
+         <span class="kwa">if</span> (cy * cy + p * p &lt; <span class="num">1</span>./<span class="num">16</span>)
+            <span class="kwa">goto</span> skip;
+
+         p = cy * cy + (cx - <span class="num">0.25</span>) * (cx - <span class="num">0.25</span>);
+         <span class="kwa">if</span> ((p * (p + cx - <span class="num">0.25</span>)) * <span class="num">4</span> &lt; cy * cy)
+            <span class="kwa">goto</span> skip;
+
+         <span class="kwa">for</span> (iter = MAX_ITER - <span class="num">1</span>; iter--; ) {
+            <span class="kwb">double</span> x2 = zx * zx, y2 = zy * zy;
+            zy = cy + zx * zy * <span class="num">2</span>;
+            zx = cx + x2 - y2;
+         }
+         bound = (zx * zx + zy * zy) &lt;= <span class="num">4</span>;
+
+      } <span class="kwa">else</span> {
+         <span class="kwa">for</span> (iter = MAX_ITER; iter--; ) {
+            <span class="kwb">double</span> x2 = zx * zx, y2 = zy * zy;
+
+            <span class="kwa">if</span> (x2 + y2 &gt; <span class="num">4</span>) <span class="kwa">goto</span> skip;
+
+            zy = cy + zx * zy * <span class="num">2</span>;
+            zx = cx + x2 - y2;
+         }
+         bound = <span class="num">1</span>;
+      }
+
+skip:
+      <span class="kwa">if</span> (bound) *pos |= mask;
+      mask &gt;&gt;= <span class="num">1</span>;
+      <span class="kwa">if</span> (!mask) {
+         mask = <span class="num">1</span> &lt;&lt; <span class="num">7</span>;
+         pos++;
+      }
+   }
+}
+
+<span class="kwb">size_t</span> next_row;
+<span class="kwb">void</span> *<span class="kwd">thread_entry</span>(<span class="kwb">void</span> *dummy) {
+   <span class="kwa">while</span> (<span class="num">1</span>) {
+      <span class="kwb">size_t</span> r = next_row;
+      <span class="kwa">if</span> (!<span class="kwd">__sync_bool_compare_and_swap</span>(&amp;next_row, r, r + <span class="num">1</span>)) {
+         <span class="kwc">volatile</span> <span class="kwb">int</span> i = <span class="num">3000</span>;
+         <span class="kwa">while</span> (i--);
+         <span class="kwd">sched_yield</span>();
+         <span class="kwa">continue</span>;
+      }
+
+      <span class="kwa">if</span> (r &gt;= h) <span class="kwa">return</span> <span class="num">0</span>;
+      <span class="kwd">calc_row</span>(r);
+   }
+}
+
+<span class="kwb">int</span> <span class="kwd">get_cpus</span>(<span class="kwb">void</span>) {
+   cpu_set_t ct;
+   <span class="kwd">sched_getaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(ct), &amp;ct);
+   <span class="kwb">int</span> i, cnt = <span class="num">0</span>;
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; <span class="num">16</span>; i++)
+      <span class="kwa">if</span> (<span class="kwd">CPU_ISSET</span>(i, &amp;ct))
+         cnt++;
+   <span class="kwa">return</span> cnt;
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> artc, <span class="kwb">char</span> **argv) {
+   ncpus = <span class="kwd">get_cpus</span>();
+
+   w = <span class="kwd">atoi</span>(argv[<span class="num">1</span>]);
+   w = (w + <span class="num">7</span>) / <span class="num">8</span> * <span class="num">8</span>;
+   row_bytes = w / <span class="num">8</span>;
+
+   dx = (xmax - xmin) / w;
+   dy = (ymax - ymin) / w;
+
+   h = w / <span class="num">2</span> + <span class="num">1</span>;
+
+   <span class="kwb">size_t</span> n_bytes = h * row_bytes;
+   buf = <span class="kwd">calloc</span>(<span class="num">1</span>, n_bytes);
+
+   <span class="kwb">int</span> i;
+   pthread_t tid[<span class="num">16</span>];
+
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; ncpus; i++)
+      <span class="kwd">pthread_create</span>(tid + i, <span class="num">0</span>, thread_entry, <span class="num">0</span>);
+
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; ncpus; i++)
+      <span class="kwd">pthread_join</span>(tid[i], <span class="num">0</span>);
+
+   <span class="kwb">char</span> header[<span class="num">100</span>];
+   <span class="kwd">sprintf</span>(header, <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">%d %d</span><span class="esc">\n</span><span class="str">&quot;</span>, (<span class="kwb">int</span>)w, (<span class="kwb">int</span>)w);
+
+   <span class="kwb">int</span> fd = <span class="kwd">fileno</span>(stdout);
+   <span class="kwd">write</span>(fd, header, <span class="kwd">strlen</span>(header));
+   <span class="kwd">write</span>(fd, buf, n_bytes);
+
+   h--;
+   <span class="kwa">while</span> (h-- &gt; <span class="num">1</span>)
+      <span class="kwd">write</span>(fd, buf + h * row_bytes, row_bytes);
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}

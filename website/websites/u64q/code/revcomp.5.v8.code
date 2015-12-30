@@ -1,0 +1,47 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Luka Popijac</span>
+<span class="com">*/</span>
+
+<span class="kwa">var</span> comp = <span class="kwa">new</span> <span class="kwd">Uint8Array</span>([
+	,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+	<span class="num">84</span>,<span class="num">86</span>,<span class="num">71</span>,<span class="num">72</span>,,,<span class="num">67</span>,<span class="num">68</span>,,,<span class="num">77</span>,,<span class="num">75</span>,<span class="num">78</span>,,,,<span class="num">89</span>,<span class="num">83</span>,<span class="num">65</span>,<span class="num">65</span>,<span class="num">66</span>,<span class="num">87</span>,,<span class="num">82</span>,,,,,,,,
+	<span class="num">84</span>,<span class="num">86</span>,<span class="num">71</span>,<span class="num">72</span>,,,<span class="num">67</span>,<span class="num">68</span>,,,<span class="num">77</span>,,<span class="num">75</span>,<span class="num">78</span>,,,,<span class="num">89</span>,<span class="num">83</span>,<span class="num">65</span>,<span class="num">65</span>,<span class="num">66</span>,<span class="num">87</span>,,<span class="num">82</span>
+]);
+
+<span class="kwa">var</span> fromCharCode = String.fromCharCode;
+
+<span class="kwa">var</span> display = <span class="kwa">function</span>(node, len) {
+	<span class="kwd">write</span>(fromCharCode.<span class="kwd">apply</span>(<span class="kwa">null</span>, node.val));
+	<span class="kwa">while</span>(node = node.next) {
+		<span class="kwa">var</span> v = node.val;
+		<span class="kwd">print</span>(fromCharCode.<span class="kwd">apply</span>(<span class="kwa">null</span>, v.<span class="kwd">subarray</span>(<span class="num">0</span>,<span class="num">60</span>-len)));
+		<span class="kwd">write</span>(fromCharCode.<span class="kwd">apply</span>(<span class="kwa">null</span>, v.<span class="kwd">subarray</span>(<span class="num">60</span>-len,<span class="num">60</span>)));
+	}
+	<span class="kwd">print</span>();
+}
+
+<span class="kwa">function</span> <span class="kwd">List</span>(len, next) {
+	<span class="kwa">this</span>.val = <span class="kwa">new</span> <span class="kwd">Uint8Array</span>(len);
+	<span class="kwa">this</span>.next = next;
+}
+
+<span class="kwa">var</span> node = <span class="kwa">null</span>;
+<span class="kwa">var</span> len, line;
+<span class="kwa">while</span>(line = <span class="kwd">readline</span>()) {
+	<span class="kwa">if</span>(line[<span class="num">0</span>] !== <span class="str">'&gt;'</span>) {
+		len = line.length;
+		node = <span class="kwa">new</span> <span class="kwd">List</span>(len, node);
+		<span class="kwa">var</span> v = node.val;
+		<span class="kwa">for</span>(<span class="kwa">var</span> i=len; i--;) {
+			v[i] = comp[line.<span class="kwd">charCodeAt</span>(len-i-<span class="num">1</span>)];
+		}
+	} <span class="kwa">else</span> {
+		<span class="kwa">if</span>(node) <span class="kwd">display</span>(node, len);
+		node = <span class="kwa">null</span>;
+		<span class="kwd">print</span>(line);
+	}
+}
+
+<span class="kwd">display</span>(node, len);

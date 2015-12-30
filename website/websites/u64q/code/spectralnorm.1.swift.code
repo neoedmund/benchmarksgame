@@ -1,0 +1,59 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Isaac Gouy </span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> CoreFoundation
+
+
+<span class="kwa">func</span> <span class="kwd">approximate</span>(n: <span class="kwb">Int</span>) -&gt; <span class="kwb">Double</span> {
+   <span class="kwa">var</span> u = <span class="kwb">Array</span>(count: n, repeatedValue: <span class="num">1.0</span>) 
+
+   <span class="kwa">var</span> v = <span class="kwb">Array</span>(count: n, repeatedValue: <span class="num">0.0</span>) 
+   <span class="kwa">for</span> _ <span class="kwa">in</span> <span class="num">1</span>..<span class="num">.10</span> {
+      <span class="kwd">multiplyAtAv</span>(n,u,&amp;v)
+      <span class="kwd">multiplyAtAv</span>(n,v,&amp;u)
+   }
+ 
+   <span class="kwa">var</span> vBv = <span class="num">0.0</span>, vv = <span class="num">0.0</span>
+   <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..&lt;n {
+      vBv += u[i]*v[i]
+      vv  += v[i]*v[i]
+   }
+
+   <span class="kwa">return</span> <span class="kwd">sqrt</span>(vBv/vv)
+}
+
+<span class="kwa">func</span> <span class="kwd">a</span>(i: <span class="kwb">Int</span>, _ j: <span class="kwb">Int</span>) -&gt; <span class="kwb">Double</span> {
+   <span class="kwa">let</span> ij = i+j
+   <span class="kwa">return</span> <span class="num">1.0</span> / <span class="kwb">Double</span>( ij*(ij+<span class="num">1</span>)/<span class="num">2</span> + i+<span class="num">1</span> ) 
+}
+
+<span class="kwa">func</span> <span class="kwd">multiplyAv</span>(n: <span class="kwb">Int</span>, _ v: [<span class="kwb">Double</span>], <span class="kwa">inout</span> _ av: [<span class="kwb">Double</span>]) {
+   <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..&lt;n {
+      av[i] = <span class="num">0.0</span>;
+      <span class="kwa">for</span> j <span class="kwa">in</span> <span class="num">0</span>..&lt;n {
+         av[i] += <span class="kwd">a</span>(i,j)*v[j] 
+      }
+   }
+}
+
+<span class="kwa">func</span> <span class="kwd">multiplyAtv</span>(n: <span class="kwb">Int</span>, _ v: [<span class="kwb">Double</span>], <span class="kwa">inout</span> _ atv: [<span class="kwb">Double</span>]) {
+   <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..&lt;n {
+      atv[i] = <span class="num">0</span>;
+      <span class="kwa">for</span> j <span class="kwa">in</span> <span class="num">0</span>..&lt;n {
+         atv[i] += <span class="kwd">a</span>(j,i)*v[j] 
+      }
+   }
+}
+
+<span class="kwa">func</span> <span class="kwd">multiplyAtAv</span>(n: <span class="kwb">Int</span>, _ v: [<span class="kwb">Double</span>], <span class="kwa">inout</span> _ atAv: [<span class="kwb">Double</span>]) {
+   <span class="kwa">var</span> u = <span class="kwb">Array</span>(count: n, repeatedValue: <span class="num">0.0</span>) 
+   <span class="kwd">multiplyAv</span>(n,v,&amp;u)
+   <span class="kwd">multiplyAtv</span>(n,u,&amp;atAv)
+}
+
+
+<span class="kwa">let</span> n: <span class="kwb">Int</span> = <span class="kwb">Int</span>(Process.arguments[<span class="num">1</span>])!
+<span class="kwd">print</span>( <span class="kwb">String</span>(format: <span class="str">&quot;%.9f&quot;</span>, <span class="kwd">approximate</span>(n)) )
+

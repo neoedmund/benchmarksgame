@@ -1,0 +1,57 @@
+<span class="com">/* The Computer Language Benchmarks game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Jos Hirth, transliterated from Jarkko Miettinen's Java program</span>
+<span class="com">*/</span>
+
+<span class="kwa">final</span> <span class="kwb">int</span> minDepth = <span class="num">4</span>;
+
+<span class="kwa">void</span> main(args){
+  <span class="kwb">int</span> n = args.length &gt; <span class="num">0</span> ? <span class="kwb">int</span>.parse(args[<span class="num">0</span>]) : <span class="num">0</span>;
+
+  <span class="kwb">int</span> maxDepth = (minDepth + <span class="num">2</span> &gt; n) ? minDepth + <span class="num">2</span> : n;
+  <span class="kwb">int</span> stretchDepth = maxDepth + <span class="num">1</span>;
+
+  <span class="kwb">int</span> check = (TreeNode.bottomUpTree(<span class="num">0</span>, stretchDepth)).itemCheck();
+  print(<span class="str">&quot;stretch tree of depth $stretchDepth</span><span class="esc">\t</span> <span class="str">check: $check&quot;</span>);
+
+  TreeNode longLivedTree = TreeNode.bottomUpTree(<span class="num">0</span>, maxDepth);
+
+  <span class="kwa">for</span> (<span class="kwb">int</span> depth = minDepth; depth &lt;= maxDepth; depth += <span class="num">2</span>){
+    <span class="kwb">int</span> iterations = <span class="num">1</span> &lt;&lt; (maxDepth - depth + minDepth);
+    check = <span class="num">0</span>;
+
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">1</span>; i &lt;= iterations; i++){
+      check += (TreeNode.bottomUpTree(i, depth)).itemCheck();
+      check += (TreeNode.bottomUpTree(-i, depth)).itemCheck();
+    }
+    print(<span class="str">&quot;${iterations * 2}</span><span class="esc">\t</span> <span class="str">trees of depth $depth</span><span class="esc">\t</span> <span class="str">check: $check&quot;</span>);
+  }
+  print(<span class="str">&quot;long lived tree of depth $maxDepth</span><span class="esc">\t</span> <span class="str">check: ${longLivedTree.itemCheck()}&quot;</span>);
+}
+
+
+<span class="kwa">class</span> TreeNode{
+  TreeNode left, right;
+  <span class="kwb">int</span> item;
+
+  TreeNode(<span class="kwa">this</span>.item, [<span class="kwa">this</span>.left, <span class="kwa">this</span>.right]);
+
+  <span class="kwa">static</span> TreeNode bottomUpTree(<span class="kwb">int</span> item, <span class="kwb">int</span> depth){
+    <span class="kwa">if</span> (depth &gt; <span class="num">0</span>){
+      <span class="kwa">return new</span> TreeNode(
+        item,
+        bottomUpTree(<span class="num">2</span> * item - <span class="num">1</span>, depth - <span class="num">1</span>),
+        bottomUpTree(<span class="num">2</span> * item, depth - <span class="num">1</span>)
+      );
+    }
+    <span class="kwa">return new</span> TreeNode(item);
+  }
+
+  <span class="kwb">int</span> itemCheck(){
+    <span class="kwa">if</span> (left == <span class="kwa">null</span>){
+      <span class="kwa">return</span> item;
+    }
+    <span class="kwa">return</span> item + left.itemCheck() - right.itemCheck();
+  }
+}

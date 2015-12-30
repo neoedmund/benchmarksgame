@@ -1,0 +1,19 @@
+
+Fri, 07 Aug 2015 18:33:54 GMT
+
+MAKE:
+/usr/local/src/rust-1.2.0-x86_64-unknown-linux-gnu/rustc/bin/rustc -C opt-level=3 -C target-cpu=core2 -C lto  spectralnorm.rs -o spectralnorm.rust_run
+spectralnorm.rs:7:1: 7:27 error: #[feature] may not be used on the stable release channel
+spectralnorm.rs:7 #![feature(os, core, env)]
+                  ^~~~~~~~~~~~~~~~~~~~~~~~~~
+error: aborting due to previous error
+/home/dunham/benchmarksgame/nanobench/makefiles/u64.programs.Makefile:617: recipe for target 'spectralnorm.rust_run' failed
+make: [spectralnorm.rust_run] Error 101 (ignored)
+rm spectralnorm.rs
+0.77s to complete and log all make actions
+
+COMMAND LINE:
+./spectralnorm.rust_run 500
+
+MAKE ERROR 
+

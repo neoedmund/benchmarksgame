@@ -1,0 +1,22 @@
+
+Sat, 10 Jan 2015 05:56:49 GMT
+
+MAKE:
+/usr/local/src/rust/bin/rustc -C opt-level=3 -C target-cpu=core2 -C lto spectralnorm.rs -o spectralnorm.rust-3.rust_run
+spectralnorm.rs:47:51: 47:52 error: obsolete syntax: `|uint| -> bool` closure type syntax
+spectralnorm.rs:47 fn mult(v: &[f64], out: &mut [f64], start: uint, a: |uint, uint| -> f64) {
+                                                                     ^
+note: use unboxed closures instead, no type annotation needed
+spectralnorm.rs:84:15: 84:19 error: obsolete syntax: `proc` expression
+spectralnorm.rs:84         spawn(proc() {
+                                 ^~~~
+note: use a `move ||` expression instead
+error: aborting due to 2 previous errors
+make: [spectralnorm.rust-3.rust_run] Error 101 (ignored)
+0.04s to complete and log all make actions
+
+COMMAND LINE:
+./spectralnorm.rust-3.rust_run 500
+
+MAKE ERROR 
+

@@ -1,0 +1,54 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by jose fco. gonzalez</span>
+<span class="slc"># optimized &amp; parallelized by Rick Branson</span>
+<span class="slc"># optimized for ruby2 by Aaron Tavistock</span>
+
+seq = <span class="kwc">STDIN</span>.readlines.join
+ilen = seq.size
+
+seq.gsub!(<span class="kwc">/&gt;.*\n|\n/</span>,<span class="str">&quot;&quot;</span><span class="opt">)</span>
+clen = seq.length
+
+MATCHERS = [
+  <span class="kwc">/agggtaaa|tttaccct/</span>,
+  <span class="kwc">/[cgt]gggtaaa|tttaccc[acg]/</span>,
+  <span class="kwc">/a[act]ggtaaa|tttacc[agt]t/</span>,
+  <span class="kwc">/ag[act]gtaaa|tttac[agt]ct/</span>,
+  <span class="kwc">/agg[act]taaa|ttta[agt]cct/</span>,
+  <span class="kwc">/aggg[acg]aaa|ttt[cgt]ccct/</span>,
+  <span class="kwc">/agggt[cgt]aa|tt[acg]accct/</span>,
+  <span class="kwc">/agggta[cgt]a|t[acg]taccct/</span>,
+  <span class="kwc">/agggtaa[cgt]|[acg]ttaccct/</span>
+]
+
+threads = MATCHERS.map <span class="kwa">do</span> |f|
+  Thread.new <span class="kwa">do</span>
+    Thread.current[<span class="kwc">:result</span>] = <span class="str">&quot;</span><span class="ipl">#{f.source}</span> <span class="str"></span><span class="ipl">#{seq.scan(f).size}</span><span class="str">&quot;</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+threads.each <span class="kwa">do</span> |t|
+  t.join
+<span class="kwa">end</span>
+
+match_results = threads.map <span class="kwa">do</span> |t|
+  t[<span class="kwc">:result</span>]
+<span class="kwa">end</span>
+
+{
+  <span class="str">'B'</span> =&gt; <span class="str">'(c|g|t)</span><span class="str">', </span>
+<span class="str">  '</span>D<span class="str">' =&gt; '</span>(a|g|t<span class="opt">)</span><span class="str">', </span>
+<span class="str">  '</span>H<span class="str">' =&gt; '</span>(a|c|t<span class="opt">)</span><span class="str">', </span>
+<span class="str">  '</span>K<span class="str">' =&gt; '</span>(g|t<span class="opt">)</span><span class="str">',</span>
+<span class="str">  '</span>M<span class="str">' =&gt; '</span>(a|c<span class="opt">)</span><span class="str">', </span>
+<span class="str">  '</span>N<span class="str">' =&gt; '</span>(a|c|g|t<span class="opt">)</span><span class="str">', </span>
+<span class="str">  '</span>R<span class="str">' =&gt; '</span>(a|g<span class="opt">)</span><span class="str">', </span>
+<span class="str">  '</span>S<span class="str">' =&gt; '</span>(c|t<span class="opt">)</span><span class="str">',</span>
+<span class="str">  '</span>V<span class="str">' =&gt; '</span>(a|c|g<span class="opt">)</span><span class="str">', </span>
+<span class="str">  '</span>W<span class="str">' =&gt; '</span>(a|t<span class="opt">)</span><span class="str">', </span>
+<span class="str">  '</span>Y<span class="str">' =&gt; '</span>(c|t<span class="opt">)</span><span class="str">'</span>
+<span class="str">}.each</span> <span class="ipl">{ |f,r| seq.gsub!(f,r) }</span>
+<span class="str"></span>
+<span class="str">puts &quot;</span><span class="ipl">#{match_results.join(&quot;\n&quot;)}</span><span class="str"></span><span class="esc">\n\n</span><span class="str"></span><span class="ipl">#{ilen}</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">#{clen}</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">#{seq.length}</span><span class="str">&quot;</span>

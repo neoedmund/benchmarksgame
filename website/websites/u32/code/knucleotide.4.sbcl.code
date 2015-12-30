@@ -1,0 +1,188 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;;   contributed by Alexey Voznyuk</span>
+<span class="slc">;;</span>
+
+(<span class="kwa">defpackage</span> #:k-nucleotide
+  (:use :cl))
+
+(<span class="kwa">in-package</span> :k-nucleotide)
+
+(<span class="kwa">defmacro</span> with-packed-sequences ((&amp;rest sequences) &amp;body body)
+  (<span class="kwa">loop</span> :for (<span class="kwa">bind</span> update length) :in sequences
+     :collect `(,bind <span class="num">0</span>) :into binds
+     :collect `(<span class="kwa">type</span> (<span class="kwa">integer</span> <span class="num">0</span> ,(<span class="kwa">1-</span> (<span class="kwa">expt</span> <span class="num">4</span> length))) ,bind) :into decls
+     :collect `(,update (<span class="kwa">char</span>) `(<span class="kwa">setf</span> ,',bind
+                                      (<span class="kwa">logior</span> (<span class="kwa">ash</span> ,',bind -<span class="num">2</span>)
+                                              (<span class="kwa">ash</span> (<span class="kwa">logand</span> (<span class="kwa">char-code</span> ,char) #x6)
+                                                   ,',(<span class="kwa">1-</span> (* (<span class="kwa">1-</span> length) <span class="num">2</span>)))))) :into updates
+     :finally (<span class="kwa">return</span> `(<span class="kwa">let</span> (,&#64;binds) (<span class="kwa">declare</span> ,&#64;decls) (<span class="kwa">macrolet</span> (,&#64;updates) ,&#64;body)))))
+
+(<span class="kwa">defmacro</span> pack-sequence (<span class="kwa">sequence</span>)
+  `(<span class="kwa">with-packed-sequences</span> ((<span class="kwa">bind</span> update ,(<span class="kwa">length</span> sequence)))
+     (<span class="kwa">loop</span> :for char :across ,sequence
+        :do (<span class="kwa">update</span> char))
+     bind))
+
+(<span class="kwa">defun</span> unpack-sequence (<span class="kwa">length</span> packed-seq)
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>))
+           (<span class="kwa">type</span> fixnum length packed-seq))
+  (<span class="kwa">with-output-to-string</span> (<span class="kwa">seq-out</span>)
+    (<span class="kwa">loop</span> :repeat length
+       :do (<span class="kwa">write-char</span> (<span class="kwa">ecase</span> (<span class="kwa">logand</span> packed-seq #x3)
+                         (<span class="kwa">0</span> #\A) (<span class="kwa">1</span> #\C) (<span class="kwa">2</span> #\T) (<span class="kwa">3</span> #\G))
+                       seq-out)
+       :do (<span class="kwa">setf</span> packed-seq (<span class="kwa">ash</span> packed-seq -<span class="num">2</span>)))))
+
+(<span class="kwa">defmacro</span> with-packed-caches-fill ((<span class="kwa">hash-access</span>) &amp;rest updaters)
+  `(<span class="kwa">progn</span> ,&#64;(<span class="kwa">loop</span>
+               :for tick :from <span class="num">1</span> :to (<span class="kwa">apply</span> #'max (<span class="kwa">mapcar</span> #'third updaters))
+               :collect `(<span class="kwa">with-current-char</span> (<span class="kwa">char</span> :skip-newline t)
+                           ,&#64;(<span class="kwa">loop</span> :for (<span class="kwa">bind</span> update length) :in updaters
+                                :collect `(,update char)
+                                :when (&gt;= tick length)
+                                :collect `(,hash-access ,length ,bind))))))
+
+(<span class="kwa">defmacro</span> with-reading-stream ((<span class="kwa">stream</span> &amp;key (<span class="kwa">block-size</span> <span class="num">8192</span>)) &amp;body body)
+  `(<span class="kwa">block</span> outer-tag
+     (<span class="kwa">let</span> ((<span class="kwa">advance</span> (<span class="kwa">let</span> ((<span class="kwa">buffer</span> (<span class="kwa">make-array</span> ,block-size :element-type 'standard-char :initial-element #\Newline))
+                          (<span class="kwa">index</span> <span class="num">0</span>)
+                          (<span class="kwa">amount</span> <span class="num">0</span>))
+                      (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum index amount))
+                      (<span class="kwa">lambda</span> ()
+                        (<span class="kwa">prog2</span> (<span class="kwa">when</span> (&gt;= index amount)
+                                 (<span class="kwa">setf</span> amount (<span class="kwa">read-sequence</span> buffer ,stream)
+                                       index <span class="num">0</span>)
+                                 (<span class="kwa">when</span> (<span class="kwa">zerop</span> amount)
+                                   (<span class="kwa">return-from</span> outer-tag nil)))
+                            (<span class="kwa">elt</span> buffer index)
+                          (<span class="kwa">incf</span> index))))))
+       (<span class="kwa">flet</span> ((<span class="kwa">get-char</span> () (<span class="kwa">funcall</span> advance)))
+         (<span class="kwa">macrolet</span> ((<span class="kwa">with-current-char</span> ((<span class="kwa">char</span> &amp;key skip-newline) &amp;body body)
+                      `(<span class="kwa">let</span> ((,char ,(<span class="kwa">if</span> skip-newline
+                                         `(<span class="kwa">loop</span> :for ,char = (<span class="kwa">get-char</span>) :while (<span class="kwa">char</span>= ,char #\Newline)
+                                             :finally (<span class="kwa">return</span> ,char))
+                                         `(<span class="kwa">get-char</span>))))
+                         (<span class="kwa">declare</span> (<span class="kwa">type</span> standard-char ,char))
+                         ,&#64;body)))
+           ,&#64;body)))))
+
+(<span class="kwa">defmacro</span> skip-buffer-to (&amp;rest patterns)
+  `(<span class="kwa">progn</span> ,&#64;(<span class="kwa">loop</span> :for pattern :in patterns
+               :collect `(<span class="kwa">loop</span> :until (<span class="kwa">and</span> ,&#64;(<span class="kwa">loop</span> :for char :across (<span class="kwa">string</span> pattern)
+                                                :collect `(<span class="kwa">with-current-char</span> (<span class="kwa">char</span>)
+                                                            (<span class="kwa">char</span>= char ,char))))))))
+
+(<span class="kwa">defmacro</span> with-dna-analyzed ((<span class="kwa">stream</span> hash-access &amp;key (<span class="kwa">block-size</span> <span class="num">8192</span>)) &amp;rest sequence-lengths)
+  (<span class="kwa">loop</span> :for length :in sequence-lengths
+     :collect (<span class="kwa">gensym</span>) :into binds
+     :collect (<span class="kwa">gensym</span>) :into updaters
+     :finally (<span class="kwa">let</span> ((<span class="kwa">desc</span> (<span class="kwa">mapcar</span> #'list binds updaters sequence-lengths)))
+                (<span class="kwa">return</span> `(<span class="kwa">with-packed-sequences</span> (,&#64;desc)
+                           (<span class="kwa">with-reading-stream</span> (,stream :block-size ,block-size)
+                             (<span class="kwa">skip-buffer-to</span> <span class="str">&quot;&gt;THREE&quot;</span> #\Newline)
+                             (<span class="kwa">with-packed-caches-fill</span> (,hash-access)
+                               ,&#64;desc)
+                             (<span class="kwa">loop</span> (<span class="kwa">with-current-char</span> (<span class="kwa">char</span> :skip-newline t)
+                                     ,&#64;(<span class="kwa">loop</span>
+                                          :for update :in updaters
+                                          :for bind :in binds
+                                          :for length :in sequence-lengths
+                                          :collect `(,update char)
+                                          :collect `(,hash-access ,length ,bind))))))))))
+
+(<span class="kwa">defun</span> seq= (<span class="kwa">seq-a</span> seq-b)
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)) (<span class="kwa">type</span> fixnum seq-a seq-b))
+  (= seq-a seq-b))
+
+(<span class="kwa">defun</span> seq-hash (<span class="kwa">seq</span>)
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)) (<span class="kwa">type</span> fixnum seq))
+  seq)
+
+(<span class="kwa">sb-ext</span>:define-hash-table-test seq= seq-hash)
+
+(<span class="kwa">defmacro</span> with-smart-dna-hash ((<span class="kwa">hash-access</span> hash-loop &amp;key (<span class="kwa">vector-threshold</span> <span class="num">1048576</span>)) (&amp;rest sequence-lengths) &amp;body body)
+  (<span class="kwa">loop</span> :for length :in sequence-lengths
+     :for bind = (<span class="kwa">gensym</span>)
+     :for area = (<span class="kwa">expt</span> <span class="num">4</span> length)
+     :for vec-p = (&lt;= area vector-threshold)
+     :collect `(,bind ,(<span class="kwa">if</span> vec-p
+                           `(<span class="kwa">make-array</span> ,area :element-type 'fixnum :initial-element <span class="num">0</span>)
+                           `(<span class="kwa">make-hash-table</span> :test ',(<span class="kwa">if</span> (&lt; area most-positive-fixnum) 'seq= 'eql)
+                                             :rehash-size ,(<span class="kwa">expt</span> <span class="num">2</span> (<span class="kwa">1-</span> length))
+                                             :rehash-threshold <span class="num">0.7</span>))) :into binds
+     :collect `(,length ,(<span class="kwa">if</span> vec-p ``(<span class="kwa">elt</span> ,',bind ,key) ``(<span class="kwa">the</span> fixnum (<span class="kwa">gethash</span> ,key ,',bind <span class="num">0</span>)))) :into accesses
+     :collect `(,length ,(<span class="kwa">if</span> vec-p
+                             ``(<span class="kwa">loop</span> :for i :from <span class="num">0</span> :below ,',(<span class="kwa">expt</span> <span class="num">4</span> length)
+                                  :for ,value = (<span class="kwa">elt</span> ,',bind i)
+                                  :for ,key = (<span class="kwa">unpack-sequence</span> ,',length i)
+                                  :unless (<span class="kwa">zerop</span> ,value)
+                                  ,&#64;loop-keywords)
+                             ``(<span class="kwa">loop</span> :for packed-key :being :the :hash-keys :in ,',bind
+                                  :for ,key = (<span class="kwa">unpack-sequence</span> ,',length packed-key)
+                                  :for ,value = (,',hash-access ,',length packed-key)
+                                  ,&#64;loop-keywords))) :into loops
+     :finally (<span class="kwa">return</span> `(<span class="kwa">let</span> (,&#64;binds)
+                         (<span class="kwa">macrolet</span> ((,hash-access (<span class="kwa">seq-length</span> key) (<span class="kwa">ecase</span> seq-length ,&#64;accesses))
+                                    (,hash-loop ((<span class="kwa">seq-length</span> key value) &amp;rest loop-keywords) (<span class="kwa">ecase</span> seq-length ,&#64;loops)))
+                           ,&#64;body)))))
+
+(<span class="kwa">defmacro</span> with-percentage ((<span class="kwa">hash-loop</span> &amp;rest seq-descriptions) &amp;body body)
+  (<span class="kwa">if</span> (<span class="kwa">null</span> seq-descriptions)
+      `(<span class="kwa">progn</span> ,&#64;body)
+      (<span class="kwa">destructuring-bind</span> (<span class="kwa">seq-bind</span> seq-length)
+          (<span class="kwa">car</span> seq-descriptions)
+        `(<span class="kwa">let</span> ((,seq-bind (,hash-loop (,seq-length k v)
+                                      :summing v :into total :of-type fixnum
+                                      :and :collect k :into seqs
+                                      :and :collect v :into counts
+                                      :finally (<span class="kwa">return</span> (<span class="kwa">mapcar</span> #'list
+                                                               seqs
+                                                               (<span class="kwa">mapcar</span> (<span class="kwa">lambda</span> (<span class="kwa">count</span>)
+                                                                         (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum count))
+                                                                         (/ (* count <span class="num">100.0</span>) total))
+                                                                       counts))))))
+           (<span class="kwa">with-percentage</span> (,hash-loop ,&#64;(<span class="kwa">cdr</span> seq-descriptions)) ,&#64;body)))))
+
+(<span class="kwa">defmacro</span> obtain-seq-count (<span class="kwa">hash-access</span> seq)
+  `(<span class="kwa">list</span> (,hash-access ,(<span class="kwa">length</span> seq) (<span class="kwa">pack-sequence</span> ,seq)) #\Tab ,seq))
+
+(<span class="kwa">defun</span> perform-work (<span class="kwa">stream</span>)
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)))
+  (<span class="kwa">with-smart-dna-hash</span> (<span class="kwa">hash-access</span> hash-loop :vector-threshold <span class="num">16777216</span>)
+      (<span class="kwa">1</span> <span class="num">2 3 4 6 12 18</span>)
+    (<span class="kwa">macrolet</span> ((<span class="kwa">incf-hash-element</span> (<span class="kwa">seq-length</span> key)
+                 `(<span class="kwa">incf</span> (<span class="kwa">hash-access</span> ,seq-length ,key))))
+      (<span class="kwa">with-dna-analyzed</span> (<span class="kwa">stream</span> incf-hash-element :block-size <span class="num">655350</span>) <span class="num">1 2 3 4 6 12 18</span>)
+      (<span class="kwa">with-percentage</span> (<span class="kwa">hash-loop</span> (<span class="kwa">seqs-1</span> <span class="num">1</span>) (<span class="kwa">seqs-2</span> <span class="num">2</span>))
+        (<span class="kwa">values</span> (<span class="kwa">list</span> seqs-1 seqs-2)
+                (<span class="kwa">list</span> (<span class="kwa">obtain-seq-count</span> hash-access <span class="str">&quot;GGT&quot;</span>)
+                      (<span class="kwa">obtain-seq-count</span> hash-access <span class="str">&quot;GGTA&quot;</span>)
+                      (<span class="kwa">obtain-seq-count</span> hash-access <span class="str">&quot;GGTATT&quot;</span>)
+                      (<span class="kwa">obtain-seq-count</span> hash-access <span class="str">&quot;GGTATTTTAATT&quot;</span>)
+                      (<span class="kwa">obtain-seq-count</span> hash-access <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>)))))))
+
+(<span class="kwa">defun</span> print-results (<span class="kwa">seq-freqs</span> seq-counts)
+  (<span class="kwa">labels</span> ((<span class="kwa">compare</span> (<span class="kwa">a</span> b)
+             (<span class="kwa">cond</span> ((&gt; (<span class="kwa">second</span> a) (<span class="kwa">second</span> b)) t)
+                   ((&lt; (<span class="kwa">second</span> a) (<span class="kwa">second</span> b)) nil)
+                   (<span class="kwa">t</span> (<span class="kwa">string</span>&lt; (<span class="kwa">first</span> a) (<span class="kwa">first</span> b)))))
+           (<span class="kwa">print-freq</span> (<span class="kwa">freq</span>)
+             (<span class="kwa">format</span> t <span class="str">&quot;~{~{~a ~3$~}~%~}~%&quot;</span> (<span class="kwa">sort</span> freq #'compare))))
+    (<span class="kwa">mapc</span> #'print-freq seq-freqs)
+    (<span class="kwa">format</span> t <span class="str">&quot;~{~{~a~c~a~}~%~}&quot;</span> seq-counts)))
+
+
+(<span class="kwa">defun</span> main ()
+  (<span class="kwa">with-open-file</span> (<span class="kwa">input-s</span> #p<span class="str">&quot;/dev/stdin&quot;</span> :external-format :iso-8859-1)
+    (<span class="kwa">multiple-value-bind</span> (<span class="kwa">freqs</span> counts)
+        (<span class="kwa">perform-work</span> input-s)
+      (<span class="kwa">print-results</span> freqs counts))))
+
+
+(<span class="kwa">in-package</span> :cl-user)
+
+(<span class="kwa">defun</span> main ()
+  (<span class="kwa">k-nucleotide</span>::main))
+

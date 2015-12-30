@@ -1,0 +1,14 @@
+
+Mon, 17 Mar 2014 19:00:19 GMT
+
+MAKE:
+mv fannkuchredux.python3-2.python3 fannkuchredux.python3-2.py
+0.01s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/Python-3.4.0/bin/python3.4 fannkuchredux.python3-2.py 12
+
+TIMED OUT after 3600s
+
+
+PROGRAM OUTPUT:

@@ -1,0 +1,25 @@
+
+Sat, 10 Jan 2015 06:15:24 GMT
+
+MAKE:
+/usr/local/src/rust/bin/rustc -C opt-level=3 -C target-cpu=core2 -C lto meteor.rs -o meteor.rust-3.rust_run
+meteor.rs:15:26: 15:27 error: obsolete syntax: `|uint| -> bool` closure type syntax
+meteor.rs:15 fn iterate<'a, T>(x: T, f: |&T|: 'a -> T) -> Iterate<'a, T> {
+                                      ^
+note: use unboxed closures instead, no type annotation needed
+meteor.rs:19:6: 19:7 error: obsolete syntax: `|uint| -> bool` closure type syntax
+meteor.rs:19     f: |&T|: 'a -> T,
+                  ^
+meteor.rs:277:15: 277:19 error: obsolete syntax: `proc` expression
+meteor.rs:277         spawn(proc() {
+                            ^~~~
+note: use a `move ||` expression instead
+error: aborting due to 3 previous errors
+make: [meteor.rust-3.rust_run] Error 101 (ignored)
+0.05s to complete and log all make actions
+
+COMMAND LINE:
+./meteor.rust-3.rust_run 2098
+
+MAKE ERROR 
+

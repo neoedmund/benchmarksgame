@@ -1,0 +1,87 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * Contributed by Premysl Hruby</span>
+<span class="com"> * convert to C++ by The Anh Tran</span>
+<span class="com"> */</span>
+
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned int</span> uint;
+
+<span class="kwb">const</span> uint NUM_THREADS   = <span class="num">503</span>;
+<span class="kwb">const</span> uint STACK_SIZE   = <span class="num">16</span>*<span class="num">1024</span>;
+
+
+<span class="kwb">int</span>   token;
+
+pthread_mutex_t      mutex   [NUM_THREADS];
+pthread_t         threadid[NUM_THREADS];
+<span class="kwb">char</span>            stacks   [NUM_THREADS][STACK_SIZE];
+
+
+<span class="kwb">static</span>
+<span class="kwb">void</span>* <span class="kwd">thread_func</span>( <span class="kwb">void</span> *num )
+{
+   <span class="kwb">size_t</span> thisnode      = <span class="kwa">reinterpret_cast</span>&lt;<span class="kwb">size_t</span>&gt;(num);
+   <span class="kwb">int</span> nextnode      = ( thisnode + <span class="num">1</span> ) % NUM_THREADS;
+
+   pthread_mutex_t   *mutex_this_node = mutex + thisnode;
+   pthread_mutex_t   *mutex_next_node = mutex + nextnode;
+
+   <span class="kwa">while</span> (<span class="kwa">true</span>) 
+   {
+      <span class="kwd">pthread_mutex_lock</span>( mutex_this_node );
+
+      <span class="kwa">if</span> ( token &gt; <span class="num">0</span> ) 
+      {
+         token--;
+         <span class="kwd">pthread_mutex_unlock</span>( mutex_next_node );
+      }
+      <span class="kwa">else</span> 
+      {
+          <span class="kwd">printf</span>( <span class="str">&quot;%d</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwa">static_cast</span>&lt;<span class="kwb">int</span>&gt;(thisnode +<span class="num">1</span>) );
+          <span class="kwd">exit</span>(<span class="num">0</span>);
+      }
+   }
+
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>** args)
+{
+   <span class="kwa">if</span> (argc &gt;= <span class="num">2</span>)
+      token = <span class="kwd">atoi</span>(args[<span class="num">1</span>]);
+   <span class="kwa">else</span>
+      token = <span class="num">1000</span>; <span class="slc">// test case</span>
+
+   pthread_attr_t stack_attr;
+   <span class="kwd">pthread_attr_init</span>(&amp;stack_attr);
+
+   <span class="kwa">for</span> (uint i = <span class="num">0</span>; i &lt; NUM_THREADS; i++) 
+   {
+      <span class="slc">// init mutex objects</span>
+      <span class="kwd">pthread_mutex_init</span>( &amp;(mutex[i]), <span class="num">0</span>);
+      <span class="kwd">pthread_mutex_lock</span>( &amp;(mutex[i]) );
+
+      <span class="slc">// manual set stack space &amp; stack size for each thread</span>
+      <span class="slc">// to reduce memory usage</span>
+      <span class="kwd">pthread_attr_setstack</span>( &amp;stack_attr, &amp;(stacks[i]), STACK_SIZE );
+
+      <span class="slc">// create thread using specified stackspace</span>
+      <span class="kwd">pthread_create</span>( &amp;(threadid[i]), &amp;stack_attr, &amp;thread_func, <span class="kwa">reinterpret_cast</span>&lt;<span class="kwb">void</span>*&gt;(i) );
+   }
+
+   <span class="slc">// start game</span>
+   <span class="kwd">pthread_mutex_unlock</span>( &amp;(mutex[<span class="num">0</span>]) );
+
+   <span class="slc">// wait for result</span>
+   <span class="kwd">pthread_join</span>( threadid[<span class="num">0</span>], <span class="num">0</span> );
+
+   <span class="kwa">return</span> <span class="num">1</span>;
+}
+

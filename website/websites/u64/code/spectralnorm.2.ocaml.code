@@ -1,0 +1,44 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Sebastien Loisel</span>
+<span class="com"> * Cleanup by Troestler Christophe</span>
+<span class="com"> * Modified by Mauricio Fernandez</span>
+<span class="com"> *)</span>
+
+<span class="kwa">let</span> eval_A i j = <span class="num">1</span>. /. <span class="kwb">float</span>((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span>+i+<span class="num">1</span>)
+
+<span class="kwa">let</span> eval_A_times_u u v =
+  <span class="kwa">let</span> n = <span class="kwc">Array</span>.length v - <span class="num">1</span> <span class="kwa">in</span>
+  <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span>  n <span class="kwa">do</span>
+    <span class="kwa">let</span> vi = <span class="kwb">ref</span> <span class="num">0</span>. <span class="kwa">in</span>
+      <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> n <span class="kwa">do</span> vi := !vi +. eval_A i j *. u.(j) <span class="kwa">done</span>;
+      v.(i) &lt;- !vi
+  <span class="kwa">done</span>
+
+<span class="kwa">let</span> eval_At_times_u u v =
+  <span class="kwa">let</span> n = <span class="kwc">Array</span>.length v -<span class="num">1</span> <span class="kwa">in</span>
+  <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> n <span class="kwa">do</span>
+    <span class="kwa">let</span> vi = <span class="kwb">ref</span> <span class="num">0</span>. <span class="kwa">in</span>
+      <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> n <span class="kwa">do</span> vi := !vi +. eval_A j i *. u.(j) <span class="kwa">done</span>;
+      v.(i) &lt;- !vi
+  <span class="kwa">done</span>
+
+<span class="kwa">let</span> eval_AtA_times_u u v =
+  <span class="kwa">let</span> w = <span class="kwc">Array</span>.make (<span class="kwc">Array</span>.length u) <span class="num">0.0</span> <span class="kwa">in</span>
+  eval_A_times_u u w; eval_At_times_u w v
+
+
+<span class="kwa">let</span> () =
+  <span class="kwa">let</span> n = <span class="kwa">try</span> int_of_string(<span class="kwc">Array</span>.get <span class="kwc">Sys</span>.argv <span class="num">1</span>) <span class="kwa">with</span> _ -&gt;  <span class="num">2000</span> <span class="kwa">in</span>
+  <span class="kwa">let</span> u = <span class="kwc">Array</span>.make n <span class="num">1.0</span>  <span class="kwa">and</span>  v = <span class="kwc">Array</span>.make n <span class="num">0.0</span> <span class="kwa">in</span>
+  <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> <span class="num">9</span> <span class="kwa">do</span>
+    eval_AtA_times_u u v; eval_AtA_times_u v u
+  <span class="kwa">done</span>;
+
+  <span class="kwa">let</span> vv = <span class="kwb">ref</span> <span class="num">0.0</span>  <span class="kwa">and</span>  vBv = <span class="kwb">ref</span> <span class="num">0.0</span> <span class="kwa">in</span>
+  <span class="kwa">for</span> i=<span class="num">0</span> <span class="kwa">to</span> n-<span class="num">1</span> <span class="kwa">do</span>
+    vv := !vv +. v.(i) *. v.(i);
+    vBv := !vBv +. u.(i) *. v.(i)
+  <span class="kwa">done</span>;
+  <span class="kwc">Printf</span>.printf <span class="str">&quot;</span><span class="ipl">%0</span><span class="str">.9f</span><span class="esc">\n</span><span class="str">&quot;</span> (sqrt(!vBv /. !vv))

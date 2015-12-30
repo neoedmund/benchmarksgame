@@ -1,0 +1,123 @@
+&lt;?php
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Wing-Chung Leung</span>
+<span class="com">   modified by Isaac Gouy</span>
+<span class="com">*/</span>
+
+<span class="slc"># error_reporting(E_STRICT);</span>
+
+<span class="kwd">define</span> (<span class="str">'IM'</span>, <span class="num">139968</span>);
+<span class="kwd">define</span> (<span class="str">'IA'</span>, <span class="num">3877</span>);
+<span class="kwd">define</span> (<span class="str">'IC'</span>, <span class="num">29573</span>);
+
+<span class="kwa">function</span> <span class="kwd">gen_random</span>($max) {
+   <span class="kwa">static</span> $last = <span class="num">42</span>;
+   <span class="kwa">return</span> $max * ($last = ($last * IA + IC) % IM) / IM;
+}
+
+<span class="com">/* Weighted selection from alphabet */</span>
+
+<span class="kwa">function</span> <span class="kwd">makeCumulative</span>(&amp;$genelist) {
+   $count = <span class="kwd">count</span>($genelist);
+   <span class="kwa">for</span> ($i=<span class="num">1</span>; $i &lt; $count; $i++) {
+      $genelist[$i][<span class="num">1</span>] += $genelist[$i-<span class="num">1</span>][<span class="num">1</span>];
+   }
+}
+
+
+<span class="kwa">function</span> <span class="kwd">selectRandom</span>(&amp;$a) {
+   $r = <span class="kwd">gen_random</span>(<span class="num">1</span>);
+   $hi = <span class="kwd">sizeof</span>($a);
+
+   <span class="kwa">for</span> ($i = <span class="num">0</span>; $i &lt; $hi; $i++) {
+      <span class="kwa">if</span> ($r &lt; $a[$i][<span class="num">1</span>]) <span class="kwa">return</span> $a[$i][<span class="num">0</span>];
+   }
+   <span class="kwa">return</span> $a[$hi-<span class="num">1</span>][<span class="num">0</span>];
+}
+
+<span class="com">/* Generate and write FASTA format */</span>
+
+<span class="kwd">define</span> (<span class="str">'LINE_LENGTH'</span>, <span class="num">60</span>);
+
+
+<span class="kwa">function</span> <span class="kwd">makeRandomFasta</span>($id, $desc, &amp;$genelist, $n) {
+   <span class="kwa">print</span>(<span class="str">&quot;&gt;</span><span class="ipl">$id $desc</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>);
+
+   <span class="kwa">for</span> ($todo = $n; $todo &gt; <span class="num">0</span>; $todo -= LINE_LENGTH) {
+      $pick = <span class="str">''</span>;
+      $m = $todo &lt; LINE_LENGTH ? $todo : LINE_LENGTH;
+      <span class="kwa">for</span> ($i=<span class="num">0</span>; $i &lt; $m; $i++) $pick .= <span class="kwd">selectRandom</span>($genelist);
+      $pick .= <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+      <span class="kwa">print</span>( $pick );
+   }
+}
+
+
+<span class="kwa">function</span> <span class="kwd">makeRepeatFasta</span>($id, $desc, $s, $n) {
+   <span class="kwa">echo</span> <span class="str">&quot;&gt;</span><span class="ipl">$id $desc</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>;
+   $i = <span class="num">0</span>; $sLength = <span class="kwd">strlen</span>($s); $lineLength = LINE_LENGTH; 
+   <span class="kwa">while</span> ($n &gt; <span class="num">0</span>) {
+      <span class="kwa">if</span> ($n &lt; $lineLength) $lineLength = $n;
+      <span class="kwa">if</span> ($i + $lineLength &lt; $sLength){ 
+         <span class="kwa">print</span>(<span class="kwd">substr</span>($s,$i,$lineLength)); <span class="kwa">print</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+         $i += $lineLength;
+      } <span class="kwa">else</span> {
+         <span class="kwa">print</span>(<span class="kwd">substr</span>($s,$i));
+         $i = $lineLength - ($sLength - $i);
+         <span class="kwa">print</span>(<span class="kwd">substr</span>($s,<span class="num">0</span>,$i)); <span class="kwa">print</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+      }
+      $n -= $lineLength;
+   }
+}
+
+
+<span class="com">/* Main -- define alphabets, make 3 fragments */</span>
+
+$iub=<span class="kwa">array</span>(
+   <span class="kwa">array</span>(<span class="str">'a'</span>, <span class="num">0.27</span>),
+   <span class="kwa">array</span>(<span class="str">'c'</span>, <span class="num">0.12</span>),
+   <span class="kwa">array</span>(<span class="str">'g'</span>, <span class="num">0.12</span>),
+   <span class="kwa">array</span>(<span class="str">'t'</span>, <span class="num">0.27</span>),
+   
+   <span class="kwa">array</span>(<span class="str">'B'</span>, <span class="num">0.02</span>),
+   <span class="kwa">array</span>(<span class="str">'D'</span>, <span class="num">0.02</span>),
+   <span class="kwa">array</span>(<span class="str">'H'</span>, <span class="num">0.02</span>),
+   <span class="kwa">array</span>(<span class="str">'K'</span>, <span class="num">0.02</span>),
+   <span class="kwa">array</span>(<span class="str">'M'</span>, <span class="num">0.02</span>),
+   <span class="kwa">array</span>(<span class="str">'N'</span>, <span class="num">0.02</span>),
+   <span class="kwa">array</span>(<span class="str">'R'</span>, <span class="num">0.02</span>),
+   <span class="kwa">array</span>(<span class="str">'S'</span>, <span class="num">0.02</span>),
+   <span class="kwa">array</span>(<span class="str">'V'</span>, <span class="num">0.02</span>),
+   <span class="kwa">array</span>(<span class="str">'W'</span>, <span class="num">0.02</span>),
+   <span class="kwa">array</span>(<span class="str">'Y'</span>, <span class="num">0.02</span>)
+);
+
+$homosapiens = <span class="kwa">array</span>(
+   <span class="kwa">array</span>(<span class="str">'a'</span>, <span class="num">0.3029549426680</span>),
+   <span class="kwa">array</span>(<span class="str">'c'</span>, <span class="num">0.1979883004921</span>),
+   <span class="kwa">array</span>(<span class="str">'g'</span>, <span class="num">0.1975473066391</span>),
+   <span class="kwa">array</span>(<span class="str">'t'</span>, <span class="num">0.3015094502008</span>)
+);
+
+$alu =
+   <span class="str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG'</span> .
+   <span class="str">'GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA'</span> .
+   <span class="str">'CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT'</span> .
+   <span class="str">'ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA'</span> .
+   <span class="str">'GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG'</span> .
+   <span class="str">'AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC'</span> .
+   <span class="str">'AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span>;
+
+$n = <span class="num">1000</span>;
+
+<span class="kwa">if</span> ($_SERVER[<span class="str">'argc'</span>] &gt; <span class="num">1</span>) $n = $_SERVER[<span class="str">'argv'</span>][<span class="num">1</span>];
+
+   <span class="kwd">makeCumulative</span>($iub);
+   <span class="kwd">makeCumulative</span>($homosapiens);
+
+   <span class="kwd">makeRepeatFasta</span>(<span class="str">'ONE'</span>, <span class="str">'Homo sapiens alu'</span>, $alu, $n*<span class="num">2</span>);
+   <span class="kwd">makeRandomFasta</span>(<span class="str">'TWO'</span>, <span class="str">'IUB ambiguity codes'</span>, $iub, $n*<span class="num">3</span>);
+   <span class="kwd">makeRandomFasta</span>(<span class="str">'THREE'</span>, <span class="str">'Homo sapiens frequency'</span>, $homosapiens, $n*<span class="num">5</span>);
+?&gt;

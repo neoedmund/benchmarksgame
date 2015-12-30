@@ -1,0 +1,16 @@
+
+Thu, 10 Dec 2015 18:53:19 GMT
+
+MAKE:
+/usr/local/src/rust-1.5.0/bin/rustc -C opt-level=3 -C target-cpu=core2  nbody.rs -o nbody.rust-2.rust_run
+nbody.rs:189:14: 189:20 warning: unnecessary parentheses around `for` head expression, #[warn(unused_parens)] on by default
+nbody.rs:189     for _ in (0..n) {
+                          ^~~~~~
+1.01s to complete and log all make actions
+
+COMMAND LINE:
+./nbody.rust-2.rust_run 50000000
+
+PROGRAM OUTPUT:
+-0.169075164
+-0.169059907

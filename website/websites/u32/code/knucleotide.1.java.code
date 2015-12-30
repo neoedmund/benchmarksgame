@@ -1,0 +1,760 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com"> contributed by Rikard Mustajärvi</span>
+<span class="com">*/</span>
+
+
+<span class="kwa">import</span> java.io.FilterInputStream;
+<span class="kwa">import</span> java.io.IOException;
+<span class="kwa">import</span> java.io.InputStream;
+<span class="kwa">import</span> java.lang.management.ManagementFactory;
+<span class="kwa">import</span> java.lang.reflect.Field;
+<span class="kwa">import</span> java.nio.ByteBuffer;
+<span class="kwa">import</span> java.nio.channels.Channels;
+<span class="kwa">import</span> java.nio.channels.ReadableByteChannel;
+<span class="kwa">import</span> java.util.ArrayList;
+<span class="kwa">import</span> java.util.Arrays;
+<span class="kwa">import</span> java.util.Collections;
+<span class="kwa">import</span> java.util.Comparator;
+<span class="kwa">import</span> java.util.HashSet;
+<span class="kwa">import</span> java.util.Iterator;
+<span class="kwa">import</span> java.util.List;
+<span class="kwa">import</span> java.util.Map;
+<span class="kwa">import</span> java.util.Set;
+<span class="kwa">import</span> java.util.TreeMap;
+<span class="kwa">import</span> java.util.concurrent.ArrayBlockingQueue;
+<span class="kwa">import</span> java.util.concurrent.ExecutorService;
+<span class="kwa">import</span> java.util.concurrent.Executors;
+<span class="kwa">import</span> java.util.concurrent.LinkedBlockingQueue;
+<span class="kwa">import</span> java.util.concurrent.TimeUnit;
+<span class="kwa">import</span> java.util.concurrent.atomic.AtomicLong;
+
+
+<span class="kwa">public class</span> knucleotide {
+   <span class="kwa">static final</span> <span class="kwb">int</span> LINE_WIDTH = <span class="num">60</span>;
+   <span class="kwa">static final</span> <span class="kwb">int</span> BITS_PER_CHAR = <span class="num">2</span>;
+   <span class="kwa">static final</span> <span class="kwb">int</span> BITS_MASK = Byte.<span class="kwd">parseByte</span>(<span class="str">&quot;11&quot;</span>, <span class="num">2</span>);
+
+   <span class="kwa">static final</span> <span class="kwb">byte</span> A = Byte.<span class="kwd">parseByte</span>(<span class="str">&quot;11&quot;</span>, <span class="num">2</span>);
+   <span class="kwa">static final</span> <span class="kwb">byte</span> C = Byte.<span class="kwd">parseByte</span>(<span class="str">&quot;01&quot;</span>, <span class="num">2</span>);
+   <span class="kwa">static final</span> <span class="kwb">byte</span> G = Byte.<span class="kwd">parseByte</span>(<span class="str">&quot;00&quot;</span>, <span class="num">2</span>);
+   <span class="kwa">static final</span> <span class="kwb">byte</span> T = Byte.<span class="kwd">parseByte</span>(<span class="str">&quot;10&quot;</span>, <span class="num">2</span>);
+
+   <span class="kwa">private static final</span> <span class="kwb">byte</span>[] ENCODE;
+   <span class="kwa">private static final</span> <span class="kwb">byte</span>[] DECODE;
+
+   <span class="kwa">static</span> {
+      ENCODE = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="str">'t'</span> + <span class="num">1</span>];
+      ENCODE[<span class="str">'a'</span>] = A;
+      ENCODE[<span class="str">'A'</span>] = A;
+      ENCODE[<span class="str">'c'</span>] = C;
+      ENCODE[<span class="str">'C'</span>] = C;
+      ENCODE[<span class="str">'g'</span>] = G;
+      ENCODE[<span class="str">'G'</span>] = G;
+      ENCODE[<span class="str">'t'</span>] = T;
+      ENCODE[<span class="str">'T'</span>] = T;
+
+      DECODE = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">4</span>];
+      DECODE[A] = <span class="str">'A'</span>;
+      DECODE[C] = <span class="str">'C'</span>;
+      DECODE[G] = <span class="str">'G'</span>;
+      DECODE[T] = <span class="str">'T'</span>;
+   }
+
+   <span class="slc">// try to determine effective number of cores</span>
+   <span class="kwa">private static final</span> <span class="kwb">int</span> concurrency =
+         AffinityDetectionHelper.<span class="kwd">isLockedToSingleCore</span>() ?
+               <span class="num">1</span> : Runtime.<span class="kwd">getRuntime</span>().<span class="kwd">availableProcessors</span>();
+
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) <span class="kwa">throws</span> Exception {
+      InputStream is;
+      is = System.<span class="kwa">in</span>;
+<span class="slc">//      is = new FileInputStream(&quot;knucleotide-input_n25m.txt&quot;);</span>
+      <span class="kwa">final</span> IsReader isr = <span class="kwa">new</span> <span class="kwd">IsReader</span>(is);
+
+      <span class="kwd">findGenome</span>(isr);
+
+      <span class="kwb">int</span>[] ks = <span class="kwa">new</span> <span class="kwb">int</span>[]{<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>, <span class="num">6</span>, <span class="num">12</span>, <span class="num">18</span>};
+
+      LinkedBlockingQueue&lt;AbstractCounter&gt; counterQueue = <span class="kwa">new</span> LinkedBlockingQueue&lt;AbstractCounter&gt;();
+
+      Counters counters = <span class="kwa">new</span> <span class="kwd">Counters</span>(ks);
+      <span class="kwa">for</span> (AbstractCounter counter : counters.<span class="kwd">getCounters</span>()) {
+         counterQueue.<span class="kwd">put</span>(counter);
+      }
+
+      List&lt;LinkedBlockingQueue&lt;WorkChunk&gt;&gt; workQueues = <span class="kwa">new</span> ArrayList&lt;LinkedBlockingQueue&lt;WorkChunk&gt;&gt;();
+
+      <span class="kwa">final</span> ExecutorService executor = Executors.<span class="kwd">newFixedThreadPool</span>(concurrency);
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; concurrency; i++) {
+         LinkedBlockingQueue&lt;WorkChunk&gt; workQueue = <span class="kwa">new</span> LinkedBlockingQueue&lt;WorkChunk&gt;();
+         workQueues.<span class="kwd">add</span>(workQueue);
+         executor.<span class="kwd">submit</span>(<span class="kwa">new</span> <span class="kwd">CounterProcesser</span>(counterQueue, workQueue));
+      }
+
+      <span class="kwb">int</span> chunkSize = LINE_WIDTH*<span class="num">100</span>;
+      <span class="kwa">while</span> (!isr.<span class="kwd">eof</span>()) {
+         <span class="kwb">byte</span>[] chunk = isr.<span class="kwd">getNextChunk</span>(chunkSize);
+         <span class="kwb">int</span> len = <span class="kwd">encode</span>(chunk);
+
+         WorkChunk wc = <span class="kwa">new</span> <span class="kwd">WorkChunk</span>();
+         wc.data = chunk;
+         wc.length = len;
+
+         <span class="kwa">for</span> (LinkedBlockingQueue&lt;WorkChunk&gt; wcQueue : workQueues) {
+            wcQueue.<span class="kwd">add</span>(wc);
+         }
+
+         chunkSize = LINE_WIDTH*<span class="num">5000</span>;
+      }
+
+      <span class="kwa">for</span> (LinkedBlockingQueue&lt;WorkChunk&gt; wcQueue : workQueues) {
+         wcQueue.<span class="kwd">add</span>(WorkChunk.END_MESSAGE);
+      }
+
+      executor.<span class="kwd">shutdown</span>();
+      executor.<span class="kwd">awaitTermination</span>(<span class="num">1</span>, TimeUnit.MINUTES);
+
+      <span class="kwd">writeRelativeFreqs</span>(counters.<span class="kwd">getCounter</span>(<span class="num">1</span>));
+      System.out.<span class="kwd">println</span>();
+
+      <span class="kwd">writeRelativeFreqs</span>(counters.<span class="kwd">getCounter</span>(<span class="num">2</span>));
+      System.out.<span class="kwd">println</span>();
+
+      String[] nucleotides = {<span class="str">&quot;GGT&quot;</span>, <span class="str">&quot;GGTA&quot;</span>, <span class="str">&quot;GGTATT&quot;</span>, <span class="str">&quot;GGTATTTTAATT&quot;</span>, <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>};
+      <span class="kwa">for</span> (String nucleotide : nucleotides) {
+         System.out.<span class="kwd">println</span>(String.<span class="kwd">format</span>(<span class="str">&quot;%d</span><span class="esc">\t</span><span class="str">%s&quot;</span>, counters.<span class="kwd">getCount</span>(nucleotide), nucleotide));
+      }
+   }
+
+   <span class="kwa">static class</span> WorkChunk {
+      <span class="kwa">public static final</span> WorkChunk END_MESSAGE = <span class="kwa">new</span> <span class="kwd">WorkChunk</span>();
+
+      <span class="kwa">public</span> <span class="kwb">byte</span>[] data;
+      <span class="kwa">public</span> <span class="kwb">int</span> length;
+   }
+
+   <span class="kwa">static class</span> CounterProcesser <span class="kwa">implements</span> Runnable {
+      <span class="kwa">private final</span> LinkedBlockingQueue&lt;AbstractCounter&gt; counterQueue;
+      <span class="kwa">private final</span> LinkedBlockingQueue&lt;WorkChunk&gt; workQueue;
+
+      <span class="kwa">public</span> <span class="kwd">CounterProcesser</span>(LinkedBlockingQueue&lt;AbstractCounter&gt; counterQueue, LinkedBlockingQueue&lt;WorkChunk&gt; workQueue) {
+         <span class="kwa">this</span>.counterQueue = counterQueue;
+         <span class="kwa">this</span>.workQueue = workQueue;
+      }
+
+      <span class="kwc">&#64;Override</span>
+      <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+         <span class="kwa">try</span> {
+            AbstractCounter counter;
+
+            List&lt;WorkChunk&gt; workList = <span class="kwa">new</span> ArrayList&lt;WorkChunk&gt;(<span class="num">1024</span>);
+
+            <span class="slc">// process first counter by taking from work queue</span>
+            counter = counterQueue.<span class="kwd">poll</span>();
+
+            WorkChunk wc = workQueue.<span class="kwd">take</span>();
+            counter.<span class="kwd">seed</span>(wc.data, wc.length);
+
+            workList.<span class="kwd">add</span>(wc);
+
+            <span class="kwa">while</span> ( (wc = workQueue.<span class="kwd">take</span>()) != WorkChunk.END_MESSAGE) {
+               workList.<span class="kwd">add</span>(wc);
+               counter.<span class="kwd">consume</span>(wc.data, <span class="num">0</span>, wc.length);
+            }
+
+            workList.<span class="kwd">add</span>(WorkChunk.END_MESSAGE);
+
+            <span class="slc">// subsequential counters will take work from list</span>
+            <span class="kwa">while</span> ( (counter = counterQueue.<span class="kwd">poll</span>()) != null) {
+               Iterator&lt;WorkChunk&gt; wcIt = workList.<span class="kwd">iterator</span>();
+
+               wc = wcIt.<span class="kwd">next</span>();
+               counter.<span class="kwd">seed</span>(wc.data, wc.length);
+
+               <span class="kwa">while</span> ( (wc = wcIt.<span class="kwd">next</span>()) != WorkChunk.END_MESSAGE) {
+                  counter.<span class="kwd">consume</span>(wc.data, <span class="num">0</span>, wc.length);
+               }
+            }
+         } <span class="kwa">catch</span> (Exception e) {
+            <span class="kwa">throw new</span> <span class="kwd">RuntimeException</span>(e);
+         }
+      }
+   }
+
+   <span class="kwa">static</span> <span class="kwb">int</span> <span class="kwd">encode</span>(<span class="kwb">byte</span>[] chunk) {
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span> ; i &lt; chunk.length; i++) {
+         chunk[i] = ENCODE[chunk[i]];
+      }
+      <span class="kwa">return</span> chunk.length;
+   }
+
+   <span class="kwa">static</span> <span class="kwb">int</span> <span class="kwd">seedCounters</span>(<span class="kwb">byte</span>[] chunk, AbstractCounter[] counters) <span class="kwa">throws</span> IOException {
+      <span class="kwb">int</span> len = <span class="kwd">encode</span>(chunk);
+      <span class="kwa">for</span> (AbstractCounter c : counters) {
+         c.<span class="kwd">seed</span>(chunk, len);
+      }
+
+      <span class="kwa">return</span> len;
+   }
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">findGenome</span>(IsReader isr) <span class="kwa">throws</span> IOException {
+      <span class="kwb">byte</span>[] line = <span class="kwa">new</span> <span class="kwb">byte</span>[LINE_WIDTH];
+
+      <span class="kwa">while</span> (true) {
+         isr.<span class="kwd">readLine</span>(line, <span class="num">0</span>);
+         <span class="kwa">if</span> (line[<span class="num">0</span>] == <span class="str">'&gt;'</span> &amp;&amp; line[<span class="num">1</span>] == <span class="str">'T'</span> &amp;&amp; line[<span class="num">2</span>] == <span class="str">'H'</span> &amp;&amp; line[<span class="num">3</span>] == <span class="str">'R'</span>) {
+            <span class="kwa">break</span>;
+         }
+      }
+   }
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">writeRelativeFreqs</span>(AbstractCounter counter) {
+      <span class="kwa">if</span> (counter == null) <span class="kwa">return</span>; <span class="slc">// simplify debugging</span>
+
+      <span class="kwa">class</span> CountString {
+         Integer count;
+         String string;
+      }
+
+      List&lt;CountString&gt; list = <span class="kwa">new</span> ArrayList&lt;CountString&gt;();
+
+      <span class="kwb">int</span> sum = <span class="num">0</span>;
+      <span class="kwb">int</span> to = <span class="num">1</span>&lt;&lt;(counter.shift);
+      <span class="kwa">for</span> (<span class="kwb">int</span> key = <span class="num">0</span>; key &lt; to; key++) {
+         <span class="kwb">int</span> count = counter.<span class="kwd">getCount</span>(key);
+         sum += count;
+
+         StringBuilder sb = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>();
+         <span class="kwb">int</span> tmp = key;
+         <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; counter.k; j++) {
+            <span class="kwb">byte</span> b = (<span class="kwb">byte</span>)(tmp &amp; BITS_MASK);
+            tmp &gt;&gt;= BITS_PER_CHAR;
+            sb.<span class="kwd">append</span>((<span class="kwb">char</span>)DECODE[b]);
+         }
+         sb.<span class="kwd">reverse</span>();
+
+         CountString cs = <span class="kwa">new</span> <span class="kwd">CountString</span>();
+         cs.count = count;
+         cs.string = sb.<span class="kwd">toString</span>();
+         list.<span class="kwd">add</span>(cs);
+      }
+
+      Collections.<span class="kwd">sort</span>(list, <span class="kwa">new</span> Comparator&lt;CountString&gt;() {
+         <span class="kwc">&#64;Override</span>
+         <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">compare</span>(CountString o1, CountString o2) {
+            <span class="kwb">int</span> res = -o1.count.<span class="kwd">compareTo</span>(o2.count);
+            <span class="kwa">if</span> (res == <span class="num">0</span>) res = o1.string.<span class="kwd">compareTo</span>(o2.string);
+            <span class="kwa">return</span> res;
+         }
+      });
+
+      <span class="kwa">for</span> (CountString cs : list) {
+         System.out.<span class="kwd">println</span>(String.<span class="kwd">format</span>(<span class="str">&quot;%s %.3f&quot;</span>, cs.string, (<span class="num">100.0</span>f*cs.count)/sum));
+      }
+   }
+
+   <span class="kwa">static</span> <span class="kwb">int</span> <span class="kwd">toIntKey</span>(String str) {
+      <span class="kwb">int</span> k = <span class="num">0</span>;
+      <span class="kwa">for</span> (<span class="kwb">byte</span> b : str.<span class="kwd">getBytes</span>()) {
+         k = k &lt;&lt; BITS_PER_CHAR | ENCODE[b];
+      }
+      <span class="kwa">return</span> k;
+   }
+
+   <span class="kwa">static</span> <span class="kwb">long</span> <span class="kwd">toLongKey</span>(String str) {
+      <span class="kwb">long</span> k = <span class="num">0</span>;
+      <span class="kwa">for</span> (<span class="kwb">byte</span> b : str.<span class="kwd">getBytes</span>()) {
+         k = k &lt;&lt; BITS_PER_CHAR | ENCODE[b];
+      }
+      <span class="kwa">return</span> k;
+   }
+
+   <span class="kwa">static class</span> Counters {
+      <span class="kwa">private final static</span> <span class="kwb">int</span> SMALL_BIG_THRESHOLD = <span class="num">9</span>; <span class="slc">// 2^(9*2)*4 = 2mb, lets make it possible to keep the tables in L3 cache</span>
+
+      <span class="kwa">private final</span> Map&lt;Integer, Map&lt;Byte, AbstractCounter&gt;&gt; counterMap = <span class="kwa">new</span> TreeMap&lt;Integer, Map&lt;Byte, AbstractCounter&gt;&gt;();
+      <span class="kwa">private final</span> AbstractCounter[] counters;
+
+      <span class="kwa">public</span> <span class="kwd">Counters</span>(<span class="kwb">int</span>[] ks) {
+         <span class="kwb">byte</span>[] letters = <span class="kwa">new</span> <span class="kwb">byte</span>[]{A, C, G, T};
+
+         Set&lt;AbstractCounter&gt; counterSet = <span class="kwa">new</span> HashSet&lt;AbstractCounter&gt;();
+         <span class="kwa">for</span> (<span class="kwb">int</span> k : ks) {
+            Map&lt;Byte, AbstractCounter&gt; lastChar2Counter = <span class="kwa">new</span> TreeMap&lt;Byte, AbstractCounter&gt;();
+            counterMap.<span class="kwd">put</span>(k, lastChar2Counter);
+
+            <span class="kwa">if</span> (k &lt;= SMALL_BIG_THRESHOLD) {
+               SmallCounter counter = <span class="kwa">new</span> <span class="kwd">SmallCounter</span>(k);
+               <span class="kwa">for</span> (<span class="kwb">byte</span> letter : letters) {
+                  lastChar2Counter.<span class="kwd">put</span>(letter, counter);
+               }
+            } <span class="kwa">else</span> {
+               <span class="kwa">if</span> (concurrency &gt; <span class="num">1</span>) {
+                  <span class="slc">// one counter per letter</span>
+                  <span class="kwa">for</span> (<span class="kwb">byte</span> letter : letters) {
+                     BigCounter counter = <span class="kwa">new</span> <span class="kwd">BigCounter</span>(k, letter);
+                     lastChar2Counter.<span class="kwd">put</span>(letter, counter);
+                  }
+               } <span class="kwa">else</span> {
+                  <span class="slc">// same counter for all letters</span>
+                  BigCounter counter = <span class="kwa">new</span> <span class="kwd">BigCounter</span>(k, (<span class="kwb">byte</span>)-<span class="num">1</span>);
+                  <span class="kwa">for</span> (<span class="kwb">byte</span> letter : letters) {
+                     lastChar2Counter.<span class="kwd">put</span>(letter, counter);
+                  }
+               }
+
+            }
+
+            counterSet.<span class="kwd">addAll</span>(lastChar2Counter.<span class="kwd">values</span>());
+         }
+
+         counters = counterSet.<span class="kwd">toArray</span>(<span class="kwa">new</span> AbstractCounter[<span class="num">0</span>]);
+         Arrays.<span class="kwd">sort</span>(counters, <span class="kwa">new</span> Comparator&lt;AbstractCounter&gt;() {
+            <span class="kwc">&#64;Override</span>
+            <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">compare</span>(AbstractCounter o1, AbstractCounter o2) {
+               <span class="kwa">if</span> (o1 <span class="kwa">instanceof</span> BigCounter &amp;&amp; o2 <span class="kwa">instanceof</span> BigCounter) {
+                  <span class="kwa">return</span> ((BigCounter)o2).letter - ((BigCounter)o1).letter;
+               } <span class="kwa">else</span> {
+                  <span class="kwa">return</span> o2.k - o1.k;
+               }
+
+            }
+         });
+      }
+
+      <span class="kwb">int</span> <span class="kwd">getCount</span>(String nucleotide) {
+         <span class="kwb">int</span> length = nucleotide.<span class="kwd">length</span>();
+         <span class="kwb">byte</span> lastChar = ENCODE[nucleotide.<span class="kwd">charAt</span>(length - <span class="num">1</span>)];
+
+         <span class="kwb">int</span> count = <span class="num">0</span>;
+
+         <span class="kwa">try</span> {
+            count = counterMap.<span class="kwd">get</span>(length).<span class="kwd">get</span>(lastChar).<span class="kwd">getCount</span>(nucleotide);
+         } <span class="kwa">catch</span> (NullPointerException e) {} <span class="slc">// beautiful code...</span>
+
+         <span class="kwa">return</span> count;
+      }
+
+      AbstractCounter <span class="kwd">getCounter</span>(<span class="kwb">int</span> k) {
+         <span class="kwa">if</span> (k &gt; SMALL_BIG_THRESHOLD) <span class="kwa">throw new</span> <span class="kwd">UnsupportedOperationException</span>();
+
+         AbstractCounter counter = null;
+         <span class="kwa">try</span> {
+            counter = counterMap.<span class="kwd">get</span>(k).<span class="kwd">get</span>(A); <span class="slc">// for small counters all letters map to the same counter</span>
+         } <span class="kwa">catch</span> (NullPointerException e) {}
+
+         <span class="kwa">return</span> counter;
+      }
+
+      AbstractCounter[] <span class="kwd">getCounters</span>() {<span class="kwa">return</span>  counters;}
+   }
+}
+
+
+<span class="kwa">final class</span> IsReader {
+   <span class="kwa">static final</span> <span class="kwb">int</span> IO_BUFFER_SIZE = <span class="num">256</span>*<span class="num">1024</span>;
+
+   <span class="kwa">final</span> ReadableByteChannel rbc;
+   <span class="kwa">final</span> ByteBuffer bb;
+
+   <span class="kwb">int</span> index; <span class="slc">// current index into backing array</span>
+   <span class="kwb">int</span> length = <span class="num">0</span>; <span class="slc">// the number of bytes in the backing array</span>
+   <span class="kwb">byte</span>[] backingArray;
+   <span class="kwb">boolean</span> eof = false;
+
+   <span class="kwa">public</span> <span class="kwd">IsReader</span>(InputStream is) <span class="kwa">throws</span> Exception {
+      rbc = <span class="kwd">extractChannel</span>(is);
+      bb = ByteBuffer.<span class="kwd">allocateDirect</span>(IO_BUFFER_SIZE);
+
+      backingArray = <span class="kwa">new</span> <span class="kwb">byte</span>[IO_BUFFER_SIZE];
+      index = <span class="num">0</span>;
+
+      <span class="kwd">readMoreIfNeeded</span>();
+   }
+
+   <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">readMoreIfNeeded</span>() <span class="kwa">throws</span> IOException {
+      <span class="kwa">while</span> (length == index) {
+         length = rbc.<span class="kwd">read</span>(bb);
+         <span class="kwa">if</span> (length == -<span class="num">1</span>) {
+            length = <span class="num">0</span>;
+            eof = true;
+            <span class="kwa">break</span>;
+         }
+         bb.<span class="kwd">flip</span>();
+         bb.<span class="kwd">get</span>(backingArray, <span class="num">0</span>, length);
+         index = <span class="num">0</span>;
+      }
+   }
+
+   <span class="kwa">public</span> <span class="kwb">byte</span> <span class="kwd">get</span>() <span class="kwa">throws</span> IOException {
+      <span class="kwd">readMoreIfNeeded</span>();
+      <span class="kwa">return</span> backingArray[index++];
+   }
+
+   <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">readLine</span>(<span class="kwb">byte</span>[] dst, <span class="kwb">int</span> dstOffset) <span class="kwa">throws</span> IOException {
+      <span class="kwb">int</span> dstIndex = dstOffset;
+      <span class="kwb">int</span> dstLength = dst.length;
+
+      outer:
+      <span class="kwa">while</span> (!<span class="kwd">eof</span>()) {
+         <span class="kwd">readMoreIfNeeded</span>();
+
+         <span class="kwb">int</span> index = <span class="kwa">this</span>.index;
+         <span class="kwb">int</span> length = <span class="kwa">this</span>.length;
+
+         <span class="kwa">while</span> (index &lt; length) {
+            <span class="kwa">if</span> (dstIndex &gt;= dstLength) {
+               <span class="kwa">this</span>.index = index;
+               <span class="kwa">break</span> outer;
+            }
+
+            <span class="kwb">byte</span> b = backingArray[index++];
+
+            <span class="kwa">if</span> (b == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) {
+               <span class="kwa">this</span>.index = index;
+               <span class="kwa">break</span> outer;
+            }
+
+            dst[dstIndex++] = b;
+         }
+
+         <span class="kwa">this</span>.index = index;
+      }
+
+      <span class="kwa">return</span> dstIndex - dstOffset;
+   }
+
+   <span class="kwa">public</span> <span class="kwb">byte</span>[] <span class="kwd">getNextChunk</span>(<span class="kwb">int</span> size) <span class="kwa">throws</span> IOException {
+      size = (size &lt;= <span class="num">0</span> ? IO_BUFFER_SIZE : size);
+      <span class="kwb">byte</span>[] tmp = <span class="kwa">new</span> <span class="kwb">byte</span>[size];
+      <span class="kwb">int</span> offset = <span class="num">0</span>;
+
+      <span class="kwa">while</span> (true) {
+         <span class="kwa">if</span> (<span class="kwd">eof</span>()) {
+            tmp = Arrays.<span class="kwd">copyOf</span>(tmp, offset);
+            <span class="kwa">break</span>;
+         }
+
+         <span class="kwb">int</span> count = <span class="kwd">readLine</span>(tmp, offset);
+         offset += count;
+
+         <span class="kwa">if</span> (offset == tmp.length) <span class="kwa">break</span>;
+      }
+
+      <span class="kwa">return</span> tmp;
+   }
+
+   <span class="kwa">public</span> <span class="kwb">boolean</span> <span class="kwd">eof</span>() {
+      <span class="kwa">return</span> eof;
+   }
+
+   <span class="kwa">private static</span> ReadableByteChannel <span class="kwd">extractChannel</span>(InputStream <span class="kwa">in</span>)
+         <span class="kwa">throws</span> NoSuchFieldException, IllegalAccessException {
+
+      Field f = FilterInputStream.<span class="kwa">class</span>.<span class="kwd">getDeclaredField</span>(<span class="str">&quot;in&quot;</span>);
+      f.<span class="kwd">setAccessible</span>(true);
+
+      <span class="kwa">while</span> (<span class="kwa">in instanceof</span> FilterInputStream) {
+         <span class="kwa">in</span> = (InputStream) f.<span class="kwd">get</span>(<span class="kwa">in</span>);
+      }
+
+      <span class="kwa">return</span> Channels.<span class="kwd">newChannel</span>(<span class="kwa">in</span>);
+   }
+}
+
+<span class="kwa">abstract class</span> AbstractCounter {
+   <span class="kwa">protected final</span> <span class="kwb">int</span> k;
+
+   <span class="kwa">protected final</span> <span class="kwb">int</span> shift;
+
+   <span class="kwa">protected</span> <span class="kwd">AbstractCounter</span>(<span class="kwa">final</span> <span class="kwb">int</span> k) {
+      <span class="kwa">this</span>.k = k;
+      shift = k*knucleotide.BITS_PER_CHAR;
+   }
+
+   <span class="kwa">public abstract</span> <span class="kwb">void</span> <span class="kwd">seed</span>(<span class="kwb">byte</span>[] mapped, <span class="kwb">int</span> length);
+   <span class="kwa">public abstract</span> <span class="kwb">void</span> <span class="kwd">consume</span>(<span class="kwb">byte</span>[] mapped, <span class="kwb">int</span> offset, <span class="kwb">int</span> length);
+   <span class="kwa">public abstract</span> <span class="kwb">int</span> <span class="kwd">getCount</span>(<span class="kwb">int</span> key);
+   <span class="kwa">public abstract</span> <span class="kwb">int</span> <span class="kwd">getCount</span>(String key);
+}
+
+<span class="kwa">final class</span> SmallCounter <span class="kwa">extends</span> AbstractCounter {
+   <span class="kwa">protected final</span> <span class="kwb">int</span> mask;
+
+   <span class="kwb">int</span> readingFrame = <span class="num">0</span>;
+
+   <span class="kwa">final</span> <span class="kwb">int</span>[] counts;
+
+   <span class="kwa">public</span> <span class="kwd">SmallCounter</span>(<span class="kwb">int</span> k) {
+      <span class="kwa">super</span>(k);
+
+      <span class="kwb">int</span> mask = <span class="num">1</span>;
+      <span class="kwb">int</span> n = shift;
+      <span class="kwa">while</span> (--n &gt; <span class="num">0</span>) {
+         mask = mask &lt;&lt; <span class="num">1</span> | <span class="num">1</span>;
+      }
+      <span class="kwa">this</span>.mask = mask;
+
+      counts = <span class="kwa">new</span> <span class="kwb">int</span>[(<span class="kwb">int</span>)Math.<span class="kwd">round</span>(Math.<span class="kwd">pow</span>(<span class="num">2</span>, k*knucleotide.BITS_PER_CHAR))];
+   }
+
+   <span class="kwc">&#64;Override</span>
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">seed</span>(<span class="kwb">byte</span>[] mapped, <span class="kwb">int</span> length) {
+      <span class="kwa">if</span> (length &lt; k) {
+         <span class="kwa">throw new</span> <span class="kwd">IllegalArgumentException</span>(<span class="str">&quot;length must be &gt;= &quot;</span> + k);
+      }
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; k; i++) {
+         readingFrame = (readingFrame &lt;&lt; knucleotide.BITS_PER_CHAR) | mapped[i];
+      }
+      counts[readingFrame]++;
+      <span class="kwd">consume</span>(mapped, k, length);
+   }
+
+   <span class="kwc">&#64;Override</span>
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">consume</span>(<span class="kwb">byte</span>[] mapped, <span class="kwb">int</span> offset, <span class="kwb">int</span> length) {
+      <span class="kwb">int</span> readingFrame = <span class="kwa">this</span>.readingFrame;
+      <span class="kwb">int</span> mask = <span class="kwa">this</span>.mask;
+      <span class="kwb">int</span>[] counts = <span class="kwa">this</span>.counts;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = offset; i &lt; length ; i++) {
+         readingFrame = (readingFrame &lt;&lt; knucleotide.BITS_PER_CHAR) | mapped[i];
+         readingFrame = readingFrame &amp; mask;
+         counts[readingFrame]++;
+      }
+      <span class="kwa">this</span>.readingFrame = readingFrame;
+   }
+
+   <span class="kwc">&#64;Override</span>
+   <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">getCount</span>(<span class="kwb">int</span> key) {
+      <span class="kwa">return</span> counts[key];
+   }
+
+   <span class="kwc">&#64;Override</span>
+   <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">getCount</span>(String key) {
+      <span class="kwa">return</span> <span class="kwd">getCount</span>(knucleotide.<span class="kwd">toIntKey</span>(key));
+   }
+}
+
+<span class="kwa">final class</span> BigCounter <span class="kwa">extends</span> AbstractCounter {
+   <span class="kwa">protected final</span> <span class="kwb">long</span> mask;
+
+   <span class="kwb">long</span> readingFrame = <span class="num">0</span>;
+
+   <span class="kwa">private final</span> PackedHash h = <span class="kwa">new</span> <span class="kwd">PackedHash</span>();
+
+   <span class="kwa">final</span> <span class="kwb">byte</span> letter;
+
+   <span class="kwa">public</span> <span class="kwd">BigCounter</span>(<span class="kwb">int</span> k, <span class="kwb">byte</span> letter) {
+      <span class="kwa">super</span>(k);
+
+      <span class="kwa">this</span>.letter = letter;
+
+      <span class="kwb">long</span> mask = <span class="num">1</span>;
+      <span class="kwb">int</span> n = shift;
+      <span class="kwa">while</span> (--n &gt; <span class="num">0</span>) {
+         mask = mask &lt;&lt; <span class="num">1</span> | <span class="num">1</span>;
+      }
+      <span class="kwa">this</span>.mask = mask;
+   }
+
+   <span class="kwc">&#64;Override</span>
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">seed</span>(<span class="kwb">byte</span>[] mapped, <span class="kwb">int</span> length) {
+      <span class="kwa">if</span> (length &lt; k) {
+         <span class="kwa">throw new</span> <span class="kwd">IllegalArgumentException</span>(<span class="str">&quot;length must be &gt;= &quot;</span> + k);
+      }
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; k - <span class="num">1</span>; i++) {
+         readingFrame = (readingFrame &lt;&lt; knucleotide.BITS_PER_CHAR) | mapped[i];
+      }
+
+      <span class="kwd">consume</span>(mapped, k - <span class="num">1</span>, length);
+   }
+
+
+   <span class="kwc">&#64;Override</span>
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">consume</span>(<span class="kwb">byte</span>[] mapped, <span class="kwb">int</span> offset, <span class="kwb">int</span> length) {
+      <span class="kwa">if</span> (letter == -<span class="num">1</span>) {
+         <span class="slc">// count all letters</span>
+         <span class="kwd">countAll</span>(mapped, offset, length);
+      } <span class="kwa">else</span> {
+         <span class="slc">// count specific letter</span>
+         <span class="kwd">countSpecific</span>(mapped, offset, length);
+      }
+   }
+
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">countAll</span>(<span class="kwb">byte</span>[] mapped, <span class="kwb">int</span> offset, <span class="kwb">int</span> length) {
+      <span class="kwb">long</span> readingFrame = <span class="kwa">this</span>.readingFrame;
+      <span class="kwb">long</span> mask = <span class="kwa">this</span>.mask;
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = offset; i &lt; length ; i++) {
+         <span class="kwb">byte</span> curLetter = mapped[i];
+         readingFrame = (readingFrame &lt;&lt; knucleotide.BITS_PER_CHAR) | curLetter;
+         readingFrame = readingFrame &amp; mask;
+         <span class="kwd">countCurrent</span>(readingFrame);
+      }
+
+      <span class="kwa">this</span>.readingFrame = readingFrame;
+   }
+
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">countSpecific</span>(<span class="kwb">byte</span>[] mapped, <span class="kwb">int</span> offset, <span class="kwb">int</span> length) {
+      <span class="kwb">byte</span> letter = <span class="kwa">this</span>.letter;
+      <span class="kwb">long</span> readingFrame = <span class="kwa">this</span>.readingFrame;
+      <span class="kwb">long</span> mask = <span class="kwa">this</span>.mask;
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = offset; i &lt; length ; i++) {
+         <span class="kwb">byte</span> curLetter = mapped[i];
+         readingFrame = (readingFrame &lt;&lt; knucleotide.BITS_PER_CHAR) | curLetter;
+         readingFrame = readingFrame &amp; mask;
+         <span class="kwa">if</span> (curLetter == letter) <span class="kwd">countCurrent</span>(readingFrame);
+      }
+
+      <span class="kwa">this</span>.readingFrame = readingFrame;
+   }
+
+   <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">countCurrent</span>(<span class="kwb">long</span> readingFrame) {
+      h.<span class="kwd">increment</span>(readingFrame);
+   }
+
+   <span class="kwc">&#64;Override</span>
+   <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">getCount</span>(<span class="kwb">int</span> key) {
+      <span class="kwa">return</span> h.<span class="kwd">getCount</span>(key);
+   }
+
+   <span class="kwc">&#64;Override</span>
+   <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">getCount</span>(String key) {
+      <span class="kwb">long</span> lKey = knucleotide.<span class="kwd">toLongKey</span>(key);
+      <span class="kwa">return</span> h.<span class="kwd">getCount</span>(lKey);
+   }
+}
+
+<span class="kwa">final class</span> PackedHash {
+   <span class="kwa">private static final</span> <span class="kwb">float</span> LOAD_FACTOR    = <span class="num">0.75</span>f;
+   <span class="kwa">private static final</span> <span class="kwb">int</span> DEFAULT_SIZE    = <span class="num">16</span>;
+
+   <span class="kwa">private static final</span> <span class="kwb">long</span> KEY_MASK      = <span class="num">0x0000000fffffffff</span>L; <span class="slc">// 36 bits for k up to 18</span>
+   <span class="kwa">private static final</span> <span class="kwb">long</span> COUNT_MASK    = <span class="num">0x000000000fffffff</span>L; <span class="slc">// should count up to 2^28-1 ~= 256m occurrences</span>
+   <span class="kwa">private   static final</span> <span class="kwb">long</span> KEY_SHIFT    = Long.<span class="kwd">numberOfLeadingZeros</span>(KEY_MASK);
+
+   <span class="kwb">long</span>[] table = <span class="kwa">new</span> <span class="kwb">long</span>[DEFAULT_SIZE];
+
+   <span class="kwb">int</span> size = <span class="num">0</span>;
+   <span class="kwb">int</span> threshold = (<span class="kwb">int</span>)(table.length*LOAD_FACTOR);
+
+   <span class="kwa">public</span> <span class="kwd">PackedHash</span>() {}
+
+   <span class="slc">// borrowed from JDK</span>
+   <span class="kwa">static final</span> <span class="kwb">int</span> <span class="kwd">hash</span>(<span class="kwb">int</span> h) {
+      h ^= (h &gt;&gt;&gt; <span class="num">20</span>) ^ (h &gt;&gt;&gt; <span class="num">12</span>);
+      <span class="kwa">return</span> h ^ (h &gt;&gt;&gt; <span class="num">7</span>) ^ (h &gt;&gt;&gt; <span class="num">4</span>);
+   }
+
+   <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">getCount</span>(<span class="kwb">long</span> key) {
+      <span class="kwb">int</span> index = <span class="kwd">index</span>(key, table);
+      <span class="kwa">return</span> <span class="kwd">getValue</span>(table[index]);
+   }
+
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">increment</span>(<span class="kwb">long</span> key) {
+      <span class="kwb">int</span> index = <span class="kwd">index</span>(key, table);
+      <span class="kwa">if</span> (table[index]++ == <span class="num">0</span>) {
+         table[index] = <span class="kwd">pack</span>(key, <span class="num">1</span>);
+         size++;
+         <span class="kwd">ensureCapacity</span>();
+      }
+   }
+
+   <span class="kwa">private</span> <span class="kwb">void</span> <span class="kwd">ensureCapacity</span>() {
+      <span class="kwa">if</span> (size &gt;= threshold) {
+         <span class="kwb">long</span>[] oldTable = <span class="kwa">this</span>.table;
+         <span class="kwb">long</span>[] newTable = <span class="kwa">new</span> <span class="kwb">long</span>[oldTable.length*<span class="num">2</span>];
+
+         <span class="kwa">final</span> <span class="kwb">int</span> curSize = oldTable.length;
+         <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; curSize; i++) {
+            <span class="kwb">long</span> entry = oldTable[i];
+            <span class="kwa">if</span> (entry != <span class="num">0</span>) {
+               <span class="slc">//transfer</span>
+               <span class="kwb">long</span> key = <span class="kwd">getKey</span>(entry);
+               <span class="kwb">int</span> index = <span class="kwd">index</span>(key, newTable);
+               newTable[index] = entry;
+            }
+         }
+
+         <span class="kwa">this</span>.table = newTable;
+         threshold = (<span class="kwb">int</span>)(newTable.length * LOAD_FACTOR);
+      }
+   }
+
+   <span class="kwa">private static</span> <span class="kwb">int</span> <span class="kwd">index</span>(<span class="kwb">long</span> key, <span class="kwb">long</span>[] table) {
+      <span class="kwb">int</span> index = (<span class="kwb">int</span>)(key ^ (key &gt;&gt;&gt; <span class="num">32</span>));
+      index = <span class="kwd">hash</span>(index);
+
+      <span class="kwa">final</span> <span class="kwb">int</span> indexMask = table.length - <span class="num">1</span>;
+      index = index &amp; indexMask;
+
+      <span class="kwa">while</span> ( ! (<span class="kwd">getKey</span>(table[index]) == key || table[index] == <span class="num">0</span>) ) {
+         index = (index + <span class="num">1</span>) &amp; indexMask;
+      }
+
+      <span class="kwa">return</span> index;
+   }
+
+   <span class="kwa">private static</span> <span class="kwb">long</span> <span class="kwd">getKey</span>(<span class="kwb">long</span> entry)          {<span class="kwa">return</span>      (entry &gt;&gt;&gt; KEY_SHIFT) &amp; KEY_MASK;}
+   <span class="kwa">private static</span> <span class="kwb">int</span> <span class="kwd">getValue</span>(<span class="kwb">long</span> entry)       {<span class="kwa">return</span> (<span class="kwb">int</span>)(entry  &amp;  COUNT_MASK)          ;}
+   <span class="kwa">private static</span> <span class="kwb">long</span> <span class="kwd">pack</span>(<span class="kwb">long</span> key, <span class="kwb">int</span> value)    {<span class="kwa">return</span>      (key   &lt;&lt;  KEY_SHIFT) | value   ;}
+}
+
+<span class="kwa">class</span> AffinityDetectionHelper {
+   <span class="kwa">public static</span> <span class="kwb">boolean</span> <span class="kwd">isLockedToSingleCore</span>() {
+      <span class="kwa">try</span> {
+         <span class="slc">// when using a native method the effect of the JIT should be less unpredictable...</span>
+         <span class="kwb">double</span> cpuWallTimeRatio = <span class="kwd">timeNativeMethod</span>(<span class="num">4</span>);
+
+         <span class="slc">// empirically determined to be ~ 0.85 with low variation when the</span>
+         <span class="slc">// JVM is locked to a single core</span>
+         <span class="kwa">return</span> cpuWallTimeRatio &lt; <span class="num">1.0</span>;
+      } <span class="kwa">catch</span> (InterruptedException e) {
+         <span class="kwa">throw new</span> <span class="kwd">RuntimeException</span>(e);
+      }
+   }
+
+   <span class="kwa">private static</span> <span class="kwb">double</span> <span class="kwd">timeNativeMethod</span>(<span class="kwb">int</span> nThreads) <span class="kwa">throws</span> InterruptedException {
+      <span class="kwb">int</span> workSize = <span class="num">4</span>;
+      ArrayList&lt;Thread&gt; threads = <span class="kwa">new</span> ArrayList&lt;Thread&gt;(nThreads);
+      <span class="kwa">final</span> <span class="kwb">int</span> arraySize = <span class="num">1024</span>*<span class="num">1024</span>;
+      <span class="kwa">final</span> <span class="kwb">byte</span>[] a = <span class="kwa">new</span> <span class="kwb">byte</span>[arraySize];
+
+      <span class="kwa">final</span> AtomicLong cpuTime = <span class="kwa">new</span> <span class="kwd">AtomicLong</span>(<span class="num">0</span>);
+
+      ArrayList&lt;ArrayBlockingQueue&lt;Runnable&gt;&gt; queueList = <span class="kwa">new</span> ArrayList&lt;ArrayBlockingQueue&lt;Runnable&gt;&gt;();
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; nThreads; i++) {
+         <span class="kwa">final</span> ArrayBlockingQueue&lt;Runnable&gt; q = <span class="kwa">new</span> ArrayBlockingQueue&lt;Runnable&gt;(workSize/nThreads);
+         queueList.<span class="kwd">add</span>(q);
+
+         <span class="kwa">while</span> (q.<span class="kwd">offer</span>(<span class="kwa">new</span> <span class="kwd">Runnable</span>() {
+            <span class="kwc">&#64;Override</span>
+            <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+               <span class="kwb">byte</span>[] b = <span class="kwa">new</span> <span class="kwb">byte</span>[arraySize];
+               System.<span class="kwd">arraycopy</span>(a, <span class="num">0</span>, b, <span class="num">0</span>, a.length);
+               cpuTime.<span class="kwd">addAndGet</span>(ManagementFactory.<span class="kwd">getThreadMXBean</span>( ).<span class="kwd">getCurrentThreadCpuTime</span>());
+            }
+         })) {}
+
+         <span class="kwa">final class</span> T <span class="kwa">extends</span> Thread {
+            <span class="kwc">&#64;Override</span>
+            <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+               Runnable r;
+               <span class="kwa">while</span> ( (r = q.<span class="kwd">poll</span>()) != null ) r.<span class="kwd">run</span>();
+            }
+         }
+
+         threads.<span class="kwd">add</span>(<span class="kwa">new</span> <span class="kwd">T</span>());
+      }
+
+      <span class="kwb">long</span> t0 = System.<span class="kwd">nanoTime</span>();
+      <span class="kwa">for</span> (Thread t : threads) t.<span class="kwd">start</span>();
+      <span class="kwa">for</span> (Thread t : threads) t.<span class="kwd">join</span>();
+      <span class="kwb">long</span> wallTime = System.<span class="kwd">nanoTime</span>() - t0;
+
+      <span class="kwa">return</span> (<span class="num">1.0</span>*cpuTime.<span class="kwd">get</span>()/wallTime);
+   }
+}

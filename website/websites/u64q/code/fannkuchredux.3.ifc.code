@@ -1,0 +1,162 @@
+<span class="slc">! The Computer Language Benchmarks Game</span>
+<span class="slc">! http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">!</span>
+<span class="slc">! Code by Andrei Jirnyi; modified from my earlier submission.</span>
+<span class="slc">!  thanks to Gilbert Brietzke for the previous Fortran code,</span>
+<span class="slc">!  and to other submitters for their work</span>
+<span class="slc">! Compilation:</span>
+<span class="slc">! - single-core: ifort -fast fannkuch3.f90</span>
+<span class="slc">! - multi-core:  ifort -fast -openmp fannkuch3.f90</span>
+
+<span class="kwa">program</span> fannkuch
+  <span class="kwa">use</span> iso_fortran_env
+  <span class="kwa">use</span> iso_c_binding
+  <span class="kwa">implicit none</span>
+
+  <span class="kwa">integer</span>,<span class="kwa">parameter</span> :: ILONG = <span class="num">8</span>, ISHORT = <span class="num">1</span>, MAXL = <span class="num">7</span>
+  <span class="kwa">integer</span> :: NP, maxfk, cksum = <span class="num">0</span>, current = <span class="num">0</span>
+  <span class="kwa">integer</span>(ILONG) ::NQ
+  <span class="kwa">integer</span>(ISHORT), allocatable :: <span class="kwd">blk</span>(:,:), <span class="kwd">cnt</span>(:)
+  <span class="kwa">logical</span> ::saveblk = .true.
+  <span class="kwa">character</span>(len=<span class="num">2</span>) :: arg
+  <span class="kwa">character</span>(len=<span class="num">20</span>) :: out
+  <span class="kwa">logical</span> :: WR = .false., WR1 = .false.
+
+  WR1 = WR1 .or. WR
+
+  <span class="kwa">call</span> <span class="kwd">get_command_argument</span>(<span class="num">1</span>,arg)
+  <span class="kwa">read</span>(arg,<span class="str">'(I2)'</span>) NP
+  NQ = <span class="kwd">factorial</span>(MAXL)/MAXL
+  <span class="kwd">allocate</span>(<span class="kwd">blk</span>(NP,NQ))
+  <span class="kwd">allocate</span>(<span class="kwd">cnt</span>(NP))
+  cnt = <span class="num">0</span>
+
+  <span class="kwa">call</span> <span class="kwd">fkcompute</span>(NP)
+
+  <span class="kwa">write</span>(out,<span class="str">'(i15)'</span>) cksum-<span class="num">2</span>
+  <span class="kwa">write</span>(*,<span class="str">'(a)'</span>) <span class="kwd">trim</span>(<span class="kwd">adjustl</span>(out))
+  <span class="kwa">write</span>(*,<span class="str">'(3a,i3)'</span>) <span class="str">'Pfannkuchen('</span>,<span class="kwd">trim</span>(<span class="kwd">adjustl</span>(arg)),<span class="str">') ='</span>,maxfk
+
+<span class="kwa">contains</span>
+
+  <span class="kwa">function</span> <span class="kwd">factorial</span>(n)
+    <span class="kwa">integer</span> n, factorial, i
+    factorial = <span class="num">1</span>
+    <span class="kwa">do</span> i=<span class="num">1</span>,n
+       factorial = factorial*i
+    <span class="kwa">end do</span>
+  <span class="kwa">end function</span> factorial
+
+  <span class="kwa">subroutine</span> <span class="kwd">fkcompute</span>(NP)
+    <span class="kwa">integer</span> :: NP
+    <span class="kwa">integer</span>(ILONG) :: bsize
+    <span class="kwa">integer</span> :: i,k,k1
+    <span class="kwa">integer</span>(ISHORT), <span class="kwa">dimension</span>(NP) :: base,oldbase
+    <span class="kwa">integer</span> :: numblk, ii, nshift
+    <span class="kwa">integer</span> :: maxlevel
+    <span class="kwa">integer</span>(ISHORT),allocatable :: <span class="kwd">bases</span>(:,:)
+    <span class="kwa">integer</span> ::icksum, imaxfk
+
+    base = [(i,i=<span class="num">1</span>,NP)]
+    <span class="kwd">blk</span>(:,<span class="num">1</span>) = base;
+
+    k = <span class="num">2</span>;
+    bsize = <span class="num">1</span>;
+    maxfk = <span class="num">0</span>;
+    nshift = <span class="num">1</span>
+    maxlevel = <span class="kwd">min</span>(MAXL,NP);   <span class="slc">! max block level</span>
+
+    <span class="kwa">do</span> i=<span class="num">2</span>,NP       <span class="slc">! rot count</span>
+       current = i
+       <span class="kwa">if</span>(i&gt;=maxlevel) saveblk = .false.
+
+       <span class="kwa">if</span>(i&lt;=maxlevel) <span class="kwa">then</span>
+          numblk = i-<span class="num">1</span>
+          nshift = i
+          bsize = bsize*(i-<span class="num">1</span>)
+       <span class="kwa">else</span>
+          numblk = (i-<span class="num">1</span>)*<span class="kwd">factorial</span>(i-<span class="num">1</span>)/bsize
+       <span class="kwa">end if</span>
+       oldbase = base
+       <span class="kwd">allocate</span>(<span class="kwd">bases</span>(NP,numblk))
+       <span class="kwa">do</span> ii=<span class="num">1</span>, numblk
+          <span class="kwa">call</span> <span class="kwd">baseshift</span>(base, nshift)
+          <span class="kwd">bases</span>(:,ii) = base
+       <span class="kwa">end do</span>
+
+       <span class="slc">!$omp  parallel do default(shared) private(ii,k1,icksum,imaxfk) &amp;</span>
+       <span class="slc">!$omp&amp; if(numblk&gt;1000) schedule(guided) &amp;</span>
+       <span class="slc">!$omp&amp; reduction(+:cksum) reduction(max: maxfk) </span>
+       <span class="kwa">do</span> ii = <span class="num">1</span>, numblk
+          k1 = k+bsize*(ii-<span class="num">1</span>)
+          <span class="kwa">if</span>(saveblk) <span class="kwa">then</span>
+             <span class="kwa">call</span> <span class="kwd">writeblk</span>(<span class="kwd">blk</span>(<span class="num">1</span>,k1),<span class="kwd">blk</span>(<span class="num">1</span>,<span class="num">1</span>),<span class="kwd">bases</span>(<span class="num">1</span>,ii),bsize)
+          <span class="kwa">end if</span>
+          <span class="kwa">call</span> <span class="kwd">procblk</span>(<span class="kwd">blk</span>(<span class="num">1</span>,<span class="num">1</span>),<span class="kwd">bases</span>(<span class="num">1</span>,ii),bsize,icksum,imaxfk)
+          cksum = cksum+icksum
+          maxfk = <span class="kwd">max</span>(maxfk, imaxfk)
+       <span class="kwa">end do</span>
+       <span class="slc">!$omp end parallel do</span>
+
+       k = k+bsize*numblk
+       <span class="kwd">deallocate</span>(bases)
+       <span class="kwa">if</span>(saveblk) <span class="kwa">then</span>
+          base = oldbase
+          <span class="kwd">cnt</span>(<span class="num">1</span>:nshift-<span class="num">1</span>)=<span class="num">0</span>
+          <span class="kwd">cnt</span>(nshift) = <span class="kwd">cnt</span>(nshift)+<span class="num">1</span>
+       <span class="kwa">end if</span>
+    <span class="kwa">end do</span>
+
+  <span class="kwa">end subroutine</span> fkcompute
+
+  <span class="kwa">recursive subroutine</span> <span class="kwd">baseshift</span>(base, n)
+    <span class="kwa">integer</span>(ISHORT) :: <span class="kwd">base</span>(NP)
+    <span class="kwa">integer</span> :: n
+
+    <span class="kwd">base</span>(<span class="num">1</span>:n) = <span class="kwd">cshift</span>(<span class="kwd">base</span>(<span class="num">1</span>:n), <span class="num">1</span>)
+    <span class="kwd">cnt</span>(n) = <span class="kwd">cnt</span>(n) +<span class="num">1</span>
+    <span class="kwa">if</span>(<span class="kwd">cnt</span>(n) &gt;= n) <span class="kwa">then</span>
+       <span class="kwd">cnt</span>(n) = <span class="num">0</span>
+       <span class="kwa">if</span>(n == NP) <span class="kwa">return</span>
+       <span class="kwa">call</span> <span class="kwd">baseshift</span>(base, n+<span class="num">1</span>)
+    <span class="kwa">end if</span>
+
+  <span class="kwa">end subroutine</span> baseshift
+  
+  <span class="kwa">subroutine</span> <span class="kwd">procblk</span>(mult,base,bsize,icksum,imaxfk)
+    <span class="kwa">integer</span>(ILONG) :: bsize
+    <span class="kwa">integer</span>(ISHORT) :: <span class="kwd">base</span>(NP),<span class="kwd">mult</span>(NP,bsize)
+    <span class="kwa">integer</span>(ISHORT) :: <span class="kwd">line</span>(NP), t, t1
+    <span class="kwa">integer</span> :: j, ii, iii, icksum, imaxfk
+
+    icksum = <span class="num">0</span>
+    imaxfk = <span class="num">0</span>
+
+    <span class="kwa">do</span> iii=<span class="num">1</span>,bsize
+       line = <span class="kwd">base</span>(<span class="kwd">mult</span>(:,iii));
+       j = <span class="num">0</span>
+       t = <span class="kwd">line</span>(<span class="num">1</span>)
+       <span class="kwa">do while</span>(t /= <span class="num">1</span>)        <span class="slc">! flip till line(1)==1 </span>
+          <span class="kwa">do</span> ii=<span class="num">1</span>,<span class="kwd">ishft</span>(t,-<span class="num">1</span>)  <span class="slc">! do the flip</span>
+             t1 = <span class="kwd">line</span>(ii)
+             <span class="kwd">line</span>(ii) = <span class="kwd">line</span>(t+<span class="num">1</span>-ii)
+             <span class="kwd">line</span>(t+<span class="num">1</span>-ii) = t1
+          <span class="kwa">end do</span>
+          t = <span class="kwd">line</span>(<span class="num">1</span>)
+          j = j+<span class="num">1</span>
+       <span class="kwa">end do</span>
+       imaxfk = <span class="kwd">max</span>(imaxfk, j)
+       icksum = icksum+j*(<span class="kwd">ishft</span>(<span class="kwd">mod</span>(iii,<span class="num">2</span>),<span class="num">1</span>)-<span class="num">1</span>)
+    <span class="kwa">end do</span>
+    
+  <span class="kwa">end subroutine</span> procblk
+
+  <span class="kwa">subroutine</span> <span class="kwd">writeblk</span>(blk,mult,base,bsize);
+    <span class="kwa">integer</span>(ILONG) :: bsize
+    <span class="kwa">integer</span>(ISHORT) :: <span class="kwd">blk</span>(NP*bsize),<span class="kwd">mult</span>(NP*bsize),<span class="kwd">base</span>(NP)
+
+    blk = <span class="kwd">base</span>(mult);
+
+  <span class="kwa">end subroutine</span> writeblk
+
+<span class="kwa">end program</span> fannkuch

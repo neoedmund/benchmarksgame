@@ -1,0 +1,61 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Ethan Burns</span>
+<span class="com">*)</span>
+
+
+<span class="com">(** Flip the front [n] pancakes of [a]. *)</span>
+<span class="kwa">let</span> flip n (a : <span class="kwb">int</span> array) =
+  <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> n / <span class="num">2</span> <span class="kwa">do</span>
+    <span class="kwa">let</span> t = a.(i) <span class="kwa">in</span>
+    <span class="kwa">let</span> k = n - i <span class="kwa">in</span>
+      a.(i) &lt;- a.(k);
+      a.(k) &lt;- t;
+  <span class="kwa">done</span>
+
+<span class="com">(** Count the number of flips so that pancake 0 is at index 0. *)</span>
+<span class="kwa">let rec</span> count c ary =
+  <span class="kwa">let</span> z = ary.(<span class="num">0</span>) <span class="kwa">in</span>
+    <span class="kwa">if</span> z &lt;&gt; <span class="num">0</span> <span class="kwa">then begin</span>
+      flip z ary;
+      count (c + <span class="num">1</span>) ary
+    <span class="kwa">end else</span>
+      c
+
+<span class="com">(** Rotate the first [n] pancakes of [a]. *)</span>
+<span class="kwa">let</span> rotate n (a : <span class="kwb">int</span> array) =
+  <span class="kwa">let</span> t = a.(<span class="num">0</span>) <span class="kwa">in</span>
+  <span class="kwa">let</span> m = n - <span class="num">1</span> <span class="kwa">in</span>
+    <span class="kwa">for</span> i = <span class="num">1</span> <span class="kwa">to</span> m <span class="kwa">do</span>
+      a.(i - <span class="num">1</span>) &lt;- a.(i);
+    <span class="kwa">done</span>;
+    a.(m) &lt;- t
+
+<span class="com">(** Call [f] on each permutation of [n] numbers in order. *)</span>
+<span class="kwa">let</span> iter_perms n f =
+  <span class="kwa">let rec</span> do_iter num perm copy f ht =
+    <span class="kwa">if</span> ht = <span class="num">1</span> <span class="kwa">then begin</span>
+      <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> n - <span class="num">1</span> <span class="kwa">do</span> copy.(i) &lt;- perm.(i) <span class="kwa">done</span>;
+      f !num copy;
+      incr num;
+    <span class="kwa">end else</span>
+      <span class="kwa">for</span> i = <span class="num">1</span> <span class="kwa">to</span> ht <span class="kwa">do</span>
+	do_iter num perm copy f (ht - <span class="num">1</span>);
+	rotate ht perm;
+      <span class="kwa">done</span>
+  <span class="kwa">in</span>
+  <span class="kwa">let</span> perm = <span class="kwc">Array</span>.init n (<span class="kwa">fun</span> i -&gt; i) <span class="kwa">in</span>
+  <span class="kwa">let</span> copy = <span class="kwc">Array</span>.create n <span class="num">0</span> <span class="kwa">in</span>
+  <span class="kwa">let</span> num = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+    do_iter num perm copy f n
+
+<span class="kwa">let</span> _ =
+  <span class="kwa">let</span> n = int_of_string <span class="kwc">Sys</span>.argv.(<span class="num">1</span>) <span class="kwa">in</span>
+  <span class="kwa">let</span> csum = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">and</span> m = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+    iter_perms n (<span class="kwa">fun</span> num a -&gt;
+		    <span class="kwa">let</span> c = count <span class="num">0</span> a <span class="kwa">in</span>
+		      <span class="com">(* csum update from Otto Bommer's Scala ver. *)</span>
+		      csum := !csum + c * (<span class="num">1</span> - (num <span class="kwa">land</span> <span class="num">1</span>) <span class="kwa">lsl</span> <span class="num">1</span>);
+		      <span class="kwa">if</span> c &gt; !m <span class="kwa">then</span> m := c;);
+    <span class="kwc">Printf</span>.printf <span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">Pfannkuchen(</span><span class="ipl">%d</span><span class="str">) =</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> !csum n !m

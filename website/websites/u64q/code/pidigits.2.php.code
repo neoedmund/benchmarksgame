@@ -1,0 +1,77 @@
+&lt;?php 
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Peter Baltruschat</span>
+<span class="com">*/</span>
+<span class="kwa">function</span> <span class="kwd">Transformation_Compose</span>($tr, $a)
+{
+   <span class="kwa">return array</span>(
+      <span class="kwd">gmp_mul</span>($tr[<span class="num">0</span>], $a[<span class="num">0</span>]),
+      <span class="kwd">gmp_add</span>(<span class="kwd">gmp_mul</span>($tr[<span class="num">0</span>], $a[<span class="num">1</span>]), <span class="kwd">gmp_mul</span>($tr[<span class="num">1</span>], $a[<span class="num">3</span>])),
+      <span class="kwd">gmp_add</span>(<span class="kwd">gmp_mul</span>($tr[<span class="num">2</span>], $a[<span class="num">0</span>]), <span class="kwd">gmp_mul</span>($tr[<span class="num">3</span>], $a[<span class="num">2</span>])),
+      <span class="kwd">gmp_add</span>(<span class="kwd">gmp_mul</span>($tr[<span class="num">2</span>], $a[<span class="num">1</span>]), <span class="kwd">gmp_mul</span>($tr[<span class="num">3</span>], $a[<span class="num">3</span>]))
+   );
+}
+<span class="kwa">function</span> <span class="kwd">Transformation_Compose2</span>($y, $a)
+{
+   <span class="kwa">return array</span>(
+      <span class="kwd">gmp_mul</span>(<span class="num">10</span>, $a[<span class="num">0</span>]),
+      <span class="kwd">gmp_add</span>(<span class="kwd">gmp_mul</span>(<span class="num">10</span>, $a[<span class="num">1</span>]), <span class="kwd">gmp_mul</span>(<span class="kwd">gmp_mul</span>(-<span class="num">10</span>, $y), $a[<span class="num">3</span>])),
+      $a[<span class="num">2</span>],
+      $a[<span class="num">3</span>]
+   );
+}
+<span class="kwa">function</span> <span class="kwd">Transformation_Extract</span>($tr, $j)
+{
+   <span class="kwa">return</span> <span class="kwd">gmp_div_q</span>(
+      <span class="kwd">gmp_add</span>(<span class="kwd">gmp_mul</span>($tr[<span class="num">0</span>], $j), $tr[<span class="num">1</span>]),
+      <span class="kwd">gmp_add</span>(<span class="kwd">gmp_mul</span>($tr[<span class="num">2</span>], $j), $tr[<span class="num">3</span>])
+   );
+}
+<span class="kwa">function</span> <span class="kwd">Transformation_Next</span>(&amp;$tr)
+{
+   $tr[<span class="num">3</span>] = (++$tr[<span class="num">0</span>]&lt;&lt;<span class="num">1</span>) + <span class="num">1</span>;
+   $tr[<span class="num">1</span>] = $tr[<span class="num">3</span>]&lt;&lt;<span class="num">1</span>;
+   $tr[<span class="num">2</span>] = <span class="num">0</span>;
+   <span class="kwa">return</span> $tr;
+}
+<span class="kwa">function</span> <span class="kwd">Pidigit_Next</span>(&amp;$pd, $times)
+{
+   $digits = <span class="str">''</span>;
+   $z = $pd[<span class="num">0</span>];
+   <span class="kwa">do</span>
+   {
+      $y = <span class="kwd">Transformation_Extract</span>($z, <span class="num">3</span>);
+      <span class="kwa">do</span>
+      {
+         $z = <span class="kwd">Transformation_Compose</span>($z, <span class="kwd">Transformation_Next</span>($pd[<span class="num">1</span>]));
+         $y = <span class="kwd">Transformation_Extract</span>($z, <span class="num">3</span>);
+      }
+      <span class="kwa">while</span>(<span class="num">0</span> != <span class="kwd">gmp_cmp</span>(<span class="kwd">Transformation_Extract</span>($z, <span class="num">4</span>), $y));
+      $z = <span class="kwd">Transformation_Compose2</span>($y, $z);
+      $digits .= <span class="kwd">gmp_strval</span>($y);
+   }
+   <span class="kwa">while</span>(--$times);
+   $pd[<span class="num">0</span>] = $z;
+   <span class="kwa">return</span> $digits;
+}
+
+$n = (<span class="kwb">int</span>) $argv[<span class="num">1</span>];
+$i = <span class="num">0</span>;
+$pidigit = <span class="kwa">array</span>(<span class="kwa">array</span>(<span class="num">1</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>), <span class="kwa">array</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>));
+
+<span class="kwa">while</span>($n)
+{
+   <span class="kwa">if</span>($n &lt; <span class="num">10</span>)
+   {
+      <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%s%s</span><span class="str"></span><span class="esc">\t</span><span class="str">:</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">Pidigit_Next</span>($pidigit, $n), <span class="kwd">str_repeat</span>(<span class="str">' '</span>, <span class="num">10</span> - $n), $i + $n);
+      <span class="kwa">break</span>;
+   }
+   <span class="kwa">else</span>
+   {
+      <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%s</span><span class="str"></span><span class="esc">\t</span><span class="str">:</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="kwd">Pidigit_Next</span>($pidigit, <span class="num">10</span>), $i += <span class="num">10</span>);
+   }
+   $n -= <span class="num">10</span>;
+}
+?&gt;

@@ -1,0 +1,14 @@
+
+Tue, 24 Mar 2015 20:56:09 GMT
+
+MAKE:
+/usr/local/src/intel/bin/ifort -O3 -fast -openmp fannkuchredux.f90 -o fannkuchredux.ifc_run
+rm fannkuchredux.f90
+0.36s to complete and log all make actions
+
+COMMAND LINE:
+./fannkuchredux.ifc_run 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

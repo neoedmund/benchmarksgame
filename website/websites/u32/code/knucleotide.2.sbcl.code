@@ -1,0 +1,122 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;   contributed by Vsevolod Dyomkin</span>
+<span class="slc">;;   modified by John Fingerhut</span>
+
+
+(<span class="kwa">defun</span> slice-and-dice (<span class="kwa">gene</span> k ht)
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>))
+	   (<span class="kwa">type</span> simple-base-string gene)
+	   (<span class="kwa">type</span> fixnum k))
+  (<span class="kwa">clrhash</span> ht)
+<span class="slc">;  (setf ht (make-hash-table :size (expt 2 k)))</span>
+  (<span class="kwa">if</span> (= k <span class="num">1</span>)
+      (<span class="kwa">dotimes</span> (<span class="kwa">i</span> (<span class="kwa">the</span> fixnum (<span class="kwa">1</span>+ (<span class="kwa">-</span> (<span class="kwa">length</span> gene) k))))
+        (<span class="kwa">incf</span> (<span class="kwa">the</span> fixnum (<span class="kwa">gethash</span> (<span class="kwa">schar</span> gene i) ht <span class="num">0</span>))))
+      (<span class="kwa">loop</span> for i from <span class="num">0</span> to (<span class="kwa">the</span> fixnum (<span class="kwa">1</span>+ (<span class="kwa">-</span> (<span class="kwa">length</span> gene) k)))
+         with gene-num = <span class="num">0</span> and mask = (<span class="kwa">1-</span> (<span class="kwa">expt</span> <span class="num">4</span> k)) do
+           (<span class="kwa">setf</span> gene-num (<span class="kwa">logand</span> mask (<span class="kwa">letter-to-num</span> gene i gene-num)))
+           (<span class="kwa">unless</span> (&lt; i (<span class="kwa">the</span> fixnum (<span class="kwa">1-</span> k)))
+             (<span class="kwa">incf</span> (<span class="kwa">the</span> fixnum (<span class="kwa">gethash</span> gene-num ht <span class="num">0</span>))))))
+  ht)
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> letter-to-num))
+(<span class="kwa">defun</span> letter-to-num (<span class="kwa">gene</span> i idx)
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>))
+           (<span class="kwa">type</span> fixnum i))
+  (<span class="kwa">ecase</span> (<span class="kwa">schar</span> gene i)
+    (#\A (<span class="kwa">ash</span> idx <span class="num">2</span>))
+    (#\C (<span class="kwa">logxor</span> (<span class="kwa">ash</span> idx <span class="num">2</span>) <span class="num">1</span>))
+    (#\G (<span class="kwa">logxor</span> (<span class="kwa">ash</span> idx <span class="num">2</span>) <span class="num">2</span>))
+    (#\T (<span class="kwa">logxor</span> (<span class="kwa">ash</span> idx <span class="num">2</span>) <span class="num">3</span>))))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> gene-to-num))
+(<span class="kwa">defun</span> gene-to-num (<span class="kwa">gene</span>)
+  (<span class="kwa">let</span> ((<span class="kwa">gene-num</span> <span class="num">0</span>))
+    (<span class="kwa">dotimes</span> (<span class="kwa">i</span> (<span class="kwa">length</span> gene))
+      (<span class="kwa">declare</span> (<span class="kwa">fixnum</span> i))
+      (<span class="kwa">setf</span> gene-num (<span class="kwa">letter-to-num</span> gene i gene-num)))
+    gene-num))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> num-to-gene))
+(<span class="kwa">defun</span> num-to-gene (<span class="kwa">num</span> k)
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>))
+           (<span class="kwa">type</span> fixnum num)
+           (<span class="kwa">type</span> fixnum k))
+  (<span class="kwa">let</span> ((<span class="kwa">gene</span> (<span class="kwa">make-array</span> k :element-type 'base-char))
+        (<span class="kwa">acgt</span> #(#\A #\C #\G #\T)))
+    (<span class="kwa">dotimes</span> (<span class="kwa">i</span> k)
+      (<span class="kwa">let</span> ((<span class="kwa">pos</span> (* i <span class="num">2</span>)))
+        (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum pos))
+        (<span class="kwa">setf</span> (<span class="kwa">aref</span> gene (<span class="kwa">-</span> k i <span class="num">1</span>))
+              (<span class="kwa">aref</span> acgt (+ (<span class="kwa">if</span> (<span class="kwa">logbitp</span> pos num) <span class="num">1 0</span>)
+                            (<span class="kwa">if</span> (<span class="kwa">logbitp</span> (<span class="kwa">1</span>+ pos) num) <span class="num">2 0</span>))))))
+    gene))
+
+(<span class="kwa">defun</span> discard-data-header (<span class="kwa">stream</span>)
+  (<span class="kwa">loop</span> for line = (<span class="kwa">read-line</span> stream nil nil)
+	while (<span class="kwa">and</span> line (<span class="kwa">string</span>/= <span class="str">&quot;&gt;THREE&quot;</span> line :end2 <span class="num">6</span>))))
+
+(<span class="kwa">defun</span> read-data (<span class="kwa">stream</span>)
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)))
+  (<span class="kwa">let</span> ((<span class="kwa">data</span> (<span class="kwa">make-array</span> <span class="num">0</span> :element-type 'base-char :adjustable t :fill-pointer <span class="num">0</span>)))
+    (<span class="kwa">do</span> ((<span class="kwa">line</span> (<span class="kwa">read-line</span> stream nil 'eof) (<span class="kwa">read-line</span> stream nil 'eof)))
+        ((<span class="kwa">or</span> (<span class="kwa">eq</span> line 'eof) (<span class="kwa">char</span>= (<span class="kwa">schar</span> line <span class="num">0</span>) #\&gt;)))
+      (<span class="kwa">if</span> (<span class="kwa">not</span> (<span class="kwa">char</span>= (<span class="kwa">schar</span> line <span class="num">0</span>) #\<span class="slc">;))</span>
+          (<span class="kwa">dotimes</span> (<span class="kwa">char-index</span> (<span class="kwa">length</span> line))
+            (<span class="kwa">vector-push-extend</span> (<span class="kwa">char-upcase</span> (<span class="kwa">the</span> base-char (<span class="kwa">schar</span> line char-index))) data))))
+    (<span class="kwa">coerce</span> data 'simple-base-string)))
+
+(<span class="kwa">defun</span> print-precentages (<span class="kwa">gene</span> k ht)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> simple-base-string gene)
+	   (<span class="kwa">type</span> fixnum k))
+  (<span class="kwa">let</span>* ((<span class="kwa">gene-table</span> (<span class="kwa">slice-and-dice</span> gene k ht))
+	 sorted-frequencies
+	 (<span class="kwa">sum</span> <span class="num">0</span>))
+    (<span class="kwa">maphash</span> (<span class="kwa">lambda</span> (<span class="kwa">key</span> v)
+	       (<span class="kwa">incf</span> sum v)
+	       (<span class="kwa">push</span> (<span class="kwa">cons</span> key v)
+                     sorted-frequencies))
+	     gene-table)
+    (<span class="kwa">setf</span> sorted-frequencies
+	  (<span class="kwa">sort</span> sorted-frequencies
+		(<span class="kwa">lambda</span> (<span class="kwa">v1</span> v2)
+                  (<span class="kwa">cond</span> ((&gt; (<span class="kwa">cdr</span> v1) (<span class="kwa">cdr</span> v2)) t)
+                        ((&lt; (<span class="kwa">cdr</span> v1) (<span class="kwa">cdr</span> v2)) nil)
+                        (<span class="kwa">t</span> (&lt; (<span class="kwa">car</span> v1) (<span class="kwa">car</span> v2)))))))
+    (<span class="kwa">dolist</span> (<span class="kwa">entry</span> sorted-frequencies)
+      (<span class="kwa">format</span> t <span class="str">&quot;~a ~,3F~%&quot;</span>
+	      (<span class="kwa">if</span> (= k <span class="num">1</span>) (<span class="kwa">car</span> entry)
+                  (<span class="kwa">num-to-gene</span> (<span class="kwa">car</span> entry) k))
+	      (* (/ (<span class="kwa">cdr</span> entry) (<span class="kwa">float</span> sum)) <span class="num">100.0</span>)))
+    (<span class="kwa">terpri</span>)))
+
+(<span class="kwa">defun</span> print-occurence (<span class="kwa">slice</span> gene k ht)
+  (<span class="kwa">let</span> ((<span class="kwa">gene-table</span> (<span class="kwa">slice-and-dice</span> gene k ht)))
+    (<span class="kwa">format</span> t <span class="str">&quot;~A~C~A~%&quot;</span>
+            (<span class="kwa">gethash</span> (<span class="kwa">gene-to-num</span> slice) gene-table <span class="num">0</span>)
+            #\Tab
+            slice)))
+
+(<span class="kwa">defun</span> main ()
+  (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">0</span>) (<span class="kwa">safety</span> <span class="num">1</span>)))
+  (<span class="kwa">discard-data-header</span> *standard-input*)
+  (<span class="kwa">let</span> ((<span class="kwa">gene</span> (<span class="kwa">read-data</span> *standard-input*))
+        (<span class="kwa">ht</span> (<span class="kwa">make-hash-table</span> :rehash-size <span class="num">5.0</span>)))
+    (<span class="kwa">print-precentages</span> gene <span class="num">1</span> ht)
+    (<span class="kwa">print-precentages</span> gene <span class="num">2</span> ht)
+    (<span class="kwa">print-occurence</span> <span class="str">&quot;GGT&quot;</span> gene <span class="num">3</span> ht)
+    (<span class="kwa">print-occurence</span> <span class="str">&quot;GGTA&quot;</span> gene <span class="num">4</span> ht)
+    (<span class="kwa">print-occurence</span> <span class="str">&quot;GGTATT&quot;</span> gene <span class="num">6</span> ht)
+    (<span class="kwa">print-occurence</span> <span class="str">&quot;GGTATTTTAATT&quot;</span> gene <span class="num">12</span> ht)
+    (<span class="kwa">print-occurence</span> <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span> gene <span class="num">18</span> ht)))
+
+
+(<span class="kwa">defun</span> test ()
+  (<span class="kwa">with-open-file</span> (*standard-input* <span class="str">&quot;knucleotide-input.txt&quot;</span>
+				    :direction :input)
+    (<span class="kwa">with-open-file</span> (*standard-output* <span class="str">&quot;knucleotide-output.txt&quot;</span>
+				       :direction :output
+				       :if-does-not-exist :create
+				       :if-exists :supersede)
+      (<span class="kwa">main</span>))))

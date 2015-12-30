@@ -1,0 +1,12 @@
+
+Mon, 24 Aug 2015 02:27:02 GMT
+
+MAKE:
+/usr/bin/hh_client
+No errors!
+0.03s to complete and log all make actions
+
+COMMAND LINE:
+/usr/bin/hhvm  mandelbrot.hack-2.hack 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN

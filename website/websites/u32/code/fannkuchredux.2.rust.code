@@ -1,0 +1,156 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by TeXitoi</span>
+
+<span class="kwa">use</span> std::{cmp, mem};
+<span class="kwa">use</span> std::thread;
+
+<span class="kwa">fn</span> rotate(x: &amp;<span class="kwa">mut</span> [i32]) {
+    <span class="kwa">let mut</span> prev = x[<span class="num">0</span>];
+    <span class="kwa">for</span> place <span class="kwa">in</span> x.iter_mut().rev() {
+        prev = mem::replace(place, prev)
+    }
+}
+
+<span class="kwa">fn</span> next_permutation(perm: &amp;<span class="kwa">mut</span> [i32], count: &amp;<span class="kwa">mut</span> [i32]) {
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">1</span>..perm.len() {
+        rotate(&amp;<span class="kwa">mut</span> perm[.. i + <span class="num">1</span>]);
+        <span class="kwa">let</span> count_i = &amp;<span class="kwa">mut</span> count[i];
+        <span class="kwa">if</span> *count_i &gt;= i <span class="kwa">as</span> i32 {
+            *count_i = <span class="num">0</span>;
+        } <span class="kwa">else</span> {
+            *count_i += <span class="num">1</span>;
+            <span class="kwa">break</span>
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+<span class="kwa">struct</span> P {
+    p: [i32; <span class="num">16</span>],
+}
+
+#[derive(Clone, Copy)]
+<span class="kwa">struct</span> Perm {
+    cnt: [i32; <span class="num">16</span>],
+    fact: [u32; <span class="num">16</span>],
+    n: u32,
+    permcount: u32,
+    perm: P,
+}
+
+<span class="kwa">impl</span> Perm {
+    <span class="kwa">fn</span> new(n: u32) -&gt; Perm {
+        <span class="kwa">let mut</span> fact = [<span class="num">1</span>; <span class="num">16</span>];
+        <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">1</span> .. n <span class="kwa">as</span> usize + <span class="num">1</span> {
+            fact[i] = fact[i - <span class="num">1</span>] * i <span class="kwa">as</span> u32;
+        }
+        Perm {
+            cnt: [<span class="num">0</span>; <span class="num">16</span>],
+            fact: fact,
+            n: n,
+            permcount: <span class="num">0</span>,
+            perm: P { p: [<span class="num">0</span>; <span class="num">16</span> ] }
+        }
+    }
+
+    <span class="kwa">fn</span> get(&amp;<span class="kwa">mut self</span>, <span class="kwa">mut</span> idx: i32) -&gt; P {
+        <span class="kwa">let mut</span> pp = [<span class="num">0u8</span>; <span class="num">16</span>];
+        <span class="kwa">self</span>.permcount = idx <span class="kwa">as</span> u32;
+        <span class="kwa">for</span> (i, place) <span class="kwa">in self</span>.perm.p.iter_mut().enumerate() {
+            *place = i <span class="kwa">as</span> i32 + <span class="num">1</span>;
+        }
+
+        <span class="kwa">for</span> i <span class="kwa">in</span> (<span class="num">1</span> .. <span class="kwa">self</span>.n <span class="kwa">as</span> usize).rev() {
+            <span class="kwa">let</span> d = idx / <span class="kwa">self</span>.fact[i] <span class="kwa">as</span> i32;
+            <span class="kwa">self</span>.cnt[i] = d;
+            idx %= <span class="kwa">self</span>.fact[i] <span class="kwa">as</span> i32;
+            <span class="kwa">for</span> (place, val) <span class="kwa">in</span> pp.iter_mut().zip(<span class="kwa">self</span>.perm.p[..(i+<span class="num">1</span>)].iter()) {
+                *place = (*val) <span class="kwa">as</span> u8
+            }
+
+            <span class="kwa">let</span> d = d <span class="kwa">as</span> usize;
+            <span class="kwa">for</span> j <span class="kwa">in</span> <span class="num">0</span> .. i + <span class="num">1</span> {
+                <span class="kwa">self</span>.perm.p[j] = <span class="kwa">if</span> j + d &lt;= i {pp[j + d]} <span class="kwa">else</span> {pp[j+d-i-<span class="num">1</span>]} <span class="kwa">as</span> i32;
+            }
+        }
+
+        <span class="kwa">self</span>.perm
+    }
+
+    <span class="kwa">fn</span> count(&amp;<span class="kwa">self</span>) -&gt; u32 { <span class="kwa">self</span>.permcount }
+    <span class="kwa">fn</span> max(&amp;<span class="kwa">self</span>) -&gt; u32 { <span class="kwa">self</span>.fact[<span class="kwa">self</span>.n <span class="kwa">as</span> usize] }
+
+    <span class="kwa">fn</span> next(&amp;<span class="kwa">mut self</span>) -&gt; P {
+        next_permutation(&amp;<span class="kwa">mut self</span>.perm.p, &amp;<span class="kwa">mut self</span>.cnt);
+        <span class="kwa">self</span>.permcount += <span class="num">1</span>;
+
+        <span class="kwa">self</span>.perm
+    }
+}
+
+
+<span class="kwa">fn</span> reverse(tperm: &amp;<span class="kwa">mut</span> [i32], k: usize) {
+    tperm[..k].reverse()
+}
+
+<span class="kwa">fn</span> work(<span class="kwa">mut</span> perm: Perm, n: usize, max: usize) -&gt; (i32, i32) {
+    <span class="kwa">let mut</span> checksum = <span class="num">0</span>;
+    <span class="kwa">let mut</span> maxflips = <span class="num">0</span>;
+
+    <span class="kwa">let mut</span> p = perm.get(n <span class="kwa">as</span> i32);
+
+    <span class="kwa">while</span> perm.count() &lt; max <span class="kwa">as</span> u32 {
+        <span class="kwa">let mut</span> flips = <span class="num">0</span>;
+
+        <span class="kwa">while</span> p.p[<span class="num">0</span>] != <span class="num">1</span> {
+            <span class="kwa">let</span> k = p.p[<span class="num">0</span>] <span class="kwa">as</span> usize;
+            reverse(&amp;<span class="kwa">mut</span> p.p, k);
+            flips += <span class="num">1</span>;
+        }
+
+        checksum += <span class="kwa">if</span> perm.count() % <span class="num">2</span> == <span class="num">0</span> {flips} <span class="kwa">else</span> {-flips};
+        maxflips = cmp::max(maxflips, flips);
+
+        p = perm.next();
+    }
+
+    (checksum, maxflips)
+}
+
+<span class="kwa">fn</span> fannkuch(n: i32) -&gt; (i32, i32) {
+    <span class="kwa">let</span> perm = Perm::new(n <span class="kwa">as</span> u32);
+
+    <span class="kwa">let</span> n = <span class="num">4</span>;
+    <span class="kwa">let mut</span> futures = vec![];
+    <span class="kwa">let</span> k = perm.max() / n;
+
+    <span class="kwa">for</span> j <span class="kwa">in</span> (<span class="num">0</span>..).map(|x| x * k).take_while(|&amp;j| j &lt; k * n) {
+        <span class="kwa">let</span> max = cmp::min(j+k, perm.max());
+
+        futures.push(thread::spawn(<span class="kwa">move</span>|| {
+            work(perm, j <span class="kwa">as</span> usize, max <span class="kwa">as</span> usize)
+        }))
+    }
+
+    <span class="kwa">let mut</span> checksum = <span class="num">0</span>;
+    <span class="kwa">let mut</span> maxflips = <span class="num">0</span>;
+    <span class="kwa">for</span> fut <span class="kwa">in</span> futures.into_iter() {
+        <span class="kwa">let</span> (cs, mf) = fut.join().unwrap();
+        checksum += cs;
+        maxflips = cmp::max(maxflips, mf);
+    }
+    (checksum, maxflips)
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> n = std::env::args_os().nth(<span class="num">1</span>)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">7</span>);
+
+    <span class="kwa">let</span> (checksum, maxflips) = fannkuch(n);
+    println!(<span class="str">&quot;{}</span><span class="esc">\n</span><span class="str">Pfannkuchen({}) = {}&quot;</span>, checksum, n, maxflips);
+}

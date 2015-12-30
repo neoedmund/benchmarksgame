@@ -1,0 +1,42 @@
+
+Thu, 27 Aug 2015 05:51:20 GMT
+
+MAKE:
+mv chameneosredux.jruby chameneosredux.rb
+0.01s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jruby-9.0.0.0/bin/jruby --server  chameneosredux.rb 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+blue red yellow 
+3964409 zero
+4126334 zero
+3909257 zero
+ one two zero zero zero zero zero zero
+
+blue red yellow red yellow blue red yellow red blue 
+1272217 zero
+1197926 zero
+1182003 zero
+1165723 zero
+1190451 zero
+1211628 zero
+1162068 zero
+1208818 zero
+1214233 zero
+1194933 zero
+ one two zero zero zero zero zero zero
+
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

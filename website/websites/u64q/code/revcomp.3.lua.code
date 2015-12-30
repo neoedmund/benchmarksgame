@@ -1,0 +1,45 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- contributed by Mike Pall (with ideas from Rici Lake)</span>
+<span class="slc">-- modified by Sokolov Yura</span>
+
+<span class="kwa">local</span> len, sub, concat = <span class="kwb">string</span>.len, <span class="kwb">string</span>.sub, <span class="kwb">table</span>.concat
+<span class="kwa">local</span> <span class="kwb">write</span>, <span class="kwb">mod</span> = io.<span class="kwb">write</span>, math.<span class="kwb">mod</span>
+
+<span class="kwa">local function</span> <span class="kwd">writerev</span>(p, np, f, lo, hi)
+  <span class="kwa">if</span> lo &lt;= hi <span class="kwa">then</span> np = np + <span class="num">1</span>; p[np] = <span class="kwd">concat</span>(f, <span class="str">&quot;&quot;</span>, lo, hi) <span class="kwa">end</span>
+  <span class="kwa">if</span> np ~= <span class="num">0</span> <span class="kwa">then</span>
+    <span class="kwa">local</span> r = <span class="str">&quot;&quot;</span>
+    <span class="kwa">for</span> i=np,<span class="num">1</span>,-<span class="num">1</span> <span class="kwa">do</span>
+      <span class="kwa">local</span> s = r..p[i]
+      <span class="kwa">local</span> sn = <span class="kwd">len</span>(s)
+      <span class="kwa">for</span> i=<span class="num">1</span>,sn-<span class="num">59</span>,<span class="num">60</span> <span class="kwa">do</span> <span class="kwb">write</span>(<span class="kwd">sub</span>(s, i, i+<span class="num">59</span>), <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>) <span class="kwa">end</span>
+      r = <span class="kwd">sub</span>(s, sn-<span class="kwb">mod</span>(sn, <span class="num">60</span>)+<span class="num">1</span>)
+    <span class="kwa">end</span>
+    <span class="kwa">if</span> r ~= <span class="str">&quot;&quot;</span> <span class="kwa">then</span> <span class="kwb">write</span>(r, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>) <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">local</span> iubc = <span class="kwd">setmetatable</span>({
+  A=<span class="str">&quot;T&quot;</span>, C=<span class="str">&quot;G&quot;</span>, B=<span class="str">&quot;V&quot;</span>, D=<span class="str">&quot;H&quot;</span>, K=<span class="str">&quot;M&quot;</span>, R=<span class="str">&quot;Y&quot;</span>,
+  a=<span class="str">&quot;T&quot;</span>, c=<span class="str">&quot;G&quot;</span>, b=<span class="str">&quot;V&quot;</span>, d=<span class="str">&quot;H&quot;</span>, k=<span class="str">&quot;M&quot;</span>, r=<span class="str">&quot;Y&quot;</span>,
+  T=<span class="str">&quot;A&quot;</span>, G=<span class="str">&quot;C&quot;</span>, V=<span class="str">&quot;B&quot;</span>, H=<span class="str">&quot;D&quot;</span>, M=<span class="str">&quot;K&quot;</span>, Y=<span class="str">&quot;R&quot;</span>, U=<span class="str">&quot;A&quot;</span>,
+  t=<span class="str">&quot;A&quot;</span>, g=<span class="str">&quot;C&quot;</span>, v=<span class="str">&quot;B&quot;</span>, h=<span class="str">&quot;D&quot;</span>, m=<span class="str">&quot;K&quot;</span>, y=<span class="str">&quot;R&quot;</span>, u=<span class="str">&quot;A&quot;</span>,
+  N=<span class="str">&quot;N&quot;</span>, S=<span class="str">&quot;S&quot;</span>, W=<span class="str">&quot;W&quot;</span>, n=<span class="str">&quot;N&quot;</span>, s=<span class="str">&quot;S&quot;</span>, w=<span class="str">&quot;W&quot;</span>,
+}, { __index = <span class="kwa">function</span>(t, s)
+  <span class="kwa">local</span> r = t[<span class="kwd">sub</span>(s, <span class="num">2</span>)]..t[<span class="kwd">sub</span>(s, <span class="num">1</span>, <span class="num">1</span>)]; t[s] = r; <span class="kwa">return</span> r <span class="kwa">end</span> })
+
+<span class="kwa">local</span> p, f, np, nf = {}, {}, <span class="num">0</span>, <span class="num">1631</span>
+<span class="kwa">for</span> line <span class="kwa">in</span> io.<span class="kwd">lines</span>() <span class="kwa">do</span>
+  <span class="kwa">local</span> c = <span class="kwd">sub</span>(line, <span class="num">1</span>, <span class="num">1</span>)
+  <span class="kwa">if</span> c == <span class="str">&quot;&gt;&quot;</span> <span class="kwa">then</span>
+    <span class="kwd">writerev</span>(p, np, f, nf, <span class="num">1630</span>); np = <span class="num">0</span>; nf = <span class="num">1631</span>
+    <span class="kwb">write</span>(line, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)
+  <span class="kwa">elseif</span> c ~= <span class="str">&quot;;&quot;</span> <span class="kwa">then</span>
+    <span class="kwa">for</span> i=<span class="num">1</span>,<span class="kwd">len</span>(line),<span class="num">4</span> <span class="kwa">do</span> nf = nf - <span class="num">1</span>; f[nf] = iubc[<span class="kwd">sub</span>(line, i, i+<span class="num">3</span>)] <span class="kwa">end</span>
+    <span class="kwa">if</span> nf &lt;= <span class="num">30</span> <span class="kwa">then</span>
+      np = np + <span class="num">1</span>; p[np] = <span class="kwd">concat</span>(f, <span class="str">&quot;&quot;</span>, nf, <span class="num">1630</span>); nf = <span class="num">1631</span>
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+<span class="kwd">writerev</span>(p, np, f, nf, <span class="num">1630</span>)

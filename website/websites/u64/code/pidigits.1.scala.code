@@ -1,0 +1,27 @@
+<span class="com">/* </span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Joseph Tang</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> math._
+
+<span class="kwa">def</span> <span class="kwd">pi</span>(n: Int) = {
+  <span class="kwa">val</span> pr = <span class="num">1.0</span> / <span class="kwd">pow</span>(<span class="num">10</span>, n)
+  <span class="kwa">def</span> <span class="kwd">t</span>(initial: BigDecimal = <span class="num">2</span>, i: Int = <span class="num">0</span>): Int = {
+    <span class="kwa">val</span> current = (i + <span class="num">1</span>) * <span class="num">1.0</span> / (<span class="num">2</span> * i + <span class="num">3</span>) * initial
+    <span class="kwa">if</span> (current &lt; pr) i <span class="kwa">else</span> <span class="kwd">t</span>(current, i + <span class="num">1</span>)
+  }
+  <span class="kwa">val</span> ts = <span class="kwd">t</span>()
+  <span class="kwa">def</span> <span class="kwd">calPi</span>(i: Int): BigDecimal = <span class="kwa">if</span> (i &gt; ts) <span class="num">2.5</span> <span class="kwa">else</span> <span class="num">2</span> + i * <span class="kwd">calPi</span>(i + <span class="num">1</span>) / (<span class="num">2</span> * i + <span class="num">1</span>)
+  <span class="kwd">calPi</span>(<span class="num">1</span>)
+}
+
+<span class="kwa">def</span> <span class="kwd">p10</span>(s: String, offset: Int = <span class="num">0</span>) {
+  <span class="kwa">val</span> (s1, r) = s.<span class="kwd">splitAt</span>(<span class="num">10</span>)
+  <span class="kwd">println</span>(s<span class="str">&quot;$s1</span><span class="esc">\t</span><span class="str">:${offset + s1.length}&quot;</span>)
+  <span class="kwa">if</span> (!r.isEmpty) <span class="kwd">p10</span>(r, <span class="num">10</span> + offset)
+}
+
+<span class="kwa">val</span> n = <span class="kwa">if</span> (args.isEmpty) <span class="num">27</span> <span class="kwa">else</span> <span class="kwd">args</span>(<span class="num">0</span>).toInt
+<span class="kwd">p10</span>(<span class="kwd">pi</span>(n).<span class="kwd">toString</span>().<span class="kwd">filterNot</span>(_ == <span class="str">'.'</span>).<span class="kwd">substring</span>(<span class="num">0</span>, n))

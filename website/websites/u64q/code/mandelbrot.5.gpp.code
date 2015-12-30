@@ -1,0 +1,82 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by Elam Kolenovic</span>
+<span class="slc">//</span>
+<span class="slc">// Changes (2013-04-07):</span>
+<span class="slc">//   - removed unnecessary arrays, faster especially on 32 bits</span>
+<span class="slc">//   - using putchar instead of iostreams, slightly faster</span>
+<span class="slc">//   - using namespace std for readability</span>
+<span class="slc">//   - replaced size_t with unsigned</span>
+<span class="slc">//   - removed some includes</span>
+
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;limits&gt;</span>
+<span class="ppc">#include &lt;vector&gt;</span>
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned char</span> Byte;
+
+<span class="kwa">using namespace</span> std;
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span>* argv[])
+{
+    <span class="kwb">const unsigned</span> N             = <span class="kwd">max</span>(<span class="num">0</span>, (argc &gt; <span class="num">1</span>) ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">0</span>);
+    <span class="kwb">const unsigned</span> width         = N;
+    <span class="kwb">const unsigned</span> height        = N;
+    <span class="kwb">const unsigned</span> maxX          = (width + <span class="num">7</span>) / <span class="num">8</span>;
+    <span class="kwb">const unsigned</span> maxIterations = <span class="num">50</span>;
+    <span class="kwb">const double</span>   limit         = <span class="num">2.0</span>;
+    <span class="kwb">const double</span>   limitSq       = limit * limit;
+
+    vector&lt;Byte&gt; <span class="kwd">data</span>(height * maxX);
+
+    <span class="kwd">printf</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">%u %u</span><span class="esc">\n</span><span class="str">&quot;</span>, width, height);
+
+    <span class="kwa">for</span> (<span class="kwb">unsigned</span> y = <span class="num">0</span>; y &lt; height; ++y)
+    {
+        <span class="kwb">const double</span> ci0 = <span class="num">2.0</span> * y / height - <span class="num">1.0</span>;
+
+        <span class="kwa">for</span> (<span class="kwb">unsigned</span> x = <span class="num">0</span>; x &lt; maxX; ++x)
+        {
+            <span class="kwb">double</span> cr0[<span class="num">8</span>];
+            <span class="kwa">for</span> (<span class="kwb">unsigned</span> k = <span class="num">0</span>; k &lt; <span class="num">8</span>; ++k)
+            {
+                cr0[k] = <span class="num">2.0</span> * (<span class="num">8</span> * x + k) / width - <span class="num">1.5</span>;
+            }
+
+            <span class="kwb">double</span> cr[<span class="num">8</span>];
+            <span class="kwd">copy</span>(cr0, cr0 + <span class="num">8</span>, &amp;cr[<span class="num">0</span>]);
+
+            <span class="kwb">double</span> ci[<span class="num">8</span>];
+            <span class="kwd">fill</span>(ci, ci + <span class="num">8</span>, ci0);
+
+            Byte bits = <span class="num">0</span>;
+            <span class="kwa">for</span> (<span class="kwb">unsigned</span> i = <span class="num">0</span>; i &lt; maxIterations &amp;&amp; bits != <span class="num">0xFF</span>; ++i)
+            {
+                <span class="kwa">for</span> (<span class="kwb">unsigned</span> k = <span class="num">0</span>; k &lt; <span class="num">8</span>; ++k)
+                {
+                    <span class="kwb">const</span> Byte mask = (<span class="num">1</span> &lt;&lt; (<span class="num">7</span> - k));
+                    <span class="kwa">if</span> ((bits &amp; mask) == <span class="num">0</span>)
+                    {
+                        <span class="kwb">const double</span> crk  = cr[k];
+                        <span class="kwb">const double</span> cik  = ci[k];
+                        <span class="kwb">const double</span> cr2k = crk * crk;
+                        <span class="kwb">const double</span> ci2k = cik * cik;
+
+                        cr[k] = cr2k - ci2k + cr0[k];
+                        ci[k] = <span class="num">2.0</span> * crk * cik + ci0;
+
+                        <span class="kwa">if</span> (cr2k + ci2k &gt; limitSq)
+                        {
+                            bits |= mask;
+                        }
+                    }
+                }
+            }
+            <span class="kwd">putchar</span>(~bits);
+        }
+    }
+
+    <span class="kwa">return</span> <span class="num">0</span>;
+}

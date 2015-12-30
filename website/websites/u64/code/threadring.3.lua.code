@@ -1,0 +1,45 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- contributed by Sam Roberts</span>
+<span class="slc">-- reviewed by Bruno Massa</span>
+
+require<span class="str">&quot;coroutine&quot;</span>
+
+<span class="slc">-- first and only argument is number of token passes</span>
+<span class="kwa">local</span> n         = <span class="kwb">assert</span>(<span class="kwb">tonumber</span>(arg[<span class="num">1</span>]))
+
+<span class="slc">-- fixed size pool</span>
+<span class="kwa">local</span> poolsize  = <span class="num">503</span>
+<span class="kwa">local</span> threads   = {}
+
+<span class="slc">-- cache these to avoid global environment lookups</span>
+<span class="kwa">local</span> create    = coroutine.create
+<span class="kwa">local</span> resume    = coroutine.resume
+<span class="kwa">local</span> yield     = coroutine.yield
+
+<span class="kwa">local</span> id        = <span class="num">1</span>
+<span class="kwa">local</span> token     = <span class="num">0</span>
+<span class="kwa">local</span> ok
+
+<span class="kwa">local</span> body = <span class="kwa">function</span>(token)
+  <span class="kwa">while true do</span>
+    token = <span class="kwd">yield</span>(token + <span class="num">1</span>)
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="slc">-- create all threads</span>
+<span class="kwa">for</span> id = <span class="num">1</span>, poolsize <span class="kwa">do</span>
+  threads[id] = <span class="kwd">create</span>(body)
+<span class="kwa">end</span>
+
+<span class="slc">-- send the token</span>
+<span class="kwa">repeat</span>
+  <span class="kwa">if</span> id == poolsize <span class="kwa">then</span>
+    id = <span class="num">1</span>
+  <span class="kwa">else</span>
+    id = id + <span class="num">1</span>
+  <span class="kwa">end</span>
+  ok, token = <span class="kwd">resume</span>(threads[id], token)
+<span class="kwa">until</span> token == n
+
+<span class="kwb">print</span>(id)

@@ -1,0 +1,95 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">  contributed by Paolo Bonzini &amp; Sean Bartlett</span>
+<span class="com">  modified by Michael Mellor</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;gmp.h&gt;</span>
+
+<span class="kwb">static</span> mpz_t numer, accum, denom, tmp1, tmp2;
+
+<span class="kwb">static int</span> <span class="kwd">extract_digit</span>()
+{
+  <span class="kwa">if</span> (<span class="kwd">mpz_cmp</span>(numer, accum) &gt; <span class="num">0</span>)
+    <span class="kwa">return</span> -<span class="num">1</span>;
+
+  <span class="com">/* Compute (numer * 3 + accum) / denom */</span>
+  <span class="kwd">mpz_mul_2exp</span>(tmp1, numer, <span class="num">1</span>);
+  <span class="kwd">mpz_add</span>(tmp1, tmp1, numer);
+  <span class="kwd">mpz_add</span>(tmp1, tmp1, accum);
+  <span class="kwd">mpz_fdiv_qr</span>(tmp1, tmp2, tmp1, denom);
+
+  <span class="com">/* Now, if (numer * 4 + accum) % denom... */</span>
+  <span class="kwd">mpz_add</span>(tmp2, tmp2, numer);
+
+  <span class="com">/* ... is normalized, then the two divisions have the same result.  */</span>
+  <span class="kwa">if</span> (<span class="kwd">mpz_cmp</span>(tmp2, denom) &gt;= <span class="num">0</span>)
+    <span class="kwa">return</span> -<span class="num">1</span>;
+
+  <span class="kwa">return</span> <span class="kwd">mpz_get_ui</span>(tmp1);
+}
+
+<span class="kwb">static void</span> <span class="kwd">next_term</span>(<span class="kwb">unsigned int</span> k)
+{
+  <span class="kwb">unsigned int</span> y2 = k*<span class="num">2</span> + <span class="num">1</span>;
+
+  <span class="kwd">mpz_mul_2exp</span>(tmp1, numer, <span class="num">1</span>);
+  <span class="kwd">mpz_add</span>(accum, accum, tmp1);
+  <span class="kwd">mpz_mul_ui</span>(accum, accum, y2);
+  <span class="kwd">mpz_mul_ui</span>(numer, numer, k);
+  <span class="kwd">mpz_mul_ui</span>(denom, denom, y2);
+}
+
+<span class="kwb">static void</span> <span class="kwd">eliminate_digit</span>(<span class="kwb">unsigned int</span> d)
+{
+  <span class="kwd">mpz_submul_ui</span>(accum, denom, d);
+  <span class="kwd">mpz_mul_ui</span>(accum, accum, <span class="num">10</span>);
+  <span class="kwd">mpz_mul_ui</span>(numer, numer, <span class="num">10</span>);
+}
+
+<span class="kwb">static void</span> <span class="kwd">pidigits</span>(<span class="kwb">unsigned int</span> n)
+{
+  <span class="kwb">int</span> d;
+  <span class="kwb">unsigned int</span> i = <span class="num">0</span>, k = <span class="num">0</span>, m;
+  <span class="kwd">mpz_init</span>(tmp1);
+  <span class="kwd">mpz_init</span>(tmp2);
+  <span class="kwd">mpz_init_set_ui</span>(numer, <span class="num">1</span>);
+  <span class="kwd">mpz_init_set_ui</span>(accum, <span class="num">0</span>);
+  <span class="kwd">mpz_init_set_ui</span>(denom, <span class="num">1</span>);
+
+  <span class="kwa">for</span>(;;)
+  {
+    <span class="kwa">do</span> {
+      k++;
+      <span class="kwd">next_term</span>(k);
+      d = <span class="kwd">extract_digit</span>();
+    } <span class="kwa">while</span>(d == -<span class="num">1</span>);
+
+    <span class="kwd">putchar</span>(d + <span class="str">'0'</span>);
+
+    i++;
+    m = i%<span class="num">10</span>;
+    <span class="kwa">if</span>(m == <span class="num">0</span>)
+      <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:%d</span><span class="esc">\n</span><span class="str">&quot;</span>, i);
+    <span class="kwa">if</span>(i &gt;= n)
+      <span class="kwa">break</span>;
+    <span class="kwd">eliminate_digit</span>(d);
+  }
+
+  <span class="kwa">if</span>(m) {
+    m = <span class="num">10</span> - m;
+    <span class="kwa">while</span>(m--)
+      <span class="kwd">putchar</span>(<span class="str">' '</span>);
+    <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:%d</span><span class="esc">\n</span><span class="str">&quot;</span>, n);
+  }
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> **argv)
+{
+  <span class="kwd">pidigits</span>(argc &gt; <span class="num">1</span> ? <span class="kwd">atoi</span>(argv[<span class="num">1</span>]) : <span class="num">27</span>);
+  <span class="kwa">return</span> <span class="num">0</span>;
+}
+

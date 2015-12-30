@@ -1,0 +1,42 @@
+
+Sat, 18 Jul 2015 16:54:30 GMT
+
+MAKE:
+mv chameneosredux.hipe chameneosredux.erl
+/usr/local/src/otp_src_18.0/bin/erlc +native +"{hipe, [o3]}"  chameneosredux.erl
+rm chameneosredux.erl
+0.66s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/otp_src_18.0/bin/erl -smp enable -noshell -run  chameneosredux main 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+ blue red yellow
+3999098 zero
+4003492 zero
+3997410 zero
+ one two zero zero zero zero zero zero
+
+ blue red yellow red yellow blue red yellow red blue
+1190372 zero
+1193100 zero
+1202793 zero
+1204027 zero
+1196786 zero
+1210493 zero
+1198792 zero
+1200219 zero
+1201287 zero
+1202131 zero
+ one two zero zero zero zero zero zero
+

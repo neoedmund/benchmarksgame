@@ -1,0 +1,1128 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Pat Rogers</span>
+<span class="slc">--</span>
+<span class="slc">-- Based on the C++ version by Andrew Moon </span>
+<span class="slc">-- and the C version by Dmitry Vyukov</span>
+<span class="slc">--</span>
+<span class="slc">-- A task (thread) is created for each chameneous.</span>
+<span class="slc">-- An atomic compare-and-swap operation is used</span>
+<span class="slc">-- for shared state manipulation.  A protected </span>
+<span class="slc">-- type is used for completion notification.</span>
+<span class="slc">-- A cache-aligned memory allocator is used.</span>
+
+
+<span class="slc">-- Expected build command:</span>
+<span class="slc">-- gnatmake -gnatp  -gnatn  -fstrict-aliasing -O3 -fomit-frame-pointer -march=native -ffunction-sections -fdata-sections -f chameneosredux.adb -o chameneosredux.gnat_run   -largs -Wl,--gc-sections</span>
+
+
+
+<span class="kwa">pragma</span> Restrictions (No_Abort_Statements);
+<span class="kwa">pragma</span> Restrictions (Max_Asynchronous_Select_Nesting =&gt; <span class="num">0</span>);
+
+<span class="kwa">with</span> Chameneos.Games;       <span class="kwa">use</span> Chameneos.Games;
+<span class="kwa">with</span> Ada.Command_Line;      <span class="kwa">use</span> Ada.Command_Line;
+<span class="kwa">with</span> Chameneos.Processors;  <span class="kwa">use</span> Chameneos.Processors;
+
+<span class="kwa">procedure</span> ChameneosRedux <span class="kwa">is</span>
+
+   <span class="kwa">use</span> Chameneos;
+
+   N : Meeting_Count;
+
+   Game1_Creature_Colors : <span class="kwa">constant</span> Color_List_Ref := <span class="kwa">new</span> Color_List<span class="str">'(Blue, Red, Yellow);</span>
+<span class="str"></span>
+<span class="str">   Game2_Creature_Colors : constant Color_List_Ref :=</span>
+<span class="str">      new Color_List'</span>(Blue, Red, Yellow, Red, Yellow, Blue, Red, Yellow, Red, Blue);
+
+   Game1 : Game (Num_Creatures =&gt; Game1_Creature_Colors<span class="kwd">'Length</span>);
+
+   Game2 : Game (Num_Creatures =&gt; Game2_Creature_Colors<span class="kwd">'Length</span>);
+
+<span class="kwa">begin</span>
+   Print_Color_Complements;
+
+   <span class="kwa">if</span> Argument_Count &lt; <span class="num">1</span> <span class="kwa">then</span>
+      N := <span class="num">6</span>_000_000;
+   <span class="kwa">else</span>
+      N := Meeting_Count<span class="kwd">'Value</span> (Argument (<span class="num">1</span>));
+   <span class="kwa">end if</span>;
+
+   <span class="kwa">if</span> Processor_Count &lt; <span class="num">4</span> <span class="kwa">then</span>  <span class="slc">-- run the games sequentially</span>
+      Game1.Start (Game1_Creature_Colors, N, Slot =&gt; <span class="num">0</span>);
+      Game1.Await_Completion;
+
+      Game2.Start (Game2_Creature_Colors, N, Slot =&gt; <span class="num">0</span>);
+      Game2.Await_Completion;
+   <span class="kwa">else</span> <span class="slc">-- run the games in parallel</span>
+      Game1.Start (Game1_Creature_Colors, N, Slot =&gt; <span class="num">1</span>);
+      Game2.Start (Game2_Creature_Colors, N, Slot =&gt; <span class="num">2</span>);
+
+      Game1.Await_Completion;
+      Game2.Await_Completion;
+   <span class="kwa">end if</span>;
+
+   Game1.Display;
+   Game2.Display;
+<span class="kwa">end</span> ChameneosRedux;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> Interfaces;                  <span class="kwa">use</span> Interfaces;
+<span class="kwa">with</span> Cache_Aligned_Storage_Pools; <span class="kwa">use</span> Cache_Aligned_Storage_Pools;
+
+<span class="kwa">package</span> Chameneos <span class="kwa">is</span>
+
+   Storage : Cache_Aligned_Storage_Pool;
+   <span class="slc">--  All allocators use this common pool, which is really just a wrapper for</span>
+   <span class="slc">--  the system allocator, but with additional constraints on the addresses</span>
+   <span class="slc">--  returned.</span>
+
+   <span class="kwa">type</span> String_Access <span class="kwa">is access all</span> <span class="kwb">String</span>;
+   <span class="kwa">for</span> String_Access<span class="kwd">'Storage_Pool</span> <span class="kwa">use</span> Storage;
+
+   <span class="kwa">type</span> Colors <span class="kwa">is</span> (Blue, Red, Yellow);
+
+   Colors_Image : <span class="kwa">constant array</span> (Colors) <span class="kwa">of</span> String_Access :=
+                    (Blue   =&gt; <span class="kwa">new</span> <span class="kwb">String</span><span class="str">'(&quot;blue&quot;),</span>
+<span class="str">                     Red    =&gt; new String'</span>(<span class="str">&quot;red&quot;</span>),
+                     Yellow =&gt; <span class="kwa">new</span> <span class="kwb">String</span><span class="str">'(&quot;yellow&quot;));</span>
+<span class="str"></span>
+<span class="str">   type Colors_Complements is array (Colors, Colors) of Colors;</span>
+<span class="str"></span>
+<span class="str">   Complementary_Color : constant Colors_Complements :=</span>
+<span class="str">                           (Blue   =&gt; (Blue   =&gt; Blue,</span>
+<span class="str">                                       Red    =&gt; Yellow,</span>
+<span class="str">                                       Yellow =&gt; Red),</span>
+<span class="str">                            Red    =&gt; (Red    =&gt; Red,</span>
+<span class="str">                                       Blue   =&gt; Yellow,</span>
+<span class="str">                                       Yellow =&gt; Blue),</span>
+<span class="str">                            Yellow =&gt; (Yellow =&gt; Yellow,</span>
+<span class="str">                                       Blue   =&gt; Red,</span>
+<span class="str">                                       Red    =&gt; Blue));</span>
+<span class="str"></span>
+<span class="str">   --  Print the Complementary_Color map</span>
+<span class="str">   procedure Print_Color_Complements;</span>
+<span class="str"></span>
+<span class="str">   --  Returns a string representing the non-negative integer Value, in which</span>
+<span class="str">   --  each digit of Value is spelled out as a distinct word</span>
+<span class="str">   function Spelled (Value : Natural) return String;</span>
+<span class="str"></span>
+<span class="str"></span>
+<span class="str">   type Color_List is array (Positive range &lt;&gt;) of Colors;</span>
+<span class="str"></span>
+<span class="str">   type Color_List_Ref is access constant Color_List;</span>
+<span class="str">   for Color_List_Ref'Storage_Pool use Storage;</span>
+<span class="str"></span>
+<span class="str"></span>
+<span class="str">   --  The efficiency of this design is due to the underlying use of a single</span>
+<span class="str">   --  variable (per game) shared amongst all the creature threads. This</span>
+<span class="str">   --  variable is used both for the count of the number of meetings completed</span>
+<span class="str">   --  as well as an indication of the creatures present for meetings. Hence</span>
+<span class="str">   --  some of the bits are used for the meeting count and some for the</span>
+<span class="str">   --  creatures. The number of bits used for the creature mask, in combination</span>
+<span class="str">   --  with the total number of bits in the shared variable, determine how many</span>
+<span class="str">   --  creatures and how many total meetings are supported.</span>
+<span class="str"></span>
+<span class="str">   --  The number of bits allocated within the shared variable for identifying</span>
+<span class="str">   --  creatures</span>
+<span class="str">   Creature_Mask_Bits : constant := 4;</span>
+<span class="str"></span>
+<span class="str">   subtype Creature_Count is Unsigned_32 range 0 .. 2 ** Creature_Mask_Bits - 1;</span>
+<span class="str"></span>
+<span class="str">   --  The number of bits allocated within the shared variable for tracking the</span>
+<span class="str">   --  total number of meetings completed</span>
+<span class="str">   Meetings_Bits : constant := Unsigned_32'Size - Creature_Mask_Bits;</span>
+<span class="str"></span>
+<span class="str">   Max_Meetings : constant := 2 ** Meetings_Bits - 1;</span>
+<span class="str"></span>
+<span class="str">   subtype Meeting_Count is Unsigned_32 range 0 .. Max_Meetings;</span>
+<span class="str"></span>
+<span class="str">end Chameneos;</span>
+<span class="str"></span>
+<span class="str">-------------------------------------------------------------------------------</span>
+<span class="str"></span>
+<span class="str">with Chameneos.Meetings;</span>
+<span class="str">with Chameneos.Countdown;</span>
+<span class="str">with Chameneos.Processors;</span>
+<span class="str"></span>
+<span class="str">with System.Task_Info;  use System.Task_Info;</span>
+<span class="str"></span>
+<span class="str">package Chameneos.Creatures is</span>
+<span class="str"></span>
+<span class="str">   type Creature (Starting_Color : Colors) is tagged limited private;</span>
+<span class="str">   --  Each creature has an initial color, but their current color is a function</span>
+<span class="str">   --  of the colors of the other creatures met.</span>
+<span class="str"></span>
+<span class="str">   type Creature_Ref is access all Creature;</span>
+<span class="str">   for Creature_Ref'Storage_Pool use Chameneos.Storage;</span>
+<span class="str"></span>
+<span class="str">   --  Tell the creature where all the creatures in the game are meeting, where</span>
+<span class="str">   --  to signal when the creature is finished, and which slot to execute in.</span>
+<span class="str">   procedure Start (This     : access Creature;</span>
+<span class="str">                    Location : Chameneos.Meetings.Venue;</span>
+<span class="str">                    Latch    : Chameneos.Countdown.Latch_Ref;</span>
+<span class="str">                    Slot     : Natural);</span>
+<span class="str"></span>
+<span class="str">   --  The caller side of the rendezvous</span>
+<span class="str">   procedure Meet (This : in out Creature;  Other : in out Creature);</span>
+<span class="str"></span>
+<span class="str">   --  The called side of the rendezvous</span>
+<span class="str">   procedure Wait_Until_Met (This : in out Creature);</span>
+<span class="str"></span>
+<span class="str">   procedure Await_Completion (This : in out Creature);</span>
+<span class="str"></span>
+<span class="str">   procedure Set_Id (This : in out Creature;  To : Creature_Count);</span>
+<span class="str"></span>
+<span class="str">   function Id (This : Creature) return Creature_Count;</span>
+<span class="str"></span>
+<span class="str">   function Current_Color (This : Creature) return Colors;</span>
+<span class="str"></span>
+<span class="str">   function Initial_Color (This : Creature) return Colors;</span>
+<span class="str"></span>
+<span class="str">   procedure Display (This : in out Creature);</span>
+<span class="str"></span>
+<span class="str">   function Total_Met (This : Creature) return Natural;</span>
+<span class="str"></span>
+<span class="str">   pragma Inline (Set_Id, Id, Current_Color, Initial_Color, Total_Met);</span>
+<span class="str"></span>
+<span class="str">private</span>
+<span class="str"></span>
+<span class="str">   use Chameneos.Processors;</span>
+<span class="str"></span>
+<span class="str">   --  Objects of type Thread implement the active execution, i.e., the</span>
+<span class="str">   --  symmetric rendezvous requirement, for their corresponding creatures.</span>
+<span class="str">   --  Each thread instance has a discriminant designating the corresponding</span>
+<span class="str">   --  creature. No state is maintained within the threads themselves. Each</span>
+<span class="str">   --  thread instance executes in a given &quot;slot&quot; that specifies the cores it</span>
+<span class="str">   --  can run upon, via processor affinities. The specific slot is also given</span>
+<span class="str">   --  via discriminant.</span>
+<span class="str">   task type Thread (This : access Creature;  Slot : Natural) is</span>
+<span class="str">      pragma Task_Info (new Thread_Attributes'</span>(CPU_Affinity =&gt; Affinity (Slot)));
+   <span class="kwa">end</span> Thread;
+
+   <span class="kwa">type</span> Thread_Ref <span class="kwa">is access all</span> Thread;
+   <span class="kwa">for</span> Thread_Ref<span class="kwd">'Storage_Pool</span> <span class="kwa">use</span> Chameneos.Storage;
+
+   <span class="kwa">type</span> Creature (Starting_Color : Colors) <span class="kwa">is tagged limited</span>
+      <span class="kwa">record</span>
+         Met              : <span class="kwb">Boolean</span> := <span class="kwd">False</span>;
+         <span class="slc">--  Met is set by other threads so the pragma is essential</span>
+         <span class="kwa">pragma</span> Volatile (Met);
+         Count            : <span class="kwb">Natural</span> := <span class="num">0</span>;
+         Same_Count       : <span class="kwb">Natural</span> := <span class="num">0</span>;
+         Color            : Colors := Starting_Color;
+         Id               : Creature_Count;
+         Rendezvous_Point : Meetings.Venue;
+         Completion       : Chameneos.Countdown.Latch_Ref;
+      <span class="kwa">end record</span>;
+
+<span class="kwa">end</span> Chameneos.Creatures;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> Chameneos.Creatures;  <span class="kwa">use</span> Chameneos.Creatures;
+<span class="kwa">with</span> Chameneos.Meetings;
+<span class="kwa">with</span> Chameneos.Countdown;
+
+<span class="kwa">package</span> Chameneos.Games <span class="kwa">is</span>
+
+   <span class="kwa">type</span> Game (Num_Creatures : Creature_Count) <span class="kwa">is tagged limited private</span>;
+
+   <span class="slc">--  Allocates the creature threads and all other required data.</span>
+   <span class="kwa">procedure</span> Start
+     (This            : <span class="kwa">in out</span> Game;
+      Creature_Colors : Color_List_Ref;
+      Num_Meetings    : Meeting_Count;
+      Slot            : <span class="kwb">Natural</span>);
+
+   <span class="slc">--  Waits for all creatures (threads) to finish.</span>
+   <span class="kwa">procedure</span> Await_Completion (This : Game);
+
+   <span class="kwa">procedure</span> Display (This : Game);
+
+<span class="kwa">private</span>
+
+   <span class="kwa">use</span> Chameneos;
+
+   <span class="kwa">type</span> Creatures_List <span class="kwa">is array</span> (Creature_Count <span class="kwa">range</span> &lt;&gt;) <span class="kwa">of</span> Creature_Ref;
+
+   <span class="kwa">type</span> Game (Num_Creatures : Creature_Count) <span class="kwa">is tagged limited</span>
+      <span class="kwa">record</span>
+         <span class="slc">--  where all the creatures in the game meet</span>
+         Rendezvous_Point : Meetings.Venue;
+         <span class="slc">--  all the creatures in the game</span>
+         Players : Creatures_List (<span class="num">1</span> .. Num_Creatures);
+         <span class="slc">--  the common mechanism used for signalling creature completion</span>
+         Latch : <span class="kwa">aliased</span> Countdown.Latch (Num_Creatures);
+      <span class="kwa">end record</span>;
+
+<span class="kwa">end</span> Chameneos.Games;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">limited with</span> Chameneos.Creatures;
+
+<span class="kwa">package</span> Chameneos.Meetings <span class="kwa">is</span>
+
+   <span class="kwa">type</span> Place (Meetings_Expected : Meeting_Count) <span class="kwa">is tagged limited private</span>;
+   <span class="slc">--  Where creatures come to meet other creatures, potentially change colors,</span>
+   <span class="slc">--  and play the game. Creatures are required to meet until the required</span>
+   <span class="slc">--  number of total meetings has occurred. This number of required meetings</span>
+   <span class="slc">--  is specified by the discriminant Meetings_Expected.</span>
+
+   <span class="kwa">type</span> Venue <span class="kwa">is access all</span> Place;
+   <span class="kwa">for</span> Venue<span class="kwd">'Storage_Pool</span> <span class="kwa">use</span> Chameneos.Storage;
+
+   <span class="slc">--  Assign a location for the creature designated by Player, within This place,</span>
+   <span class="slc">--  for the purpose of meeting any other creatures willing to meet.</span>
+   <span class="kwa">procedure</span> Register
+     (This   : <span class="kwa">in out</span> Place;
+      Player : <span class="kwa">access</span> Chameneos.Creatures.Creature);
+
+   <span class="slc">--  Have creature Player iteratively meet other creatures with This place,</span>
+   <span class="slc">--  updating the count of the total number of creature meetings as they</span>
+   <span class="slc">--  occur, and updating individual creature states as well (including</span>
+   <span class="slc">--  individual meeting counts and color changes).</span>
+   <span class="kwa">procedure</span> Meet_Others
+     (This   : <span class="kwa">in out</span> Place;
+      Player : <span class="kwa">access</span> Chameneos.Creatures.Creature);
+
+<span class="kwa">private</span>
+
+   <span class="kwa">type</span> Creature_Reference_List <span class="kwa">is</span>
+     <span class="kwa">array</span> (Creature_Count <span class="kwa">range</span> <span class="num">1</span> .. Creature_Count<span class="kwd">'Last</span>) <span class="kwa">of</span>
+        <span class="kwa">access</span> Chameneos.Creatures.Creature;
+
+   <span class="kwa">subtype</span> Valid_Creature_Id <span class="kwa">is</span>
+     Creature_Count <span class="kwa">range</span> <span class="num">1</span> .. Creature_Count<span class="kwd">'Last</span>;
+
+   No_Creature : <span class="kwa">constant</span> Creature_Count := Valid_Creature_Id<span class="kwd">'First</span> - <span class="num">1</span>;
+   <span class="slc">--  used in Meet_Others to determine whether any creatures are waiting</span>
+
+   <span class="kwa">type</span> Place (Meetings_Expected : Meeting_Count) <span class="kwa">is tagged limited</span>
+      <span class="kwa">record</span>
+         Id_Generator : Valid_Creature_Id := Valid_Creature_Id<span class="kwd">'First</span>;
+         <span class="slc">--  Used to assign unique id's to creature threads as they register.</span>
+         Shared_State : <span class="kwa">aliased</span> Unsigned_32 := Shift_Left (Meetings_Expected, Creature_Mask_Bits);
+         <span class="slc">--  The essential aspect of this program's design is the use of this</span>
+         <span class="slc">--  shared variable accessed by all the creature threads in a given</span>
+         <span class="slc">--  game. This variable is used both for the count of the number of</span>
+         <span class="slc">--  meetings completed as well as an indication of creatures waiting</span>
+         <span class="slc">--  for meetings. Hence the initial value is the number of required</span>
+         <span class="slc">--  meetings, shifted into the dedicated bits, with no creatures yet</span>
+         <span class="slc">--  waiting.</span>
+         <span class="kwa">pragma</span> Volatile (Shared_State);
+         <span class="slc">--  Shared_State is accessed and modified by all the threads within a</span>
+         <span class="slc">--  given game, so the pragma is essential!</span>
+         Registered_Players : Creature_Reference_List;
+      <span class="kwa">end record</span>;
+
+<span class="kwa">end</span> Chameneos.Meetings;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> System.Storage_Pools;
+<span class="kwa">with</span> System.Storage_Elements;
+
+<span class="kwa">package</span> Cache_Aligned_Storage_Pools <span class="kwa">is</span>
+
+   <span class="kwa">package</span> SSE <span class="kwa">renames</span> System.Storage_Elements;
+   <span class="kwa">package</span> SSP <span class="kwa">renames</span> System.Storage_Pools;
+
+   <span class="kwa">type</span> Cache_Aligned_Storage_Pool <span class="kwa">is</span>
+     <span class="kwa">new</span> SSP.Root_Storage_Pool <span class="kwa">with private</span>;
+   <span class="slc">--  A Cache_Aligned_Storage_Pool is a wrapper for the underlying operating</span>
+   <span class="slc">--  system storage allocator. Allocations using pool objects of this type</span>
+   <span class="slc">--  will return addresses that are aligned with the cache line size specified</span>
+   <span class="slc">--  below.</span>
+
+   Cache_Line_Size : <span class="kwa">constant</span> := <span class="num">64</span>;
+   <span class="slc">--  The length of a cache line on this machine.  Change as necessary...</span>
+
+   <span class="slc">--  Allocates a block of storage such that Storage_Address is aligned with</span>
+   <span class="slc">--  Cache_Line_Size. Uses the system memory allocator to do the actual</span>
+   <span class="slc">--  allocation but asks for more storage than Requested_Size so that an</span>
+   <span class="slc">--  aligned address within the allocated block can be found.</span>
+   <span class="kwa">procedure</span> Allocate
+     (Pool            : <span class="kwa">in out</span> Cache_Aligned_Storage_Pool;
+      Storage_Address : <span class="kwa">out</span> System.Address;
+      Requested_Size  : SSE.Storage_Count;
+      Alignment       : SSE.Storage_Count);
+
+   <span class="slc">--  Uses the system memory routine to deallocate the entire block of storage</span>
+   <span class="slc">--  in which Storage_Address is contained.</span>
+   <span class="kwa">procedure</span> Deallocate
+     (Pool            : <span class="kwa">in out</span> Cache_Aligned_Storage_Pool;
+      Storage_Address : System.Address;
+      Requested_Size  : SSE.Storage_Count;
+      Alignment       : SSE.Storage_Count);
+
+   <span class="slc">--  Returns a meaningless number since the system memory allocation and</span>
+   <span class="slc">--  deallocation routines are used.</span>
+   <span class="kwa">function</span> Storage_Size (Pool : Cache_Aligned_Storage_Pool)
+      <span class="kwa">return</span> SSE.Storage_Count;
+
+<span class="kwa">private</span>
+
+   <span class="kwa">procedure</span> Allocate_Any
+     (Pool            : <span class="kwa">in out</span> Cache_Aligned_Storage_Pool<span class="kwd">'Class</span>;
+      Storage_Address : <span class="kwa">out</span> System.Address;
+      Requested_Size  : SSE.Storage_Count;
+      Alignment       : SSE.Storage_Count);
+
+   <span class="kwa">procedure</span> Deallocate_Any
+     (Pool            : <span class="kwa">in out</span> Cache_Aligned_Storage_Pool<span class="kwd">'Class</span>;
+      Storage_Address : System.Address;
+      Requested_Size  : SSE.Storage_Count;
+      Alignment       : SSE.Storage_Count);
+
+   <span class="kwa">type</span> Cache_Aligned_Storage_Pool <span class="kwa">is</span>
+     <span class="kwa">new</span> SSP.Root_Storage_Pool <span class="kwa">with null record</span>;  <span class="slc">-- just a wrapper...</span>
+
+<span class="kwa">end</span> Cache_Aligned_Storage_Pools;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">package</span> Chameneos.Countdown <span class="kwa">is</span>
+
+   <span class="slc">--  &quot;Latch&quot; is a non-cyclic traditional barrier abstraction. As a barrier it</span>
+   <span class="slc">--  provides a means of blocking callers to Wait until a specified number of</span>
+   <span class="slc">--  calls to Signal have occurred. At that point all of the prior calls to</span>
+   <span class="slc">--  Wait are allowed to execute and, therefore, their callers are no longer</span>
+   <span class="slc">--  blocked. The number of required calls to Signal is specified on a</span>
+   <span class="slc">--  per-object basis via discriminant when objects of the type are declared.</span>
+   <span class="slc">--  Latch is &quot;non-cyclic&quot;, i.e., it does not block another set of waiters</span>
+   <span class="slc">--  after the first set is allowed to continue, because there is no</span>
+   <span class="slc">--  requirement in this application for cyclic behavior.</span>
+   <span class="kwa">protected type</span> Latch (Signallers : Creature_Count) <span class="kwa">is</span>
+      <span class="kwa">entry</span> Wait;
+      <span class="kwa">procedure</span> Signal;
+   <span class="kwa">private</span>
+      Count : Unsigned_32 := Signallers;
+   <span class="kwa">end</span> Latch;
+
+   <span class="kwa">type</span> Latch_Ref <span class="kwa">is access all</span> Latch;
+   <span class="kwa">for</span> Latch_Ref<span class="kwd">'Storage_Pool</span> <span class="kwa">use</span> Chameneos.Storage;
+
+<span class="kwa">end</span> Chameneos.Countdown;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> System.Task_Info;     <span class="kwa">use</span> System.Task_Info;
+<span class="kwa">pragma</span> Warnings (Off);
+<span class="kwa">with</span> System.OS_Interface;  <span class="kwa">use</span> System.OS_Interface;
+<span class="kwa">pragma</span> Warnings (On);
+
+<span class="kwa">package</span> Chameneos.Processors <span class="kwa">is</span>
+   <span class="kwa">pragma</span> Elaborate_Body;
+
+   Processor_Count : <span class="kwa">constant</span> <span class="kwb">Positive</span> := System.Task_Info.Number_Of_Processors;
+
+   Max_Slots : <span class="kwa">constant</span> := <span class="num">33</span>;
+
+   <span class="slc">--  Returns a bit mask indicating the cores on which a thread in Slot can</span>
+   <span class="slc">--  execute. A game is assigned to a given slot, and as a result all the</span>
+   <span class="slc">--  threads within that game will execute only on those cores, for the sake</span>
+   <span class="slc">--  of locality (ie performance).</span>
+   <span class="kwa">function</span> Affinity (Slot : <span class="kwb">Natural</span>) <span class="kwa">return</span> CPU_Set;
+
+   <span class="slc">--  Each slot has an affinity mask consisting of a pair of cores</span>
+   <span class="slc">--  dedicated to that slot, except for slot 0 which is the global mask</span>
+   <span class="slc">--  returned by the OS (which shows all processors available).</span>
+   <span class="slc">--</span>
+   <span class="slc">--  For example, imagine that we get a mask with the first 8 bits</span>
+   <span class="slc">--  enabled, indicating that 8 processors (cores) are available.</span>
+   <span class="slc">--  The resulting data structure would be as follows:</span>
+   <span class="slc">--</span>
+   <span class="slc">--                     bit#</span>
+   <span class="slc">--   slot #         123456789...</span>
+   <span class="slc">--     0            1111111100</span>
+   <span class="slc">--     1            1100000000</span>
+   <span class="slc">--     2            0011000000</span>
+   <span class="slc">--     3            0000110000</span>
+   <span class="slc">--     4            0000001100</span>
+   <span class="slc">--     5            1100000000</span>
+   <span class="slc">--     6            0011000000</span>
+   <span class="slc">--    ...              ...</span>
+
+<span class="kwa">end</span> Chameneos.Processors;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> Interfaces;   <span class="kwa">use</span> Interfaces;
+
+<span class="kwa">package</span> x86_Atomic_Swap_Utils <span class="kwa">is</span>
+
+   <span class="slc">-- Perform an atomic compare and swap: if the current value of</span>
+   <span class="slc">-- Destination.all is Comparand, then write New_Value into Destination.all.</span>
+   <span class="slc">-- Returns the content of Destination.all before the operation.</span>
+   <span class="kwa">function</span> Sync_Val_Compare_And_Swap
+     (Destination : <span class="kwa">access</span> Unsigned_32;
+      Comparand   : Unsigned_32;
+      New_Value   : Unsigned_32)
+      <span class="kwa">return</span> Unsigned_32;
+
+   <span class="kwa">pragma</span> Inline_Always (Sync_Val_Compare_And_Swap);
+
+<span class="kwa">end</span> x86_Atomic_Swap_Utils;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> GNAT.IO; <span class="kwa">use</span> GNAT.IO;
+<span class="kwa">with</span> Ada.Strings.Unbounded;
+
+<span class="kwa">package body</span> Chameneos <span class="kwa">is</span>
+
+   Numbers_Image : <span class="kwa">constant array</span> (<span class="num">0</span> .. <span class="num">9</span>) <span class="kwa">of</span> String_Access :=
+                     (<span class="num">0</span> =&gt; <span class="kwa">new</span> <span class="kwb">String</span><span class="str">'(&quot; zero&quot;),</span>
+<span class="str">                      1 =&gt; new String'</span>(<span class="str">&quot; one&quot;</span>),
+                      <span class="num">2</span> =&gt; <span class="kwa">new</span> <span class="kwb">String</span><span class="str">'(&quot; two&quot;),</span>
+<span class="str">                      3 =&gt; new String'</span>(<span class="str">&quot; three&quot;</span>),
+                      <span class="num">4</span> =&gt; <span class="kwa">new</span> <span class="kwb">String</span><span class="str">'(&quot; four&quot;),</span>
+<span class="str">                      5 =&gt; new String'</span>(<span class="str">&quot; five&quot;</span>),
+                      <span class="num">6</span> =&gt; <span class="kwa">new</span> <span class="kwb">String</span><span class="str">'(&quot; six&quot;),</span>
+<span class="str">                      7 =&gt; new String'</span>(<span class="str">&quot; seven&quot;</span>),
+                      <span class="num">8</span> =&gt; <span class="kwa">new</span> <span class="kwb">String</span><span class="str">'(&quot; eight&quot;),</span>
+<span class="str">                      9 =&gt; new String'</span>(<span class="str">&quot; nine&quot;</span>));
+
+   <span class="slc">-------------</span>
+   <span class="slc">-- Spelled --</span>
+   <span class="slc">-------------</span>
+
+   <span class="kwa">function</span> Spelled (Value : <span class="kwb">Natural</span>) <span class="kwa">return</span> <span class="kwb">String</span> <span class="kwa">is</span>
+      <span class="kwa">use</span> Ada.Strings.Unbounded;
+      Result : Unbounded_String;
+      K      : <span class="kwb">Natural</span> := Value;
+   <span class="kwa">begin</span>
+      <span class="kwa">loop</span>
+         Insert (Result, <span class="num">1</span>, Numbers_Image (K <span class="kwa">rem</span> <span class="num">10</span>).<span class="kwa">all</span>);
+         K := K / <span class="num">10</span>;
+         <span class="kwa">exit when</span> K = <span class="num">0</span>;
+      <span class="kwa">end loop</span>;
+      <span class="kwa">return</span> To_String (Result);
+   <span class="kwa">end</span> Spelled;
+
+   <span class="slc">-------------------------</span>
+   <span class="slc">-- Print_Color_Changes --</span>
+   <span class="slc">-------------------------</span>
+
+   <span class="kwa">procedure</span> Print_Color_Complements <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> Self <span class="kwa">in</span> Colors <span class="kwa">loop</span>
+         <span class="kwa">for</span> Other <span class="kwa">in</span> Colors <span class="kwa">loop</span>
+            Put_Line (Colors_Image (Self).<span class="kwa">all</span> &amp; <span class="str">&quot; + &quot;</span> &amp;
+                      Colors_Image (Other).<span class="kwa">all</span> &amp; <span class="str">&quot; -&gt; &quot;</span> &amp;
+                      Colors_Image (Complementary_Color (Self, Other)).<span class="kwa">all</span>);
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end loop</span>;
+      New_Line;
+   <span class="kwa">end</span> Print_Color_Complements;
+
+<span class="kwa">end</span> Chameneos;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> GNAT.IO;  <span class="kwa">use</span> GNAT.IO;
+
+<span class="kwa">package body</span> Chameneos.Creatures <span class="kwa">is</span>
+
+   <span class="slc">-----------</span>
+   <span class="slc">-- Start --</span>
+   <span class="slc">-----------</span>
+
+   <span class="kwa">procedure</span> Start
+     (This     : <span class="kwa">access</span> Creature;
+      Location : Chameneos.Meetings.Venue;
+      Latch    : Chameneos.Countdown.Latch_Ref;
+      Slot     : <span class="kwb">Natural</span>)
+   <span class="kwa">is</span>
+      Player_To_Be_Named_Later : Thread_Ref;
+      <span class="kwa">pragma</span> Unreferenced (Player_To_Be_Named_Later);
+   <span class="kwa">begin</span>
+      This.Rendezvous_Point := Location;
+      This.Completion := Latch;
+      This.Rendezvous_Point.Register (This);
+      Player_To_Be_Named_Later := <span class="kwa">new</span> Thread (This, Slot);
+        <span class="slc">--  just launch the thread, no need to keep track of it</span>
+   <span class="kwa">end</span> Start;
+
+   <span class="slc">----------</span>
+   <span class="slc">-- Meet --</span>
+   <span class="slc">----------</span>
+
+   <span class="kwa">procedure</span> Meet (This : <span class="kwa">in out</span> Creature; Other : <span class="kwa">in out</span> Creature) <span class="kwa">is</span>
+      New_Color : Colors;
+   <span class="kwa">begin</span>
+      <span class="kwa">if</span> This.Id = Other.Id <span class="kwa">then</span>
+         This.Same_Count := This.Same_Count + <span class="num">1</span>;
+         Other.Same_Count := Other.Same_Count + <span class="num">1</span>;
+      <span class="kwa">end if</span>;
+
+      This.Count  := This.Count + <span class="num">1</span>;
+      Other.Count := Other.Count + <span class="num">1</span>;
+
+      New_Color := Complementary_Color (This.Color, Other.Color);
+      This.Color := New_Color;
+      Other.Color := New_Color;
+
+      Other.Met := <span class="kwd">True</span>;
+   <span class="kwa">end</span> Meet;
+
+   <span class="slc">--------------------</span>
+   <span class="slc">-- Wait_Until_Met --</span>
+   <span class="slc">--------------------</span>
+
+   <span class="kwa">procedure</span> Wait_Until_Met (This : <span class="kwa">in out</span> Creature) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">if</span> Processor_Count &gt; <span class="num">1</span> <span class="kwa">then</span>
+         <span class="kwa">declare</span>
+            Spin_Count : <span class="kwb">Integer</span> := <span class="num">0</span>;
+         <span class="kwa">begin</span>
+            <span class="kwa">while not</span> This.Met <span class="kwa">loop</span>
+               Spin_Count := Spin_Count + <span class="num">1</span>;
+               <span class="kwa">if</span> Spin_Count &gt; <span class="num">20</span>_000 <span class="kwa">then</span>  <span class="slc">-- arbitrary max</span>
+                  <span class="kwa">delay</span> <span class="num">0.0</span>;  <span class="slc">-- yield</span>
+                  Spin_Count := <span class="num">0</span>;
+               <span class="kwa">end if</span>;
+            <span class="kwa">end loop</span>;
+         <span class="kwa">end</span>;
+      <span class="kwa">else</span>
+         <span class="kwa">while not</span> This.Met <span class="kwa">loop</span>
+            <span class="kwa">delay</span> <span class="num">0.0</span>; <span class="slc">-- yield</span>
+         <span class="kwa">end loop</span>;
+      <span class="kwa">end if</span>;
+      This.Met := <span class="kwd">False</span>;
+   <span class="kwa">end</span> Wait_Until_Met;
+
+   <span class="slc">----------------------</span>
+   <span class="slc">-- Await_Completion --</span>
+   <span class="slc">----------------------</span>
+
+   <span class="kwa">procedure</span> Await_Completion (This : <span class="kwa">in out</span> Creature) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      This.Completion.Wait;
+   <span class="kwa">end</span> Await_Completion;
+
+   <span class="slc">------------</span>
+   <span class="slc">-- Set_Id --</span>
+   <span class="slc">------------</span>
+
+   <span class="kwa">procedure</span> Set_Id (This : <span class="kwa">in out</span> Creature;  To : Creature_Count) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      This.Id := To;
+   <span class="kwa">end</span> Set_Id;
+
+   <span class="slc">--------</span>
+   <span class="slc">-- Id --</span>
+   <span class="slc">--------</span>
+
+   <span class="kwa">function</span> Id (This : Creature) <span class="kwa">return</span> Creature_Count <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">return</span> This.Id;
+   <span class="kwa">end</span> Id;
+
+   <span class="slc">-------------------</span>
+   <span class="slc">-- Current_Color --</span>
+   <span class="slc">-------------------</span>
+
+   <span class="kwa">function</span> Current_Color (This : Creature) <span class="kwa">return</span> Colors <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">return</span> This.Color;
+   <span class="kwa">end</span> Current_Color;
+
+   <span class="slc">-------------------</span>
+   <span class="slc">-- Initial_Color --</span>
+   <span class="slc">-------------------</span>
+
+   <span class="kwa">function</span> Initial_Color (This : Creature) <span class="kwa">return</span> Colors <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">return</span> This.Starting_Color;
+   <span class="kwa">end</span> Initial_Color;
+
+   <span class="slc">-------------</span>
+   <span class="slc">-- Display --</span>
+   <span class="slc">-------------</span>
+
+   <span class="kwa">procedure</span> Display (This : <span class="kwa">in out</span> Creature) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      Put (This.Count);
+      Put_Line (Spelled (This.Same_Count));
+   <span class="kwa">end</span> Display;
+
+   <span class="slc">---------------</span>
+   <span class="slc">-- Total_Met --</span>
+   <span class="slc">---------------</span>
+
+   <span class="kwa">function</span> Total_Met (This : Creature) <span class="kwa">return</span> <span class="kwb">Natural</span> <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">return</span> This.Count;
+   <span class="kwa">end</span> Total_Met;
+
+   <span class="slc">------------</span>
+   <span class="slc">-- Thread --</span>
+   <span class="slc">------------</span>
+
+   <span class="kwa">task body</span> Thread <span class="kwa">is</span>
+      <span class="kwa">use</span> Chameneos.Meetings;
+   <span class="kwa">begin</span>
+      Meet_Others (This.Rendezvous_Point.<span class="kwa">all</span>, Player =&gt; This);
+      This.Completion.Signal;
+   <span class="kwa">end</span> Thread;
+
+<span class="kwa">end</span> Chameneos.Creatures;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> GNAT.IO;  <span class="kwa">use</span> GNAT.IO;
+
+<span class="kwa">package body</span> Chameneos.Games <span class="kwa">is</span>
+
+   <span class="slc">-----------</span>
+   <span class="slc">-- Start --</span>
+   <span class="slc">-----------</span>
+
+   <span class="kwa">procedure</span> Start
+     (This            : <span class="kwa">in out</span> Game;
+      Creature_Colors : Color_List_Ref;
+      Num_Meetings    : Meeting_Count;
+      Slot            : <span class="kwb">Natural</span>)
+   <span class="kwa">is</span>
+      Color_Index : <span class="kwb">Positive</span> := Creature_Colors<span class="kwd">'First</span>;
+      <span class="slc">--  We use a separate index, instead of the index used to iterate over</span>
+      <span class="slc">--  This.Players, since the bounds need not be the same. The range of</span>
+      <span class="slc">--  This.Players is 1 .. Num_Creatures, where that upper bound is set as a</span>
+      <span class="slc">--  discriminant to the game when it is created. The actual value passed</span>
+      <span class="slc">--  to this discriminant comes from the length of an array of colors,</span>
+      <span class="slc">--  which is then passed to this procedure in Creature_Colors, so the</span>
+      <span class="slc">--  count will be the same. There is no guarantee of that, of course, but</span>
+      <span class="slc">--  in practice that will suffice.</span>
+   <span class="kwa">begin</span>
+      This.Rendezvous_Point := <span class="kwa">new</span> Meetings.Place (Num_Meetings);
+      <span class="kwa">for</span> K <span class="kwa">in</span> This.Players<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         This.Players (K) := <span class="kwa">new</span> Creature (Creature_Colors (Color_Index));
+         This.Players (K).Start
+           (Location =&gt; This.Rendezvous_Point,
+            Latch    =&gt; This.Latch<span class="kwd">'Unchecked_Access</span>,
+            Slot     =&gt; Slot);
+         Color_Index := Color_Index + <span class="num">1</span>;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Start;
+
+   <span class="slc">----------------------</span>
+   <span class="slc">-- Await_Completion --</span>
+   <span class="slc">----------------------</span>
+
+   <span class="kwa">procedure</span> Await_Completion (This : Game) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> K <span class="kwa">in</span> This.Players<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         This.Players (K).Await_Completion;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Await_Completion;
+
+   <span class="slc">-------------</span>
+   <span class="slc">-- Display --</span>
+   <span class="slc">-------------</span>
+
+   <span class="kwa">procedure</span> Display (This : Game) <span class="kwa">is</span>
+      Grand_Total : <span class="kwb">Natural</span> := <span class="num">0</span>;
+   <span class="kwa">begin</span>
+      <span class="kwa">for</span> K <span class="kwa">in</span> This.Players<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         Put( <span class="str">&quot; &quot;</span> &amp; Colors_Image (This.Players (K).Initial_Color).<span class="kwa">all</span>);
+      <span class="kwa">end loop</span>;
+      New_Line;
+
+      <span class="kwa">for</span> K <span class="kwa">in</span> This.Players<span class="kwd">'Range</span> <span class="kwa">loop</span>
+         This.Players (K).Display;
+         Grand_Total := Grand_Total + This.Players (K).Total_Met;
+      <span class="kwa">end loop</span>;
+      Put_Line (Spelled (Grand_Total));
+      New_Line;
+   <span class="kwa">end</span> Display;
+
+<span class="kwa">end</span> Chameneos.Games;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> Chameneos.Creatures;
+<span class="kwa">with</span> x86_Atomic_Swap_Utils;  <span class="kwa">use</span> x86_Atomic_Swap_Utils;
+
+<span class="kwa">package body</span> Chameneos.Meetings <span class="kwa">is</span>
+
+   <span class="slc">--------------</span>
+   <span class="slc">-- Register --</span>
+   <span class="slc">--------------</span>
+
+   <span class="kwa">procedure</span> Register
+     (This   : <span class="kwa">in out</span> Place;
+      Player : <span class="kwa">access</span> Chameneos.Creatures.Creature)
+   <span class="kwa">is</span>
+      Id : <span class="kwa">constant</span> Creature_Count := This.Id_Generator;
+   <span class="kwa">begin</span>
+      Player.Set_Id (Id);
+      This.Registered_Players (Id) := Player;
+      This.Id_Generator := This.Id_Generator + <span class="num">1</span>;
+   <span class="kwa">end</span> Register;
+
+
+   <span class="slc">--  the lower part of the shared variable State, used to represent those</span>
+   <span class="slc">--  chameneos wating for a meeting in the mall</span>
+   Creature_Mask : <span class="kwa">constant</span> := <span class="num">2</span> ** Creature_Mask_Bits - <span class="num">1</span>;
+
+   <span class="slc">--  the additional meeting count value due to the creature mask</span>
+   Count_Offset : <span class="kwa">constant</span> Unsigned_32 := Shift_Left (<span class="num">1</span>, Creature_Mask_Bits);
+
+
+   <span class="slc">-----------------</span>
+   <span class="slc">-- Meet_Others --</span>
+   <span class="slc">-----------------</span>
+
+   <span class="kwa">procedure</span> Meet_Others
+     (This   : <span class="kwa">in out</span> Place;
+      Player : <span class="kwa">access</span> Chameneos.Creatures.Creature)
+   <span class="kwa">is</span>
+      Local_State       : Unsigned_32 := This.Shared_State;
+      Waiting           : Unsigned_32;
+      Target_State      : Unsigned_32;
+      State_Before_Swap : Unsigned_32;
+   <span class="kwa">begin</span>
+      <span class="kwa">loop</span>
+         <span class="slc">--  get the Id of a creature waiting for a meeting, if any</span>
+         Waiting := Local_State <span class="kwa">and</span> Creature_Mask;
+         <span class="kwa">if</span> Waiting /= No_Creature <span class="kwa">then</span>
+            <span class="slc">--  at least one creature is in the mall, waiting for a rendezvous,</span>
+            <span class="slc">--  so we set the target state to the current meeting count - 1 to</span>
+            <span class="slc">--  reflect the meeting we're about to attempt</span>
+            Target_State := (Local_State <span class="kwa">and not</span> Creature_Mask) - Count_Offset;
+         <span class="kwa">elsif</span> Local_State /= <span class="num">0</span> <span class="kwa">then</span>
+            <span class="slc">--  no creatures are waiting but there are meetings remaining so set</span>
+            <span class="slc">--  the target state to reflect Player, who is willing to meet</span>
+            Target_State := Local_State <span class="kwa">or</span> Player.Id;
+         <span class="kwa">else</span>  <span class="slc">--  no creatures waiting and no further meetings to be held</span>
+            <span class="kwa">exit</span>;
+         <span class="kwa">end if</span>;
+
+         <span class="slc">--  Attempt to update the shared game state. If the value of the shared</span>
+         <span class="slc">--  state is that of the local copy when the swap is attempted, then</span>
+         <span class="slc">--  the shared state will be updated, otherwise it is not changed.</span>
+         State_Before_Swap := Sync_Val_Compare_And_Swap
+           (Destination =&gt; This.Shared_State<span class="kwd">'Access</span>,
+            Comparand   =&gt; Local_State,
+            New_Value   =&gt; Target_State);
+
+         <span class="kwa">if</span> State_Before_Swap = Local_State <span class="kwa">then</span> <span class="slc">-- we successfully updated it</span>
+            <span class="kwa">if</span> Waiting /= <span class="num">0</span> <span class="kwa">then</span>
+               Player.Meet (This.Registered_Players (Waiting).<span class="kwa">all</span>);
+            <span class="kwa">else</span>
+               Player.Wait_Until_Met;
+            <span class="kwa">end if</span>;
+
+            Local_State := Target_State;
+         <span class="kwa">else</span>  <span class="slc">-- we did not update the shared state, so use the shared value</span>
+            Local_State := State_Before_Swap;
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Meet_Others;
+
+<span class="kwa">end</span> Chameneos.Meetings;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">package body</span> Chameneos.Countdown <span class="kwa">is</span>
+
+   <span class="slc">-----------</span>
+   <span class="slc">-- Latch --</span>
+   <span class="slc">-----------</span>
+
+   <span class="kwa">protected body</span> Latch <span class="kwa">is</span>
+
+      <span class="slc">----------</span>
+      <span class="slc">-- Wait --</span>
+      <span class="slc">----------</span>
+
+      <span class="kwa">entry</span> Wait <span class="kwa">when</span> Count = <span class="num">0</span> <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         <span class="kwa">null</span>;
+      <span class="kwa">end</span> Wait;
+
+      <span class="slc">------------</span>
+      <span class="slc">-- Signal --</span>
+      <span class="slc">------------</span>
+
+      <span class="kwa">procedure</span> Signal <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Count := Count - <span class="num">1</span>;
+      <span class="kwa">end</span> Signal;
+
+   <span class="kwa">end</span> Latch;
+
+<span class="kwa">end</span> Chameneos.Countdown;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> System.Memory;
+<span class="kwa">with</span> Ada.Unchecked_Conversion;
+
+<span class="kwa">package body</span> Cache_Aligned_Storage_Pools <span class="kwa">is</span>
+
+   <span class="kwa">use</span> System, System.Storage_Elements;
+
+   <span class="slc">--  we cannot use System.Address'Size as the modulus so we use the same thing</span>
+   <span class="slc">--  that the compiler does (when declaring Address as a modular type in the</span>
+   <span class="slc">--  full definition)</span>
+   <span class="kwa">type</span> Unsigned_Address <span class="kwa">is mod</span> System.Memory_Size;
+
+   <span class="kwa">function</span> As_Unsigned_Address <span class="kwa">is new</span> Ada.Unchecked_Conversion
+     (Source =&gt; Address,
+      Target =&gt; Unsigned_Address);
+
+   <span class="kwa">function</span> As_Address <span class="kwa">is new</span> Ada.Unchecked_Conversion
+     (Target =&gt; Address,
+      Source =&gt; Unsigned_Address);
+
+   <span class="kwa">type</span> Address_Pointer <span class="kwa">is access all</span> Address;
+   <span class="kwa">for</span> Address_Pointer<span class="kwd">'Storage_Size</span> <span class="kwa">use</span> <span class="num">0</span>;
+
+   <span class="kwa">function</span> As_Address_Pointer <span class="kwa">is new</span> Ada.Unchecked_Conversion
+     (Source =&gt; Address,
+      Target =&gt; Address_Pointer);
+
+   <span class="slc">--  size of an address in terms of storage units</span>
+   Size_Of_Address : <span class="kwa">constant</span> Storage_Offset := Address<span class="kwd">'Size</span> / System.Storage_Unit;
+
+   Twice_Cache_Line_Size : <span class="kwa">constant</span> := <span class="num">2</span> * Cache_Line_Size;
+
+   <span class="slc">--------------</span>
+   <span class="slc">-- Allocate --</span>
+   <span class="slc">--------------</span>
+
+   <span class="kwa">procedure</span> Allocate
+     (Pool            : <span class="kwa">in out</span> Cache_Aligned_Storage_Pool;
+      Storage_Address : <span class="kwa">out</span> System.Address;
+      Requested_Size  : SSE.Storage_Count;
+      Alignment       : SSE.Storage_Count)
+   <span class="kwa">is</span>
+      <span class="kwa">pragma</span> Unreferenced (Pool);
+      <span class="kwa">pragma</span> Unreferenced (Alignment);
+
+      Actual  : Address;
+      Aligned : Address;
+      Header  : Address;
+      Temp    : Unsigned_Address;
+   <span class="kwa">begin</span>
+      Actual := Memory.Alloc (Memory.size_t (Requested_Size + Twice_Cache_Line_Size));
+      <span class="slc">--  The call to Alloc returns an address whose alignment is compatible</span>
+      <span class="slc">--  with the worst case alignment requirement for the machine; thus the</span>
+      <span class="slc">--  Alignment argument can be safely ignored.</span>
+
+      <span class="kwa">if</span> Actual = Null_Address <span class="kwa">then</span>
+         <span class="kwa">raise</span> Storage_Error;
+      <span class="kwa">end if</span>;
+
+      <span class="slc">--  compute a cache-aligned address within the block allocated</span>
+      Temp := As_Unsigned_Address (Actual + Cache_Line_Size) <span class="kwa">and not</span> (Cache_Line_Size - <span class="num">1</span>);
+      Aligned := As_Address (Temp);
+      <span class="slc">--  Put the address of the whole allocated block just before the address</span>
+      <span class="slc">--  given to the application so we can deallocate the whole block later</span>
+      Header := Aligned - Size_of_Address;
+      As_Address_Pointer (Header).<span class="kwa">all</span> := Actual;
+      Storage_Address := Aligned;
+   <span class="kwa">end</span> Allocate;
+
+   <span class="slc">----------------</span>
+   <span class="slc">-- Deallocate --</span>
+   <span class="slc">----------------</span>
+
+   <span class="kwa">procedure</span> Deallocate
+     (Pool            : <span class="kwa">in out</span> Cache_Aligned_Storage_Pool;
+      Storage_Address : System.Address;
+      Requested_Size  : SSE.Storage_Count;
+      Alignment       : SSE.Storage_Count)
+   <span class="kwa">is</span>
+      <span class="kwa">pragma</span> Unreferenced (Pool);
+      <span class="kwa">pragma</span> Unreferenced (Requested_Size);
+      <span class="kwa">pragma</span> Unreferenced (Alignment);
+
+      Actual : Address;
+      Header : Address;
+   <span class="kwa">begin</span>
+      Header := Storage_Address - Size_of_Address;
+      Actual := As_Address_Pointer (Header).<span class="kwa">all</span>;
+      Memory.Free (Actual);
+   <span class="kwa">end</span> Deallocate;
+
+   <span class="slc">------------------</span>
+   <span class="slc">-- Storage_Size --</span>
+   <span class="slc">------------------</span>
+
+   <span class="kwa">function</span> Storage_Size
+     (Pool  : Cache_Aligned_Storage_Pool)
+      <span class="kwa">return</span>  SSE.Storage_Count
+   <span class="kwa">is</span>
+      <span class="kwa">pragma</span> Warnings (Off, Pool);
+   <span class="kwa">begin</span>
+      <span class="kwa">return</span> SSE.Storage_Count<span class="kwd">'Last</span>;
+   <span class="kwa">end</span> Storage_Size;
+
+   <span class="slc">------------------</span>
+   <span class="slc">-- Allocate_Any --</span>
+   <span class="slc">------------------</span>
+
+   <span class="kwa">procedure</span> Allocate_Any
+     (Pool            : <span class="kwa">in out</span> Cache_Aligned_Storage_Pool<span class="kwd">'Class</span>;
+      Storage_Address : <span class="kwa">out</span> System.Address;
+      Requested_Size  : SSE.Storage_Count;
+      Alignment       : SSE.Storage_Count)
+   <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      Allocate (Pool, Storage_Address, Requested_Size, Alignment);
+   <span class="kwa">end</span> Allocate_Any;
+
+   <span class="slc">--------------------</span>
+   <span class="slc">-- Deallocate_Any --</span>
+   <span class="slc">--------------------</span>
+
+   <span class="kwa">procedure</span> Deallocate_Any
+     (Pool            : <span class="kwa">in out</span> Cache_Aligned_Storage_Pool<span class="kwd">'Class</span>;
+      Storage_Address : System.Address;
+      Requested_Size  : SSE.Storage_Count;
+      Alignment       : SSE.Storage_Count)
+   <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      Deallocate (Pool, Storage_Address, Requested_Size, Alignment);
+   <span class="kwa">end</span> Deallocate_Any;
+
+<span class="kwa">end</span> Cache_Aligned_Storage_Pools;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> Interfaces.C;
+
+<span class="kwa">package body</span> Chameneos.Processors <span class="kwa">is</span>
+
+   Cores_Per_Slot : <span class="kwa">constant</span> := <span class="num">2</span>;
+
+   Affinities : <span class="kwa">array</span> (<span class="num">0</span> .. Max_Slots) <span class="kwa">of aliased</span> CPU_Set;
+   <span class="slc">--  we use the first slot (ie 0) for the global affinity mask, internally,</span>
+   <span class="slc">--  hence there are Max_Slots-1 total slots available to the application</span>
+   <span class="slc">--  threads, and a total of ((Max_Slots-1) * Cores_Per_Slot) cores supported</span>
+
+   Slot_Modulus : <span class="kwb">Natural</span>;
+
+   <span class="slc">--------------</span>
+   <span class="slc">-- Affinity --</span>
+   <span class="slc">--------------</span>
+
+   <span class="kwa">function</span> Affinity (Slot : <span class="kwb">Natural</span>) <span class="kwa">return</span> cpu_set_t <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">if</span> Slot = <span class="num">0</span> <span class="kwa">then</span>
+         <span class="kwa">return</span> Affinities (Slot);
+      <span class="kwa">else</span>
+         <span class="kwa">return</span> Affinities ((Slot <span class="kwa">mod</span> Slot_Modulus) + <span class="num">1</span>);
+      <span class="kwa">end if</span>;
+   <span class="kwa">end</span> Affinity;
+
+   <span class="slc">-----------------------</span>
+   <span class="slc">-- sched_getaffinity --</span>
+   <span class="slc">-----------------------</span>
+
+   <span class="kwa">function</span> Sched_Getaffinity
+     (Pid : Pid_T;  Cpusetsize : Unsigned_32;  Mask : <span class="kwa">access</span> CPU_Set)
+      <span class="kwa">return</span> Interfaces.C.int;
+   <span class="kwa">pragma</span> Import (C, sched_getaffinity);
+
+
+   <span class="kwa">subtype</span> Bit_Number <span class="kwa">is</span> <span class="kwb">Integer</span> <span class="kwa">range</span> bit_field<span class="kwd">'Range</span>;
+
+   <span class="slc">--------------</span>
+   <span class="slc">--  Set_Bit --</span>
+   <span class="slc">--------------</span>
+
+   <span class="kwa">procedure</span> Set_Bit (Bit : Bit_Number;  Within : <span class="kwa">in out</span> CPU_Set) <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      Within.bits (Bit) := <span class="kwd">True</span>;
+   <span class="kwa">end</span> Set_Bit;
+
+   <span class="slc">-------------------------------</span>
+   <span class="slc">-- Define_Affinities_By_Slot --</span>
+   <span class="slc">-------------------------------</span>
+
+   <span class="kwa">procedure</span> Define_Affinities_By_Slot <span class="kwa">is</span>
+      Num_Bits_Set     : <span class="kwb">Natural</span> := <span class="num">0</span>;
+      Global_Mask      : CPU_Set <span class="kwa">renames</span> Affinities (<span class="num">0</span>);
+      Result           : Int;
+      Global_Mask_Size : <span class="kwa">constant</span> Unsigned_32 := Global_Mask<span class="kwd">'Size</span> / System.Storage_Unit;
+      Next_Affinity    : <span class="kwb">Natural</span>;
+      <span class="kwa">use type</span> Interfaces.C.int;
+   <span class="kwa">begin</span>
+      Result := sched_getaffinity (getpid, Global_Mask_Size, Global_Mask<span class="kwd">'Access</span>);
+      <span class="kwa">if</span> Result /= <span class="num">0</span> <span class="kwa">then</span>
+         <span class="kwa">raise</span> Program_Error <span class="kwa">with</span> <span class="str">&quot;Could not get affinity&quot;</span>;
+      <span class="kwa">end if</span>;
+
+      <span class="kwa">for</span> B <span class="kwa">in</span> <span class="num">1</span> .. CPU_SETSIZE <span class="kwa">loop</span>
+         <span class="kwa">if</span> Global_Mask.Bits (B) <span class="kwa">then</span>
+            Next_Affinity := (Num_Bits_Set / Cores_Per_Slot) + <span class="num">1</span>;
+            <span class="kwa">if</span> Next_Affinity <span class="kwa">not in</span> Affinities<span class="kwd">'Range</span> <span class="kwa">then</span>
+               <span class="slc">--  there are more processors enabled than we support, but</span>
+               <span class="slc">--  that is OK since we only want a few</span>
+               <span class="kwa">exit</span>;
+            <span class="kwa">end if</span>;
+            Set_Bit (B, Affinities (Next_Affinity));
+            Num_Bits_Set := Num_Bits_Set + <span class="num">1</span>;
+         <span class="kwa">end if</span>;
+      <span class="kwa">end loop</span>;
+
+      <span class="kwa">if</span> Num_Bits_Set &gt; <span class="num">2</span> <span class="kwa">then</span>
+         Slot_Modulus := Num_Bits_Set / <span class="num">2</span>;
+      <span class="kwa">else</span>
+         Slot_Modulus := <span class="num">1</span>;
+      <span class="kwa">end if</span>;
+   <span class="kwa">end</span> Define_Affinities_By_Slot;
+
+
+<span class="kwa">begin</span>
+   <span class="kwa">for</span> K <span class="kwa">in</span> Affinities<span class="kwd">'Range</span> <span class="kwa">loop</span>
+      Affinities (K).bits := (<span class="kwa">others</span> =&gt; <span class="kwd">False</span>);
+   <span class="kwa">end loop</span>;
+   Define_Affinities_By_Slot;
+<span class="kwa">end</span> Chameneos.Processors;
+
+<span class="slc">-------------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> System.Machine_Code;  <span class="kwa">use</span> System.Machine_Code;
+
+<span class="kwa">package body</span> x86_Atomic_Swap_Utils <span class="kwa">is</span>
+
+   <span class="slc">-------------------------------</span>
+   <span class="slc">-- Sync_Val_Compare_And_Swap --</span>
+   <span class="slc">-------------------------------</span>
+
+   <span class="kwa">function</span> Sync_Val_Compare_And_Swap
+     (Destination : <span class="kwa">access</span> Unsigned_32;
+      Comparand   : Unsigned_32;
+      New_Value   : Unsigned_32)
+      <span class="kwa">return</span> Unsigned_32
+   <span class="kwa">is</span>
+      Prior_Value : Unsigned_32;
+      <span class="kwa">pragma</span> Suppress (All_Checks);
+   <span class="kwa">begin</span>
+      <span class="slc">--  %eax := Comparand</span>
+      <span class="slc">--  if %eax = Destination.all then</span>
+      <span class="slc">--     Destination.all := New_Value</span>
+      <span class="slc">--  else</span>
+      <span class="slc">--     %eax := Destination.all</span>
+      <span class="slc">--  end if</span>
+      Asm(<span class="str">&quot;lock cmpxchg %1, %2;&quot;</span>,
+        Inputs  =&gt; (Unsigned_32<span class="kwd">'Asm_Input</span> (<span class="str">&quot;r&quot;</span>, New_Value),        <span class="slc">-- %1</span>
+                    Unsigned_32<span class="kwd">'Asm_Input</span> (<span class="str">&quot;m&quot;</span>, Destination.<span class="kwa">all</span>),  <span class="slc">-- %2</span>
+                    Unsigned_32<span class="kwd">'Asm_Input</span> (<span class="str">&quot;a&quot;</span>, Comparand)),
+        Outputs =&gt; (Unsigned_32<span class="kwd">'Asm_Output</span> (<span class="str">&quot;=a&quot;</span>, Prior_Value)),   <span class="slc">-- %0</span>
+        Clobber =&gt; <span class="str">&quot;memory, cc&quot;</span>,
+        Volatile =&gt; <span class="kwd">True</span>);
+      <span class="slc">--  return %eax</span>
+      <span class="kwa">return</span> Prior_Value;
+   <span class="kwa">end</span> Sync_Val_Compare_And_Swap;
+
+<span class="kwa">end</span> x86_Atomic_Swap_Utils;

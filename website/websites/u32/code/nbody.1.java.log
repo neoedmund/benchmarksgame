@@ -1,0 +1,23 @@
+
+Tue, 19 May 2015 03:26:32 GMT
+
+MAKE:
+mv nbody.java nbody.java
+mv: ‘nbody.java’ and ‘nbody.java’ are the same file
+/home/dunham/benchmarksgame/nanobench/makefiles/u32.programs.Makefile:308: recipe for target 'nbody.java_run' failed
+make: [nbody.java_run] Error 1 (ignored)
+/usr/local/src/jdk1.8.0_45/bin/javac nbody.java
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+0.76s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java -XX:MaxMetaspaceSize=1764K -XX:InitialCodeCacheSize=1280K -XX:ReservedCodeCacheSize=1280K -server -XX:+TieredCompilation -XX:+AggressiveOpts nbody 500000
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+FATAL ERROR in native method: processing of -javaagent failed
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Exception in thread "main" 

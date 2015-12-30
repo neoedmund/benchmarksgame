@@ -1,0 +1,193 @@
+<span class="com">/*  The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">    Contributed by Joe Farro</span>
+<span class="com">    parts taken from solution contributed by </span>
+<span class="com">    Jesse Millikan which was modified by Matt Baker</span>
+<span class="com">*/</span>
+
+
+
+<span class="kwa">function</span> <span class="kwd">SeqSets</span>(len) {
+    <span class="kwa">this</span>.seqLen = len;
+    <span class="kwa">this</span>.uintLeft = <span class="num">0</span>;
+    <span class="kwa">this</span>.uintRight = <span class="num">0</span>;
+    <span class="kwa">this</span>.maskLeft = len &lt;= <span class="num">12</span> ? <span class="num">0</span> : Math.<span class="kwd">pow</span>(<span class="num">2</span>, (len - <span class="num">12</span>) * <span class="num">2</span>) - <span class="num">1</span>;
+    <span class="kwa">this</span>.maskRight = Math.<span class="kwd">pow</span>(<span class="num">2</span>, Math.<span class="kwd">min</span>(<span class="num">12</span>, len) * <span class="num">2</span>) - <span class="num">1</span>;
+    <span class="kwa">this</span>.data = {};
+    <span class="kwa">this</span>.lastUintLeft = undefined;
+    <span class="kwa">this</span>.lastLeftData = undefined;
+}
+
+SeqSets.<span class="kwa">prototype</span>.pushToken = <span class="kwa">function</span>(<span class="kwb">char</span>) {
+    <span class="kwa">this</span>.uintLeft = (<span class="kwa">this</span>.uintLeft &lt;&lt; <span class="num">2</span> | <span class="kwa">this</span>.uintRight &gt;&gt;&gt; <span class="num">22</span>) &amp; <span class="kwa">this</span>.maskLeft;
+    <span class="kwa">this</span>.uintRight = (<span class="kwa">this</span>.uintRight &lt;&lt; <span class="num">2</span> | <span class="kwb">char</span>) &amp; <span class="kwa">this</span>.maskRight;
+};
+
+SeqSets.<span class="kwa">prototype</span>.inc = <span class="kwa">function</span>(<span class="kwb">char</span>) {
+    <span class="kwa">if</span> (<span class="kwa">this</span>.uintLeft !== <span class="kwa">this</span>.lastUintLeft) {
+        <span class="kwa">this</span>.lastUintLeft = <span class="kwa">this</span>.uintLeft;
+        <span class="kwa">this</span>.lastLeftData = <span class="kwa">this</span>.data[<span class="kwa">this</span>.uintLeft] = (<span class="kwa">this</span>.data[<span class="kwa">this</span>.uintLeft] || {});
+    }
+    <span class="kwa">this</span>.lastLeftData[<span class="kwa">this</span>.uintRight] = (<span class="kwa">this</span>.lastLeftData[<span class="kwa">this</span>.uintRight] || <span class="num">0</span>) + <span class="num">1</span>;
+};
+
+SeqSets.<span class="kwa">prototype</span>.incWithToken = <span class="kwa">function</span>(<span class="kwb">char</span>) {
+    <span class="kwa">this</span>.<span class="kwd">pushToken</span>(<span class="kwb">char</span>);
+    <span class="kwa">this</span>.<span class="kwd">inc</span>();
+};
+
+SeqSets.<span class="kwa">prototype</span>.getCount = <span class="kwa">function</span>(seq) {
+    <span class="kwa">var</span> seqLeft = seq.length &lt;= <span class="num">12</span> ? <span class="str">''</span> : seq.<span class="kwd">substr</span>(<span class="num">0</span>, seq.length - <span class="num">12</span>),
+        seqRight = seq.<span class="kwd">substr</span>(-<span class="num">12</span>),
+        uintLeft = seqLeft &amp;&amp; <span class="kwd">toUint</span>(seqLeft) || <span class="num">0</span>,
+        uintRight = <span class="kwd">toUint</span>(seqRight);
+
+    <span class="kwa">return this</span>.data[uintLeft][uintRight];
+};
+
+
+<span class="kwa">function</span> <span class="kwd">charToInt</span>(str) {
+    <span class="kwa">switch</span> (str) {
+        <span class="kwa">case</span> <span class="str">'a'</span>: <span class="kwa">return</span> <span class="num">0</span>;
+        <span class="kwa">case</span> <span class="str">'c'</span>: <span class="kwa">return</span> <span class="num">1</span>;
+        <span class="kwa">case</span> <span class="str">'g'</span>: <span class="kwa">return</span> <span class="num">2</span>;
+        <span class="kwa">case</span> <span class="str">'t'</span>: <span class="kwa">return</span> <span class="num">3</span>;
+    }
+}
+
+<span class="kwa">function</span> <span class="kwd">toStr</span>(num, len) {
+    <span class="kwa">var</span> res = <span class="str">''</span>;
+    <span class="kwa">while</span> (len &gt; <span class="num">0</span>) {
+        <span class="kwa">switch</span> (num &amp; <span class="num">3</span>) {
+            <span class="kwa">case</span> <span class="num">0</span>: res = <span class="str">'A'</span> + res; <span class="kwa">break</span>;
+            <span class="kwa">case</span> <span class="num">1</span>: res = <span class="str">'C'</span> + res; <span class="kwa">break</span>;
+            <span class="kwa">case</span> <span class="num">2</span>: res = <span class="str">'G'</span> + res; <span class="kwa">break</span>;
+            <span class="kwa">case</span> <span class="num">3</span>: res = <span class="str">'T'</span> + res; <span class="kwa">break</span>;
+        }
+        num = num &gt;&gt;&gt; <span class="num">2</span>;
+        len--;
+    }
+    <span class="kwa">return</span> res;
+}
+
+<span class="kwa">function</span> <span class="kwd">toUint</span>(str) {
+
+    <span class="kwa">var</span> offset = <span class="num">2</span> * str.length,
+        <span class="kwb">uint</span> = <span class="kwa">new</span> <span class="kwd">Uint32Array</span>(<span class="kwa">new</span> <span class="kwd">ArrayBuffer</span>(<span class="num">4</span>)),
+        i = <span class="num">0</span>;
+
+    <span class="kwa">while</span> (offset) {
+        offset -= <span class="num">2</span>;
+        <span class="kwb">uint</span>[<span class="num">0</span>] |= (<span class="kwd">charToInt</span>(str[i]) &lt;&lt; offset);
+        i++;
+    }
+    <span class="kwa">return</span> <span class="kwb">uint</span>[<span class="num">0</span>];
+}
+
+
+<span class="kwa">var</span> dataLength = <span class="num">0</span>;
+
+<span class="kwa">var</span> seq1 = <span class="kwa">new</span> <span class="kwd">SeqSets</span>(<span class="num">1</span>),
+    seq2 = <span class="kwa">new</span> <span class="kwd">SeqSets</span>(<span class="num">2</span>),
+    seq3 = <span class="kwa">new</span> <span class="kwd">SeqSets</span>(<span class="num">3</span>),
+    seq4 = <span class="kwa">new</span> <span class="kwd">SeqSets</span>(<span class="num">4</span>),
+    seq6 = <span class="kwa">new</span> <span class="kwd">SeqSets</span>(<span class="num">6</span>),
+    seq12 = <span class="kwa">new</span> <span class="kwd">SeqSets</span>(<span class="num">12</span>),
+    seq18 = <span class="kwa">new</span> <span class="kwd">SeqSets</span>(<span class="num">18</span>);
+
+<span class="kwa">var</span> tables = [
+    seq1,
+    seq2,
+    seq3,
+    seq4,
+    seq6,
+    seq12,
+    seq18,
+];
+
+
+<span class="kwa">function</span> <span class="kwd">readInput</span>() {
+
+    <span class="kwa">var</span> len = <span class="num">0</span>,
+        line,
+        i,
+        <span class="kwb">char</span>,
+        si,
+        slen = tables.length,
+        seqSet;
+
+    <span class="kwa">while</span> (<span class="kwd">readline</span>().<span class="kwd">substr</span>(<span class="num">0</span>, <span class="num">3</span>) !== <span class="str">'&gt;TH'</span>) {
+    }
+
+    line = <span class="kwd">readline</span>();
+    i = <span class="num">0</span>;
+    len = line.length;
+
+    <span class="slc">// the first-line is a special case as not all the counts should start</span>
+    <span class="slc">// saving immediately</span>
+    <span class="kwa">while</span> (i &lt; <span class="num">18</span>) {
+
+        <span class="kwb">char</span> = <span class="kwd">charToInt</span>(line[i]);
+
+        si = <span class="num">0</span>;
+        iPlusOne = i + <span class="num">1</span>;
+        <span class="kwa">for</span> (; si &lt; slen; si++) {
+            seqSet = tables[si];
+            seqSet.<span class="kwd">pushToken</span>(<span class="kwb">char</span>);
+            <span class="kwa">if</span> (seqSet.seqLen &lt;= i + <span class="num">1</span>) {
+                seqSet.<span class="kwd">inc</span>();
+            }
+        }
+        i++;
+    }
+
+    <span class="slc">// use do-loop bc want to preserve `i` position on first line</span>
+    <span class="kwa">do</span> {
+
+        len = line.length;
+        dataLength += len;
+        <span class="kwa">while</span> (i &lt; len) {
+
+            <span class="kwb">char</span> = <span class="kwd">charToInt</span>(line[i]);
+
+            seq1.<span class="kwd">incWithToken</span>(<span class="kwb">char</span>);
+            seq2.<span class="kwd">incWithToken</span>(<span class="kwb">char</span>);
+            seq3.<span class="kwd">incWithToken</span>(<span class="kwb">char</span>);
+            seq4.<span class="kwd">incWithToken</span>(<span class="kwb">char</span>);
+            seq6.<span class="kwd">incWithToken</span>(<span class="kwb">char</span>);
+            seq12.<span class="kwd">incWithToken</span>(<span class="kwb">char</span>);
+            seq18.<span class="kwd">incWithToken</span>(<span class="kwb">char</span>);
+
+            i++;
+        }
+        i = <span class="num">0</span>;
+    } <span class="kwa">while</span> ((line = <span class="kwd">readline</span>()) &amp;&amp; line[<span class="num">0</span>] !== <span class="str">'&gt;'</span>)
+}
+
+
+<span class="kwa">function</span> <span class="kwd">sortCounts</span>(data, seqLen) {
+
+    <span class="kwa">var</span> keys = Object.<span class="kwd">keys</span>(data),
+        pctFactor = <span class="num">100</span> / (dataLength - seqLen + <span class="num">1</span>);
+
+    keys.<span class="kwd">sort</span>(<span class="kwa">function</span>(a, b) {
+        <span class="kwa">return</span> data[b] - data[a];
+    });
+
+    keys.<span class="kwd">forEach</span>(<span class="kwa">function</span>(code) {
+        <span class="kwd">print</span>(<span class="kwd">toStr</span>(code, seqLen), (data[code] * pctFactor).<span class="kwd">toFixed</span>(<span class="num">3</span>));
+    });
+    <span class="kwd">print</span>();
+}
+
+<span class="kwd">readInput</span>();
+
+<span class="kwd">sortCounts</span>(seq1.data[<span class="num">0</span>], <span class="num">1</span>);
+<span class="kwd">sortCounts</span>(seq2.data[<span class="num">0</span>], <span class="num">2</span>);
+
+<span class="kwd">print</span>(seq3.<span class="kwd">getCount</span>(<span class="str">'ggt'</span>) +<span class="str">'</span><span class="esc">\t</span><span class="str">'</span> + <span class="str">'GGT'</span>);
+<span class="kwd">print</span>(seq4.<span class="kwd">getCount</span>(<span class="str">'ggta'</span>) +<span class="str">'</span><span class="esc">\t</span><span class="str">'</span> + <span class="str">'GGTA'</span>);
+<span class="kwd">print</span>(seq6.<span class="kwd">getCount</span>(<span class="str">'ggtatt'</span>) +<span class="str">'</span><span class="esc">\t</span><span class="str">'</span> + <span class="str">'GGTATT'</span>);
+<span class="kwd">print</span>(seq12.<span class="kwd">getCount</span>(<span class="str">'ggtattttaatt'</span>) +<span class="str">'</span><span class="esc">\t</span><span class="str">'</span> + <span class="str">'GGTATTTTAATT'</span>);
+<span class="kwd">print</span>(seq18.<span class="kwd">getCount</span>(<span class="str">'ggtattttaatttatagt'</span>) + <span class="str">'</span><span class="esc">\t</span><span class="str">'</span> + <span class="str">'GGTATTTTAATTTATAGT'</span>);

@@ -1,0 +1,110 @@
+<span class="slc">--</span>
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">-- Modified by Ryan Trinkle: 1) change from divInt# to uncheckedIShiftRA#</span>
+<span class="slc">--                           2) changed -optc-O to -optc-O3</span>
+<span class="slc">--                           3) added -optc-ffast-math</span>
+<span class="slc">-- Translation from Clean by Don Stewart</span>
+<span class="slc">-- Parallelized by Louis Wasserman</span>
+<span class="slc">--</span>
+<span class="slc">-- Should be compiled with:</span>
+<span class="slc">-- 	-threaded -funbox-strict-fields -O2 -fvia-c -optc-O3 </span>
+<span class="slc">-- 	-fexcess-precision -optc-ffast-math </span>
+<span class="slc">-- Should be run with:</span>
+<span class="slc">-- 	+RTS -N&lt;number of cores&gt;</span>
+
+<span class="kwd">import</span> System.Environment
+<span class="kwd">import</span> Foreign.Marshal.<span class="kwb">Array</span>
+<span class="kwd">import</span> Foreign
+<span class="kwd">import</span> Text.Printf
+<span class="kwd">import</span> Control.Concurrent
+<span class="kwd">import</span> Control.Monad
+<span class="kwd">import</span> GHC.Base
+<span class="kwd">import</span> GHC.Conc
+
+<span class="kwd">type</span> Reals = Ptr <span class="kwb">Double</span>
+
+main = <span class="kwd">do</span>
+    n &lt;- <span class="kwc">getArgs</span> &gt;&gt;= <span class="kwc">readIO</span> . <span class="kwc">head</span>
+    allocaArray n $ \ u -&gt; allocaArray n $ \ v -&gt; <span class="kwd">do</span>
+      forM_ [<span class="num">0</span>..n-<span class="num">1</span>] $ \i -&gt; pokeElemOff u i <span class="num">1</span> &gt;&gt; pokeElemOff v i <span class="num">0</span>
+
+      powerMethod <span class="num">10</span> n u v
+      printf <span class="str">&quot;%.9f</span><span class="esc">\n</span><span class="str">&quot;</span> =&lt;&lt; eigenvalue n u v <span class="num">0 0 0</span>
+
+<span class="slc">------------------------------------------------------------------------</span>
+
+eigenvalue :: <span class="kwb">Int</span> -&gt; Reals -&gt; Reals -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">Double</span> -&gt; <span class="kwb">Double</span> -&gt; <span class="kwb">IO Double</span>
+eigenvalue !n !u !v !i !vBv !vv
+    | i &lt; n     = <span class="kwd">do</span>	ui &lt;- peekElemOff u i
+			vi &lt;- peekElemOff v i
+			eigenvalue n u v (i+<span class="num">1</span>) (vBv + ui * vi) (vv + vi * vi)
+    | <span class="kwc">otherwise</span> = <span class="kwc">return</span> $! <span class="kwc">sqrt</span> $! vBv / vv
+
+<span class="slc">------------------------------------------------------------------------</span>
+
+<span class="slc">-- Essentially borrowed from the Java implementation.</span>
+<span class="kwd">data</span> CyclicBarrier = Cyclic !<span class="kwb">Int</span> !(MVar (<span class="kwb">Int</span>, [MVar ()]))
+
+await :: CyclicBarrier -&gt; <span class="kwb">IO</span> ()
+await (Cyclic k waitsVar) = <span class="kwd">do</span>
+	(x, waits) &lt;- takeMVar waitsVar
+	<span class="kwd">if</span> x &lt;= <span class="num">1</span> <span class="kwd">then do</span>
+		<span class="kwc">mapM_</span> (`putMVar` ()) waits
+		putMVar waitsVar (k, [])
+	  <span class="kwd">else do</span>
+	  	var &lt;- newEmptyMVar
+	  	putMVar waitsVar (x-<span class="num">1</span>,var:waits)
+	  	takeMVar var
+
+newCyclicBarrier :: <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> CyclicBarrier
+newCyclicBarrier k = <span class="kwc">liftM</span> (Cyclic k) (newMVar (k, []))
+
+powerMethod :: <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; Reals -&gt; Reals -&gt; <span class="kwb">IO</span> ()
+powerMethod z n u v = allocaArray n $ \ !t -&gt; <span class="kwd">do</span>
+	<span class="kwd">let</span> chunk = (n + numCapabilities - <span class="num">1</span>) `quotInt` numCapabilities
+	!barrier &lt;- newCyclicBarrier $! (n + chunk - <span class="num">1</span>) `quotInt` chunk
+	<span class="kwd">let</span> timesAtAv !s !d l r = <span class="kwd">do</span>
+		timesAv n s t l r
+		await barrier
+		timesAtv n t d l r
+		await barrier
+	<span class="kwd">let</span> thread !l !r = <span class="kwc">foldr</span> (&gt;&gt;) (<span class="kwc">return</span> ()) $ <span class="kwc">replicate</span> z $ <span class="kwd">do</span>
+		timesAtAv u v l r
+		timesAtAv v u l r
+	<span class="kwd">let</span> go l = <span class="kwd">case</span> l + chunk <span class="kwd">of</span>
+		r | r &lt; n	-&gt; forkIO (thread l r) &gt;&gt; go r
+		  | <span class="kwc">otherwise</span>	-&gt; thread l n
+	go <span class="num">0</span>
+
+timesAv :: <span class="kwb">Int</span> -&gt; Reals -&gt; Reals -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> ()
+timesAv !n !u !au !l !r = go l <span class="kwd">where</span>
+    go :: <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> ()
+    go !i = <span class="kwc">when</span> (i &lt; r) $ <span class="kwd">do</span>
+	<span class="kwd">let</span> avsum !j !acc
+		| j &lt; n = <span class="kwd">do</span>
+			!uj &lt;- peekElemOff u j
+			avsum (j+<span class="num">1</span>) (acc + ((aij i j) * uj))
+		| <span class="kwc">otherwise</span> = pokeElemOff au i acc &gt;&gt; go (i+<span class="num">1</span>)
+	avsum <span class="num">0 0</span>
+
+timesAtv :: <span class="kwb">Int</span> -&gt; Reals -&gt; Reals -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> ()
+timesAtv !n !u !a !l !r = go l
+  <span class="kwd">where</span>
+    go :: <span class="kwb">Int</span> -&gt; <span class="kwb">IO</span> ()
+    go !i = <span class="kwc">when</span> (i &lt; r) $ <span class="kwd">do</span>
+	<span class="kwd">let</span> atvsum !j !acc 
+		| j &lt; n	= <span class="kwd">do</span>	!uj &lt;- peekElemOff u j
+				atvsum (j+<span class="num">1</span>) (acc + ((aij j i) * uj))
+		| <span class="kwc">otherwise</span> = pokeElemOff a i acc &gt;&gt; go (i+<span class="num">1</span>)
+	atvsum <span class="num">0 0</span>
+
+<span class="slc">--</span>
+<span class="slc">-- manually unbox the inner loop:</span>
+<span class="slc">-- aij i j = 1 / fromIntegral ((i+j) * (i+j+1) `div` 2 + i + 1)</span>
+<span class="slc">--</span>
+aij (I# i) (I# j) = D# (
+    <span class="kwd">case</span> i +# j <span class="kwd">of</span>
+        n -&gt; <span class="num">1.0</span>## /## int2Double# 
+        	(((n *# (n+#<span class="num">1</span>#)) `uncheckedIShiftRA#` <span class="num">1</span>#) +# (i +# <span class="num">1</span>#)))

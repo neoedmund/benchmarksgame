@@ -1,0 +1,120 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Alex Burlyga</span>
+<span class="com">*/</span>
+
+<span class="ppc">#define _GNU_SOURCE</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+<span class="ppc">#include &lt;unistd.h&gt;</span>
+<span class="ppc">#include &lt;inttypes.h&gt;</span>
+
+<span class="ppc">#define NUMBER_OF_THREADS 503</span>
+
+pthread_mutex_t cv_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cv_main = PTHREAD_COND_INITIALIZER;
+pthread_cond_t *cvs = NULL;
+<span class="kwb">uint32_t</span> token = <span class="num">0</span>;
+<span class="kwb">uint32_t</span> token_count = <span class="num">1000</span>;
+<span class="kwb">uint32_t</span> threads_started = <span class="num">0</span>;
+<span class="kwb">uint32_t</span> number_of_cpus = <span class="num">0</span>;
+
+<span class="kwb">void</span> *<span class="kwd">thread_function</span>(<span class="kwb">void</span> *arg) {
+    <span class="kwb">uint32_t</span> thread_num = *(<span class="kwb">uint32_t</span> *)arg;
+    <span class="kwb">uint32_t</span> next_thread_num = (thread_num + <span class="num">1</span>) % NUMBER_OF_THREADS;
+    cpu_set_t cpu_mask;
+
+    <span class="kwd">CPU_ZERO</span>(&amp;cpu_mask);
+    <span class="kwd">CPU_SET</span>(<span class="num">0</span>, &amp;cpu_mask);
+    <span class="kwd">pthread_setaffinity_np</span>(<span class="kwd">pthread_self</span>(), <span class="kwa">sizeof</span>(cpu_set_t), &amp;cpu_mask);
+
+    <span class="kwd">pthread_mutex_lock</span>(&amp;cv_mutex);
+    <span class="kwa">while</span> (<span class="num">1</span>) {
+        threads_started++;
+        <span class="kwd">pthread_cond_signal</span>(&amp;cv_main);
+        <span class="kwd">pthread_cond_wait</span>(cvs+thread_num, &amp;cv_mutex);
+        token++;
+        <span class="kwa">if</span> (token == token_count + <span class="num">1</span>) {
+            <span class="kwd">printf</span>(<span class="str">&quot;%d</span><span class="esc">\n</span><span class="str">&quot;</span>, thread_num + <span class="num">1</span>);
+            token++;
+            <span class="kwd">pthread_cond_signal</span>(cvs+next_thread_num);
+            <span class="kwd">pthread_mutex_unlock</span>(&amp;cv_mutex);
+            <span class="kwa">break</span>;
+        } <span class="kwa">else if</span> (token &gt; token_count + <span class="num">1</span>) {
+            <span class="kwd">pthread_cond_signal</span>(cvs+next_thread_num);
+            <span class="kwd">pthread_mutex_unlock</span>(&amp;cv_mutex);
+            <span class="kwa">break</span>;
+        }
+        <span class="kwd">pthread_cond_signal</span>(cvs+next_thread_num);
+    }
+
+    <span class="kwd">pthread_exit</span>(NULL);
+}
+
+<span class="kwb">int</span>
+<span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> **argv) {
+    <span class="kwb">int</span> errno = <span class="num">0</span>;
+    pthread_t *threads = NULL;
+    <span class="kwb">uint32_t</span> *thread_args = NULL;
+
+    <span class="kwa">if</span> (argc &gt; <span class="num">1</span>) {
+        token_count = <span class="kwd">strtol</span>(argv[<span class="num">1</span>], NULL, <span class="num">0</span>);
+    }
+
+    number_of_cpus = <span class="kwd">sysconf</span>(_SC_NPROCESSORS_CONF);
+
+    threads = (pthread_t *)<span class="kwd">malloc</span>(<span class="kwa">sizeof</span>(pthread_t)*NUMBER_OF_THREADS);
+    <span class="kwa">if</span> (threads == NULL) {
+        <span class="kwd">perror</span>(<span class="str">&quot;pthread_t array malloc&quot;</span>);
+        <span class="kwd">exit</span>(<span class="num">1</span>);
+    }
+    <span class="kwd">memset</span>(threads, <span class="num">0</span>, <span class="kwa">sizeof</span>(pthread_t)*NUMBER_OF_THREADS);
+
+    thread_args = (<span class="kwb">uint32_t</span> *)<span class="kwd">malloc</span>(<span class="kwa">sizeof</span>(<span class="kwb">uint32_t</span>)*NUMBER_OF_THREADS);
+    <span class="kwa">if</span> (thread_args == NULL) {
+        <span class="kwd">perror</span>(<span class="str">&quot;thread_args array malloc&quot;</span>);
+        <span class="kwd">exit</span>(<span class="num">1</span>);
+    }
+    <span class="kwd">memset</span>(thread_args, <span class="num">0</span>, <span class="kwa">sizeof</span>(<span class="kwb">uint32_t</span>)*NUMBER_OF_THREADS);
+
+    cvs = (pthread_cond_t *)<span class="kwd">malloc</span>(<span class="kwa">sizeof</span>(pthread_cond_t)*NUMBER_OF_THREADS);
+    <span class="kwa">if</span> (cvs == NULL) {
+        <span class="kwd">perror</span>(<span class="str">&quot;cvs array malloc&quot;</span>);
+        <span class="kwd">exit</span>(<span class="num">1</span>);
+    }
+
+    <span class="kwd">pthread_mutex_lock</span>(&amp;cv_mutex);
+    <span class="kwa">for</span> (<span class="kwb">uint32_t</span> i = <span class="num">0</span>; i &lt; NUMBER_OF_THREADS; i++) {
+        *(thread_args + i) = i;
+        errno = <span class="kwd">pthread_cond_init</span>(cvs+i, NULL);
+        <span class="kwa">if</span> (errno) {
+            <span class="kwd">perror</span>(<span class="str">&quot;pthread_cond_init&quot;</span>);
+            <span class="kwd">exit</span>(<span class="num">1</span>);
+        }
+
+        errno = <span class="kwd">pthread_create</span>(threads+i, NULL, thread_function, (<span class="kwb">void</span> *)(thread_args + i));
+        <span class="kwa">if</span> (errno) {
+            <span class="kwd">perror</span>(<span class="str">&quot;pthread_create&quot;</span>);
+            <span class="kwd">exit</span>(<span class="num">1</span>);
+        }
+    }
+
+    <span class="kwa">while</span>(threads_started &lt; NUMBER_OF_THREADS) {
+        <span class="kwd">pthread_cond_wait</span>(&amp;cv_main, &amp;cv_mutex);
+    }
+    <span class="kwd">pthread_cond_signal</span>(cvs);
+    <span class="kwd">pthread_mutex_unlock</span>(&amp;cv_mutex);
+
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; NUMBER_OF_THREADS; i++) {
+        <span class="kwd">pthread_join</span>(*(threads + i), NULL);
+    }
+
+    <span class="kwd">free</span>(cvs);
+    <span class="kwd">free</span>(thread_args);
+    <span class="kwd">free</span>(threads);
+    <span class="kwd">pthread_exit</span>(NULL);
+}

@@ -1,0 +1,40 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Anthony Donnefort</span>
+<span class="com"> * redone by Enotus 2010-11-20</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.io.*;
+
+<span class="kwa">public final class</span> revcomp {
+
+    <span class="kwa">static final</span> <span class="kwb">byte</span>[] map=<span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">128</span>];
+        <span class="kwa">static</span>{
+        String[] mm={<span class="str">&quot;ACBDGHK</span><span class="esc">\n</span><span class="str">MNSRUTWVYacbdghkmnsrutwvy&quot;</span>,<span class="str">&quot;TGVHCDM</span><span class="esc">\n</span><span class="str">KNSYAAWBRTGVHCDMKNSYAAWBR&quot;</span>};
+        <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;mm[<span class="num">0</span>].<span class="kwd">length</span>();i++) map[mm[<span class="num">0</span>].<span class="kwd">charAt</span>(i)]=(<span class="kwb">byte</span>)mm[<span class="num">1</span>].<span class="kwd">charAt</span>(i);
+    } 
+
+    <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">reverse</span>(<span class="kwb">byte</span>[] buf,<span class="kwb">int</span> begin,<span class="kwb">int</span> end){
+        <span class="kwa">while</span>(true){
+            <span class="kwb">byte</span> bb=buf[begin];<span class="kwa">if</span>(bb==<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) bb=buf[++begin];
+            <span class="kwb">byte</span> be=buf[end];<span class="kwa">if</span>(be==<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) be=buf[--end];
+            <span class="kwa">if</span>(begin&gt;end) <span class="kwa">break</span>;
+            buf[begin++]=map[be];
+            buf[end--]=map[bb];
+        }
+    }
+      
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) <span class="kwa">throws</span> IOException{
+        <span class="kwa">final</span> <span class="kwb">byte</span>[] buf=<span class="kwa">new</span> <span class="kwb">byte</span>[System.<span class="kwa">in</span>.<span class="kwd">available</span>()];
+        System.<span class="kwa">in</span>.<span class="kwd">read</span>(buf);
+
+        <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;buf.length;){
+            <span class="kwa">while</span>(buf[i++]!=<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>);
+            <span class="kwb">int</span> data=i; <span class="kwa">while</span>(i&lt;buf.length &amp;&amp; buf[i++]!=<span class="str">'&gt;'</span>);
+            <span class="kwd">reverse</span>(buf,data,i-<span class="num">2</span>);
+        }
+
+        System.out.<span class="kwd">write</span>(buf);
+    }
+}

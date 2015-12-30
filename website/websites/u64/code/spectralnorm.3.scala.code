@@ -1,0 +1,139 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Marc Millstone</span>
+<span class="com">*/</span>
+
+
+<span class="kwa">import</span> scala.annotation.tailrec
+<span class="kwa">import</span> scala.actors.Futures._
+
+<span class="kwa">object</span> spectralnorm  {
+<span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) = {
+   <span class="kwa">val</span> n = (<span class="kwa">if</span> (args.length&gt;<span class="num">0</span>) <span class="kwd">args</span>(<span class="num">0</span>).toInt <span class="kwa">else</span> <span class="num">100</span>)
+   <span class="kwa">val</span> sTime = System.currentTimeMillis   
+   <span class="kwa">val</span> solution = <span class="kwd">RecursiveSpectralNorm</span>(n).approximate 
+   <span class="kwa">val</span> totalTime = System.currentTimeMillis - sTime
+   <span class="kwd">println</span>(<span class="str">&quot;%.09f&quot;</span>.<span class="kwd">format</span>(solution)) 
+ }
+}
+
+<span class="slc">//Companion object for construction</span>
+<span class="kwa">object</span> RecursiveSpectralNorm{
+  <span class="kwa">def</span> <span class="kwd">apply</span>(size:Int) = {
+   <span class="kwa">new</span> <span class="kwd">RecursiveSpectralNorm</span>(size)
+  }
+}
+
+
+<span class="kwa">class</span> <span class="kwd">RecursiveSpectralNorm</span>(size:Int){  
+   <span class="slc">//v = A'A*u</span>
+   <span class="slc">//u = A'A*v</span>
+
+   <span class="slc">//Evaluate matrix (and transpose) elements</span>
+   <span class="kwa">val</span> A = (i: Int, j: Int) =&gt; <span class="num">1.0</span>/((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span> +i+<span class="num">1</span>)
+   <span class="kwa">val</span> At = (j: Int, i: Int) =&gt; <span class="num">1.0</span>/((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span> +i+<span class="num">1</span>)
+
+   <span class="slc">//For parallelization, get number of cores (virtual cores) </span>
+   <span class="kwa">val</span> numProcessors = Runtime.getRuntime.availableProcessors
+
+   <span class="slc">//Break up problem into Chunks correponding to rows</span>
+   <span class="kwa">val</span> chunk = (size/numProcessors)  
+
+   <span class="slc">// generate a list of tuples of chunks to process</span>
+   <span class="slc">// (0,chunk-1) (chunk, 2*chunk-1) ... (_, size-1)</span>
+   <span class="kwa">val</span> chunkIndex = (<span class="num">0</span> to numProcessors-<span class="num">1</span>).<span class="kwd">map</span>(s=&gt; s*chunk).<span class="kwd">zip</span>( 
+                ((<span class="num">1</span> to numProcessors-<span class="num">1</span>).<span class="kwd">map</span>(
+                  s=&gt;s*chunk-<span class="num">1</span>).toList:::<span class="kwd">List</span>((size-<span class="num">1</span>))))
+
+   <span class="slc">// Mulitples M from row StartRow to endRow times a vector</span>
+   <span class="kwa">def</span> <span class="kwd">subMatrixTimesVector</span>(Mat: (Int,Int) =&gt; Double, 
+                      indexTuple:Tuple2[Int,Int], vec:Array[Double]) = {
+      <span class="kwa">val</span> chunkSize = indexTuple._2 - indexTuple._1 + <span class="num">1</span> 
+      <span class="kwa">var</span> w = Array.<span class="kwd">fill</span>(chunkSize)(<span class="num">0</span>.)
+      <span class="kwa">var</span> i = indexTuple._1 
+      <span class="kwa">var</span> indexW = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt;= indexTuple._2){
+         <span class="kwa">var</span> sum = <span class="num">0.0</span>
+         <span class="kwa">var</span> j = <span class="num">0</span>
+         <span class="kwa">while</span>(j &lt; size){
+            sum+= <span class="kwd">Mat</span>(i,j)*<span class="kwd">vec</span>(j)
+            j+=<span class="num">1</span>
+         }
+         <span class="kwd">w</span>(indexW) = sum
+         indexW+=<span class="num">1</span>
+         i+=<span class="num">1</span>
+      }
+      w
+     }
+
+
+   <span class="slc">// Uses non-blocking Scala futures to perform the required matrix-vector</span>
+   <span class="slc">//products.  Uses a number of threads equal to the number of</span>
+   <span class="slc">// available (virtual) cores.</span>
+   <span class="kwa">def</span> <span class="kwd">fastMatrixTimesVector</span>(Mat: (Int,Int) =&gt; Double, vec:Array[Double]) = {
+    <span class="kwa">var</span> w:List[scala.actors.Future[Array[Double]]] = <span class="kwd">List</span>()
+    <span class="kwa">for</span>(i &lt;- <span class="num">0</span> <span class="kwd">to</span> (numProcessors -<span class="num">1</span>))
+      w = w ::: <span class="kwd">List</span>(future{<span class="kwd">subMatrixTimesVector</span>(Mat,<span class="kwd">chunkIndex</span>(i),vec)})
+    
+    <span class="slc">//Complete the future and concatenate the results</span>
+   w.<span class="kwd">map</span>(s =&gt; s.apply).flatten.toArray
+
+   }
+
+
+   <span class="kwa">def</span> <span class="kwd">matrixTimesVector</span>(Mat: (Int,Int) =&gt; Double, vec:Array[Double]) = {
+      <span class="kwa">var</span> w = Array.<span class="kwd">fill</span>(size)(<span class="num">0</span>.)
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwd">subMatrixTimesVector</span>(Mat,(<span class="num">0</span>,size-<span class="num">1</span>),vec)
+   }
+
+   <span class="kwa">def</span> <span class="kwd">computeNewUandV</span>(u:Array[Double]) = {
+      <span class="kwa">val</span> w = <span class="kwd">fastMatrixTimesVector</span>(A,u)
+      <span class="kwd">fastMatrixTimesVector</span>(At,w)
+   }
+
+   <span class="kwa">def</span> <span class="kwd">updateUandV</span>(u: Array[Double], v:Array[Double])
+               : Tuple2[Array[Double], Array[Double]] = {
+     <span class="kwa">val</span> vnew = <span class="kwd">computeNewUandV</span>(u)
+     <span class="kwa">val</span> unew = <span class="kwd">computeNewUandV</span>(vnew)
+     (unew,vnew)
+   }
+
+   <span class="kwa">def</span> <span class="kwd">computeSolution</span>(u:Array[Double], v:Array[Double]) = {
+     <span class="kwa">var</span> vbv,vv = <span class="num">0.0</span>
+     <span class="kwa">var</span> i = <span class="num">0</span>
+     <span class="kwa">while</span> (i &lt; size) {
+      vbv += <span class="kwd">u</span>(i)*<span class="kwd">v</span>(i)
+      vv += <span class="kwd">v</span>(i)*<span class="kwd">v</span>(i)
+      i += <span class="num">1</span>
+     }
+     math.<span class="kwd">sqrt</span>(vbv/vv)
+   }   
+   
+
+   <span class="slc">//Uses a tail recursive helper function, approximateHelper to approximate</span>
+   <span class="slc">//the spectral norm of A.  Observe that approximateHelper returns a tuple of</span>
+   <span class="slc">//arrays.  The parallization is performed in the Matrix -vector product code</span>
+   <span class="slc">// FastMatrixTimesVector</span>
+
+   <span class="kwa">def</span> <span class="kwd">approximate</span>() = { 
+     <span class="slc">// (u,v) = approximate(u,v) recursive call</span>
+
+     <span class="kwc">&#64;tailrec</span> <span class="kwa">def</span> <span class="kwd">approximateHelper</span>(iter: Int, 
+                            UVpair:Tuple2[Array[Double],Array[Double]])
+                            : Tuple2[Array[Double],Array[Double]] = {
+      <span class="kwa">if</span> (iter == <span class="num">9</span>)
+        UVpair
+      <span class="kwa">else</span> { 
+        <span class="kwd">approximateHelper</span>(iter+<span class="num">1</span>,<span class="kwd">updateUandV</span>(UVpair._1,UVpair._2))
+      }
+     }
+     <span class="kwa">val</span> UV = <span class="kwd">approximateHelper</span>(<span class="num">0</span>, (Array.<span class="kwd">fill</span>(size)(<span class="num">1.0</span>),Array.<span class="kwd">fill</span>(size)(<span class="num">1.0</span>)))
+
+     <span class="slc">//Compute the result  </span>
+     
+     <span class="kwd">computeSolution</span>(UV._1, UV._2) 
+         
+   }
+}

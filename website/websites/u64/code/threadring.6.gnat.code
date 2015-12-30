@@ -1,0 +1,152 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">--  Contributed by Brad Moore (28 Sep 2014)</span>
+<span class="slc">--</span>
+<span class="slc">-- The Ada standard does not provide a direct mapping from Tasks to</span>
+<span class="slc">-- OS threads. In the GNAT compiler implementation, tasks happen to</span>
+<span class="slc">-- correspond to OS threads. This approach creates an abstraction of an</span>
+<span class="slc">-- array of lighweight threads, which are executed by a pool of Ada tasks.</span>
+<span class="slc">-- Transfer of control is via an Ada protected entry call which passes</span>
+<span class="slc">-- the token to the next waiting Ada task. The token is protected inside</span>
+<span class="slc">-- the protected object, which guarantees that only one thread at a time</span>
+<span class="slc">-- updates it. Note that this version is compiled with full Ada checks</span>
+<span class="slc">-- enabled, and optimization turned off.</span>
+<span class="slc">--</span>
+<span class="slc">--  compile with:</span>
+<span class="slc">--    gnatchop threadring.gnat</span>
+<span class="slc">--    gnatmake -march=native threadring.adb</span>
+<span class="slc">-----------------------------------------------------------------------------</span>
+
+<span class="kwa">with</span> Ada.Command_Line; <span class="kwa">use</span> Ada.Command_Line;
+<span class="kwa">with</span> Ada.Text_IO; <span class="kwa">use</span> Ada.Text_IO;
+<span class="kwa">with</span> Execute_Threadring;
+
+<span class="kwa">procedure</span> Threadring <span class="kwa">is</span>
+   <span class="kwa">package</span> Natural_IO <span class="kwa">is new</span> Integer_IO (Num =&gt; <span class="kwb">Natural</span>);
+
+   <span class="kwa">function</span> Get_Token_Count <span class="kwa">return</span> <span class="kwb">Positive</span>
+   <span class="kwa">is</span>
+      Default_Token_Count : <span class="kwa">constant</span> := <span class="num">500</span>;
+   <span class="kwa">begin</span>
+      <span class="kwa">if</span> Argument_Count &gt; <span class="num">0</span> <span class="kwa">then</span>
+         <span class="kwa">return</span> <span class="kwb">Positive</span><span class="kwd">'Value</span> (Argument (<span class="num">1</span>));
+      <span class="kwa">else</span>
+         <span class="kwa">return</span> Default_Token_Count;
+      <span class="kwa">end if</span>;
+   <span class="kwa">end</span> Get_Token_Count;
+
+   Token_Count : <span class="kwa">constant</span> <span class="kwb">Positive</span> := Get_Token_Count;
+<span class="kwa">begin</span>
+
+   Natural_IO.Put(Item =&gt; Execute_Threadring (Token_Count),
+                  Width =&gt; <span class="num">0</span>);
+   New_Line;
+
+<span class="kwa">end</span> Threadring;
+
+<span class="kwa">function</span> Execute_Threadring
+  (Number_Of_Tokens : <span class="kwb">Positive</span>) <span class="kwa">return</span> <span class="kwb">Positive</span>
+<span class="kwa">is</span>
+
+   <span class="kwa">subtype</span> Token_Type <span class="kwa">is</span> <span class="kwb">Natural</span> <span class="kwa">range</span> <span class="num">0</span> .. Number_Of_Tokens;
+
+   Threadring_Size : <span class="kwa">constant</span> := <span class="num">503</span>;
+
+   <span class="kwa">type</span> Thread_Index <span class="kwa">is mod</span> Threadring_Size;
+   <span class="kwa">type</span> Thread_Id <span class="kwa">is range</span> <span class="num">1</span> .. Threadring_Size;
+
+   Next_Name : Thread_Id<span class="kwd">'Base</span> := <span class="num">1</span>;
+
+   <span class="kwa">type</span> Lightweight_Thread
+     (Name : Thread_Id := Thread_Id<span class="kwd">'First</span>;
+      Index : Thread_Index := Thread_Index<span class="kwd">'First</span>) <span class="kwa">is null record</span>;
+
+   <span class="kwa">function</span> Create_Lightweight_Thread <span class="kwa">return</span> Lightweight_Thread;
+
+   Lightweight_Threads : <span class="kwa">array</span> (Thread_Index) <span class="kwa">of aliased</span> Lightweight_Thread :=
+     (<span class="kwa">others</span> =&gt; Create_Lightweight_Thread);
+
+   <span class="kwa">protected</span> Token_Passer <span class="kwa">is</span>
+      <span class="kwa">procedure</span> Start (Thread : <span class="kwa">access</span> Lightweight_Thread);
+      <span class="kwa">entry</span> Wait_For_Baton (Done : <span class="kwa">in out</span> <span class="kwb">Boolean</span>);
+      <span class="kwa">function</span> Get_Result <span class="kwa">return</span> Thread_Id;
+   <span class="kwa">private</span>
+      Token : Token_Type := Number_Of_Tokens;
+      Has_Baton : <span class="kwb">Boolean</span> := <span class="kwd">False</span>;
+      Current_Thread : <span class="kwa">access</span> Lightweight_Thread;
+      Result : Thread_Id;
+   <span class="kwa">end</span> Token_Passer;
+
+   <span class="kwa">protected body</span> Token_Passer <span class="kwa">is</span>
+
+      <span class="kwa">function</span> Get_Result <span class="kwa">return</span> Thread_Id <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         <span class="kwa">return</span> Result;
+      <span class="kwa">end</span> Get_Result;
+
+      <span class="kwa">procedure</span> Start (Thread : <span class="kwa">access</span> Lightweight_Thread) <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Current_Thread := Thread;
+         Has_Baton := <span class="kwd">True</span>;
+      <span class="kwa">end</span> Start;
+
+      <span class="kwa">entry</span> Wait_For_Baton (Done : <span class="kwa">in out</span> <span class="kwb">Boolean</span>) <span class="kwa">when</span> Has_Baton <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+
+         <span class="kwa">if</span> Token = <span class="num">0</span> <span class="kwa">then</span>
+            Result := Current_Thread.Name;
+            Done := <span class="kwd">True</span>;
+         <span class="kwa">else</span>
+            Token := Token - <span class="num">1</span>;
+            Current_Thread :=
+              Lightweight_Threads (Current_Thread.Index + <span class="num">1</span>)<span class="kwd">'Access</span>;
+         <span class="kwa">end if</span>;
+
+      <span class="kwa">end</span> Wait_For_Baton;
+
+   <span class="kwa">end</span> Token_Passer;
+
+   <span class="kwa">function</span> Create_Lightweight_Thread <span class="kwa">return</span> Lightweight_Thread <span class="kwa">is</span>
+   <span class="kwa">begin</span>
+      <span class="kwa">return</span> New_Thread : <span class="kwa">constant</span> Lightweight_Thread :=
+        (Name =&gt; Next_Name,
+         Index =&gt; Thread_Index (Next_Name - <span class="num">1</span>))
+      <span class="kwa">do</span>
+         Next_Name := Next_Name + <span class="num">1</span>;
+      <span class="kwa">end return</span>;
+   <span class="kwa">end</span> Create_Lightweight_Thread;
+
+   <span class="kwa">task type</span> OS_Thread;
+
+   <span class="kwa">task body</span> OS_Thread
+   <span class="kwa">is</span>
+      All_Done : <span class="kwb">Boolean</span> := <span class="kwd">False</span>;
+   <span class="kwa">begin</span>
+      Task_Loop :
+      <span class="kwa">loop</span>
+         Token_Passer.Wait_For_Baton (All_Done);
+         <span class="kwa">exit</span> Task_Loop <span class="kwa">when</span> All_Done;
+      <span class="kwa">end loop</span> Task_Loop;
+   <span class="kwa">end</span> OS_Thread;
+
+<span class="kwa">begin</span>
+
+   Token_Passer.Start
+     (Thread =&gt; Lightweight_Threads (Lightweight_Threads<span class="kwd">'First</span>)<span class="kwd">'Access</span>);
+
+   <span class="slc">-- Wait for workers to complete before returning result</span>
+   <span class="kwa">declare</span>
+      Number_Of_Workers : <span class="kwa">constant</span> := <span class="num">503</span>;
+
+      <span class="kwa">pragma</span> Warnings (Off, <span class="str">&quot;*Worker_Pool* is not referenced&quot;</span>);
+
+      Worker_Pool : <span class="kwa">array</span> (<span class="num">1</span> .. Number_Of_Workers) <span class="kwa">of</span> OS_Thread;
+
+      <span class="kwa">pragma</span> Warnings (On, <span class="str">&quot;*Worker_Pool* is not referenced&quot;</span>);
+   <span class="kwa">begin</span>
+      <span class="kwa">null</span>;
+   <span class="kwa">end</span>;
+
+   <span class="kwa">return</span> <span class="kwb">Positive</span> (Token_Passer.Get_Result);
+<span class="kwa">end</span> Execute_Threadring;

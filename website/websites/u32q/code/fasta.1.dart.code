@@ -1,0 +1,180 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by James Wendel</span>
+<span class="com">*/</span>
+
+<span class="kwc">import</span> <span class="str">'dart:io'</span>;
+<span class="kwc">import</span> <span class="str">'dart:typed_data'</span>;
+
+<span class="kwa">const</span> String ALU =
+<span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>
+<span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>
+<span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>
+<span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>
+<span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>
+<span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>
+<span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+<span class="kwa">final</span> Frequency IUB = <span class="kwa">new</span> Frequency(
+    [<span class="str">'a'</span>,  <span class="str">'c'</span>,  <span class="str">'g'</span>,  <span class="str">'t'</span>,
+     <span class="str">'B'</span>,  <span class="str">'D'</span>,  <span class="str">'H'</span>,  <span class="str">'K'</span>,
+     <span class="str">'M'</span>,  <span class="str">'N'</span>,  <span class="str">'R'</span>,  <span class="str">'S'</span>,
+     <span class="str">'V'</span>,  <span class="str">'W'</span>,  <span class="str">'Y'</span>],
+     [<span class="num">0.27</span>, <span class="num">0.12</span>, <span class="num">0.12</span>, <span class="num">0.27</span>,
+      <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>,
+      <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>,
+      <span class="num">0.02</span>, <span class="num">0.02</span>, <span class="num">0.02</span>,]);
+
+<span class="kwa">final</span> Frequency HOMO_SAPIENS = <span class="kwa">new</span> Frequency(
+    [ <span class="str">'a'</span>,
+      <span class="str">'c'</span>,
+      <span class="str">'g'</span>,
+      <span class="str">'t'</span>],
+      [ <span class="num">0.3029549426680</span>,
+        <span class="num">0.1979883004921</span>,
+        <span class="num">0.1975473066391</span>,
+        <span class="num">0.3015094502008</span>]);
+
+<span class="kwa">const</span> <span class="kwb">int</span> IM = <span class="num">139968</span>;
+<span class="kwa">const</span> <span class="kwb">int</span> IA = <span class="num">3877</span>;
+<span class="kwa">const</span> <span class="kwb">int</span> IC = <span class="num">29573</span>;
+
+<span class="kwa">const</span> <span class="kwb">int</span> LINE_LENGTH = <span class="num">60</span>;
+<span class="kwa">const</span> <span class="kwb">int</span> BUFFER_SIZE = (LINE_LENGTH + <span class="num">1</span>)*<span class="num">1024</span>;
+
+<span class="kwa">const</span> <span class="kwb">double</span> oneOverIM = (<span class="num">1.0</span>/ IM);
+
+<span class="kwa">class</span> Frequency {
+  Uint8List chars;
+  Float64List probs;
+  <span class="kwb">int</span> last;
+
+  <span class="kwb">double</span> random(<span class="kwb">double</span> max) {
+    last = (last * IA + IC) % IM;
+    <span class="kwa">return</span> max * last * oneOverIM;
+  }
+
+  Frequency(List&lt;String&gt; charList, List&lt;<span class="kwb">double</span>&gt; probList) {
+    chars = <span class="kwa">new</span> Uint8List(charList.length);
+    <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i &lt; chars.length; i++) {
+      chars[i] = charList[i].codeUnitAt(<span class="num">0</span>);
+    }
+
+    probs = <span class="kwa">new</span> Float64List(probList.length);
+    <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i &lt; probList.length; i++) {
+      probs[i] = probList[i];
+    }
+
+    makeCumulative();
+  }
+
+  <span class="kwa">void</span> makeCumulative() {
+    <span class="kwb">double</span> cp = <span class="num">0.0</span>;
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; probs.length; i++) {
+      cp += probs[i];
+      probs[i] = cp;
+    }
+  }
+
+  <span class="kwb">int</span> selectRandomIntoBuffer(Uint8List buffer, <span class="kwb">int</span> bufferIndex, <span class="kwb">int</span> nRandom) {
+    <span class="kwa">final</span> <span class="kwb">int</span> len = probs.length;
+
+    outer:
+    <span class="kwa">for</span> (<span class="kwb">int</span> rIndex = <span class="num">0</span>; rIndex &lt; nRandom; rIndex++) {
+      <span class="kwb">double</span> r = random(<span class="num">1.0</span>);
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; len; i++) {
+        <span class="kwa">if</span> (r &lt; probs[i]) {
+          buffer[bufferIndex++] = chars[i];
+          <span class="kwa">continue</span> outer;
+        }
+      }
+
+      buffer[bufferIndex++] = chars[len-<span class="num">1</span>];
+    }
+
+    <span class="kwa">return</span> bufferIndex;
+  }
+}
+
+makeRepeatFasta(String id, String desc, String alu, <span class="kwb">int</span> _nChars, IOSink writer) {
+  writer.write(<span class="str">&quot;&gt;${id} ${desc}</span><span class="esc">\n</span><span class="str">&quot;</span>);
+
+  <span class="kwb">int</span> aluIndex = <span class="num">0</span>;
+  <span class="kwa">final</span> List&lt;<span class="kwb">int</span>&gt; aluCode = alu.codeUnits;
+  <span class="kwa">final</span> <span class="kwb">int</span> aluLength = aluCode.length;
+
+  Uint8List buffer = <span class="kwa">new</span> Uint8List(BUFFER_SIZE);
+
+  <span class="kwb">int</span> bufferIndex = <span class="num">0</span>;
+  <span class="kwb">int</span> nChars = _nChars;
+  <span class="kwa">while</span> (nChars &gt; <span class="num">0</span>) {
+    <span class="kwa">final</span> <span class="kwb">int</span> chunkSize = nChars &gt;= LINE_LENGTH ? LINE_LENGTH : nChars;
+
+    <span class="kwa">if</span> (bufferIndex == BUFFER_SIZE) {
+      writer.add(<span class="kwa">new</span> Uint8List.view(buffer.buffer, <span class="num">0</span>, bufferIndex));
+      buffer = <span class="kwa">new</span> Uint8List(BUFFER_SIZE);
+      bufferIndex = <span class="num">0</span>;
+    }
+
+    <span class="kwa">if</span> (aluIndex + chunkSize &lt; aluLength) {
+      buffer.setRange(bufferIndex, bufferIndex+chunkSize, aluCode, aluIndex);
+      bufferIndex += chunkSize;
+      aluIndex += chunkSize;
+    } <span class="kwa">else</span> {
+      <span class="kwb">int</span> len = aluLength - aluIndex;
+      buffer.setRange(bufferIndex, bufferIndex+len, aluCode, aluIndex);
+      bufferIndex += len;
+      aluIndex = <span class="num">0</span>;
+      len = chunkSize - len;
+      buffer.setRange(bufferIndex, bufferIndex+len, aluCode, aluIndex);
+      bufferIndex += len;
+      aluIndex += len;
+    }
+
+    buffer[bufferIndex++] = <span class="num">10</span>;
+
+    nChars -= chunkSize;
+  }
+
+  writer.add(<span class="kwa">new</span> Uint8List.view(buffer.buffer, <span class="num">0</span>, bufferIndex));
+}
+
+
+
+<span class="kwa">void</span> makeRandomFasta(String id, String desc, Frequency fpf, <span class="kwb">int</span> nChars, IOSink writer) {
+  writer.write(<span class="str">&quot;&gt;${id} ${desc}</span><span class="esc">\n</span><span class="str">&quot;</span>);
+
+  Uint8List buffer = <span class="kwa">new</span> Uint8List(BUFFER_SIZE);
+
+  <span class="kwb">int</span> bufferIndex = <span class="num">0</span>;
+  <span class="kwa">while</span> (nChars &gt; <span class="num">0</span>) {
+    <span class="kwa">final</span> <span class="kwb">int</span> chunkSize = nChars &gt;= LINE_LENGTH ? LINE_LENGTH : nChars;
+
+    <span class="kwa">if</span> (bufferIndex == BUFFER_SIZE) {
+      writer.add(<span class="kwa">new</span> Uint8List.view(buffer.buffer, <span class="num">0</span>, bufferIndex));
+      buffer = <span class="kwa">new</span> Uint8List(BUFFER_SIZE);
+      bufferIndex = <span class="num">0</span>;
+    }
+
+    bufferIndex = fpf.selectRandomIntoBuffer(buffer, bufferIndex, chunkSize);
+    buffer[bufferIndex++] = <span class="num">10</span>;
+
+    nChars -= chunkSize;
+  }
+
+  writer.add(<span class="kwa">new</span> Uint8List.view(buffer.buffer, <span class="num">0</span>, bufferIndex));
+}
+
+
+main(args) {
+  IOSink writer = stdout;
+
+  <span class="kwb">int</span> n = args.length &gt; <span class="num">0</span> ? <span class="kwb">int</span>.parse(args[<span class="num">0</span>]) : <span class="num">250</span>;
+
+  makeRepeatFasta(<span class="str">&quot;ONE&quot;</span>, <span class="str">&quot;Homo sapiens alu&quot;</span>, ALU, n * <span class="num">2</span>, writer);
+  IUB.last = <span class="num">42</span>;
+  makeRandomFasta(<span class="str">&quot;TWO&quot;</span>, <span class="str">&quot;IUB ambiguity codes&quot;</span>, IUB, n * <span class="num">3</span>, writer);
+  HOMO_SAPIENS.last = IUB.last;
+  makeRandomFasta(<span class="str">&quot;THREE&quot;</span>, <span class="str">&quot;Homo sapiens frequency&quot;</span>, HOMO_SAPIENS, n * <span class="num">5</span>, writer);
+}

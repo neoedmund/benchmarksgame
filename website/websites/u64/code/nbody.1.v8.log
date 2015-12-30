@@ -1,0 +1,9 @@
+
+Tue, 14 Jul 2015 21:47:50 GMT
+
+COMMAND LINE:
+/usr/local/src/v8/out/native/d8 --nodebugger nbody.v8 -- 50000000
+
+PROGRAM OUTPUT:
+-0.169075164
+-0.169059907

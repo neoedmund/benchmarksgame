@@ -1,0 +1,179 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Contributed by Marceli Narcyz</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> java.io.OutputStream
+
+<span class="kwa">object</span> fastaredux {
+  <span class="kwa">val</span> LINE_LENGTH: Int = <span class="num">60</span>;
+  <span class="kwa">val</span> OUT_BUFFER_SIZE: Int = <span class="num">256</span> * <span class="num">1024</span>;
+  <span class="kwa">val</span> LOOKUP_SIZE: Int = <span class="num">4</span> * <span class="num">1024</span>;
+  <span class="kwa">val</span> LOOKUP_SCALE: Double = LOOKUP_SIZE - <span class="num">1</span>;
+
+  <span class="kwa">case class</span> <span class="kwd">Freq</span>(<span class="kwa">var</span> c: Byte, <span class="kwa">var</span> p: Double);
+
+  <span class="kwa">val</span> ALU =
+    <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span> +
+      <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span> +
+      <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span> +
+      <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span> +
+      <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span> +
+      <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span> +
+      <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+  <span class="kwa">val</span> IUB: Array[Freq] = Array[Freq](
+    <span class="kwd">Freq</span>(<span class="str">'a'</span>, <span class="num">0.27</span>),
+    <span class="kwd">Freq</span>(<span class="str">'c'</span>, <span class="num">0.12</span>),
+    <span class="kwd">Freq</span>(<span class="str">'g'</span>, <span class="num">0.12</span>),
+    <span class="kwd">Freq</span>(<span class="str">'t'</span>, <span class="num">0.27</span>),
+    <span class="kwd">Freq</span>(<span class="str">'B'</span>, <span class="num">0.02</span>),
+    <span class="kwd">Freq</span>(<span class="str">'D'</span>, <span class="num">0.02</span>),
+    <span class="kwd">Freq</span>(<span class="str">'H'</span>, <span class="num">0.02</span>),
+    <span class="kwd">Freq</span>(<span class="str">'K'</span>, <span class="num">0.02</span>),
+    <span class="kwd">Freq</span>(<span class="str">'M'</span>, <span class="num">0.02</span>),
+    <span class="kwd">Freq</span>(<span class="str">'N'</span>, <span class="num">0.02</span>),
+    <span class="kwd">Freq</span>(<span class="str">'R'</span>, <span class="num">0.02</span>),
+    <span class="kwd">Freq</span>(<span class="str">'S'</span>, <span class="num">0.02</span>),
+    <span class="kwd">Freq</span>(<span class="str">'V'</span>, <span class="num">0.02</span>),
+    <span class="kwd">Freq</span>(<span class="str">'W'</span>, <span class="num">0.02</span>),
+    <span class="kwd">Freq</span>(<span class="str">'Y'</span>, <span class="num">0.02</span>));
+
+  <span class="kwa">val</span> HomoSapiens: Array[Freq] = Array[Freq](
+    <span class="kwd">Freq</span>(<span class="str">'a'</span>, <span class="num">0.3029549426680</span>),
+    <span class="kwd">Freq</span>(<span class="str">'c'</span>, <span class="num">0.1979883004921</span>),
+    <span class="kwd">Freq</span>(<span class="str">'g'</span>, <span class="num">0.1975473066391</span>),
+    <span class="kwd">Freq</span>(<span class="str">'t'</span>, <span class="num">0.3015094502008</span>));
+
+  <span class="kwa">def</span> <span class="kwd">sumAndScale</span>(a: Array[Freq]): Unit = {
+    <span class="kwa">var</span> p: Double = <span class="num">0</span>;
+    <span class="kwa">var</span> i: Int = <span class="num">0</span>;
+    <span class="kwa">while</span> (i &lt; a.length) {
+      p = p + <span class="kwd">a</span>(i).p
+      <span class="kwd">a</span>(i).p = p * LOOKUP_SCALE;
+      i = i + <span class="num">1</span>;
+    }
+    <span class="kwd">a</span>(a.length - <span class="num">1</span>).p = LOOKUP_SCALE;
+  }
+
+  <span class="kwa">object</span> Random {
+    <span class="kwa">val</span> IM: Int = <span class="num">139968</span>;
+    <span class="kwa">val</span> IA: Int = <span class="num">3877</span>;
+    <span class="kwa">val</span> IC: Int = <span class="num">29573</span>;
+    <span class="kwa">val</span> SCALE: Double = LOOKUP_SCALE / IM;
+    <span class="kwa">var</span> last: Int = <span class="num">42</span>;
+
+    <span class="kwa">def</span> <span class="kwd">next</span>(): Double = {
+      last = (last * IA + IC) % IM
+
+      SCALE * last;
+    }
+  }
+
+  <span class="kwa">object</span> Out {
+    <span class="kwa">val</span> buf = <span class="kwa">new</span> Array[Byte](OUT_BUFFER_SIZE);
+    <span class="kwa">val</span> lim: Int = OUT_BUFFER_SIZE - <span class="num">2</span> * LINE_LENGTH - <span class="num">1</span>;
+    <span class="kwa">var</span> ct: Int = <span class="num">0</span>;
+    <span class="kwa">var</span> stream: OutputStream = null;
+
+    <span class="kwa">def</span> <span class="kwd">checkFlush</span>(): Unit = {
+      <span class="kwa">if</span> (ct &gt;= lim) {
+        stream.<span class="kwd">write</span>(buf, <span class="num">0</span>, ct);
+        ct = <span class="num">0</span>;
+      }
+    }
+
+    <span class="kwa">def</span> <span class="kwd">close</span>(): Unit = {
+      stream.<span class="kwd">write</span>(buf, <span class="num">0</span>, ct);
+      ct = <span class="num">0</span>;
+      stream.<span class="kwd">close</span>();
+    }
+  }
+
+  <span class="kwa">object</span> RandomFasta {
+    <span class="kwa">val</span> lookup: Array[Freq] = <span class="kwa">new</span> Array[Freq](LOOKUP_SIZE);
+
+    <span class="kwa">def</span> <span class="kwd">makeLookup</span>(a: Array[Freq]): Unit = {
+      <span class="kwa">var</span> i: Int = <span class="num">0</span>;
+      <span class="kwa">var</span> j: Int = <span class="num">0</span>;
+      <span class="kwa">while</span> (i &lt; LOOKUP_SIZE) {
+        <span class="kwa">while</span> (<span class="kwd">a</span>(j).p &lt; i) {
+          j = j + <span class="num">1</span>;
+        }
+        <span class="kwd">lookup</span>(i) = <span class="kwd">a</span>(j);
+        i = i + <span class="num">1</span>;
+      }
+    }
+
+    <span class="kwa">def</span> <span class="kwd">addLine</span>(bytes: Int): Unit = {
+      Out.<span class="kwd">checkFlush</span>();
+      <span class="kwa">var</span> lct: Int = Out.ct;
+      <span class="kwa">while</span> (lct &lt; Out.ct + bytes) {
+        <span class="kwa">val</span> r: Double = Random.<span class="kwd">next</span>();
+        <span class="kwa">var</span> ai: Int = r.asInstanceOf[Int];
+        <span class="kwa">while</span> (<span class="kwd">lookup</span>(ai).p &lt; r) {
+          ai = ai + <span class="num">1</span>;
+        }
+        Out.<span class="kwd">buf</span>(lct) = <span class="kwd">lookup</span>(ai).c;
+        lct = lct + <span class="num">1</span>;
+      }
+      Out.<span class="kwd">buf</span>(lct) = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>.asInstanceOf[Byte];
+      lct = lct + <span class="num">1</span>;
+      Out.ct = lct;
+    }
+
+    <span class="kwa">def</span> <span class="kwd">make</span>(desc: String, a: Array[Freq], startN: Int): Unit = {
+      <span class="kwa">var</span> n = startN;
+      <span class="kwd">makeLookup</span>(a);
+
+      System.<span class="kwd">arraycopy</span>(desc.<span class="kwd">getBytes</span>(), <span class="num">0</span>, Out.buf, Out.ct, desc.<span class="kwd">length</span>());
+      Out.ct += desc.<span class="kwd">length</span>();
+
+      <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+        <span class="kwa">val</span> bytes: Int = Math.<span class="kwd">min</span>(LINE_LENGTH, n);
+        <span class="kwd">addLine</span>(bytes);
+        n = n - bytes;
+      }
+    }
+  }
+
+  <span class="kwa">object</span> RepeatFasta {
+    <span class="kwa">def</span> <span class="kwd">make</span>(desc: String, alu: Array[Byte], startN: Int): Unit = {
+      <span class="kwa">var</span> n = startN;
+      System.<span class="kwd">arraycopy</span>(desc.<span class="kwd">getBytes</span>(), <span class="num">0</span>, Out.buf, Out.ct, desc.<span class="kwd">length</span>());
+      Out.ct += desc.<span class="kwd">length</span>();
+
+      <span class="kwa">val</span> buf = <span class="kwa">new</span> Array[Byte](alu.length + LINE_LENGTH);
+      <span class="kwa">var</span> i: Int = <span class="num">0</span>;
+      <span class="kwa">while</span> (i &lt; buf.length) {
+        System.<span class="kwd">arraycopy</span>(alu, <span class="num">0</span>, buf, i, Math.<span class="kwd">min</span>(alu.length, buf.length - i));
+        i += alu.length;
+      }
+
+      <span class="kwa">var</span> pos: Int = <span class="num">0</span>;
+      <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+        <span class="kwa">val</span> bytes: Int = Math.<span class="kwd">min</span>(LINE_LENGTH, n);
+        Out.<span class="kwd">checkFlush</span>();
+        System.<span class="kwd">arraycopy</span>(buf, pos, Out.buf, Out.ct, bytes); Out.ct += bytes;
+        Out.<span class="kwd">buf</span>(Out.ct) = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>.asInstanceOf[Byte];
+        Out.ct += <span class="num">1</span>
+        pos = (pos + bytes) % alu.length;
+        n -= bytes;
+      }
+    }
+  }
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]): Unit = {
+    <span class="kwa">val</span> n = (<span class="kwa">if</span> (args.length &gt; <span class="num">0</span>) Integer.<span class="kwd">parseInt</span>(<span class="kwd">args</span>(<span class="num">0</span>)) <span class="kwa">else</span> <span class="num">2500000</span>);
+
+    <span class="kwd">sumAndScale</span>(IUB);
+    <span class="kwd">sumAndScale</span>(HomoSapiens);
+
+    Out.stream = System.out;
+    RepeatFasta.<span class="kwd">make</span>(<span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>, ALU.<span class="kwd">getBytes</span>(), n * <span class="num">2</span>);
+    RandomFasta.<span class="kwd">make</span>(<span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>, IUB, n * <span class="num">3</span>);
+    RandomFasta.<span class="kwd">make</span>(<span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>, HomoSapiens, n * <span class="num">5</span>);
+    Out.<span class="kwd">close</span>();
+  }
+}

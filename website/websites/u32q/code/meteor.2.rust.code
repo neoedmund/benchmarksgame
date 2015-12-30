@@ -1,0 +1,545 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Olof Kraigher</span>
+<span class="com"></span>
+<span class="com">   Tested with rust 1.0.0-beta</span>
+<span class="com">   Compile with: rustc -C opt-level=3 meteor.rs -o meteor</span>
+<span class="com">*/</span>
+
+<span class="kwa">use</span> std::sync::Arc;
+<span class="kwa">use</span> std::sync::mpsc::{Sender, Receiver, channel};
+<span class="kwa">use</span> std::thread::spawn;
+<span class="kwa">use</span> std::cmp::Ordering;
+
+
+<span class="kwa">fn</span> main () {
+    <span class="kwa">match</span> read_args() {
+        Ok(num_solutions) =&gt; {
+            solve(num_solutions);
+        }
+        Err(message) =&gt; {
+            println!(<span class="str">&quot;{}&quot;</span>, message);
+            std::process::exit(<span class="num">1</span>);
+        }
+    }
+}
+
+<span class="kwa">fn</span> solve(num_solutions : usize) {
+    <span class="kwa">let</span> (min, max, num_found) = read_solutions(spawn_solvers(), num_solutions);
+    println!(<span class="str">&quot;{} solutions found</span><span class="esc">\n</span><span class="str">&quot;</span>, num_found);
+    min.pretty_print();
+    max.pretty_print();
+}
+
+<span class="kwa">fn</span> read_args() -&gt; Result&lt;usize, String&gt; {
+    <span class="kwa">let</span> args : Vec&lt;String&gt; = std::env::args().collect();
+    <span class="kwa">if</span> args.len() != <span class="num">2</span> {
+        <span class="kwa">return</span> Err(format!(
+            <span class="str">&quot;Usage: {} num_solutions&quot;</span>,
+            args[<span class="num">0</span>]));
+    }
+
+    <span class="kwa">let</span> maybe_int : Result&lt;usize, _&gt; = args[<span class="num">1</span>].parse();
+    <span class="kwa">if</span> !maybe_int.is_ok() {
+        <span class="kwa">return</span> Err(format!(
+            <span class="str">&quot;Invalid argument '{}' cannot parse as unsigned integer&quot;</span>,
+            args[<span class="num">1</span>]));
+    }
+
+    <span class="kwa">let</span> num_solutions = maybe_int.unwrap();
+    <span class="kwa">if</span> num_solutions == <span class="num">0</span> {
+        <span class="kwa">return</span> Err(format!(
+            <span class="str">&quot;Invalid argument '{}' must be greather than 0&quot;</span>,
+            args[<span class="num">1</span>]));
+    }
+
+    <span class="kwa">return</span> Ok(num_solutions);
+}
+
+<span class="kwa">fn</span> read_solutions(solution_receiver : Receiver&lt;Solution&gt;,
+                  num_solutions : usize)  -&gt; (Solution, Solution, usize) {
+    <span class="kwa">let</span> first = solution_receiver.recv().unwrap();
+    <span class="kwa">let mut</span> num_found = <span class="num">1</span>;
+    <span class="kwa">let mut</span> min = first.clone();
+    <span class="kwa">let mut</span> max = first;
+    <span class="kwa">for</span> solution <span class="kwa">in</span> solution_receiver.iter() {
+        <span class="kwa">if</span> num_found == num_solutions {
+            <span class="kwa">break</span>;
+        }
+        <span class="kwa">if</span> solution &lt; min {
+            min = solution;
+        } <span class="kwa">else if</span> solution &gt; max {
+            max = solution;
+        }
+        num_found += <span class="num">1</span>;
+    }
+
+    (min, max, num_found)
+}
+
+<span class="kwa">fn</span> spawn_solvers() -&gt; Receiver&lt;Solution&gt; {
+    <span class="kwa">let</span> mask_lookup = Arc::new(MaskLookup::new());
+
+    <span class="kwa">let</span> (solution_sender, solution_receiver) = channel();
+
+    <span class="kwa">for</span> first_piece <span class="kwa">in</span> (<span class="num">0</span>..NUM_PIECES) {
+        <span class="kwa">let</span> num_masks = mask_lookup.get(first_piece, LAST_POSITION).len();
+
+        <span class="kwa">for</span> mask_idx <span class="kwa">in</span> (<span class="num">0</span>..num_masks) {
+            <span class="kwa">let</span> my_solution_sender = solution_sender.clone();
+            <span class="kwa">let</span> my_mask_lookup = mask_lookup.clone();
+
+            spawn(<span class="kwa">move</span> || {
+                <span class="kwa">let mut</span> solver = Solver::new(
+                    &amp;*my_mask_lookup,
+                    &amp;my_solution_sender);
+                solver.place_piece(first_piece,
+                                   LAST_POSITION,
+                                   mask_idx,
+                                   num_masks);
+            });
+        }
+    }
+    solution_receiver
+}
+
+<span class="kwa">struct</span> Solver&lt;'a&gt; {
+    mask_lookup: &amp;'a MaskLookup,
+    masks: [u64; NUM_PIECES],
+    mask : u64,
+    used_pieces: usize,
+    solution_sender : &amp;'a Sender&lt;Solution&gt;,
+    solution: Solution,
+    reversed_solution: Solution
+}
+
+<span class="kwa">impl</span>&lt;'a&gt; Solver&lt;'a&gt; {
+    <span class="kwa">fn</span> new(mask_lookup : &amp;'a MaskLookup,
+           solution_sender : &amp;'a Sender&lt;Solution&gt;) -&gt; Solver&lt;'a&gt; {
+        Solver {
+            mask_lookup: mask_lookup,
+            masks: [<span class="num">0</span>; NUM_PIECES],
+            mask: <span class="num">0</span>,
+            used_pieces: <span class="num">0</span>,
+            solution_sender: solution_sender,
+            solution: Solution::default(),
+            reversed_solution: Solution::default()
+        }
+    }
+
+    <span class="kwa">fn</span> place_piece(&amp;<span class="kwa">mut self</span>,
+                   piece : usize,
+                   position : usize,
+                   start : usize,
+                   step : usize) {
+        <span class="kwa">self</span>.toggle_piece(piece);
+        <span class="kwa">let</span> masks = <span class="kwa">self</span>.mask_lookup.get(piece, position);
+        <span class="kwa">let mut</span> idx = start;
+        <span class="kwa">while</span> idx &lt; masks.len() {
+            <span class="kwa">self</span>.evaluate(piece, masks[idx]);
+            idx += step;
+        }
+        <span class="kwa">self</span>.toggle_piece(piece);
+    }
+
+    <span class="kwa">fn</span> evaluate(&amp;<span class="kwa">mut self</span>, piece : usize, mask : u64) {
+        <span class="kwa">if self</span>.fits(mask) {
+            <span class="kwa">self</span>.place_mask(piece, mask);
+            <span class="kwa">if self</span>.done() {
+                <span class="kwa">self</span>.send_solution();
+            } <span class="kwa">else if self</span>.still_possible() {
+                <span class="kwa">self</span>.choose_piece();
+            }
+            <span class="kwa">self</span>.unplace_mask(mask);
+        }
+    }
+
+    <span class="kwa">fn</span> choose_piece(&amp;<span class="kwa">mut self</span>) {
+        <span class="kwa">let</span> position = <span class="kwa">self</span>.first_free_position();
+        <span class="kwa">let mut</span> piece = <span class="num">0</span>;
+        <span class="kwa">while</span> piece &lt; NUM_PIECES {
+            <span class="kwa">if self</span>.is_not_placed(piece) {
+                <span class="kwa">self</span>.place_piece(piece, position, <span class="num">0</span>, <span class="num">1</span>);
+            }
+            piece += <span class="num">1</span>;
+        }
+    }
+
+    <span class="kwa">fn</span> toggle_piece(&amp;<span class="kwa">mut self</span>, piece : usize) {
+        <span class="kwa">self</span>.used_pieces ^= <span class="num">1</span> &lt;&lt; piece;
+    }
+
+    <span class="kwa">fn</span> place_mask(&amp;<span class="kwa">mut self</span>, piece: usize, mask : u64) {
+        <span class="kwa">self</span>.mask ^= mask;
+        <span class="kwa">self</span>.masks[piece] = mask;
+    }
+
+    <span class="kwa">fn</span> unplace_mask(&amp;<span class="kwa">mut self</span>, mask : u64) {
+        <span class="kwa">self</span>.mask ^= mask;
+    }
+
+    <span class="kwa">fn</span> done(&amp;<span class="kwa">self</span>) -&gt; bool {
+        <span class="kwa">self</span>.used_pieces == (<span class="num">1</span> &lt;&lt; NUM_PIECES) - <span class="num">1</span>
+    }
+
+    <span class="kwa">fn</span> still_possible(&amp;<span class="kwa">self</span>) -&gt; bool {
+        no_islands(<span class="kwa">self</span>.mask)
+    }
+
+    <span class="kwa">fn</span> first_free_position(&amp;<span class="kwa">self</span>) -&gt; usize {
+        find_first_one(!<span class="kwa">self</span>.mask &amp; FULL_MASK)
+    }
+
+    <span class="kwa">fn</span> is_not_placed(&amp;<span class="kwa">self</span>, piece : usize) -&gt; bool {
+        <span class="kwa">self</span>.used_pieces &amp; (<span class="num">1</span> &lt;&lt; piece) == <span class="num">0</span>
+    }
+
+    <span class="kwa">fn</span> fits(&amp;<span class="kwa">self</span>, mask : u64) -&gt; bool {
+        <span class="kwa">self</span>.mask &amp; mask == <span class="num">0</span>
+    }
+
+    <span class="kwa">fn</span> send_solution(&amp;<span class="kwa">mut self</span>) {
+        <span class="kwa">self</span>.fill_solutions();
+        <span class="kwa">let</span> _ = <span class="kwa">self</span>.solution_sender.send(<span class="kwa">self</span>.solution.clone());
+        <span class="kwa">let</span> _ = <span class="kwa">self</span>.solution_sender.send(<span class="kwa">self</span>.reversed_solution.clone());
+    }
+
+    <span class="kwa">fn</span> fill_solutions(&amp;<span class="kwa">mut self</span>) {
+        <span class="kwa">for</span> position <span class="kwa">in</span> (<span class="num">0</span>..NUM_POSITIONS) {
+            <span class="kwa">let</span> piece = <span class="kwa">self</span>.piece_at_position(position);
+            <span class="kwa">self</span>.solution.pieces[position] = piece;
+            <span class="kwa">let</span> reversed_position = LAST_POSITION - position;
+            <span class="kwa">self</span>.reversed_solution.pieces[reversed_position] = piece;
+        }
+    }
+
+    <span class="kwa">fn</span> piece_at_position(&amp;<span class="kwa">self</span>, position : usize) -&gt; u8 {
+        <span class="kwa">let</span> position_mask = <span class="num">1</span> &lt;&lt; position;
+        <span class="kwa">for</span> piece <span class="kwa">in</span> (<span class="num">0</span>..NUM_PIECES) {
+            <span class="kwa">let</span> mask = <span class="kwa">self</span>.masks[piece];
+            <span class="kwa">let</span> uses_piece = (<span class="kwa">self</span>.used_pieces &gt;&gt; piece) &amp; <span class="num">1</span> == <span class="num">1</span>;
+            <span class="kwa">let</span> occupies_position = overlaps(mask, position_mask);
+            <span class="kwa">if</span> uses_piece &amp;&amp; occupies_position {
+                <span class="kwa">return</span> piece <span class="kwa">as</span> u8;
+            }
+        }
+        <span class="kwa">return</span> <span class="num">0</span>;
+    }
+}
+
+
+<span class="kwa">struct</span> Solution {
+    pieces: [u8; NUM_POSITIONS]
+}
+
+<span class="kwa">impl</span> Solution {
+    <span class="kwa">fn</span> default() -&gt; Solution {
+        Solution {
+            pieces: [<span class="num">0</span>; NUM_POSITIONS]
+        }
+    }
+}
+
+<span class="kwa">impl</span> Clone <span class="kwa">for</span> Solution {
+    <span class="kwa">fn</span> clone(&amp;<span class="kwa">self</span>) -&gt; Solution {
+        Solution {
+            pieces: <span class="kwa">self</span>.pieces
+        }
+    }
+}
+
+<span class="kwa">impl</span> PartialOrd <span class="kwa">for</span> Solution {
+    <span class="kwa">fn</span> partial_cmp(&amp;<span class="kwa">self</span>, other : &amp;Solution) -&gt; Option&lt;Ordering&gt; {
+        <span class="kwa">for</span> i <span class="kwa">in</span> (<span class="num">0</span>..NUM_POSITIONS) {
+            <span class="kwa">if self</span>.pieces[i] &lt; other.pieces[i] {
+                <span class="kwa">return</span> Some(Ordering::Less)
+            } <span class="kwa">else if self</span>.pieces[i] &gt; other.pieces[i] {
+                <span class="kwa">return</span> Some(Ordering::Greater)
+            }
+        }
+        Some(Ordering::Equal)
+    }
+}
+
+<span class="kwa">impl</span> PartialEq <span class="kwa">for</span> Solution {
+    <span class="kwa">fn</span> eq(&amp;<span class="kwa">self</span>, other : &amp;Solution) -&gt; bool {
+        <span class="kwa">self</span>.pieces.partial_cmp(other.pieces.as_ref()) == Some(Ordering::Equal)
+    }
+}
+
+<span class="kwa">impl</span> Solution {
+    <span class="kwa">fn</span> pretty_print(&amp;<span class="kwa">self</span>) {
+        <span class="kwa">for</span> (idx, &amp;piece) <span class="kwa">in self</span>.pieces.iter().enumerate() {
+            <span class="kwa">let</span> glyph = (('<span class="num">0</span>' <span class="kwa">as</span> u8) + piece) <span class="kwa">as</span> char;
+            print!(<span class="str">&quot;{}&quot;</span>, glyph);
+            print!(<span class="str">&quot; &quot;</span>);
+
+            <span class="kwa">let</span> x = idx % WIDTH;
+            <span class="kwa">let</span> y = idx / WIDTH;
+
+            <span class="kwa">if</span> x == WIDTH-<span class="num">1</span> {
+                <span class="kwa">if</span> y%<span class="num">2</span> == <span class="num">0</span> {
+                    print!(<span class="str">&quot;</span><span class="esc">\n</span> <span class="str">&quot;</span>);
+                } <span class="kwa">else</span> {
+                    print!(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+                }
+            }
+        }
+        print!(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+    }
+}
+
+<span class="kwa">struct</span> MaskLookup {
+    masks_by_piece_and_position: Vec&lt;Vec&lt;u64&gt;&gt;
+}
+
+<span class="kwa">impl</span> MaskLookup {
+    <span class="kwa">fn</span> new() -&gt; MaskLookup {
+        <span class="kwa">let mut</span> ml = MaskLookup::default();
+        ml.add_piece(<span class="kwa">false</span>, <span class="num">0</span>, &amp;[E, E, E, SE]);
+        ml.add_piece(<span class="kwa">false</span>, <span class="num">1</span>, &amp;[SE, SW, W, SW]);
+        ml.add_piece(<span class="kwa">false</span>, <span class="num">2</span>, &amp;[W, W, SW, SE]);
+        ml.add_piece(<span class="kwa">true</span>,  <span class="num">3</span>, &amp;[E, E, SW, SE]);
+        ml.add_piece(<span class="kwa">false</span>, <span class="num">4</span>, &amp;[NW, W, NW, SE, SW]);
+        ml.add_piece(<span class="kwa">false</span>, <span class="num">5</span>, &amp;[E, E,  NE, W]);
+        ml.add_piece(<span class="kwa">false</span>, <span class="num">6</span>, &amp;[NW, NE, NE, W]);
+        ml.add_piece(<span class="kwa">false</span>, <span class="num">7</span>, &amp;[NE, SE, E, NE]);
+        ml.add_piece(<span class="kwa">false</span>, <span class="num">8</span>, &amp;[SE, SE, E, SE]);
+        ml.add_piece(<span class="kwa">false</span>, <span class="num">9</span>, &amp;[E, NW, NW, NW]);
+        ml
+    }
+
+    <span class="kwa">fn</span> default() -&gt; MaskLookup {
+        MaskLookup {
+            masks_by_piece_and_position:
+            (<span class="num">0</span>..NUM_PIECES * NUM_POSITIONS).map(|_| Vec::with_capacity(<span class="num">2</span>*<span class="num">6</span>)).collect()
+        }
+    }
+
+    <span class="kwa">fn</span> add_piece(&amp;<span class="kwa">mut self</span>,
+                 fully_rotated : bool,
+                 index : usize,
+                 directions : &amp;[Direction]) {
+        <span class="kwa">let mut</span> piece : Piece = Piece::new(directions);
+        <span class="kwa">let</span> num_orientations : usize = <span class="num">2</span>;
+        <span class="kwa">let</span> num_rotations : usize = <span class="kwa">if</span> fully_rotated {<span class="num">3</span>} <span class="kwa">else</span> {<span class="num">6</span>};
+
+        <span class="kwa">for</span> _ <span class="kwa">in</span> (<span class="num">0</span>..num_orientations) {
+            <span class="kwa">for</span> _ <span class="kwa">in</span> (<span class="num">0</span>..num_rotations) {
+                <span class="kwa">for</span> x <span class="kwa">in</span> (<span class="num">0</span>..WIDTH <span class="kwa">as</span> isize) {
+                    <span class="kwa">for</span> y <span class="kwa">in</span> (<span class="num">0</span>..HEIGHT <span class="kwa">as</span> isize) {
+                        <span class="kwa">let</span> position = Position::new(x,y);
+                        <span class="kwa">self</span>.add_piece_at_position(index,
+                                                   &amp;piece,
+                                                   position);
+                    }
+                }
+                piece = piece.rotate();
+            }
+            piece = piece.flip();
+        }
+    }
+
+    <span class="kwa">fn</span> add_piece_at_position(&amp;<span class="kwa">mut self</span>,
+                             index : usize,
+                             piece : &amp;Piece,
+                             position : Position) {
+
+        <span class="kwa">match</span> piece.to_mask(position) {
+            Some(mask) =&gt; {
+                <span class="kwa">let</span> last = find_first_one(mask);
+                <span class="kwa">let</span> idx = index*NUM_POSITIONS + last;
+                <span class="kwa">self</span>.masks_by_piece_and_position.get_mut(idx).unwrap().push(mask);
+            }
+            None =&gt; ()
+        }
+    }
+
+    <span class="kwa">fn</span> get&lt;'a&gt;(&amp;'a <span class="kwa">self</span>, index : usize, position : usize) -&gt; &amp;'a [u64] {
+        <span class="kwa">let</span> idx = index*NUM_POSITIONS + position;
+        <span class="kwa">self</span>.masks_by_piece_and_position[idx].as_ref()
+    }
+}
+
+#[derive(Clone)]
+<span class="kwa">struct</span> Piece {
+    directions: Vec&lt;Direction&gt;
+}
+
+<span class="kwa">impl</span> Piece {
+    <span class="kwa">fn</span> new(directions : &amp;[Direction]) -&gt; Piece {
+        Piece {
+            directions: (<span class="num">0</span>..directions.len()).map(|i| directions[i].clone()).collect()
+        }
+    }
+
+    <span class="kwa">fn</span> to_mask(&amp;<span class="kwa">self</span>, position : Position) -&gt; Option&lt;u64&gt; {
+        <span class="kwa">let mut</span> mask = position.to_mask();
+        <span class="kwa">let mut</span> current_position = position;
+
+        <span class="kwa">for</span> direction <span class="kwa">in self</span>.directions.iter() {
+            <span class="kwa">match</span> current_position.in_direction(direction) {
+                Some(position) =&gt; {
+                    current_position = position;
+                    mask |= current_position.to_mask();
+                },
+                None =&gt; <span class="kwa">return</span> None
+            }
+        }
+        <span class="kwa">return</span> Piece::prune(mask);
+    }
+
+    <span class="kwa">fn</span> prune(mask : u64) -&gt; Option&lt;u64&gt; {
+        <span class="kwa">let</span> border = <span class="num">0</span>b11111_10001_10001_10001_10001_10001_10001_10001_10001_11111;
+        <span class="kwa">if</span> mask &amp; border == <span class="num">0</span> || no_islands(mask) {
+            Some(mask)
+        } <span class="kwa">else</span> {
+            None
+        }
+    }
+
+    <span class="kwa">fn</span> flip(&amp;<span class="kwa">self</span>) -&gt; Piece {
+        <span class="kwa">self</span>.as_modified(|x| x.flip())
+    }
+
+    <span class="kwa">fn</span> rotate(&amp;<span class="kwa">self</span>) -&gt; Piece {
+        <span class="kwa">self</span>.as_modified(|x| x.rotate())
+    }
+
+    <span class="kwa">fn</span> as_modified&lt;F : Fn(&amp;Direction) -&gt; Direction&gt;(&amp;<span class="kwa">self</span>, fun : F) -&gt; Piece {
+        Piece {
+            directions: <span class="kwa">self</span>.directions.iter().map(fun).collect()
+        }
+    }
+}
+
+#[derive(Clone)]
+<span class="kwa">struct</span> Position {
+    x: isize,
+    y: isize
+}
+
+<span class="kwa">impl</span> Position {
+    <span class="kwa">fn</span> new(x : isize, y : isize) -&gt; Position {
+        Position {x:x, y:y}
+    }
+
+    <span class="kwa">fn</span> in_direction(&amp;<span class="kwa">self</span>, direction : &amp;Direction) -&gt; Option&lt;Position&gt; {
+
+        <span class="kwa">let</span> (dx, dy) =
+            <span class="kwa">match</span> direction {
+                &amp;E =&gt; (-<span class="num">1</span>, <span class="num">0</span>),
+                &amp;W =&gt; ( <span class="num">1</span>, <span class="num">0</span>),
+                &amp;NE =&gt; (<span class="kwa">self</span>.y%<span class="num">2</span> - <span class="num">1</span>,  <span class="num">1</span>),
+                &amp;NW =&gt; (<span class="kwa">self</span>.y%<span class="num">2</span>    ,  <span class="num">1</span>),
+                &amp;SE =&gt; (<span class="kwa">self</span>.y%<span class="num">2</span> - <span class="num">1</span>, -<span class="num">1</span>),
+                &amp;SW =&gt; (<span class="kwa">self</span>.y%<span class="num">2</span>    , -<span class="num">1</span>)
+            };
+
+        <span class="kwa">let</span> new_position = <span class="kwa">self</span>.in_2d_direction(dx, dy);
+
+        <span class="kwa">if</span> Position::is_valid(&amp;new_position) {
+            Some(new_position.clone())
+        } <span class="kwa">else</span> {
+            None
+        }
+    }
+
+    <span class="kwa">fn</span> in_2d_direction(&amp;<span class="kwa">self</span>, dx : isize, dy : isize) -&gt; Position {
+        Position {
+            x: <span class="kwa">self</span>.x + dx,
+            y: <span class="kwa">self</span>.y + dy
+        }
+    }
+
+    <span class="kwa">fn</span> is_valid(&amp;Position{x,y} : &amp;Position) -&gt; bool {
+        <span class="num">0</span> &lt;= x &amp;&amp; x &lt; WIDTH <span class="kwa">as</span> isize &amp;&amp; <span class="num">0</span> &lt;= y &amp;&amp; y &lt; HEIGHT <span class="kwa">as</span> isize
+    }
+
+    <span class="kwa">fn</span> to_mask(&amp;<span class="kwa">self</span>) -&gt; u64 {
+        <span class="num">1u64</span> &lt;&lt; (<span class="kwa">self</span>.y * WIDTH <span class="kwa">as</span> isize + <span class="kwa">self</span>.x) <span class="kwa">as</span> usize
+    }
+}
+
+<span class="kwa">use</span> Direction::*;
+
+#[derive(Clone)]
+<span class="kwa">enum</span> Direction {
+    E=<span class="num">0</span>, SE=<span class="num">1</span>, SW=<span class="num">2</span>, W=<span class="num">3</span>, NW=<span class="num">4</span>, NE=<span class="num">5</span>
+}
+
+<span class="kwa">impl</span> Direction {
+    <span class="kwa">fn</span> rotate(&amp;<span class="kwa">self</span>) -&gt; Direction {
+        <span class="kwa">self</span>.as_modified(|x| (x + <span class="num">1</span>)%<span class="num">6</span>)
+    }
+
+    <span class="kwa">fn</span> flip(&amp;<span class="kwa">self</span>) -&gt; Direction {
+        <span class="kwa">self</span>.as_modified(|x| (<span class="num">9</span> - x)%<span class="num">6</span>)
+    }
+
+    <span class="kwa">fn</span> from_int(value : isize) -&gt; Option&lt;Direction&gt; {
+        <span class="kwa">match</span> value {
+            <span class="num">0</span> =&gt; Some(E),
+            <span class="num">1</span> =&gt; Some(SE),
+            <span class="num">2</span> =&gt; Some(SW),
+            <span class="num">3</span> =&gt; Some(W),
+            <span class="num">4</span> =&gt; Some(NW),
+            <span class="num">5</span> =&gt; Some(NE),
+            _ =&gt; None,
+        }
+    }
+
+    <span class="kwa">fn</span> as_modified&lt;F : Fn(isize) -&gt; isize&gt;(&amp;<span class="kwa">self</span>, modifier : F) -&gt; Direction {
+        Direction::from_int(modifier(<span class="kwa">self</span>.clone() <span class="kwa">as</span> isize)).unwrap()
+    }
+}
+
+<span class="kwa">fn</span> no_islands(mask : u64) -&gt; bool {
+    <span class="kwa">let</span> allowed = !mask &amp; FULL_MASK;
+    <span class="kwa">let</span> seed = (<span class="num">1</span> &lt;&lt; mask.trailing_zeros() <span class="kwa">as</span> usize) - <span class="num">1</span>;
+    <span class="kwa">let</span> filled = flood_fill(seed, allowed);
+    filled.count_ones() % <span class="num">5</span> == <span class="num">0</span>
+}
+
+<span class="kwa">fn</span> flood_fill(seed : u64, allowed : u64) -&gt; u64 {
+    <span class="kwa">let mut</span> filled = seed;
+
+    <span class="kwa">loop</span> {
+        <span class="kwa">let</span> new_filled = grow(filled) &amp; allowed;
+        <span class="kwa">if</span> new_filled == filled {
+            <span class="kwa">return</span> filled;
+        }
+        filled = new_filled;
+    }
+}
+
+<span class="kwa">fn</span> find_first_one(mask : u64) -&gt; usize {
+    <span class="num">63</span> - mask.leading_zeros() <span class="kwa">as</span> usize
+}
+
+<span class="kwa">fn</span> overlaps(m1 : u64, m2 : u64) -&gt; bool {
+    <span class="kwa">return</span> m1 &amp; m2 != <span class="num">0u64</span>;
+}
+
+<span class="kwa">fn</span> grow(mask : u64) -&gt; u64 {
+    <span class="kwa">let</span> even = <span class="num">0</span>b00000_11111_00000_11111_00000_11111_00000_11111_00000_11111;
+    <span class="kwa">let</span> odd = <span class="num">0</span>b11111_00000_11111_00000_11111_00000_11111_00000_11111_00000;
+    <span class="kwa">let</span> right = <span class="num">0</span>b00001_00001_00001_00001_00001_00001_00001_00001_00001_00001;
+    <span class="kwa">let</span> left = <span class="num">0</span>b10000_10000_10000_10000_10000_10000_10000_10000_10000_10000;
+
+    <span class="kwa">let</span> not_right = mask &amp; !right;
+    <span class="kwa">let</span> not_left = mask &amp; !left;
+    <span class="kwa">let</span> east = not_right&gt;&gt;<span class="num">1</span>;
+    <span class="kwa">let</span> west = not_left&lt;&lt;<span class="num">1</span>;
+    <span class="kwa">let</span> body = mask | (east &amp; (even&gt;&gt;<span class="num">1</span>)) | (west &amp; (odd&lt;&lt;<span class="num">1</span>));
+
+    mask | west | (body &lt;&lt; WIDTH) | east | (body &gt;&gt; WIDTH)
+}
+
+
+<span class="kwa">const</span> NUM_PIECES : usize = <span class="num">10</span>;
+<span class="kwa">const</span> WIDTH : usize = <span class="num">5</span>;
+<span class="kwa">const</span> HEIGHT : usize = <span class="num">10</span>;
+<span class="kwa">const</span> NUM_POSITIONS : usize = WIDTH*HEIGHT;
+<span class="kwa">const</span> LAST_POSITION : usize = NUM_POSITIONS-<span class="num">1</span>;
+<span class="kwa">const</span> FULL_MASK : u64 = (<span class="num">1</span> &lt;&lt; NUM_POSITIONS) - <span class="num">1</span>;

@@ -1,0 +1,282 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">Contributed by Andrew Moon</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;cstdlib&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;fstream&gt;</span>
+<span class="ppc">#include &lt;vector&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+
+<span class="kwb">struct</span> CPUs {
+   <span class="kwd">CPUs</span>() {
+      cpu_set_t cs;
+      <span class="kwd">CPU_ZERO</span>( &amp;cs );
+      <span class="kwd">sched_getaffinity</span>( <span class="num">0</span>, <span class="kwa">sizeof</span>(cs), &amp;cs );
+      count = <span class="num">0</span>;
+      <span class="kwa">for</span> ( <span class="kwb">size_t</span> i = <span class="num">0</span>; i &lt; CPU_SETSIZE; i++ )
+         count += <span class="kwd">CPU_ISSET</span>( i, &amp;cs ) ? <span class="num">1</span> : <span class="num">0</span>;
+      count = std::<span class="kwd">max</span>( count, <span class="kwb">size_t</span>(<span class="num">1</span>) );
+   }
+
+   <span class="kwb">size_t</span> count;
+} cpus;
+
+<span class="kwb">struct</span> ReverseLookup {
+   <span class="kwd">ReverseLookup</span>( <span class="kwb">const char</span> *from, <span class="kwb">const char</span> *to ) {
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">256</span>; i++ )
+         byteLookup[i] = i;
+      <span class="kwa">for</span> ( ; *from &amp;&amp; *to; from++, to++ ) {
+         byteLookup[<span class="kwd">toupper</span>(*from)] = *to;
+         byteLookup[<span class="kwd">tolower</span>(*from)] = *to;
+      }
+
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="num">256</span>; i++ )
+         <span class="kwa">for</span> ( <span class="kwb">int</span> j = <span class="num">0</span>; j &lt; <span class="num">256</span>; j++ )
+            wordLookup[(i &lt;&lt; <span class="num">8</span>) | j] = ( byteLookup[j] &lt;&lt; <span class="num">8</span> ) | byteLookup[i];
+   }
+
+   <span class="kwb">char</span> <span class="kwc">operator</span>[]( <span class="kwb">const char</span> &amp;c ) { <span class="kwa">return</span> (<span class="kwb">char</span> )byteLookup[(<span class="kwb">unsigned char</span> )c]; }
+   <span class="kwb">short</span> <span class="kwc">operator</span>[]( <span class="kwb">const short</span> &amp;s ) { <span class="kwa">return</span> (<span class="kwb">short</span> )wordLookup[(<span class="kwb">unsigned short</span> )s]; }
+
+<span class="kwc">protected</span>:
+   <span class="kwb">unsigned char</span> byteLookup[<span class="num">256</span>];
+   <span class="kwb">unsigned short</span> wordLookup[<span class="num">256</span>*<span class="num">256</span>];
+} <span class="kwd">lookup</span>( <span class="str">&quot;acbdghkmnsrutwvy&quot;</span>, <span class="str">&quot;TGVHCDMKNSYAAWBR&quot;</span> );
+
+<span class="kwc">template</span>&lt; <span class="kwc">class</span> type &gt;
+<span class="kwb">struct</span> vector2 : <span class="kwc">public</span> std::vector&lt;type&gt; {
+   type &amp;<span class="kwd">last</span>() { <span class="kwa">return this</span>-&gt;<span class="kwc">operator</span>[]( std::vector&lt;type&gt;::<span class="kwd">size</span>() -<span class="num">1</span> ); }
+};
+
+<span class="kwb">struct</span> Chunker {
+   <span class="kwb">enum</span> { lineLength = <span class="num">60</span>, chunkSize = <span class="num">65536</span>, };
+
+   <span class="kwd">Chunker</span>( <span class="kwb">int</span> seq ) : <span class="kwd">id</span>(seq) {}
+
+   <span class="kwb">struct</span> Chunk {
+      <span class="kwd">Chunk</span>() {}
+      <span class="kwd">Chunk</span>( <span class="kwb">char</span> *in, <span class="kwb">size_t</span> amt ) : <span class="kwd">data</span>(in), <span class="kwd">size</span>(amt) {}
+      <span class="kwb">char</span> *data;
+      <span class="kwb">size_t</span> size;
+   };
+
+   <span class="kwb">void</span> <span class="kwd">NewChunk</span>() {
+      <span class="kwb">size_t</span> cur = mark - chunkBase;
+      chunks.<span class="kwd">push_back</span>( <span class="kwd">Chunk</span>( chunkBase, cur ) );
+      chunkBase += ( cur + ( cur &amp; <span class="num">1</span> ) ); <span class="slc">// keep it word aligned</span>
+      mark = chunkBase;
+   }
+
+   <span class="kwc">template</span>&lt; <span class="kwb">int</span> N &gt;
+   <span class="kwb">struct</span> LinePrinter {
+      <span class="kwd">LinePrinter</span>() : <span class="kwd">lineFill</span>(<span class="num">0</span>) {}
+      <span class="kwb">void</span> <span class="kwd">endofblock</span>() { <span class="kwa">if</span> ( lineFill ) <span class="kwd">newline</span>(); }
+      <span class="kwb">void</span> <span class="kwd">emit</span>( <span class="kwb">const char</span> *str, <span class="kwb">size_t</span> amt ) { 
+         <span class="kwd">fwrite_unlocked</span>( str, <span class="num">1</span>, amt, stdout );
+      }
+      <span class="kwb">void</span> <span class="kwd">emit</span>( <span class="kwb">char</span> c ) { <span class="kwd">fputc_unlocked</span>( c, stdout ); }
+      <span class="kwb">void</span> <span class="kwd">emitnewline</span>() { <span class="kwd">emit</span>( <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> ); }
+      <span class="kwb">void</span> <span class="kwd">emitlines</span>( <span class="kwb">char</span> *data, <span class="kwb">size_t</span> size ) {
+         <span class="kwa">if</span> ( lineFill ) {
+            <span class="kwb">size_t</span> toprint = std::<span class="kwd">min</span>( size, lineLength - lineFill );
+            <span class="kwd">emit</span>( data, toprint );
+            size -= toprint;
+            data += toprint;
+            lineFill += toprint;
+            <span class="kwa">if</span> ( lineFill == lineLength )
+               <span class="kwd">newline</span>();
+         }
+
+         <span class="kwa">while</span> ( size &gt;= lineLength ) {
+            <span class="kwd">emit</span>( data, lineLength );
+            <span class="kwd">emitnewline</span>();
+            size -= lineLength;
+            data += lineLength;
+         }
+
+         <span class="kwa">if</span> ( size ) {
+            lineFill = size;
+            <span class="kwd">emit</span>( data, size );
+         }
+      }
+      <span class="kwb">void</span> <span class="kwd">newline</span>() { lineFill = <span class="num">0</span>; <span class="kwd">emitnewline</span>(); }
+      <span class="kwb">void</span> <span class="kwd">reset</span>() { lineFill = <span class="num">0</span>; }
+   <span class="kwc">protected</span>:
+      <span class="kwb">size_t</span> lineFill;
+   };
+
+   <span class="kwb">void</span> <span class="kwd">Print</span>() {
+      <span class="kwb">int</span> prevId = -( id - <span class="num">1</span> );
+      <span class="kwa">while</span> ( <span class="kwd">__sync_val_compare_and_swap</span>( &amp;printQueue, prevId, id ) != prevId )
+         <span class="kwd">sched_yield</span>();
+
+      <span class="kwd">fwrite_unlocked</span>( name, <span class="num">1</span>, <span class="kwd">strlen</span>( name ), stdout );
+      <span class="kwb">static</span> LinePrinter&lt;<span class="num">65536</span>*<span class="num">2</span>&gt; line;
+      line.<span class="kwd">reset</span>();
+      <span class="kwa">for</span> ( <span class="kwb">int</span> i = <span class="kwb">int</span>(chunks.<span class="kwd">size</span>()) - <span class="num">1</span>; i &gt;= <span class="num">0</span>; i-- )
+         line.<span class="kwd">emitlines</span>( chunks[i].data, chunks[i].size );
+      line.<span class="kwd">endofblock</span>();
+
+      <span class="kwd">__sync_val_compare_and_swap</span>( &amp;printQueue, id, -id );
+   }
+
+   <span class="slc">// fseek on stdin seems flaky so this hack. not called often</span>
+   <span class="kwb">void</span> <span class="kwd">Backup</span>() {
+      <span class="kwa">while</span> ( <span class="kwa">true</span> ) {
+         <span class="kwa">if</span> ( <span class="kwd">fgetc_unlocked</span>( stdin ) == <span class="str">'&gt;'</span> ) {
+            <span class="kwd">fseek</span>( stdin, -<span class="num">1</span>, SEEK_CUR );
+            <span class="kwa">return</span>;
+         }
+         <span class="kwd">fseek</span>( stdin, -<span class="num">2</span>, SEEK_CUR );
+      }
+   }
+
+   <span class="slc">// input buffer can hold all of stdin, so no size checking</span>
+   <span class="kwb">size_t</span> <span class="kwd">Read</span>( <span class="kwb">char</span> *data ) {
+      <span class="kwa">if</span> ( <span class="kwd">feof</span>( stdin ) )
+         <span class="kwa">return</span> <span class="num">0</span>;
+
+      name = data;
+      <span class="kwd">fgets_unlocked</span>( name, <span class="num">128</span>, stdin );
+      mark = chunkBase = name + <span class="kwd">strlen</span>( name ) + <span class="num">1</span>;
+      mark[lineLength] = -<span class="num">1</span>;
+
+      <span class="kwa">while</span> ( <span class="kwd">fgets_unlocked</span>( mark, <span class="num">128</span>, stdin ) ) {
+         <span class="kwa">if</span> ( *mark == <span class="str">'&gt;'</span> ) {
+            <span class="kwd">Backup</span>();
+            <span class="kwa">break</span>;
+         }
+
+         <span class="slc">// mark trick should keep us from calling strlen</span>
+         mark += ( mark[lineLength] != <span class="num">0xa</span> ) ? <span class="kwd">strlen</span>( mark ) - <span class="num">1</span> : lineLength;
+         <span class="kwa">if</span> ( mark - chunkBase &gt; chunkSize )
+            <span class="kwd">NewChunk</span>();
+
+         mark[lineLength] = -<span class="num">1</span>;
+      }
+
+      <span class="kwa">if</span> ( mark - chunkBase )
+         <span class="kwd">NewChunk</span>();
+      <span class="kwa">return</span> ( chunkBase - data );
+   }
+
+   <span class="kwb">struct</span> WorkerState {
+      Chunker *chunker;
+      <span class="kwb">size_t</span> offset, count;
+      pthread_t handle;
+   };
+
+   <span class="kwb">static void</span> *<span class="kwd">ReverseWorker</span>( <span class="kwb">void</span> *arg ) {
+      WorkerState *state = (WorkerState *)arg;
+      Chunker &amp;chunker = *state-&gt;chunker;
+      <span class="kwa">for</span> ( <span class="kwb">size_t</span> i = <span class="num">0</span>; i &lt; state-&gt;count; i++ ) {
+         Chunk &amp;chunk = chunker[state-&gt;offset + i];
+         <span class="kwb">short</span> *w = (<span class="kwb">short</span> *)chunk.data, *bot = w, *top = w + ( chunk.size / <span class="num">2</span> ) - <span class="num">1</span>;
+         <span class="kwa">for</span> ( ; bot &lt; top; bot++, top-- ) {
+            <span class="kwb">short</span> tmp = lookup[*bot];
+            *bot = lookup[*top];
+            *top = tmp;
+         }
+         <span class="slc">// if size is odd, final byte would reverse to the start (skip it)</span>
+         <span class="kwa">if</span> ( chunk.size &amp; <span class="num">1</span> )
+            chunk.data++;
+      }
+      <span class="kwa">return</span> <span class="num">0</span>;
+   }
+
+   <span class="kwb">void</span> <span class="kwd">Reverse</span>() {
+      <span class="kwa">if</span> ( !chunks.<span class="kwd">size</span>() )
+         <span class="kwa">return</span>;
+
+      <span class="slc">// this takes so little time it's almost not worth parallelizing</span>
+      vector2&lt;WorkerState&gt; threads;
+      threads.<span class="kwd">reserve</span>( cpus.count );
+      <span class="kwb">size_t</span> divs = chunks.<span class="kwd">size</span>() / cpus.count;
+      <span class="kwa">for</span> ( <span class="kwb">size_t</span> i = <span class="num">0</span>, offset = <span class="num">0</span>; i &lt; cpus.count; i++, offset += divs ) {
+         threads.<span class="kwd">push_back</span>( <span class="kwd">WorkerState</span>() );
+         WorkerState &amp;ws = threads.<span class="kwd">last</span>();
+         ws.chunker = <span class="kwa">this</span>;
+         ws.count = ( i &lt; cpus.count - <span class="num">1</span> ) ? divs : chunks.<span class="kwd">size</span>() - offset;
+         ws.offset = offset;
+         <span class="kwd">pthread_create</span>( &amp;ws.handle, <span class="num">0</span>, ReverseWorker, &amp;ws );
+      }
+
+      <span class="kwa">for</span> ( <span class="kwb">size_t</span> i = <span class="num">0</span>; i &lt; cpus.count; i++ )
+         <span class="kwd">pthread_join</span>( threads[i].handle, <span class="num">0</span> );
+   }
+
+   Chunk &amp;<span class="kwc">operator</span>[] ( <span class="kwb">size_t</span> i ) { <span class="kwa">return</span> chunks[i]; }
+
+<span class="kwc">protected</span>:
+   vector2&lt;Chunk&gt; chunks;
+   <span class="kwb">char</span> *name, *chunkBase, *mark;
+   <span class="kwb">int</span> id;
+   <span class="kwb">static</span> <span class="kwc">volatile</span> <span class="kwb">int</span> printQueue;
+};
+
+<span class="slc">// used to order chunk printing</span>
+<span class="kwc">volatile</span> <span class="kwb">int</span> Chunker::printQueue = <span class="num">0</span>;
+
+<span class="kwb">struct</span> ReverseComplement {
+   <span class="kwd">ReverseComplement</span>() {
+      <span class="slc">// get stdin file size</span>
+      <span class="kwb">long</span> start = <span class="kwd">ftell</span>( stdin );
+      <span class="kwd">fseek</span>( stdin, <span class="num">0</span>, SEEK_END );
+      size = <span class="kwd">ftell</span>( stdin ) - start;
+      <span class="kwd">fseek</span>( stdin, start, SEEK_SET );
+
+      data = <span class="kwa">new</span> <span class="kwb">char</span>[size + <span class="num">3</span>];
+   }
+
+   ~<span class="kwd">ReverseComplement</span>() {
+      <span class="kwa">delete</span>[] data;
+   }
+
+   <span class="kwb">static void</span> *<span class="kwd">ChunkerThread</span>( <span class="kwb">void</span> *arg ) {
+      Chunker *chunker = (Chunker *)arg;
+      chunker-&gt;<span class="kwd">Reverse</span>();
+      chunker-&gt;<span class="kwd">Print</span>();
+      <span class="kwa">return</span> <span class="num">0</span>;
+   }
+
+   <span class="kwb">void</span> <span class="kwd">Run</span>() {
+      vector2&lt;Chunker *&gt; chunkers;
+      vector2&lt;pthread_t&gt; threads;
+
+      <span class="kwb">size_t</span> cur = <span class="num">0</span>;
+      <span class="kwa">for</span> ( <span class="kwb">int</span> id = <span class="num">1</span>; <span class="kwa">true</span>; id++ ) {
+         chunkers.<span class="kwd">push_back</span>( <span class="kwa">new</span> <span class="kwd">Chunker</span>( id ) );
+
+         <span class="kwb">size_t</span> read = chunkers.<span class="kwd">last</span>()-&gt;<span class="kwd">Read</span>( data + cur );
+         cur += read;
+         <span class="kwa">if</span> ( !read )
+            <span class="kwa">break</span>;
+
+         <span class="slc">// spawn off a thread to finish this guy up while we read another chunk in</span>
+         threads.<span class="kwd">push_back</span>( <span class="num">0</span> );
+         <span class="kwd">pthread_create</span>( &amp;threads.<span class="kwd">last</span>(), <span class="num">0</span>, ChunkerThread, chunkers.<span class="kwd">last</span>() );
+      }
+
+      <span class="kwa">for</span> ( <span class="kwb">size_t</span> i = <span class="num">0</span>; i &lt; threads.<span class="kwd">size</span>(); i++ )
+         <span class="kwd">pthread_join</span>( threads[i], <span class="num">0</span> );
+
+      <span class="kwa">for</span> ( <span class="kwb">size_t</span> i = <span class="num">0</span>; i &lt; chunkers.<span class="kwd">size</span>(); i++ )
+         <span class="kwa">delete</span> chunkers[i];
+   }
+
+
+<span class="kwc">protected</span>:
+   <span class="kwb">size_t</span> size;
+   <span class="kwb">char</span> *data;
+};
+
+
+<span class="kwb">int</span> <span class="kwd">main</span>( <span class="kwb">int</span> argc, <span class="kwb">const char</span> *argv[] ) {
+   ReverseComplement revcom;
+   revcom.<span class="kwd">Run</span>();
+   <span class="kwa">return</span> <span class="num">0</span>;
+}

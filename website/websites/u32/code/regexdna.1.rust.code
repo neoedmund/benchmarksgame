@@ -1,0 +1,76 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// contributed by the Rust Project Developers</span>
+<span class="hl slc">// contributed by BurntSushi</span>
+<span class="hl slc">// contributed by TeXitoi</span>
+
+<span class="hl kwc">extern</span> crate regex<span class="hl opt">;</span>
+
+use std<span class="hl opt">::</span>io<span class="hl opt">::{</span>self<span class="hl opt">,</span> Read<span class="hl opt">};</span>
+use std<span class="hl opt">::</span>sync<span class="hl opt">::</span>Arc<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>thread<span class="hl opt">;</span>
+use regex<span class="hl opt">::</span>NoExpand<span class="hl opt">;</span>
+
+macro_rules<span class="hl opt">!</span> regex <span class="hl opt">{ (</span>$re<span class="hl opt">:</span>expr<span class="hl opt">) =&gt; (::</span>regex<span class="hl opt">::</span>Regex<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">(</span>$re<span class="hl opt">).</span><span class="hl kwd">unwrap</span><span class="hl opt">()); }</span>
+
+fn <span class="hl kwd">main</span><span class="hl opt">() {</span>
+    let mut seq <span class="hl opt">=</span> String<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">();</span>
+    io<span class="hl opt">::</span><span class="hl kwd">stdin</span><span class="hl opt">().</span><span class="hl kwd">read_to_string</span><span class="hl opt">(&amp;</span>mut seq<span class="hl opt">).</span><span class="hl kwd">unwrap</span><span class="hl opt">();</span>
+    let ilen <span class="hl opt">=</span> seq<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">();</span>
+
+    seq <span class="hl opt">=</span> regex<span class="hl opt">!(</span><span class="hl str">&quot;&gt;[^</span><span class="hl esc">\n</span><span class="hl str">]*</span><span class="hl esc">\n</span><span class="hl str">|</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">).</span><span class="hl kwd">replace_all</span><span class="hl opt">(&amp;</span>seq<span class="hl opt">,</span> <span class="hl kwd">NoExpand</span><span class="hl opt">(</span><span class="hl str">&quot;&quot;</span><span class="hl opt">));</span>
+    let seq_arc <span class="hl opt">=</span> Arc<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">(</span>seq<span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">());</span> <span class="hl slc">// copy before it moves</span>
+    let clen <span class="hl opt">=</span> seq<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">();</span>
+
+    let seqlen <span class="hl opt">=</span> thread<span class="hl opt">::</span><span class="hl kwd">spawn</span><span class="hl opt">(</span>move<span class="hl opt">|| {</span>
+        let substs <span class="hl opt">=</span> vec<span class="hl opt">![</span>
+            <span class="hl opt">(</span>regex<span class="hl opt">!(</span><span class="hl str">&quot;B&quot;</span><span class="hl opt">),</span> <span class="hl str">&quot;(c|g|t)&quot;</span><span class="hl opt">),</span>
+            <span class="hl opt">(</span>regex<span class="hl opt">!(</span><span class="hl str">&quot;D&quot;</span><span class="hl opt">),</span> <span class="hl str">&quot;(a|g|t)&quot;</span><span class="hl opt">),</span>
+            <span class="hl opt">(</span>regex<span class="hl opt">!(</span><span class="hl str">&quot;H&quot;</span><span class="hl opt">),</span> <span class="hl str">&quot;(a|c|t)&quot;</span><span class="hl opt">),</span>
+            <span class="hl opt">(</span>regex<span class="hl opt">!(</span><span class="hl str">&quot;K&quot;</span><span class="hl opt">),</span> <span class="hl str">&quot;(g|t)&quot;</span><span class="hl opt">),</span>
+            <span class="hl opt">(</span>regex<span class="hl opt">!(</span><span class="hl str">&quot;M&quot;</span><span class="hl opt">),</span> <span class="hl str">&quot;(a|c)&quot;</span><span class="hl opt">),</span>
+            <span class="hl opt">(</span>regex<span class="hl opt">!(</span><span class="hl str">&quot;N&quot;</span><span class="hl opt">),</span> <span class="hl str">&quot;(a|c|g|t)&quot;</span><span class="hl opt">),</span>
+            <span class="hl opt">(</span>regex<span class="hl opt">!(</span><span class="hl str">&quot;R&quot;</span><span class="hl opt">),</span> <span class="hl str">&quot;(a|g)&quot;</span><span class="hl opt">),</span>
+            <span class="hl opt">(</span>regex<span class="hl opt">!(</span><span class="hl str">&quot;S&quot;</span><span class="hl opt">),</span> <span class="hl str">&quot;(c|g)&quot;</span><span class="hl opt">),</span>
+            <span class="hl opt">(</span>regex<span class="hl opt">!(</span><span class="hl str">&quot;V&quot;</span><span class="hl opt">),</span> <span class="hl str">&quot;(a|c|g)&quot;</span><span class="hl opt">),</span>
+            <span class="hl opt">(</span>regex<span class="hl opt">!(</span><span class="hl str">&quot;W&quot;</span><span class="hl opt">),</span> <span class="hl str">&quot;(a|t)&quot;</span><span class="hl opt">),</span>
+            <span class="hl opt">(</span>regex<span class="hl opt">!(</span><span class="hl str">&quot;Y&quot;</span><span class="hl opt">),</span> <span class="hl str">&quot;(c|t)&quot;</span><span class="hl opt">),</span>
+        <span class="hl opt">];</span>
+        let mut seq <span class="hl opt">=</span> seq<span class="hl opt">;</span>
+        <span class="hl kwa">for</span> <span class="hl opt">(</span>re<span class="hl opt">,</span> replacement<span class="hl opt">)</span> in substs<span class="hl opt">.</span><span class="hl kwd">into_iter</span><span class="hl opt">() {</span>
+            seq <span class="hl opt">=</span> re<span class="hl opt">.</span><span class="hl kwd">replace_all</span><span class="hl opt">(&amp;</span>seq<span class="hl opt">,</span> <span class="hl kwd">NoExpand</span><span class="hl opt">(</span>replacement<span class="hl opt">));</span>
+        <span class="hl opt">}</span>
+        seq<span class="hl opt">.</span><span class="hl kwd">len</span><span class="hl opt">()</span>
+    <span class="hl opt">});</span>
+
+    let variants <span class="hl opt">=</span> vec<span class="hl opt">![</span>
+        regex<span class="hl opt">!(</span><span class="hl str">&quot;agggtaaa|tttaccct&quot;</span><span class="hl opt">),</span>
+        regex<span class="hl opt">!(</span><span class="hl str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span><span class="hl opt">),</span>
+        regex<span class="hl opt">!(</span><span class="hl str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span><span class="hl opt">),</span>
+        regex<span class="hl opt">!(</span><span class="hl str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span><span class="hl opt">),</span>
+        regex<span class="hl opt">!(</span><span class="hl str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span><span class="hl opt">),</span>
+        regex<span class="hl opt">!(</span><span class="hl str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span><span class="hl opt">),</span>
+        regex<span class="hl opt">!(</span><span class="hl str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span><span class="hl opt">),</span>
+        regex<span class="hl opt">!(</span><span class="hl str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span><span class="hl opt">),</span>
+        regex<span class="hl opt">!(</span><span class="hl str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span><span class="hl opt">),</span>
+    <span class="hl opt">];</span>
+    <span class="hl kwd">let</span> <span class="hl opt">(</span>mut variant_strs<span class="hl opt">,</span> mut counts<span class="hl opt">) = (</span>vec<span class="hl opt">!(),</span> vec<span class="hl opt">!());</span>
+    <span class="hl kwa">for</span> variant in variants<span class="hl opt">.</span><span class="hl kwd">into_iter</span><span class="hl opt">() {</span>
+        let seq_arc_copy <span class="hl opt">=</span> seq_arc<span class="hl opt">.</span><span class="hl kwd">clone</span><span class="hl opt">();</span>
+        variant_strs<span class="hl opt">.</span><span class="hl kwd">push</span><span class="hl opt">(</span>variant<span class="hl opt">.</span><span class="hl kwd">to_string</span><span class="hl opt">());</span>
+        counts<span class="hl opt">.</span><span class="hl kwd">push</span><span class="hl opt">(</span>thread<span class="hl opt">::</span><span class="hl kwd">spawn</span><span class="hl opt">(</span>move<span class="hl opt">|| {</span>
+            variant<span class="hl opt">.</span><span class="hl kwd">find_iter</span><span class="hl opt">(&amp;</span>seq_arc_copy<span class="hl opt">).</span><span class="hl kwd">count</span><span class="hl opt">()</span>
+        <span class="hl opt">}));</span>
+    <span class="hl opt">}</span>
+
+    let mut olines <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwa">new</span><span class="hl opt">();</span>
+    <span class="hl kwa">for</span> <span class="hl opt">(</span>variant<span class="hl opt">,</span> count<span class="hl opt">)</span> in variant_strs<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">().</span><span class="hl kwd">zip</span><span class="hl opt">(</span>counts<span class="hl opt">.</span><span class="hl kwd">into_iter</span><span class="hl opt">()) {</span>
+        olines<span class="hl opt">.</span><span class="hl kwd">push</span><span class="hl opt">(</span>format<span class="hl opt">!(</span><span class="hl str">&quot;{} {}&quot;</span><span class="hl opt">,</span> variant<span class="hl opt">,</span> count<span class="hl opt">.</span><span class="hl kwd">join</span><span class="hl opt">().</span><span class="hl kwd">unwrap</span><span class="hl opt">()));</span>
+    <span class="hl opt">}</span>
+    olines<span class="hl opt">.</span><span class="hl kwd">push</span><span class="hl opt">(</span><span class="hl str">&quot;&quot;</span><span class="hl opt">.</span><span class="hl kwd">to_string</span><span class="hl opt">());</span>
+    olines<span class="hl opt">.</span><span class="hl kwd">push</span><span class="hl opt">(</span>format<span class="hl opt">!(</span><span class="hl str">&quot;{}&quot;</span><span class="hl opt">,</span> ilen<span class="hl opt">));</span>
+    olines<span class="hl opt">.</span><span class="hl kwd">push</span><span class="hl opt">(</span>format<span class="hl opt">!(</span><span class="hl str">&quot;{}&quot;</span><span class="hl opt">,</span> clen<span class="hl opt">));</span>
+    olines<span class="hl opt">.</span><span class="hl kwd">push</span><span class="hl opt">(</span>format<span class="hl opt">!(</span><span class="hl str">&quot;{}&quot;</span><span class="hl opt">,</span> seqlen<span class="hl opt">.</span><span class="hl kwd">join</span><span class="hl opt">().</span><span class="hl kwd">unwrap</span><span class="hl opt">()));</span>
+    println<span class="hl opt">!(</span><span class="hl str">&quot;{}&quot;</span><span class="hl opt">,</span> olines<span class="hl opt">.</span><span class="hl kwd">connect</span><span class="hl opt">(</span><span class="hl str">&quot;</span><span class="hl esc">\n</span><span class="hl str">&quot;</span><span class="hl opt">));</span>
+<span class="hl opt">}</span>

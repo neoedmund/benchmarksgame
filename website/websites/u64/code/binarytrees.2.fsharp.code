@@ -1,0 +1,54 @@
+﻿<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Minor modification by Don Syme &amp; Jomo Fisher to use null as representation</span>
+<span class="slc">// of Empty node.</span>
+<span class="slc">// Based on F# version by Robert Pickering</span>
+<span class="slc">// Based on ocaml version by Troestler Christophe &amp; Isaac Gouy</span>
+
+
+[&lt;<span class="kwd">CompilationRepresentation</span>(<span class="kwd">CompilationRepresentationFlags</span>
+  .<span class="kwd">UseNullAsTrueValue</span>)&gt;]
+<span class="kwa">type</span> <span class="kwd">Tree</span>&lt;'<span class="kwd">T</span>&gt; = 
+    | <span class="kwd">Empty</span> 
+    | <span class="kwd">Node</span> <span class="kwa">of</span> <span class="kwd">Tree</span>&lt;'<span class="kwd">T</span>&gt; * '<span class="kwd">T</span> * <span class="kwd">Tree</span>&lt;'<span class="kwd">T</span>&gt;
+
+<span class="kwa">let rec</span> make i d =
+    <span class="kwa">if</span> d = <span class="num">0</span> <span class="kwa">then</span> 
+        <span class="kwd">Node</span>(<span class="kwd">Empty</span>, i, <span class="kwd">Empty</span>)
+    <span class="kwa">else</span>
+        <span class="kwa">let</span> i2 = <span class="num">2</span> * i
+        <span class="kwa">let</span> d = d - <span class="num">1</span>
+        <span class="kwd">Node</span>(make (i2 - <span class="num">1</span>) d, i, make i2 d)
+
+<span class="kwa">let rec</span> check x = 
+    <span class="kwa">match</span> x <span class="kwa">with</span> 
+    | <span class="kwd">Empty</span> -&gt; <span class="num">0</span> 
+    | <span class="kwd">Node</span>(l, i, r) -&gt; i + check l - check r
+
+<span class="kwa">let rec</span> loopDepths maxDepth minDepth d =
+    <span class="kwa">if</span> d &lt;= maxDepth <span class="kwa">then</span>
+        <span class="kwa">let</span> niter = <span class="num">1</span> &lt;&lt;&lt; (maxDepth - d + minDepth)
+        <span class="kwa">let mutable</span> c = <span class="num">0</span>
+        <span class="kwa">for</span> i = <span class="num">1</span> <span class="kwa">to</span> niter <span class="kwa">do</span> 
+            c &lt;- c + check (make i d) + check (make (-i) d)
+        printf <span class="str">&quot;</span><span class="ipl">%i</span><span class="str"></span><span class="esc">\t</span> <span class="str">trees of depth</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> (<span class="num">2</span> * niter) d c
+        loopDepths maxDepth minDepth (d + <span class="num">2</span>)
+
+[&lt;<span class="kwd">EntryPoint</span>&gt;]
+<span class="kwa">let</span> main args =
+    <span class="kwa">let</span> minDepth = <span class="num">4</span>
+    <span class="kwa">let</span> maxDepth =
+        <span class="kwa">let</span> n = <span class="kwa">if</span> args.<span class="kwd">Length</span> &gt; <span class="num">0</span> <span class="kwa">then</span> <span class="kwb">int</span> args.[<span class="num">0</span>] <span class="kwa">else</span> <span class="num">10</span>
+        max (minDepth + <span class="num">2</span>) n
+    <span class="kwa">let</span> stretchDepth = maxDepth + <span class="num">1</span>
+
+    <span class="kwa">let</span> c = check (make <span class="num">0</span> stretchDepth)
+    printf <span class="str">&quot;stretch tree of depth</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> stretchDepth c
+    <span class="kwa">let</span> longLivedTree = make <span class="num">0</span> maxDepth
+    loopDepths maxDepth minDepth minDepth
+    printf <span class="str">&quot;long lived tree of depth</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> 
+           maxDepth 
+           (check longLivedTree)
+    <span class="num">0</span>
+

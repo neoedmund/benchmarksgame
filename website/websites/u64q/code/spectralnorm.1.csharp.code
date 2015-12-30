@@ -1,0 +1,71 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> </span>
+<span class="com">   contributed by Isaac Gouy </span>
+<span class="com">*/</span>
+
+<span class="kwa">using</span> System;
+
+<span class="kwa">class</span> SpectralNorm
+{
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(String[] args) {        
+      <span class="kwb">int</span> n = <span class="num">100</span>;
+      <span class="kwa">if</span> (args.Length &gt; <span class="num">0</span>) n = Int32.<span class="kwd">Parse</span>(args[<span class="num">0</span>]);
+
+      Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;{0:f9}&quot;</span>, <span class="kwa">new</span> <span class="kwd">SpectralNorm</span>().<span class="kwd">Approximate</span>(n));
+   }
+
+   <span class="kwb">double</span> <span class="kwd">Approximate</span>(<span class="kwb">int</span> n) {
+      <span class="slc">// create unit vector</span>
+      <span class="kwb">double</span>[] u = <span class="kwa">new</span> <span class="kwb">double</span>[n];       
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; i++) u[i] =  <span class="num">1</span>;
+
+      <span class="slc">// 20 steps of the power method</span>
+      <span class="kwb">double</span>[] v = <span class="kwa">new</span> <span class="kwb">double</span>[n];  
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; i++) v[i] = <span class="num">0</span>;
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;<span class="num">10</span>; i++) {
+         <span class="kwd">MultiplyAtAv</span>(n,u,v);
+         <span class="kwd">MultiplyAtAv</span>(n,v,u);
+      }
+
+      <span class="slc">// B=AtA         A multiplied by A transposed</span>
+      <span class="slc">// v.Bv /(v.v)   eigenvalue of v </span>
+      <span class="kwb">double</span> vBv = <span class="num">0</span>, vv = <span class="num">0</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; i++) {
+         vBv += u[i]*v[i];
+         vv  += v[i]*v[i];
+      }
+
+      <span class="kwa">return</span> Math.<span class="kwd">Sqrt</span>(vBv/vv);
+   }
+
+
+   <span class="com">/* return element i,j of infinite matrix A */</span>
+   <span class="kwb">double</span> <span class="kwd">A</span>(<span class="kwb">int</span> i, <span class="kwb">int</span> j){
+      <span class="kwa">return</span> <span class="num">1.0</span>/((i+j)*(i+j+<span class="num">1</span>)/<span class="num">2</span> +i+<span class="num">1</span>); 
+   }
+
+   <span class="com">/* multiply vector v by matrix A */</span>
+   <span class="kwb">void</span> <span class="kwd">MultiplyAv</span>(<span class="kwb">int</span> n, <span class="kwb">double</span>[] v, <span class="kwb">double</span>[] Av){
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; i++){
+         Av[i] = <span class="num">0</span>;
+         <span class="kwa">for</span> (<span class="kwb">int</span> j=<span class="num">0</span>; j&lt;n; j++) Av[i] += <span class="kwd">A</span>(i,j)*v[j];
+      }
+   }
+
+   <span class="com">/* multiply vector v by matrix A transposed */</span>
+   <span class="kwb">void</span> <span class="kwd">MultiplyAtv</span>(<span class="kwb">int</span> n, <span class="kwb">double</span>[] v, <span class="kwb">double</span>[] Atv){
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>;i&lt;n;i++){
+         Atv[i] = <span class="num">0</span>;
+         <span class="kwa">for</span> (<span class="kwb">int</span> j=<span class="num">0</span>; j&lt;n; j++) Atv[i] += <span class="kwd">A</span>(j,i)*v[j];
+      }
+   }
+
+   <span class="com">/* multiply vector v by matrix A and then by matrix A transposed */</span>
+   <span class="kwb">void</span> <span class="kwd">MultiplyAtAv</span>(<span class="kwb">int</span> n, <span class="kwb">double</span>[] v, <span class="kwb">double</span>[] AtAv){
+      <span class="kwb">double</span>[] u = <span class="kwa">new</span> <span class="kwb">double</span>[n];
+      <span class="kwd">MultiplyAv</span>(n,v,u);
+      <span class="kwd">MultiplyAtv</span>(n,u,AtAv);
+   }
+}

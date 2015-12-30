@@ -1,0 +1,53 @@
+
+Wed, 01 Jul 2015 00:16:48 GMT
+
+MAKE:
+mv chameneosredux.clojure chameneosredux.clj
+/usr/local/src/jdk1.8.0_45/bin/java -Dclojure.compile.path=. -cp .:/usr/local/src/clojure/clojure-1.7.0.jar: clojure.lang.Compile chameneosredux
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Compiling chameneosredux to .
+Warning: *blue* not declared dynamic and thus is not dynamically rebindable, but its name suggests otherwise. Please either indicate ^:dynamic *blue* or change the name. (chameneosredux.clj:42)
+Warning: *red* not declared dynamic and thus is not dynamically rebindable, but its name suggests otherwise. Please either indicate ^:dynamic *red* or change the name. (chameneosredux.clj:42)
+Warning: *yellow* not declared dynamic and thus is not dynamically rebindable, but its name suggests otherwise. Please either indicate ^:dynamic *yellow* or change the name. (chameneosredux.clj:42)
+Warning: *blue* not declared dynamic and thus is not dynamically rebindable, but its name suggests otherwise. Please either indicate ^:dynamic *blue* or change the name. (chameneosredux.clj:43)
+Warning: *red* not declared dynamic and thus is not dynamically rebindable, but its name suggests otherwise. Please either indicate ^:dynamic *red* or change the name. (chameneosredux.clj:48)
+Warning: *yellow* not declared dynamic and thus is not dynamically rebindable, but its name suggests otherwise. Please either indicate ^:dynamic *yellow* or change the name. (chameneosredux.clj:53)
+Warning: *in-order* not declared dynamic and thus is not dynamically rebindable, but its name suggests otherwise. Please either indicate ^:dynamic *in-order* or change the name. (chameneosredux.clj:72)
+Warning: *game-id* not declared dynamic and thus is not dynamically rebindable, but its name suggests otherwise. Please either indicate ^:dynamic *game-id* or change the name. (chameneosredux.clj:149)
+2.36s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -cp .:/usr/local/src/clojure/clojure-1.7.0.jar: chameneosredux 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+ blue red yellow
+3997249 zero
+4010449 zero
+3992301 zero
+ one two zero zero zero zero zero zero
+
+ blue red yellow red yellow blue red yellow red blue
+1202895 zero
+1192342 zero
+1203379 zero
+1219848 zero
+1201348 zero
+1187695 zero
+1204245 zero
+1201558 zero
+1203896 zero
+1182794 zero
+ one two zero zero zero zero zero zero
+
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

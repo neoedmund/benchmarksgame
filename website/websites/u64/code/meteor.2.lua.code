@@ -1,0 +1,165 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- contributed by Mike Pall</span>
+
+<span class="slc">-- Generate a decision tree based solver for the meteor puzzle.</span>
+<span class="kwa">local function</span> <span class="kwd">generatesolver</span>(countinit)
+  <span class="kwa">local</span> pairs, ipairs, <span class="kwb">format</span> = pairs, ipairs, <span class="kwb">string</span>.<span class="kwb">format</span>
+  <span class="kwa">local</span> byte, <span class="kwb">min</span>, <span class="kwb">sort</span> = <span class="kwb">string</span>.byte, math.<span class="kwb">min</span>, <span class="kwb">table</span>.<span class="kwb">sort</span>
+
+  <span class="slc">-- Cached position to distance lookup.</span>
+  <span class="kwa">local</span> dist = <span class="kwd">setmetatable</span>({}, { __index = <span class="kwa">function</span>(t, xy)
+    <span class="kwa">local</span> x = xy%<span class="num">10</span>; <span class="kwa">local</span> y = (xy-x)/<span class="num">10</span>
+    <span class="kwa">if</span> (x+y)%<span class="num">2</span> == <span class="num">1</span> <span class="kwa">then</span> y = y + <span class="num">1</span>; x = <span class="num">10</span> - x <span class="kwa">end</span>
+    <span class="kwa">local</span> d = xy + <span class="num">256</span>*x*x + <span class="num">1024</span>*y*y; t[xy] = d; <span class="kwa">return</span> d
+  <span class="kwa">end</span>})
+
+  <span class="slc">-- Generate an optimized decision tree (within 4% of a hand-tuned tree).</span>
+  <span class="kwa">local</span> dtree = {}
+  <span class="kwa">local</span> rot = { <span class="kwa">nil</span>, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {} }
+  <span class="kwa">for</span> k=<span class="num">0</span>,<span class="num">9</span> <span class="kwa">do</span>
+    <span class="slc">-- Generate 10 initial pieces from line noise. :-)</span>
+    <span class="kwa">local</span> t = { <span class="num">60</span>, <span class="num">62</span>, <span class="kwd">byte</span>(<span class="str">&quot;&#64;BMBIK&#64;KT&#64;GPIKR&#64;IKIKT&#64;GK&#64;KM&#64;BG&quot;</span>, k*<span class="num">3</span>+<span class="num">1</span>, k*<span class="num">3</span>+<span class="num">3</span>) }
+    rot[<span class="num">1</span>] = t
+    <span class="kwa">for</span> i,xy <span class="kwa">in</span> <span class="kwd">ipairs</span>(t) <span class="kwa">do</span>
+      <span class="kwa">local</span> x = xy%<span class="num">10</span>; <span class="kwa">local</span> y = (xy-x-<span class="num">60</span>)/<span class="num">10</span>
+      <span class="slc">-- Add 11 more variations by rotating and flipping.</span>
+      <span class="kwa">for</span> j=<span class="num">2</span>,<span class="num">12</span> <span class="kwa">do</span>
+	<span class="kwa">if</span> j == <span class="num">7</span> <span class="kwa">then</span> y = -y <span class="kwa">else</span> x,y = (x+<span class="num">3</span>*y)/<span class="num">2</span>, (y-x)/<span class="num">2</span> <span class="kwa">end</span>
+	rot[j][i] = x+<span class="num">10</span>*y
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+    <span class="kwa">for</span> i,v <span class="kwa">in</span> <span class="kwd">ipairs</span>(rot) <span class="kwa">do</span>
+      <span class="slc">-- Exploit symmetry and leave out half of the orientations of one piece.</span>
+      <span class="slc">-- The selected piece gives the best reduction of the solution space.</span>
+      <span class="kwa">if</span> k ~= <span class="num">3</span> <span class="kwa">or</span> i%<span class="num">2</span> == <span class="num">0</span> <span class="kwa">then</span>
+	<span class="slc">-- Normalize to origin, add distance, sort by distance from origin.</span>
+	<span class="kwa">local</span> m = <span class="kwb">min</span>(v[<span class="num">1</span>], v[<span class="num">2</span>], v[<span class="num">3</span>], v[<span class="num">4</span>], v[<span class="num">5</span>])
+	<span class="kwa">for</span> i=<span class="num">1</span>,<span class="num">5</span> <span class="kwa">do</span> v[i] = dist[v[i]-m] <span class="kwa">end</span>
+	<span class="kwb">sort</span>(v)
+	<span class="slc">-- Insert into decision tree in distance order.</span>
+	<span class="kwa">local</span> tt = dtree
+	<span class="kwa">for</span> i=<span class="num">2</span>,<span class="num">4</span> <span class="kwa">do</span>
+	  <span class="kwa">local</span> xy = v[i]%<span class="num">256</span>
+	  <span class="kwa">local</span> tn = tt[xy]
+	  <span class="kwa">if not</span> tn <span class="kwa">then</span> tn = {}; tt[xy] = tn <span class="kwa">end</span> <span class="slc">-- Create nodes as needed.</span>
+	  tt = tn
+	<span class="kwa">end</span>
+	tt[v[<span class="num">5</span>]%<span class="num">256</span>] = k <span class="slc">-- Leaves hold the piece numbers.</span>
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+
+  <span class="slc">-- Lookup table to validate a cell and to find its successor.</span>
+  <span class="kwa">local</span> ok = {}
+  <span class="kwa">for</span> i=<span class="num">0</span>,<span class="num">150</span> <span class="kwa">do</span> ok[i] = <span class="kwa">false end</span>
+  <span class="kwa">for</span> i=<span class="num">99</span>,<span class="num">0</span>,-<span class="num">1</span> <span class="kwa">do</span>
+    <span class="kwa">local</span> x = i%<span class="num">10</span>
+    <span class="kwa">if</span> ((i-x)/<span class="num">10</span>+x)%<span class="num">2</span> == <span class="num">0</span> <span class="kwa">then</span>
+      ok[i] = i + (ok[i+<span class="num">1</span>] <span class="kwa">and</span> <span class="num">1</span> <span class="kwa">or</span> (ok[i+<span class="num">2</span>] <span class="kwa">and</span> <span class="num">2</span> <span class="kwa">or</span> <span class="num">3</span>))
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+
+  <span class="kwa">local</span> s = <span class="str">&quot;local u0,u1,u2,u3,u4,u5,u6,u7,u8,u9&quot;</span> <span class="slc">-- Piece use flags.</span>
+  <span class="kwa">for</span> p=<span class="num">0</span>,<span class="num">99</span> <span class="kwa">do if</span> ok[p] <span class="kwa">then</span> s = s..<span class="str">&quot;,b&quot;</span>..p <span class="kwa">end end</span> <span class="slc">-- Board cells.</span>
+  s = s..<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>..<span class="str">[[</span>
+<span class="str">local countinit = ...</span>
+<span class="str">local count = countinit</span>
+<span class="str">local bmin, bmax, pcs = 9, 0, {}</span>
+<span class="str">local smin, smax</span>
+<span class="str">local write, reverse = io.write, string.reverse</span>
+<span class="str"></span>
+<span class="str">-- Print min/max boards.</span>
+<span class="str">local function printboard(s)</span>
+<span class="str">  local flip = true</span>
+<span class="str">  for x in string.gmatch(string.gsub(s, &quot;.&quot;, &quot;%1 &quot;), &quot;..........&quot;) do</span>
+<span class="str">    write(x, flip and &quot;\n &quot; or &quot;\n&quot;)</span>
+<span class="str">    flip = not flip</span>
+<span class="str">  end</span>
+<span class="str">  write(&quot;\n&quot;)</span>
+<span class="str">end</span>
+<span class="str"></span>
+<span class="str">-- Print result.</span>
+<span class="str">local function printresult()</span>
+<span class="str">  write(countinit-count, &quot; solutions found\n\n&quot;)</span>
+<span class="str">  printboard(smin)</span>
+<span class="str">  printboard(smax)</span>
+<span class="str">end</span>
+<span class="str"></span>
+<span class="str">-- Generate piece lookup array from the order of use.</span>
+<span class="str">local function genp()</span>
+<span class="str">  local p = pcs</span>
+<span class="str">  p[u0] = &quot;0&quot; p[u1] = &quot;1&quot; p[u2] = &quot;2&quot; p[u3] = &quot;3&quot; p[u4] = &quot;4&quot;</span>
+<span class="str">  p[u5] = &quot;5&quot; p[u6] = &quot;6&quot; p[u7] = &quot;7&quot; p[u8] = &quot;8&quot; p[u9] = &quot;9&quot;</span>
+<span class="str">  return p</span>
+<span class="str">end</span>
+<span class="str"></span>
+<span class="str">-- Goal function.</span>
+<span class="str">local function f91(k)</span>
+<span class="str">  if k ~= 10 then return end</span>
+<span class="str">  count = count - 2 -- Need to count the symmetric solution, too.</span>
+<span class="str">  repeat</span>
+<span class="str">    -- Quick precheck before constructing the string.</span>
+<span class="str">    local b0, b99 = b0, b99</span>
+<span class="str">    if b0 &lt;= bmin then bmin = b0 elseif b0 &gt;= bmax then bmax = b0</span>
+<span class="str">    elseif b99 &lt;= bmin then bmin = b99 elseif b99 &gt;= bmax then bmax = b99</span>
+<span class="str">    else break end</span>
+<span class="str">    -- Translate the filled board to a string.</span>
+<span class="str">    local p = genp()</span>
+<span class="str">    local s = p[b0] ]]</span>
+  <span class="kwa">for</span> p=<span class="num">2</span>,<span class="num">99</span> <span class="kwa">do if</span> ok[p] <span class="kwa">then</span> s = s..<span class="str">&quot;..p[b&quot;</span>..p..<span class="str">&quot;]&quot;</span> <span class="kwa">end end</span>
+  s = s..<span class="str">[[</span>
+<span class="str">    -- Remember min/max boards, dito for the symmetric board.</span>
+<span class="str">    if not smin then smin = s; smax = s</span>
+<span class="str">    elseif s &lt; smin then smin = s elseif s &gt; smax then smax = s end</span>
+<span class="str">    s = reverse(s)</span>
+<span class="str">    if s &lt; smin then smin = s elseif s &gt; smax then smax = s end</span>
+<span class="str">  until true</span>
+<span class="str">  if count &lt;= 0 then error(&quot;&quot;) end -- Early abort if max count given.</span>
+<span class="str">end</span>
+<span class="str">local f93 = f91</span>
+<span class="str">]]</span>
+
+  <span class="slc">-- Recursively prune the decision tree and convert it to Lua code.</span>
+  <span class="kwa">local function</span> <span class="kwd">codetree</span>(tree, d, p, pn)
+    <span class="kwa">local</span> found, s = <span class="kwa">false</span>, <span class="str">&quot;&quot;</span>
+    d = d + <span class="num">1</span>
+    <span class="kwa">for</span> a,t <span class="kwa">in</span> <span class="kwd">pairs</span>(tree) <span class="kwa">do</span>
+      <span class="kwa">local</span> b = p+a
+      <span class="kwa">local</span> pp = ok[b]
+      <span class="kwa">if</span> pp <span class="kwa">then</span> <span class="slc">-- Prune the tree on-the-fly.</span>
+	<span class="kwa">if</span> b ~= pn <span class="kwa">then</span> pp = pn <span class="kwa">end</span> <span class="slc">-- Find maximum successor function.</span>
+	<span class="kwa">if</span> d == <span class="num">5</span> <span class="kwa">then</span> <span class="slc">-- Try to place the last cell of a piece and advance.</span>
+	  found = <span class="kwa">true</span>
+	  s = <span class="kwb">format</span>(<span class="str">&quot;%sif not u%d and not b%d then b%d=k u%d=k f%d(k) u%d=N b%d=N end</span><span class="esc">\n</span><span class="str">&quot;</span>,
+		     s, t, b, b, t, pp, t, b)
+	<span class="kwa">else</span> <span class="slc">-- Try to place an intermediate cell.</span>
+	  <span class="kwa">local</span> st = <span class="kwd">codetree</span>(t, d, p, pp)
+	  <span class="kwa">if</span> st <span class="kwa">then</span> <span class="slc">-- But only if the subtree is not empty.</span>
+	    found = <span class="kwa">true</span>
+	    s = <span class="kwb">format</span>(<span class="str">&quot;%sif not b%d then b%d=k</span><span class="esc">\n</span><span class="str">%sb%d=N end</span><span class="esc">\n</span><span class="str">&quot;</span>, s, b, b, st, b)
+	  <span class="kwa">end</span>
+	<span class="kwa">end</span>
+      <span class="kwa">end</span>
+    <span class="kwa">end</span>
+    <span class="kwa">return</span> found <span class="kwa">and</span> s
+  <span class="kwa">end</span>
+
+  <span class="slc">-- Embed the decision tree into a function hierarchy.</span>
+  <span class="kwa">for</span> p=<span class="num">88</span>,<span class="num">0</span>,-<span class="num">1</span> <span class="kwa">do</span>
+    <span class="kwa">local</span> pn = ok[p]
+    <span class="kwa">if</span> pn <span class="kwa">then</span>
+      s = <span class="kwb">format</span>(<span class="str">&quot;%slocal function f%d(k)</span><span class="esc">\n</span><span class="str">local N if b%d then return f%d(k) end k=k+1 b%d=k</span><span class="esc">\n</span><span class="str">%sb%d=N end</span><span class="esc">\n</span><span class="str">&quot;</span>,
+	    s, p, p, pn, p, <span class="kwd">codetree</span>(dtree, <span class="num">1</span>, p, pn), p)
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+
+  <span class="slc">-- Compile and return solver function and result getter.</span>
+  <span class="kwa">return</span> <span class="kwd">loadstring</span>(s..<span class="str">&quot;return f0, printresult</span><span class="esc">\n</span><span class="str">&quot;</span>, <span class="str">&quot;solver&quot;</span>)(countinit)
+<span class="kwa">end</span>
+
+<span class="slc">-- Run the solver protected to get partial results (max count or ctrl-c).</span>
+<span class="kwa">local</span> solver, printresult = <span class="kwd">generatesolver</span>(<span class="kwb">tonumber</span>(arg <span class="kwa">and</span> arg[<span class="num">1</span>]) <span class="kwa">or</span> <span class="num">10000</span>)
+<span class="kwd">pcall</span>(solver, <span class="num">0</span>)
+<span class="kwd">printresult</span>()
+

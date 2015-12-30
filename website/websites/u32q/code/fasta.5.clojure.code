@@ -1,0 +1,194 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; contributed by Andy Fingerhut</span>
+
+(ns fasta
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+
+<span class="slc">;; Handle slight difference in function name between Clojure 1.2.0 and</span>
+<span class="slc">;; 1.3.0-alpha*.</span>
+(<span class="kwa">defmacro</span> my-unchecked-inc-int [&amp; args]
+  (<span class="kwc">if</span> (and (== (*clojure-version* :major) <span class="num">1</span>)
+           (== (*clojure-version* :minor) <span class="num">2</span>))
+    `(unchecked-inc ~&#64;args)
+    `(unchecked-inc-int ~&#64;args)))
+
+(<span class="kwa">defmacro</span> my-unchecked-add-int [&amp; args]
+  (<span class="kwc">if</span> (and (== (*clojure-version* :major) <span class="num">1</span>)
+           (== (*clojure-version* :minor) <span class="num">2</span>))
+    `(unchecked-add ~&#64;args)
+    `(unchecked-add-int ~&#64;args)))
+
+(<span class="kwa">defmacro</span> my-unchecked-multiply-int [&amp; args]
+  (<span class="kwc">if</span> (and (== (*clojure-version* :major) <span class="num">1</span>)
+           (== (*clojure-version* :minor) <span class="num">2</span>))
+    `(unchecked-multiply ~&#64;args)
+    `(unchecked-multiply-int ~&#64;args)))
+
+(<span class="kwa">defmacro</span> my-unchecked-remainder-int [&amp; args]
+  (<span class="kwc">if</span> (and (== (*clojure-version* :major) <span class="num">1</span>)
+           (== (*clojure-version* :minor) <span class="num">2</span>))
+    `(unchecked-remainder ~&#64;args)
+    `(unchecked-remainder-int ~&#64;args)))
+
+
+(<span class="kwa">defn</span> make-repeat-fasta [#^java.io.BufferedOutputStream ostream
+                         line-length id desc s n]
+  (<span class="kwc">let</span> [descstr (str <span class="str">&quot;&gt;&quot;</span> id <span class="str">&quot; &quot;</span> desc <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)]
+    (.write ostream (.getBytes descstr) <span class="num">0</span> (count descstr)))
+  (<span class="kwc">let</span> [s-len (int (count s))
+        line-length (int line-length)
+        line-length+<span class="num">1</span> (int (inc line-length))
+        min-buf-len (int (+ s-len line-length))
+        repeat-count (int (inc (quot min-buf-len s-len)))
+        buf (apply str (<span class="kwd">repeat</span> repeat-count s))
+        <span class="slc">;; Precompute all byte arrays that we might want to write, one</span>
+        <span class="slc">;; at each possible offset in the string s to be repeated.</span>
+        line-strings (vec (<span class="kwd">map</span> (<span class="kwa">fn</span> [i]
+                                 (.getBytes (str (subs buf i (+ i line-length))
+                                                 <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)))
+                               (<span class="kwd">range</span> <span class="num">0</span> s-len)))
+        num-full-lines (int (quot n line-length))]
+    (<span class="kwb">loop</span> [j (int <span class="num">0</span>)
+           s-offset (int <span class="num">0</span>)]
+      (<span class="kwc">if</span> (== j num-full-lines)
+        <span class="slc">;; Write out the left over part of length n, if any.</span>
+        (<span class="kwc">let</span> [remaining (int (rem n line-length))]
+          (<span class="kwc">when</span> (not= <span class="num">0</span> remaining)
+            (.write ostream
+                    (.getBytes (str (subs buf s-offset (+ s-offset remaining))
+                                    <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>))
+                    <span class="num">0</span> (inc remaining))))
+        (do
+          (.write ostream #^bytes (line-strings s-offset) <span class="num">0</span> line-length+<span class="num">1</span>)
+          (<span class="kwb">recur</span> (inc j) (int (my-unchecked-remainder-int
+                               (my-unchecked-add-int s-offset line-length)
+                               s-len))))))))
+
+
+(definterface IPRNG
+  (gen_random_BANG_ [^double max-val]))
+
+
+(deftype PRNG [^{:unsynchronized-mutable true :tag int} rand-state]
+  IPRNG
+  (gen-random! [this max-val]
+    (<span class="kwc">let</span> [IM (int <span class="num">139968</span>)
+          IM-double (double <span class="num">139968.0</span>)
+          IA (int <span class="num">3877</span>)
+          IC (int <span class="num">29573</span>)
+          max (double max-val)
+          last-state (int rand-state)
+          next-state (int (my-unchecked-remainder-int
+                           (my-unchecked-add-int
+                            (my-unchecked-multiply-int last-state IA) IC) IM))
+          next-state-double (double next-state)]
+      (set! rand-state next-state)
+      (/ (* max next-state-double) IM-double))))
+
+
+(<span class="kwa">defmacro</span> fill-random! [#^bytes gene-bytes #^doubles gene-cdf n #^bytes buf
+                        my-prng]
+  `(<span class="kwc">let</span> [double-one# (double <span class="num">1.0</span>)]
+     (<span class="kwb">dotimes</span> [i# ~n]
+       (<span class="kwc">let</span> [x# (double (.gen-random! ~my-prng double-one#))
+             <span class="slc">;; In my performance testing, I found linear search to</span>
+             <span class="slc">;; be a little faster than binary search.  The arrays</span>
+             <span class="slc">;; being searched are small.</span>
+             b# (byte (<span class="kwb">loop</span> [j# (int <span class="num">0</span>)]
+                        (<span class="kwc">if</span> (&lt; x# (aget ~gene-cdf j#))
+                          (aget ~gene-bytes j#)
+                          (<span class="kwb">recur</span> (my-unchecked-inc-int j#)))))]
+         (aset ~buf i# b#)))))
+
+
+(<span class="kwa">defn</span> make-random-fasta [#^java.io.BufferedOutputStream ostream
+                         line-length id desc n #^bytes gene-bytes
+                         #^doubles gene-cdf #^PRNG my-prng]
+  (<span class="kwc">let</span> [descstr (str <span class="str">&quot;&gt;&quot;</span> id <span class="str">&quot; &quot;</span> desc <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)]
+    (.write ostream (.getBytes descstr)))
+  (<span class="kwc">let</span> [line-length (int line-length)
+        len-with-newline (int (inc line-length))
+        num-full-lines (int (quot n line-length))
+        line-buf (byte-array len-with-newline)]
+    (aset line-buf line-length (byte (int <span class="esc">\n</span>ewline)))
+    (<span class="kwb">dotimes</span> [i num-full-lines]
+      (fill-random! gene-bytes gene-cdf line-length line-buf my-prng)
+      (.write ostream line-buf (int <span class="num">0</span>) len-with-newline))
+    (<span class="kwc">let</span> [remaining-len (int (rem n line-length))]
+      (<span class="kwc">when</span> (not= <span class="num">0</span> remaining-len)
+        (fill-random! gene-bytes gene-cdf remaining-len line-buf my-prng)
+        (.write ostream line-buf <span class="num">0</span> remaining-len)
+        (.write ostream (int <span class="esc">\n</span>ewline)))))
+  my-prng)
+
+
+(<span class="kwa">def</span> alu (str <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>
+              <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>
+              <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>
+              <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>
+              <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>
+              <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>
+              <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>))
+
+(<span class="kwa">def</span> iub [[<span class="esc">\a</span> <span class="num">0.27</span>]
+          [\c <span class="num">0.12</span>]
+          [\g <span class="num">0.12</span>]
+          [<span class="esc">\t</span> <span class="num">0.27</span>]
+          [\B <span class="num">0.02</span>]
+          [\D <span class="num">0.02</span>]
+          [\H <span class="num">0.02</span>]
+          [\K <span class="num">0.02</span>]
+          [\M <span class="num">0.02</span>]
+          [\N <span class="num">0.02</span>]
+          [\R <span class="num">0.02</span>]
+          [\S <span class="num">0.02</span>]
+          [\V <span class="num">0.02</span>]
+          [\W <span class="num">0.02</span>]
+          [\Y <span class="num">0.02</span>]])
+
+(<span class="kwa">def</span> homosapiens [[<span class="esc">\a</span> <span class="num">0.3029549426680</span>]
+                  [\c <span class="num">0.1979883004921</span>]
+                  [\g <span class="num">0.1975473066391</span>]
+                  [<span class="esc">\t</span> <span class="num">0.3015094502008</span>]])
+
+
+(<span class="kwa">defn</span> prefix-sums-helper [x coll]
+  (lazy-seq
+   (when-let [s (seq coll)]
+     (<span class="kwc">let</span> [sum (+ x (<span class="kwd">first</span> s))]
+       (<span class="kwd">cons</span> sum (prefix-sums-helper sum (<span class="kwd">rest</span> s)))))))
+
+
+(<span class="kwa">defn</span> prefix-sums [coll]
+  (prefix-sums-helper <span class="num">0</span> coll))
+
+
+(<span class="kwa">defn</span> make-genelist [pdf-map]
+  (<span class="kwc">let</span> [n (count pdf-map)
+        bytes (byte-array n (<span class="kwd">map</span> (<span class="kwa">fn</span> [pair]
+                                   (byte (int (<span class="kwd">first</span> pair))))
+                                 pdf-map))
+        cdf (double-array n (prefix-sums (<span class="kwd">map</span> #(nth % <span class="num">1</span>) pdf-map)))]
+    [bytes cdf]))
+
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [n (<span class="kwc">if</span> (and (&gt;= (count args) <span class="num">1</span>)
+                   (re-matches #<span class="str">&quot;^\d+$&quot;</span> (nth args <span class="num">0</span>)))
+            (. Integer valueOf (nth args <span class="num">0</span>) <span class="num">10</span>))
+        line-length <span class="num">60</span>
+        ostream (java.io.BufferedOutputStream. System/out)
+        [iub-bytes iub-cdf] (make-genelist iub)
+        [homosapiens-bytes homosapiens-cdf] (make-genelist homosapiens)
+        my-prng (PRNG. (int <span class="num">42</span>))]
+    (make-repeat-fasta ostream line-length <span class="str">&quot;ONE&quot;</span> <span class="str">&quot;Homo sapiens alu&quot;</span> alu (* <span class="num">2</span> n))
+    (<span class="kwc">let</span> [my-prng2
+          (make-random-fasta ostream line-length <span class="str">&quot;TWO&quot;</span> <span class="str">&quot;IUB ambiguity codes&quot;</span>
+                             (* <span class="num">3</span> n) iub-bytes iub-cdf my-prng)]
+      (make-random-fasta ostream line-length <span class="str">&quot;THREE&quot;</span> <span class="str">&quot;Homo sapiens frequency&quot;</span>
+                         (* <span class="num">5</span> n) homosapiens-bytes homosapiens-cdf my-prng2))
+    (.flush ostream)))

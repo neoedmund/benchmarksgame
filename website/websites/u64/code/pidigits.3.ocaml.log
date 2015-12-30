@@ -1,0 +1,18 @@
+
+Mon, 16 Mar 2015 09:47:52 GMT
+
+MAKE:
+mv pidigits.ocaml-3.ocaml pidigits.ocaml-3.ml
+/usr/local/bin/ocamlopt -noassert -unsafe -fno-PIC -nodynlink -inline 100 -I /usr/local/lib/ocaml/gmp gmp.cmxa pidigits.ocaml-3.ml -o pidigits.ocaml-3.ocaml_run
+File "pidigits.ocaml-3.ml", line 1:
+Error: No implementations provided for the following modules:
+         Big_int referenced from pidigits.ocaml-3.cmx
+make: [pidigits.ocaml-3.ocaml_run] Error 2 (ignored)
+rm pidigits.ocaml-3.ml
+0.30s to complete and log all make actions
+
+COMMAND LINE:
+./pidigits.ocaml-3.ocaml_run 2000
+
+MAKE ERROR 
+

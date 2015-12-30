@@ -1,0 +1,160 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgameshootout.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by The Go Authors.</span>
+<span class="com"> * modified by roger peppe</span>
+<span class="com"> * </span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;flag&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;strconv&quot;</span>
+   <span class="str">&quot;sync&quot;</span>
+)
+
+<span class="kwa">const</span> (
+   blue = <span class="kwb">iota</span>
+   red
+   yellow
+   ncol
+)
+
+<span class="kwa">var</span> complement = [...]<span class="kwb">int</span>{
+   red | red&lt;&lt;<span class="num">2</span>: red,
+   red | yellow&lt;&lt;<span class="num">2</span>: blue,
+   red | blue&lt;&lt;<span class="num">2</span>: yellow,
+   yellow | red&lt;&lt;<span class="num">2</span>: blue,
+   yellow | yellow&lt;&lt;<span class="num">2</span>: yellow,
+   yellow | blue&lt;&lt;<span class="num">2</span>: red,
+   blue | red&lt;&lt;<span class="num">2</span>: yellow,
+   blue | yellow&lt;&lt;<span class="num">2</span>: red,
+   blue | blue&lt;&lt;<span class="num">2</span>: blue,
+}
+
+<span class="kwa">var</span> colname = [...]<span class="kwb">string</span>{
+   blue: <span class="str">&quot;blue&quot;</span>,
+   red: <span class="str">&quot;red&quot;</span>,
+   yellow: <span class="str">&quot;yellow&quot;</span>,
+}
+
+<span class="slc">// information about the current state of a creature.</span>
+<span class="kwa">type</span> info <span class="kwa">struct</span> {
+   colour <span class="kwb">int</span> <span class="slc">// creature's current colour.</span>
+   name   <span class="kwb">int</span> <span class="slc">// creature's name.</span>
+}
+
+<span class="slc">// if mate is nil, it indicates there's no creature currently waiting</span>
+<span class="slc">// otherwise the creature's info is stored in info, and</span>
+<span class="slc">// it is waiting to receive its mate's information on the mate channel.</span>
+<span class="kwa">type</span> Place <span class="kwa">struct</span> {
+   sync.Mutex
+   n    <span class="kwb">int</span>         <span class="slc">// current number of encounters.</span>
+   mate <span class="kwa">chan</span>&lt;- info <span class="slc">// creature waiting when non-nil.</span>
+   info info        <span class="slc">// info about creature waiting.</span>
+}
+
+<span class="slc">// result sent by each creature at the end of processing.</span>
+<span class="kwa">type</span> result <span class="kwa">struct</span> {
+   met  <span class="kwb">int</span>
+   same <span class="kwb">int</span>
+}
+
+<span class="kwa">var</span> n = <span class="num">600</span>
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   flag.<span class="kwd">Parse</span>()
+   <span class="kwa">if</span> flag.<span class="kwd">NArg</span>() &gt; <span class="num">0</span> {
+      n, _ = strconv.<span class="kwd">Atoi</span>(flag.<span class="kwd">Arg</span>(<span class="num">0</span>))
+   }
+
+   <span class="kwa">for</span> c0 := <span class="num">0</span>; c0 &lt; ncol; c0++ {
+      <span class="kwa">for</span> c1 := <span class="num">0</span>; c1 &lt; ncol; c1++ {
+         fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">+</span> <span class="ipl">%s</span> <span class="str">-&gt;</span> <span class="ipl">%s</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, colname[c0], colname[c1], colname[complement[c0|c1&lt;&lt;<span class="num">2</span>]])
+      }
+   }
+   fmt.<span class="kwd">Print</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)
+
+   <span class="kwd">pallmall</span>([]<span class="kwb">int</span>{blue, red, yellow})
+   <span class="kwd">pallmall</span>([]<span class="kwb">int</span>{blue, red, yellow, red, yellow, blue, red, yellow, red, blue})
+}
+
+<span class="kwa">func</span> <span class="kwd">pallmall</span>(cols []<span class="kwb">int</span>) {
+
+   <span class="slc">// invariant: meetingplace always contains a value unless a creature</span>
+   <span class="slc">// is currently dealing with it (whereupon it must put it back).</span>
+   meetingplace := <span class="kwb">new</span>(Place)
+   ended := <span class="kwb">make</span>(<span class="kwa">chan</span> result)
+   msg := <span class="str">&quot;&quot;</span>
+   <span class="kwa">for</span> i, col := <span class="kwa">range</span> cols {
+      <span class="kwa">go</span> <span class="kwd">creature</span>(info{col, i}, meetingplace, ended)
+      msg += <span class="str">&quot; &quot;</span> + colname[col]
+   }
+   fmt.<span class="kwd">Println</span>(msg)
+   tot := <span class="num">0</span>
+   <span class="slc">// wait for all results</span>
+   <span class="kwa">for</span> _ = <span class="kwa">range</span> (cols) {
+      result := &lt;-ended
+      tot += result.met
+      fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%v%v</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, result.met, <span class="kwd">spell</span>(result.same, <span class="kwb">true</span>))
+   }
+   fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%v</span><span class="str"></span><span class="esc">\n\n</span><span class="str">&quot;</span>, <span class="kwd">spell</span>(tot, <span class="kwb">true</span>))
+}
+
+<span class="slc">// in this function, variables ending in 0 refer to the local creature,</span>
+<span class="slc">// variables ending in 1 to the creature we've met.</span>
+<span class="kwa">func</span> <span class="kwd">creature</span>(info0 info, m *Place, ended <span class="kwa">chan</span> result) {
+   c0 := <span class="kwb">make</span>(<span class="kwa">chan</span> info)
+   met := <span class="num">0</span>
+   same := <span class="num">0</span>
+   <span class="kwa">for</span> {
+      <span class="kwa">var</span> othername <span class="kwb">int</span>
+      <span class="slc">// get access to rendez data and decide what to do.</span>
+      m.<span class="kwd">Lock</span>()
+      <span class="kwa">switch</span> {
+      <span class="kwa">case</span> m.n &gt;= n:
+         <span class="slc">// if no more meetings left, then send our result data and exit.</span>
+         m.<span class="kwd">Unlock</span>()
+         ended &lt;- result{met, same}
+         <span class="kwa">return</span>
+
+      <span class="kwa">case</span> m.mate == <span class="kwb">nil</span>:
+         <span class="slc">// no creature waiting wait for someone to meet us,</span>
+         <span class="slc">// get their info and send our info in reply.</span>
+         m.info = info0
+         m.mate = c0
+         m.<span class="kwd">Unlock</span>()
+         info1 := &lt;-c0
+         othername = info1.name
+         info0.colour = complement[info0.colour|info1.colour&lt;&lt;<span class="num">2</span>]
+
+      <span class="kwa">default</span>:
+         <span class="slc">// another creature is waiting for us with its info</span>
+         <span class="slc">// increment meeting count,</span>
+         <span class="slc">// send them our info in reply.</span>
+         mate := m.mate
+         m.n++
+         m.mate = <span class="kwb">nil</span>
+         info1 := m.info
+         m.<span class="kwd">Unlock</span>()
+         mate &lt;- info0
+         othername = info1.name
+         info0.colour = complement[info0.colour|info1.colour&lt;&lt;<span class="num">2</span>]
+      }
+      <span class="kwa">if</span> othername == info0.name {
+         same++
+      }
+      met++
+   }
+}
+
+<span class="kwa">var</span> digits = [...]<span class="kwb">string</span>{<span class="str">&quot;zero&quot;</span>, <span class="str">&quot;one&quot;</span>, <span class="str">&quot;two&quot;</span>, <span class="str">&quot;three&quot;</span>, <span class="str">&quot;four&quot;</span>, <span class="str">&quot;five&quot;</span>, <span class="str">&quot;six&quot;</span>, <span class="str">&quot;seven&quot;</span>, <span class="str">&quot;eight&quot;</span>, <span class="str">&quot;nine&quot;</span>}
+
+<span class="kwa">func</span> <span class="kwd">spell</span>(n <span class="kwb">int</span>, required <span class="kwb">bool</span>) <span class="kwb">string</span> {
+   <span class="kwa">if</span> n == <span class="num">0</span> &amp;&amp; !required {
+      <span class="kwa">return</span> <span class="str">&quot;&quot;</span>
+   }
+   <span class="kwa">return</span> <span class="kwd">spell</span>(n/<span class="num">10</span>, <span class="kwb">false</span>) + <span class="str">&quot; &quot;</span> + digits[n%10]
+}

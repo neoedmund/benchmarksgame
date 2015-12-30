@@ -1,0 +1,181 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Rex Kerr</span>
+<span class="com">   based partially on Java solution by Jason Nordwick</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> java.util.regex._
+<span class="kwa">import</span> java.util.concurrent._
+<span class="kwa">import</span> java.util.Arrays.{copyOfRange =&gt; dup}
+
+<span class="slc">// We won't be needing subsequences</span>
+<span class="kwa">trait</span> CS <span class="kwa">extends</span> CharSequence {
+  <span class="kwa">def</span> <span class="kwd">subSequence</span>(i0: Int, i1: Int) = ???
+}
+
+<span class="slc">// A byte-array-backed CharSequence (i.e. like a String)</span>
+<span class="kwa">class</span> <span class="kwd">ByteCS</span>(<span class="kwa">val</span> buf: Array[Byte])(<span class="kwa">var</span> length: Int = buf.length) <span class="kwa">extends</span> CS {
+  <span class="kwa">def</span> <span class="kwd">charAt</span>(i: Int) = <span class="kwd">buf</span>(i).toChar
+  <span class="kwa">def</span> ++=(arr: Array[Byte], i0: Int, i1: Int): ByteCS = {
+    <span class="kwa">val</span> ans = { <span class="kwa">if</span> (length+i1-i0 &lt; buf.length) <span class="kwa">this else new</span> <span class="kwd">ByteCS</span>(<span class="kwd">dup</span>(buf, <span class="num">0</span>, buf.length*<span class="num">2</span>))(length) }
+    <span class="kwa">var</span> i = i0
+    <span class="kwa">var</span> j = ans.length
+    <span class="kwa">while</span> (i &lt; i1) { ans.<span class="kwd">buf</span>(j) = <span class="kwd">arr</span>(i); j += <span class="num">1</span>; i += <span class="num">1</span> }
+    ans.length = j
+    ans
+  }
+  <span class="kwa">override def</span> toString = <span class="kwa">new</span> <span class="kwd">String</span>(buf,<span class="num">0</span>,length)
+}
+
+<span class="slc">// A &quot;string&quot; made from a bunch of byte arrays</span>
+<span class="kwa">class</span> <span class="kwd">MegaCS</span>(<span class="kwa">val</span> bcs: Array[ByteCS]) <span class="kwa">extends</span> CS {
+  <span class="kwa">def</span> <span class="kwd">charAt</span>(i: Int) = {
+    <span class="kwa">var</span> j = i
+    <span class="kwa">var</span> k = <span class="num">0</span>
+    <span class="kwa">while</span> (j &gt;= <span class="kwd">bcs</span>(k).length) { j -= <span class="kwd">bcs</span>(k).length; k += <span class="num">1</span> }
+    <span class="kwd">bcs</span>(k).<span class="kwd">charAt</span>(j)
+  }
+  <span class="kwa">def</span> length = bcs.<span class="kwd">map</span>(_.length).sum
+  <span class="kwa">override def</span> toString = bcs.<span class="kwd">map</span>(_.toString).mkString
+}
+
+<span class="slc">// Represents work to complete</span>
+<span class="kwa">trait</span> Work {
+  <span class="kwa">def</span> run: Seq[Work]
+  <span class="kwa">def</span> pri: Int
+}
+<span class="kwa">object</span> Done <span class="kwa">extends</span> Work {
+  <span class="kwa">def</span> run = <span class="kwd">Seq</span>(Done)
+  <span class="kwa">def</span> pri = Int.MaxValue
+}
+
+<span class="kwa">object</span> regexdna {
+  <span class="kwa">val</span> cores = java.lang.Runtime.getRuntime.availableProcessors
+
+  <span class="slc">// Runs &amp; collects jobs</span>
+  <span class="kwa">def</span> <span class="kwd">doWork</span>(works: Seq[Work]) {
+    <span class="kwa">val</span> pri = <span class="kwa">new</span> <span class="kwd">PriorityBlockingQueue</span>(<span class="num">12</span>, <span class="kwa">new</span> java.util.Comparator[Work] {
+      <span class="kwa">def</span> <span class="kwd">compare</span>(w: Work, v: Work) = w.pri compare v.pri
+    })
+    works.<span class="kwd">foreach</span>(pri put _)
+    <span class="kwa">val</span> complete = <span class="kwa">new</span> <span class="kwd">CountDownLatch</span>(cores)
+    <span class="kwa">for</span> (i &lt;- <span class="num">0</span> until cores) {
+      <span class="kwa">val</span> t = <span class="kwa">new</span> Thread { <span class="kwa">override def</span> <span class="kwd">run</span>() {
+        <span class="kwa">var</span> w: Work = null
+        <span class="kwa">while</span> (w ne Done) {
+          w = pri.take
+          w.run.foreach{ pri.put }
+        }
+        pri.<span class="kwd">put</span>(Done)
+        complete.countDown
+      }}
+      t.start
+    }
+    complete.<span class="kwd">await</span>()
+  }
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args : Array[String]) {
+    <span class="slc">// load data from stdin</span>
+    <span class="kwa">val</span> init = {
+      <span class="kwa">import</span> java.io._
+      <span class="kwa">import</span> java.nio.ByteBuffer
+      <span class="kwa">val in</span> = (<span class="kwa">new</span> <span class="kwd">FileInputStream</span>(FileDescriptor.<span class="kwa">in</span>)).getChannel
+      <span class="kwa">val</span> bb = ByteBuffer.<span class="kwd">allocate</span>(<span class="kwa">in</span>.size.toInt)
+      <span class="kwa">in</span>.<span class="kwd">read</span>(bb)
+      <span class="kwa">new</span> <span class="kwd">ByteCS</span>(bb.array)()
+    }
+
+    <span class="slc">// strip header &amp; newline</span>
+    <span class="kwa">val</span> input = {
+      <span class="kwa">var</span> bcs = <span class="kwa">new</span> <span class="kwd">ByteCS</span>(<span class="kwa">new</span> Array[Byte](init.length))(<span class="num">0</span>)
+      <span class="kwa">val</span> m = Pattern.<span class="kwd">compile</span>(<span class="str">&quot;&gt;.*</span><span class="esc">\n</span><span class="str">|</span><span class="esc">\n</span><span class="str">&quot;</span>).<span class="kwd">matcher</span>(init)
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwa">while</span> (m.find) {
+        bcs = (bcs ++= (init.buf, i, m.start))
+        i = m.end
+      }
+      bcs ++= (init.buf, i, init.length)
+    }
+    <span class="kwa">val</span> inc = math.<span class="kwd">max</span>(<span class="num">1</span>,(input.length+<span class="num">15</span>)/<span class="num">16</span>)
+
+    <span class="slc">// patterns to count</span>
+    <span class="kwa">val</span> patterns  = <span class="kwd">Seq</span>(
+      <span class="str">&quot;agggtaaa|tttaccct&quot;</span> ,
+      <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>,
+      <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>,
+      <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>,
+      <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>,
+      <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>,
+      <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>,
+      <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>,
+      <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>)
+
+
+    <span class="slc">// run pattern-counting tasks in parallel</span>
+    <span class="kwa">val</span> countResults = Array.<span class="kwd">fill</span>(patterns.length)(<span class="str">&quot;&quot;</span>)
+    <span class="kwd">doWork</span>(
+      <span class="kwa">for</span> ((p,i) &lt;- patterns.zipWithIndex) <span class="kwa">yield</span> {
+        <span class="kwa">new</span> Work {
+          <span class="kwa">private val</span> m = Pattern.<span class="kwd">compile</span>(p).<span class="kwd">matcher</span>(input)
+          <span class="kwa">private var</span> stop = inc
+          <span class="kwa">private var</span> n = <span class="num">0</span>
+          <span class="kwa">def</span> pri = stop + i
+          <span class="kwa">def</span> run = {
+            <span class="kwa">while</span> (m.find &amp;&amp; m.start &lt; stop) n += <span class="num">1</span>
+            stop += inc
+            <span class="kwa">if</span> (m.hitEnd) {
+              <span class="kwd">countResults</span>(i) = p + <span class="str">&quot; &quot;</span> + n
+              <span class="kwd">Seq</span>(Done)
+            }
+            <span class="kwa">else</span> {
+             n += <span class="num">1</span>
+             <span class="kwd">Seq</span>(<span class="kwa">this</span>)
+            }
+          }
+        }
+      }
+    )
+    countResults.<span class="kwd">foreach</span>(println)
+
+    <span class="slc">// replace IUB</span>
+    <span class="kwa">val</span> iub = <span class="str">&quot;Bcgt Dagt Hact Kgt Mac Nacgt Rag Scg Vacg Wat Yct&quot;</span>.<span class="kwd">split</span>(<span class="str">' '</span>).map{ s =&gt;
+      Pattern.<span class="kwd">compile</span>(s.<span class="kwd">take</span>(<span class="num">1</span>)) -&gt; s.<span class="kwd">drop</span>(<span class="num">1</span>).<span class="kwd">mkString</span>(<span class="str">&quot;(&quot;</span>,<span class="str">&quot;|&quot;</span>,<span class="str">&quot;)&quot;</span>).getBytes
+    }.toArray
+
+    <span class="slc">// run replacement tasks in parallel (in chunks)</span>
+    <span class="kwa">val</span> chunks = Array.<span class="kwd">tabulate</span>(<span class="num">16</span>){ i =&gt;
+      <span class="kwa">val</span> b = <span class="kwa">new</span> <span class="kwd">ByteCS</span>(<span class="kwa">new</span> Array[Byte]((inc*<span class="num">3</span>)/<span class="num">2</span>))(<span class="num">0</span>)
+      b ++= (input.buf, inc*i, math.<span class="kwd">min</span>(inc*(i+<span class="num">1</span>), input.length))
+    }
+    <span class="kwa">val</span> replaced = <span class="kwa">new</span> <span class="kwd">MegaCS</span>(chunks)
+    <span class="kwa">val</span> alts = <span class="kwa">new</span> <span class="kwd">MegaCS</span>(Array.<span class="kwd">tabulate</span>(<span class="num">16</span>){ i =&gt; <span class="kwa">new</span> <span class="kwd">ByteCS</span>(<span class="kwa">new</span> Array[Byte]((inc*<span class="num">3</span>)/<span class="num">2</span>))(<span class="num">0</span>) })
+    <span class="kwa">class</span> <span class="kwd">Chunk</span>(<span class="kwa">var</span> j: Int) <span class="kwa">extends</span> Work {
+      <span class="kwa">private var</span> i = <span class="num">0</span>
+      <span class="kwa">def</span> pri = (cores*j+i)*inc
+      <span class="kwa">def</span> run = {
+        <span class="kwa">var</span> ans = replaced.<span class="kwd">bcs</span>(j)
+        <span class="kwa">var</span> alt = alts.<span class="kwd">bcs</span>(j)
+        alt.length = <span class="num">0</span>
+        <span class="kwa">val</span> (p,b) = <span class="kwd">iub</span>(i)
+        <span class="kwa">val</span> m = p.<span class="kwd">matcher</span>(ans)
+        <span class="kwa">var</span> k = <span class="num">0</span>
+        <span class="kwa">while</span> (m.find) {
+          alt = (alt ++= (ans.buf, k, m.start))
+          alt = (alt ++= (b, <span class="num">0</span>, b.length))
+          k = m.end
+        }
+        alt = (alt ++= (ans.buf, k, ans.length))
+        replaced.<span class="kwd">bcs</span>(j) = alt
+        alts.<span class="kwd">bcs</span>(j) = ans
+        <span class="kwa">if</span> (i+<span class="num">1</span> &gt;= iub.length) <span class="kwd">List</span>(Done)
+        <span class="kwa">else if</span> (i != <span class="num">0</span> || j+<span class="num">1</span> &gt;= chunks.length) { i += <span class="num">1</span>; <span class="kwd">List</span>(<span class="kwa">this</span>) }
+        <span class="kwa">else</span> { i +=<span class="num">1</span>; <span class="kwd">List</span>(<span class="kwa">this</span>, <span class="kwa">new</span> <span class="kwd">Chunk</span>(j+<span class="num">1</span>)) }
+      }
+    }
+    <span class="kwd">doWork</span>(<span class="kwd">List</span>(<span class="kwa">new</span> <span class="kwd">Chunk</span>(<span class="num">0</span>)))
+
+    <span class="slc">// print final results</span>
+    <span class="kwd">printf</span>( <span class="str">&quot;</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">%d</span><span class="esc">\n</span><span class="str">&quot;</span>, init.length, input.length, replaced.length )
+  }
+}

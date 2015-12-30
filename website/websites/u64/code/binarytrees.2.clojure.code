@@ -1,0 +1,73 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; Adapted from the Java -server version</span>
+<span class="slc">;; contributed by Marko Kocic</span>
+<span class="slc">;; modified by Kenneth Jonsson, restructured to allow usage of 'pmap'</span>
+<span class="slc">;; modified by Andy Fingerhut to use faster primitive math ops, and</span>
+<span class="slc">;; deftype instead of defrecord for smaller tree nodes.</span>
+<span class="slc">;; modified by Rich Hickey for Clojure 1.3</span>
+<span class="slc">;; modified promise/delivery improvement by Stuart Halloway</span>
+<span class="slc">;; small hints by David Nolen and Alex Miller</span>
+                                        <span class="slc">;</span>
+(ns binarytrees
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* true)
+
+(<span class="kwa">def</span> ^:const ^long min-depth <span class="num">4</span>)
+
+(deftype TreeNode [left right ^long item])
+
+(<span class="kwa">defn</span> make-tree [^long item ^long depth]
+  (<span class="kwc">if</span> (zero? depth)
+    (TreeNode. nil nil item)
+    (<span class="kwc">let</span> [i2 (* <span class="num">2</span> item)
+          ddec (dec depth)]
+      (TreeNode. (make-tree (dec i2) ddec) (make-tree i2 ddec) item))))
+
+(<span class="kwa">defn</span> item-check ^long [^TreeNode node]
+  (<span class="kwc">if</span> (nil? (.left node))
+    (.item node)
+    (- (+ (.item node)
+          (item-check (.left node)))
+       (item-check (.right node)))))
+
+(<span class="kwa">defn</span> iterate-trees [^long mx ^long mn ^long d]
+  (<span class="kwc">let</span> [iterations (bit-shift-left <span class="num">1</span> (long (+ mx mn (- d))))]
+    (format <span class="str">&quot;%d</span><span class="esc">\t</span> <span class="str">trees of depth %d</span><span class="esc">\t</span> <span class="str">check: %d&quot;</span>
+            (* <span class="num">2</span> iterations)
+            d
+            (<span class="kwb">loop</span> [result <span class="num">0</span>
+         i <span class="num">1</span>]
+    (<span class="kwc">if</span> (= i (inc iterations))
+      result
+      (<span class="kwb">recur</span> (+ result
+                (item-check (make-tree i d))
+                (item-check (make-tree (- i) d)))
+             (inc i)))))))
+
+(<span class="kwa">defn</span> main [^long max-depth]
+  (<span class="kwc">let</span> [stretch-depth (inc max-depth)]
+    (<span class="kwc">let</span> [tree (make-tree <span class="num">0</span> stretch-depth)
+          <span class="kwc">check</span> (item-check tree)]
+      (println (format <span class="str">&quot;stretch tree of depth %d</span><span class="esc">\t</span> <span class="str">check: %d&quot;</span> stretch-depth <span class="kwc">check</span>)))
+    (<span class="kwc">let</span> [agents (repeatedly (.availableProcessors (Runtime/getRuntime)) #(agent []))
+          long-lived-tree (make-tree <span class="num">0</span> max-depth)]
+      (<span class="kwb">loop</span> [depth min-depth
+             [a &amp; more] (<span class="kwd">cycle</span> agents)
+             results []]
+        (<span class="kwc">if</span> (&gt; depth stretch-depth)
+          (<span class="kwb">doseq</span> [r results] (println &#64;r))
+          (<span class="kwc">let</span> [result (promise)]
+            (send a (<span class="kwa">fn</span> [_]
+                      (deliver result (iterate-trees max-depth min-depth depth))))
+            (<span class="kwb">recur</span> (+ <span class="num">2</span> depth) more (conj results result)))))
+        (println (format <span class="str">&quot;long lived tree of depth %d</span><span class="esc">\t</span> <span class="str">check: %d&quot;</span> max-depth (item-check long-lived-tree))))))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [n (<span class="kwc">if</span> (<span class="kwd">first</span> args) (Long/parseLong (<span class="kwd">first</span> args)) <span class="num">0</span>)
+        max-depth (<span class="kwc">if</span> (&gt; (+ min-depth <span class="num">2</span>) n) (+ min-depth <span class="num">2</span>) n)]
+    (main max-depth)
+    (shutdown-agents)))

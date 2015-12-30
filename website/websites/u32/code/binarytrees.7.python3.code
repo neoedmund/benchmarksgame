@@ -1,0 +1,68 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by Antoine Pitrou</span>
+<span class="slc"># modified by Dominique Wahli and Daniel Nanz</span>
+<span class="slc"># modified by Joerg Baumann</span>
+
+<span class="kwa">import</span> sys
+<span class="kwa">import</span> multiprocessing <span class="kwa">as</span> mp
+<span class="kwa">import</span> gc
+
+<span class="kwa">def</span> <span class="kwd">make_tree</span>(i, d):
+    <span class="kwa">if</span> d &gt; <span class="num">0</span>:
+        d -= <span class="num">1</span>
+        <span class="kwa">return</span> (i, <span class="kwd">make_tree</span>(i, d), <span class="kwd">make_tree</span>(i + <span class="num">1</span>, d))
+    <span class="kwa">return</span> (i, <span class="kwa">None</span>, <span class="kwa">None</span>)
+
+<span class="kwa">def</span> <span class="kwd">check_tree</span>(node):
+    (i, l, r) = node
+    <span class="kwa">if</span> l <span class="kwa">is None</span>:
+        <span class="kwa">return</span> i
+    <span class="kwa">else</span>:
+        <span class="kwa">return</span> i + <span class="kwd">check_tree</span>(l) - <span class="kwd">check_tree</span>(r)
+
+<span class="kwa">def</span> <span class="kwd">make_check</span>(itde, make=make_tree, check=check_tree):
+    i, d = itde
+    <span class="kwa">return</span> <span class="kwd">check</span>(<span class="kwd">make</span>(i, d))
+
+<span class="kwa">def</span> <span class="kwd">get_argchunks</span>(i, d, chunksize=<span class="num">5000</span>):
+    <span class="kwa">assert</span> chunksize % <span class="num">2</span> == <span class="num">0</span>
+    chunk = []
+    <span class="kwa">for</span> k <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">1</span>, i + <span class="num">1</span>):
+        chunk.<span class="kwd">extend</span>([(k, d), (-k, d)])
+        <span class="kwa">if</span> <span class="kwb">len</span>(chunk) == chunksize:
+            <span class="kwa">yield</span> chunk
+            chunk = []
+    <span class="kwa">if</span> <span class="kwb">len</span>(chunk) &gt; <span class="num">0</span>:
+        <span class="kwa">yield</span> chunk
+
+<span class="kwa">def</span> <span class="kwd">main</span>(n, min_depth=<span class="num">4</span>):
+    max_depth = <span class="kwb">max</span>(min_depth + <span class="num">2</span>, n)
+    stretch_depth = max_depth + <span class="num">1</span>
+    <span class="kwa">if</span> mp.<span class="kwd">cpu_count</span>() &gt; <span class="num">1</span>:
+        pool = mp.<span class="kwd">Pool</span>()
+        chunkmap = pool.<span class="kwb">map</span>
+    <span class="kwa">else</span>:
+        chunkmap = <span class="kwb">map</span>
+
+    <span class="kwa">print</span>(<span class="str">'stretch tree of depth {0}</span><span class="esc">\t</span> <span class="str">check: {1}'</span>.<span class="kwd">format</span>(
+          stretch_depth, <span class="kwd">make_check</span>((<span class="num">0</span>, stretch_depth))))
+
+    long_lived_tree = <span class="kwd">make_tree</span>(<span class="num">0</span>, max_depth)
+
+    mmd = max_depth + min_depth
+    <span class="kwa">for</span> d <span class="kwa">in</span> <span class="kwb">range</span>(min_depth, stretch_depth, <span class="num">2</span>):
+        i = <span class="num">2</span> ** (mmd - d)
+        cs = <span class="num">0</span>
+        <span class="kwa">for</span> argchunk <span class="kwa">in</span> <span class="kwd">get_argchunks</span>(i,d):
+            cs += <span class="kwb">sum</span>(<span class="kwd">chunkmap</span>(make_check, argchunk))
+        <span class="kwa">print</span>(<span class="str">'{0}</span><span class="esc">\t</span> <span class="str">trees of depth {1}</span><span class="esc">\t</span> <span class="str">check: {2}'</span>.<span class="kwd">format</span>(i * <span class="num">2</span>, d, cs))
+
+    <span class="kwa">print</span>(<span class="str">'long lived tree of depth {0}</span><span class="esc">\t</span> <span class="str">check: {1}'</span>.<span class="kwd">format</span>(
+          max_depth, <span class="kwd">check_tree</span>(long_lived_tree)))
+
+<span class="kwa">if</span> __name__ == <span class="str">'__main__'</span>:
+    gc.<span class="kwd">disable</span>()
+    <span class="kwd">main</span>(<span class="kwb">int</span>(sys.argv[<span class="num">1</span>]))
+    gc.<span class="kwd">enable</span>()

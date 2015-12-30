@@ -1,0 +1,887 @@
+<span class="kwa">program</span> meteorshower;
+
+<span class="com">{ The Computer Language Benchmarks Game</span>
+<span class="com">  http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">  contributed by Daniel Mantione</span>
+<span class="com">  modified by Vincent Snijders</span>
+<span class="com">}</span>
+
+
+<span class="kwa">uses</span> dos;
+
+<span class="kwa">const</span> N_COL = <span class="num">5</span>;
+      N_ROW = <span class="num">10</span>;
+      N_CELL = N_COL * N_ROW;
+      N_PIECE_TYPE = <span class="num">10</span>;
+
+      N_ELEM=<span class="num">5</span>;
+      N_ORIENT=<span class="num">12</span>;
+      ALL_PIECE_MASK=[<span class="num">0</span>..N_PIECE_TYPE-<span class="num">1</span>];
+      SKIP_PIECE=<span class="num">5</span>;
+
+      no_piece=<span class="kwd">high</span>(<span class="kwb">byte</span>);
+
+      L_EDGE_MASK=[<span class="num">0</span>,<span class="num">5</span>,<span class="num">10</span>,<span class="num">15</span>,<span class="num">20</span>,<span class="num">25</span>,<span class="num">30</span>];
+      R_EDGE_MASK=[<span class="num">4</span>,<span class="num">9</span>,<span class="num">14</span>,<span class="num">19</span>,<span class="num">24</span>,<span class="num">29</span>];
+      TOP_ROW    = [<span class="num">0</span>*N_COL.<span class="num">.1</span>*N_COL-<span class="num">1</span>];
+      SECOND_ROW = [<span class="num">1</span>*N_COL.<span class="num">.2</span>*N_COL-<span class="num">1</span>];
+      THIRD_ROW  = [<span class="num">2</span>*N_COL.<span class="num">.3</span>*N_COL-<span class="num">1</span>];
+      FOURTH_ROW = [<span class="num">3</span>*N_COL.<span class="num">.4</span>*N_COL-<span class="num">1</span>];
+      FIFTH_ROW  = [<span class="num">4</span>*N_COL.<span class="num">.5</span>*N_COL-<span class="num">1</span>];
+      SIXTH_ROW  = [<span class="num">5</span>*N_COL.<span class="num">.6</span>*N_COL-<span class="num">1</span>];
+      LAST_ROW   = SIXTH_ROW;
+      ROW_0_MASK=[<span class="num">0</span>..N_COL-<span class="num">1</span>,<span class="num">10</span>..N_COL+<span class="num">10</span>-<span class="num">1</span>,<span class="num">20</span>..N_COL+<span class="num">20</span>-<span class="num">1</span>,<span class="num">30</span>,<span class="num">31</span>];
+      ROW_1_MASK=[<span class="num">5</span>..N_COL+<span class="num">5</span>-<span class="num">1</span>,<span class="num">15</span>..N_COL+<span class="num">15</span>-<span class="num">1</span>,<span class="num">25</span>..N_COL+<span class="num">25</span>-<span class="num">1</span>];
+      BOARD_MASK=[<span class="num">0</span>.<span class="num">.29</span>];
+
+
+<span class="kwa">type</span>  bitvec=<span class="kwa">set of</span> <span class="num">0</span>.<span class="num">.31</span>;
+      dimensions=(dimx,dimy);
+      parity=(even,odd);
+      goodbad=(good,bad,always_bad);
+      piecenr=<span class="kwa">type</span> <span class="num">0</span>..N_PIECE_TYPE-<span class="num">1</span>;
+      orientation=<span class="kwa">type</span> <span class="num">0</span>..N_ORIENT-<span class="num">1</span>;
+
+      piece_placement=<span class="kwa">record</span>
+        vec:bitvec;
+        ipiece:piecenr;
+        row:<span class="kwb">byte</span>;
+      <span class="kwa">end</span>;
+
+<span class="kwa">type</span> Soln=<span class="kwa">object</span>
+       m_pieces:<span class="kwa">array</span>[piecenr] <span class="kwa">of</span> piece_placement;
+       m_npiece:<span class="kwb">byte</span>;
+       m_cells:<span class="kwa">array</span>[<span class="num">0</span>..N_ROW-<span class="num">1</span>,<span class="num">0</span>..N_COL-<span class="num">1</span>] <span class="kwa">of</span> piecenr;
+       m_synched:<span class="kwb">boolean</span>;
+       <span class="kwa">constructor</span> <span class="kwd">init</span>(fillval:<span class="kwb">byte</span>);
+       <span class="kwa">procedure</span> setCells;
+       <span class="kwa">function</span> <span class="kwd">lessThan</span>(<span class="kwa">var</span> r:Soln):<span class="kwb">boolean</span>;
+       <span class="kwa">procedure</span> <span class="kwd">write</span>(<span class="kwa">var</span> f:<span class="kwb">text</span>);
+       <span class="kwa">procedure</span> <span class="kwd">fill</span>(value:<span class="kwb">byte</span>);
+       <span class="kwa">procedure</span> <span class="kwd">spin</span>(<span class="kwa">var</span> spun:Soln);
+
+       <span class="kwa">function</span> isEmpty:<span class="kwb">boolean</span>;
+       <span class="kwa">procedure</span> popPiece;<span class="kwa">inline</span>;
+       <span class="kwa">procedure</span> <span class="kwd">pushPiece</span>(Avec:bitvec;AiPiece:piecenr;Arow:<span class="kwb">byte</span>);
+     <span class="kwa">end</span>;
+
+     instance=<span class="kwa">record</span>
+       m_allowed:<span class="kwa">set of</span> <span class="kwb">byte</span>;
+       m_vec:bitvec;
+       m_offset:<span class="kwb">longint</span>;
+     <span class="kwa">end</span>;
+
+     TPts=<span class="kwa">array</span>[<span class="num">0</span>..N_ELEM-<span class="num">1</span>,dimensions] <span class="kwa">of</span> shortint;
+     piece=<span class="kwa">object</span>
+       m_instance:<span class="kwa">array</span>[parity] <span class="kwa">of</span> instance;
+       <span class="kwa">procedure</span> <span class="kwd">set_ok_positions</span>(isOdd:parity;w,h:<span class="kwb">longint</span>);
+     <span class="kwa">end</span>;
+
+     OkPieces=<span class="kwa">record</span>
+       nPieces:<span class="kwa">array</span>[piecenr] <span class="kwa">of</span> <span class="kwb">byte</span>;
+       pieceVec:<span class="kwa">array</span>[piecenr,orientation] <span class="kwa">of</span> bitvec;
+     <span class="kwa">end</span>;
+
+
+<span class="kwa">type</span>  fixed=(OPEN, CLOSED);
+      islandinfo=<span class="kwa">record</span>
+        has_bad:<span class="kwa">array</span>[fixed,parity] <span class="kwa">of</span> bitvec;
+        is_known:<span class="kwa">array</span>[fixed,parity] <span class="kwa">of</span> bitvec;
+        alwaysBad:<span class="kwa">array</span>[parity] <span class="kwa">of</span> bitvec;
+      <span class="kwa">end</span>;
+
+<span class="kwa">const</span> MAX_ISLAND_OFFSET=<span class="num">1024</span>;
+
+<span class="kwa">type</span> cacherec=<span class="kwa">record</span>
+       krow,kpiecevec:<span class="kwb">word</span>;
+       kboardvec:bitvec;
+     <span class="kwa">end</span>;
+
+<span class="kwa">var</span> s_basePiece:<span class="kwa">array</span>[piecenr,orientation] <span class="kwa">of</span> piece;
+    g_okPieces:<span class="kwa">array</span>[<span class="num">0</span>..N_ROW-<span class="num">1</span>,<span class="num">0</span>..N_COL-<span class="num">1</span>] <span class="kwa">of</span> OkPieces;
+    g_islandInfo:<span class="kwa">array</span>[<span class="num">0</span>..MAX_ISLAND_OFFSET-<span class="num">1</span>] <span class="kwa">of</span> islandinfo;
+    g_nIslandInfo:<span class="kwb">cardinal</span>=<span class="num">0</span>;
+    cache:<span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.1024</span>*<span class="num">128</span>-<span class="num">1</span>] <span class="kwa">of</span> cacherec;
+
+    m_curSoln,m_minSoln,m_maxSoln:Soln;
+    m_nSoln:<span class="kwb">cardinal</span>;
+
+<span class="kwa">const</span> basevecs:<span class="kwa">array</span> [<span class="num">0</span>.<span class="num">.9</span>] <span class="kwa">of</span> bitvec= (
+        [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">8</span>],
+        [<span class="num">0</span>,<span class="num">1</span>,<span class="num">3</span>,<span class="num">6</span>,<span class="num">7</span>],
+        [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">7</span>,<span class="num">12</span>],
+        [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">5</span>,<span class="num">10</span>],
+        [<span class="num">0</span>,<span class="num">2</span>,<span class="num">5</span>,<span class="num">6</span>,<span class="num">10</span>],
+        [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">6</span>,<span class="num">7</span>],
+        [<span class="num">0</span>,<span class="num">1</span>,<span class="num">5</span>,<span class="num">10</span>,<span class="num">15</span>],
+        [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">5</span>,<span class="num">7</span>],
+        [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">7</span>,<span class="num">8</span>],
+        [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">7</span>]
+      );
+
+
+<span class="kwa">constructor</span> soln.<span class="kwd">init</span>(fillval:<span class="kwb">byte</span>);
+
+<span class="kwa">begin</span>
+  <span class="kwd">fill</span>(fillval);
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> Soln.<span class="kwd">fill</span>(value:<span class="kwb">byte</span>);
+
+<span class="kwa">begin</span>
+   m_synched:=<span class="kwb">false</span>;
+   <span class="kwd">fillchar</span>(m_cells,N_CELL,value);
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> soln.isEmpty:<span class="kwb">boolean</span>;
+
+<span class="kwa">begin</span>
+  isempty:=m_nPiece=<span class="num">0</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> soln.<span class="kwd">pushPiece</span>(Avec:bitvec;AiPiece:piecenr;Arow:<span class="kwb">byte</span>);
+
+<span class="kwa">begin</span>
+  <span class="kwc">with</span> m_pieces[m_npiece] <span class="kwc">do</span>
+    <span class="kwa">begin</span>
+      vec:=Avec;
+      iPiece:=AiPiece;
+      row:=Arow;
+    <span class="kwa">end</span>;
+  <span class="kwd">inc</span>(m_npiece);
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> soln.popPiece;<span class="kwa">inline</span>;
+
+<span class="kwa">begin</span>
+  <span class="kwd">dec</span>(m_nPiece);
+  m_synched := <span class="kwb">false</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> soln.<span class="kwd">write</span>(<span class="kwa">var</span> f:<span class="kwb">text</span>);
+
+<span class="kwa">var</span> x,y:<span class="kwb">byte</span>;
+
+<span class="kwa">begin</span>
+  <span class="kwc">for</span> y:=<span class="num">0</span> <span class="kwc">to</span> N_ROW-<span class="num">1</span> <span class="kwc">do</span>
+    <span class="kwa">begin</span>
+      <span class="com">{indent every second line}</span>
+      <span class="kwc">if</span> y <span class="kwa">mod</span> <span class="num">2</span>=<span class="num">1</span> <span class="kwc">then</span>
+        system.<span class="kwd">write</span>(f,<span class="str">' '</span>);
+      <span class="kwc">for</span> x:=<span class="num">0</span> <span class="kwc">to</span> N_COL-<span class="num">1</span> <span class="kwc">do</span>
+        <span class="kwc">if</span> m_cells[y,x]=no_piece <span class="kwc">then</span>
+          system.<span class="kwd">write</span>(f,<span class="str">'. '</span>)
+        <span class="kwc">else</span>
+          system.<span class="kwd">write</span>(f,<span class="kwb">char</span>(<span class="kwb">byte</span>(<span class="str">'0'</span>)+m_cells[y,x]),<span class="str">' '</span>);
+      <span class="kwd">writeln</span>(f);
+    <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+
+<span class="kwa">procedure</span> Soln.setCells;
+
+<span class="kwa">var</span> c,i,x,y,newcells:<span class="kwb">byte</span>;
+
+<span class="kwa">begin</span>
+   <span class="kwc">if</span> m_synched <span class="kwc">then</span>
+     exit;
+   <span class="kwc">for</span> i:=<span class="num">1</span> <span class="kwc">to</span> m_nPiece <span class="kwc">do</span>
+     <span class="kwc">with</span> m_pieces[i-<span class="num">1</span>] <span class="kwc">do</span>
+       <span class="kwa">begin</span>
+         newcells:=<span class="num">0</span>;
+         c:=<span class="num">0</span>;
+         <span class="kwc">for</span> y:=row <span class="kwc">to</span> N_ROW <span class="kwc">do</span>
+           <span class="kwa">begin</span>
+             <span class="kwc">for</span> x:=<span class="num">0</span> <span class="kwc">to</span> N_COL-<span class="num">1</span> <span class="kwc">do</span>
+               <span class="kwa">begin</span>
+                 <span class="kwc">if</span> c <span class="kwa">in</span> vec <span class="kwc">then</span>
+                   <span class="kwa">begin</span>
+                     m_cells[y,x]:=ipiece;
+                     <span class="kwd">inc</span>(NewCells);
+                   <span class="kwa">end</span>;
+                 <span class="kwd">inc</span>(c);
+               <span class="kwa">end</span>;
+             <span class="kwc">if</span> NewCells=N_ELEM <span class="kwc">then</span>
+               break;
+           <span class="kwa">end</span>;
+       <span class="kwa">end</span>;
+   m_synched:=<span class="kwb">true</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> Soln.<span class="kwd">lessThan</span>(<span class="kwa">var</span> r:Soln):<span class="kwb">boolean</span>;
+
+<span class="kwa">var</span> x,y,lval,rval:<span class="kwb">byte</span>;
+
+<span class="kwa">begin</span>
+   <span class="kwc">if</span> m_pieces[<span class="num">0</span>].iPiece&lt;&gt;r.m_pieces[<span class="num">0</span>].iPiece <span class="kwc">then</span>
+     <span class="kwa">begin</span>
+       lessthan:=m_pieces[<span class="num">0</span>].iPiece &lt; r.m_pieces[<span class="num">0</span>].iPiece;
+       exit;
+     <span class="kwa">end</span>;
+
+   <span class="kwd">setCells</span>();
+   r.<span class="kwd">setCells</span>();
+
+   <span class="kwc">for</span> y:=<span class="num">0</span> <span class="kwc">to</span> N_ROW-<span class="num">1</span> <span class="kwc">do</span>
+      <span class="kwc">for</span> x:=<span class="num">0</span> <span class="kwc">to</span> N_COL-<span class="num">1</span> <span class="kwc">do</span>
+        <span class="kwa">begin</span>
+         lval:=m_cells[y,x];
+         rval:=r.m_cells[y,x];
+
+         <span class="kwc">if</span> lval &lt;&gt; rval <span class="kwc">then</span>
+           <span class="kwa">begin</span>
+             lessthan:=lval&lt;rval;
+             exit;
+           <span class="kwa">end</span>;
+        <span class="kwa">end</span>;
+
+   lessthan:=<span class="kwb">false</span>; <span class="com">{solutions are equal}</span>
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> Soln.<span class="kwd">spin</span>(<span class="kwa">var</span> spun:Soln);
+
+<span class="kwa">var</span> x,y:<span class="kwb">byte</span>;
+
+<span class="kwa">begin</span>
+   setCells;
+   <span class="com">{swap cells}</span>
+   <span class="kwc">for</span> y:=<span class="num">0</span> <span class="kwc">to</span> N_ROW-<span class="num">1</span> <span class="kwc">do</span>
+      <span class="kwc">for</span> x:=<span class="num">0</span> <span class="kwc">to</span> N_COL-<span class="num">1</span> <span class="kwc">do</span>
+        spun.m_cells[y,x]:=m_cells[N_ROW-y-<span class="num">1</span>,N_COL-x-<span class="num">1</span>];
+
+   <span class="com">{swap first and last pieces (the rest aren't used)}</span>
+   spun.m_pieces[<span class="num">0</span>].iPiece:=m_pieces[N_PIECE_TYPE-<span class="num">1</span>].iPiece;
+   spun.m_synched:=<span class="kwb">true</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">floor</span>(top,bot:<span class="kwb">longint</span>):<span class="kwb">longint</span>;
+
+<span class="kwa">begin</span>
+   floor:=top <span class="kwa">div</span> bot;
+   <span class="com">{negative numbers should be rounded down, not towards zero}</span>
+   <span class="kwc">if</span> (floor*bot&lt;&gt;top) <span class="kwa">and</span> ((top&lt;<span class="num">0</span>) <span class="kwa">xor</span> (bot&lt;=<span class="num">0</span>)) <span class="kwc">then</span>
+      <span class="kwd">dec</span>(floor);
+<span class="kwa">end</span>;
+
+<span class="kwa">const</span> s_firstOne:<span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.31</span>] <span class="kwa">of</span> <span class="kwb">byte</span>=(
+   <span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,
+   <span class="num">3</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,
+
+   <span class="num">4</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,
+   <span class="num">3</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>,   <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">0</span>
+);
+
+<span class="kwa">function</span> <span class="kwd">first_set_bit</span>(v:bitvec):<span class="kwb">cardinal</span>;<span class="kwa">inline</span>;
+
+<span class="com">{$ifdef endian_little}</span>
+<span class="kwa">const</span> l=<span class="num">0</span>;
+      h=<span class="num">1</span>;
+<span class="com">{$else}</span>
+<span class="kwa">const</span> l=<span class="num">1</span>;
+      h=<span class="num">0</span>;
+<span class="com">{$endif}</span>
+
+<span class="kwa">var</span> d:<span class="kwb">double</span>;
+    u:<span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.1</span>] <span class="kwa">of</span> bitvec <span class="kwa">absolute</span> d;
+
+<span class="kwa">begin</span>
+  first_set_bit:=<span class="num">0</span>;
+  <span class="kwc">if</span> v&lt;&gt;[] <span class="kwc">then</span>
+    <span class="kwa">begin</span>
+      u[l]:=v;
+      u[h]:=[<span class="num">30</span>,<span class="num">25</span>,<span class="num">24</span>,<span class="num">21</span>,<span class="num">20</span>];
+      d:=d-<span class="num">4503599627370496</span>;
+      first_set_bit:=<span class="kwb">cardinal</span>(u[h]) <span class="kwa">shr</span> <span class="num">20</span>-<span class="num">$3ff</span>;
+    <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">count_ones</span>(v:bitvec):<span class="kwb">cardinal</span>;<span class="kwa">inline</span>;
+
+<span class="kwa">begin</span>
+   count_ones:=<span class="num">0</span>;
+   <span class="kwc">while</span> v&lt;&gt;[] <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       <span class="kwd">inc</span>(count_ones);
+       <span class="kwb">cardinal</span>(v):=<span class="kwb">cardinal</span>(v) <span class="kwa">and</span> (<span class="kwb">cardinal</span>(v)-<span class="num">1</span>);
+     <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">setCoordList</span>(vec:bitvec;<span class="kwa">var</span> pts:Tpts);
+
+<span class="kwa">var</span> iPt,n:<span class="kwb">longint</span>;
+    x,y:<span class="kwb">byte</span>;
+
+<span class="kwa">begin</span>
+   iPt:=<span class="num">0</span>;
+   n:=<span class="num">0</span>;
+   <span class="kwc">for</span> y:=<span class="num">0</span> <span class="kwc">to</span> N_ROW-<span class="num">1</span> <span class="kwc">do</span>
+     <span class="kwc">for</span> x:=<span class="num">0</span> <span class="kwc">to</span> N_COL-<span class="num">1</span> <span class="kwc">do</span>
+       <span class="kwa">begin</span>
+         <span class="kwc">if</span> n <span class="kwa">in</span> vec <span class="kwc">then</span>
+           <span class="kwa">begin</span>
+             pts[iPt,dimx]:=x;
+             pts[iPt,dimy]:=y;
+             <span class="kwd">inc</span>(iPt);
+           <span class="kwa">end</span>;
+         <span class="kwd">inc</span>(n);
+         <span class="kwc">if</span> n=<span class="num">32</span> <span class="kwc">then</span>
+           exit;
+       <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">toBitVector</span>(<span class="kwa">const</span> pts:Tpts):bitvec;
+
+<span class="kwa">var</span> x,y,iPt:<span class="kwb">byte</span>;
+
+<span class="kwa">begin</span>
+   tobitvector:=[];
+   <span class="kwc">for</span> iPt:=<span class="kwd">low</span>(pts) <span class="kwc">to</span> <span class="kwd">high</span>(pts) <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       x:=pts[iPt,dimx];
+       y:=pts[iPt,dimy];
+       <span class="kwd">include</span>(tobitvector,y*N_COL+x);
+     <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">shiftUpLines</span>(<span class="kwa">var</span> pts:Tpts;shift:<span class="kwb">longint</span>);
+
+<span class="kwa">var</span> iPt:<span class="kwb">byte</span>;
+
+<span class="kwa">begin</span>
+   <span class="com">{vertical shifts have a twist}</span>
+   <span class="kwc">for</span> iPt:=<span class="kwd">low</span>(pts) <span class="kwc">to</span> <span class="kwd">high</span>(pts) <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       <span class="kwc">if</span> pts[iPt,dimy] <span class="kwa">and</span> shift <span class="kwa">and</span> <span class="num">1</span>&lt;&gt;<span class="num">0</span> <span class="kwc">then</span>
+         <span class="kwd">inc</span>(pts[iPt,dimx]);
+       <span class="kwd">dec</span>(pts[iPt,dimy],shift);
+     <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">shiftToX0</span>(<span class="kwa">var</span> pts:Tpts;<span class="kwa">var</span> Ainstance:instance;offsetRow:<span class="kwb">longint</span>):shortint;
+
+<span class="kwa">var</span> x,y,xmin,xmax,iPt,offset:shortint;
+
+<span class="kwa">begin</span>
+   <span class="com">{ .. determine shift}</span>
+   xMin:=pts[<span class="num">0</span>,dimx];
+   xMax:=xMin;
+   <span class="kwc">for</span> iPt:=<span class="kwd">low</span>(pts)+<span class="num">1</span> <span class="kwc">to</span> <span class="kwd">high</span>(pts) <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       x:=pts[iPt,dimx];
+       y:=pts[iPt,dimy];
+       <span class="kwc">if</span> x&lt;xMin <span class="kwc">then</span>
+         xMin:=x
+       <span class="kwc">else if</span> x &gt; xMax <span class="kwc">then</span>
+         xMax:=x;
+     <span class="kwa">end</span>;
+
+   offset:=N_ELEM;
+   <span class="kwc">for</span> iPt:=<span class="kwd">low</span>(pts) <span class="kwc">to</span> <span class="kwd">high</span>(pts) <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+      <span class="kwd">dec</span>(pts[iPt,dimx],xMin);
+      <span class="com">{check offset -- leftmost cell on top line}</span>
+      <span class="kwc">if</span> (pts[iPt,dimy]=offsetRow) <span class="kwa">and</span> (pts[iPt,dimx]&lt;offset) <span class="kwc">then</span>
+         offset:=pts[iPt,dimx];
+   <span class="kwa">end</span>;
+
+   Ainstance.m_offset := offset;
+   Ainstance.m_vec := <span class="kwd">toBitVector</span>(pts);
+   shifttox0:=xMax - xMin;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">badregion</span>(<span class="kwa">var</span> to_fill:bitvec;rnew:bitvec):<span class="kwb">boolean</span>;
+
+<span class="kwa">var</span> region,even_region,odd_region:bitvec;
+    cell_count:<span class="kwb">cardinal</span>;
+
+<span class="kwa">begin</span>
+   <span class="com">{Grow empty region, until it doesn't change any more.}</span>
+   <span class="kwc">repeat</span>
+      region:=rnew;
+      even_region:=region*(ROW_0_MASK*([<span class="num">0</span>.<span class="num">.31</span>]-L_EDGE_MASK));
+      odd_region:=region*(ROW_1_MASK*([<span class="num">0</span>.<span class="num">.31</span>]-R_EDGE_MASK));
+
+      rnew:=to_fill*(rnew
+                    <span class="com">{simple grow up/down}</span>
+                    +<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(region) <span class="kwa">shr</span> N_COL)
+                    +<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(region) <span class="kwa">shl</span> N_COL)
+                    <span class="com">{grow right/left}</span>
+                    +<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(region) <span class="kwa">and not</span> <span class="kwb">cardinal</span>(L_EDGE_MASK) <span class="kwa">shr</span> <span class="num">1</span>)
+                    +<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(region) <span class="kwa">and not</span> <span class="kwb">cardinal</span>(R_EDGE_MASK) <span class="kwa">shl</span> <span class="num">1</span>)
+                    <span class="com">{tricky growth}</span>
+                    +<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(even_Region) <span class="kwa">shr</span> (N_COL+<span class="num">1</span>))
+                    +<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(even_Region) <span class="kwa">shl</span> (N_COL-<span class="num">1</span>))
+                    +<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(odd_Region) <span class="kwa">shr</span> (N_COL-<span class="num">1</span>))
+                    +<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(odd_Region) <span class="kwa">shl</span> (N_COL+<span class="num">1</span>))
+                    );
+   <span class="kwc">until</span> (rnew=to_fill) <span class="kwa">or</span> (rnew=region);
+
+   <span class="com">{Subtract empty region from board.}</span>
+   to_fill:=to_fill-rnew;
+
+   cell_count:=<span class="kwd">count_ones</span>(to_fill);
+   <span class="com">{Optimize 'cell_count mod 5&lt;&gt;0' by hand...}</span>
+   badregion:=cell_count&lt;&gt;((cell_count*<span class="num">$cccd</span>) <span class="kwa">shr</span> <span class="num">18</span>)*<span class="num">5</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">has_bad_islands_single</span>(boardVec:bitvec;row:<span class="kwb">longint</span>):<span class="kwb">boolean</span>;
+
+<span class="kwa">var</span> tofill,startregion,bmask:bitvec;
+    isodd:<span class="kwb">boolean</span>;
+
+<span class="kwa">begin</span>
+   tofill:=[<span class="num">0</span>.<span class="num">.31</span>]-boardvec;
+   isOdd:=row <span class="kwa">and</span> <span class="num">1</span>&lt;&gt;<span class="num">0</span>;
+   <span class="kwc">if</span> isOdd <span class="kwc">then</span>
+     <span class="kwa">begin</span>
+       <span class="kwd">dec</span>(row);
+       toFill:=<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(tofill) <span class="kwa">shl</span> N_COL); <span class="com">{shift to even aligned}</span>
+       toFill:= tofill + TOP_ROW;
+     <span class="kwa">end</span>;
+
+   startRegion := TOP_ROW;
+   bMask := BOARD_MASK; <span class="com">{all but the first two bits}</span>
+   <span class="kwc">if</span> row&gt;=<span class="num">4</span> <span class="kwc">then</span>
+      <span class="kwb">cardinal</span>(bMask):=<span class="kwb">cardinal</span>(bmask) <span class="kwa">shr</span> ((row-<span class="num">4</span>)*N_COL)
+   <span class="kwc">else if</span> isOdd <span class="kwa">or</span> (row = <span class="num">0</span>) <span class="kwc">then</span>
+      startRegion := LAST_ROW;
+
+   toFill:=tofill*bMask;
+   startRegion:=startregion*toFill;
+
+   has_bad_islands_single:=<span class="kwb">true</span>;
+   <span class="kwc">while</span> toFill&lt;&gt;[] <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       <span class="kwc">if</span> <span class="kwd">badRegion</span>(toFill, startRegion) <span class="kwc">then</span>
+         exit;
+       startRegion:=[<span class="kwd">first_set_bit</span>(toFill)];
+     <span class="kwa">end</span>;
+   has_bad_islands_single:=<span class="kwb">false</span>;
+<span class="kwa">end</span>;
+
+
+<span class="kwa">procedure</span> piece.<span class="kwd">set_ok_positions</span>(isOdd:parity;w,h:<span class="kwb">longint</span>);
+
+<span class="kwa">var</span> x,y,xpos,pos:<span class="kwb">byte</span>;
+
+<span class="kwa">begin</span>
+   pos:=<span class="kwb">byte</span>(isodd)*N_COL;
+   <span class="kwc">with</span> m_instance[isOdd] <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       m_allowed:=[];
+       y:=<span class="kwb">byte</span>(isOdd);
+       <span class="kwc">while</span> y&lt;N_ROW-h <span class="kwc">do</span>
+         <span class="kwa">begin</span>
+           <span class="kwc">if</span> m_offset&lt;&gt;<span class="num">0</span> <span class="kwc">then</span>
+             <span class="kwd">inc</span>(pos,m_offset);
+           <span class="kwc">for</span> xPos:=<span class="num">0</span> <span class="kwc">to</span> N_COL-<span class="num">1</span>-m_offset <span class="kwc">do</span>
+             <span class="kwa">begin</span>
+               <span class="com">{check if the new position is on the board}</span>
+               <span class="kwc">if</span> (xPos&lt;N_COL-w) <span class="kwa">and not</span> <span class="kwd">has_bad_islands_single</span>(<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(m_vec) <span class="kwa">shl</span> xPos),y) <span class="kwc">then</span>
+                 <span class="kwa">begin</span>
+                   <span class="com">{position is allowed}</span>
+                   <span class="kwd">include</span>(m_allowed,pos);
+                 <span class="kwa">end</span>;
+               <span class="kwd">inc</span>(pos);
+             <span class="kwa">end</span>;
+           y:=y+<span class="num">2</span>;
+           <span class="com">{Skip row with wrong parity:}</span>
+           <span class="kwd">inc</span>(pos,N_COL);
+         <span class="kwa">end</span>;
+   <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">gen_orientation</span>(vec:bitvec;iOrient:<span class="kwb">cardinal</span>;<span class="kwa">var</span> target:Piece);
+
+<span class="kwa">var</span> pts:Tpts;
+    x,y,ymin,ymax,h,w:shortint;
+    rot,iPt:<span class="kwb">byte</span>;
+    flip:<span class="kwb">boolean</span>;
+
+<span class="kwa">begin</span>
+   <span class="com">{get (x,y) coordinates}</span>
+   <span class="kwd">setCoordList</span>(vec, pts);
+
+   rot := iOrient <span class="kwa">mod</span> <span class="num">6</span>;
+   flip := iOrient &gt;= <span class="num">6</span>;
+   <span class="kwc">if</span> flip <span class="kwc">then</span>
+     <span class="kwc">for</span> iPt:=<span class="num">0</span> <span class="kwc">to</span> N_ELEM-<span class="num">1</span> <span class="kwc">do</span>
+       pts[iPt,dimy]:=-pts[iPt,dimy];
+
+   <span class="com">{rotate as necessary}</span>
+   <span class="kwc">while</span> rot&gt;<span class="num">0</span> <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       <span class="kwc">for</span> iPt:=<span class="num">0</span> <span class="kwc">to</span> N_ELEM-<span class="num">1</span> <span class="kwc">do</span>
+         <span class="kwa">begin</span>
+           x:=pts[iPt,dimx];
+           y:=pts[iPt,dimy];
+           pts[iPt,dimx]:=<span class="kwd">floor</span>(<span class="num">2</span>*x-<span class="num">3</span>*y+<span class="num">1</span>,<span class="num">4</span>);
+           pts[iPt,dimy]:=<span class="kwd">floor</span>(<span class="num">2</span>*x+y+<span class="num">1</span>,<span class="num">2</span>);
+         <span class="kwa">end</span>;
+      <span class="kwd">dec</span>(rot);
+   <span class="kwa">end</span>;
+
+   <span class="com">{determine vertical shift}</span>
+   yMin := pts[<span class="num">0</span>,dimy];
+   yMax := yMin;
+   <span class="kwc">for</span> iPt:= <span class="num">1</span> <span class="kwc">to</span> N_ELEM-<span class="num">1</span> <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       y := pts[iPt,dimy];
+
+       <span class="kwc">if</span> y &lt; yMin <span class="kwc">then</span>
+         yMin := y
+       <span class="kwc">else if</span> y &gt; yMax <span class="kwc">then</span>
+         yMax := y;
+     <span class="kwa">end</span>;
+   h:=yMax-yMin;
+
+   <span class="kwd">shiftUpLines</span>(pts, yMin);
+   w := <span class="kwd">shiftToX0</span>(pts, target.m_instance[EVEN], <span class="num">0</span>);
+   target.<span class="kwd">set_ok_positions</span>(EVEN, w, h);
+   <span class="kwb">cardinal</span>(target.m_instance[EVEN].m_vec) := <span class="kwb">cardinal</span>(target.m_instance[EVEN].m_vec) <span class="kwa">shr</span> target.m_instance[EVEN].m_offset;
+
+   <span class="com">{shift down one line}</span>
+   <span class="kwd">shiftUpLines</span>(pts, -<span class="num">1</span>);
+   w := <span class="kwd">shiftToX0</span>(pts, target.m_instance[ODD], <span class="num">1</span>);
+   <span class="com">{shift the bitmask back one line}</span>
+   <span class="kwb">cardinal</span>(target.m_instance[ODD].m_vec) :=<span class="kwb">cardinal</span>(target.m_instance[ODD].m_vec) <span class="kwa">shr</span> N_COL;
+   target.<span class="kwd">set_ok_positions</span>(ODD, w, h);
+   <span class="kwb">cardinal</span>(target.m_instance[ODD].m_vec):= <span class="kwb">cardinal</span>(target.m_instance[ODD].m_vec) <span class="kwa">shr</span> target.m_instance[ODD].m_offset;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">getPiece</span>(iPiece,iOrient:<span class="kwb">cardinal</span>;iParity:parity):instance;<span class="kwa">inline</span>;
+
+<span class="kwa">begin</span>
+  getpiece:=s_basePiece[iPiece][iOrient].m_instance[iParity];
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> gen_all_orientations;
+
+<span class="kwa">var</span> ipiece:piecenr;
+    iorient:orientation;
+    irow,icol:<span class="kwb">byte</span>;
+    refpiece:bitvec;
+    n,npiece:<span class="kwb">byte</span>;
+
+<span class="kwa">begin</span>
+   <span class="kwc">for</span> iPiece:=<span class="kwd">low</span>(ipiece) <span class="kwc">to</span> <span class="kwd">high</span>(ipiece) <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       refPiece:=BaseVecs[iPiece];
+       <span class="kwc">for</span> iOrient:=<span class="kwd">low</span>(iorient) <span class="kwc">to</span> <span class="kwd">high</span>(iorient) <span class="kwc">do</span>
+         <span class="kwa">begin</span>
+           <span class="kwd">gen_orientation</span>(refPiece, iOrient, s_basePiece[iPiece,iOrient]);
+           <span class="kwc">with</span> s_basePiece[iPiece,iOrient] <span class="kwc">do</span>
+             <span class="kwa">begin</span>
+               <span class="kwc">if</span> (iPiece=SKIP_PIECE) <span class="kwa">and</span> (iOrient <span class="kwa">in</span> [<span class="num">3</span>.<span class="num">.5</span>,<span class="num">9</span>.<span class="num">.11</span>]) <span class="kwc">then</span>
+                 <span class="kwa">begin</span>
+                   m_instance[odd].m_allowed := [];
+                   m_instance[even].m_allowed := [];
+                 <span class="kwa">end</span>;
+             <span class="kwa">end</span>;
+         <span class="kwa">end</span>;
+     <span class="kwa">end</span>;
+
+   <span class="kwc">for</span> iPiece:=<span class="kwd">low</span>(ipiece) <span class="kwc">to</span> <span class="kwd">high</span>(ipiece) <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+      <span class="kwc">for</span> iOrient:=<span class="kwd">low</span>(iorient) <span class="kwc">to</span> <span class="kwd">high</span>(iorient) <span class="kwc">do</span>
+        <span class="kwa">begin</span>
+         n:=<span class="num">0</span>;
+         <span class="kwc">for</span> iRow:=<span class="num">0</span> <span class="kwc">to</span> N_ROW-<span class="num">1</span> <span class="kwc">do</span>
+           <span class="kwa">begin</span>
+            <span class="kwc">with</span> <span class="kwd">getPiece</span>(iPiece, iOrient, <span class="kwd">parity</span>(iRow <span class="kwa">and</span> <span class="num">1</span>)) <span class="kwc">do</span>
+              <span class="kwc">for</span> iCol:=<span class="num">0</span> <span class="kwc">to</span> N_COL-<span class="num">1</span> <span class="kwc">do</span>
+                <span class="kwa">begin</span>
+                  <span class="kwc">if</span> n <span class="kwa">in</span> m_allowed <span class="kwc">then</span>
+                    <span class="kwa">begin</span>
+                      nPiece:=g_okPieces[iRow,iCol].nPieces[iPiece];
+                      g_okPieces[iRow,iCol].pieceVec[iPiece,nPiece]:=<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(m_vec) <span class="kwa">shl</span> iCol);
+                      <span class="kwd">inc</span>(g_okPieces[iRow,iCol].nPieces[iPiece]);
+                    <span class="kwa">end</span>;
+                  <span class="kwd">inc</span>(n);
+                <span class="kwa">end</span>;
+          <span class="kwa">end</span>
+      <span class="kwa">end</span>
+   <span class="kwa">end</span>
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> init_board;
+
+<span class="kwa">begin</span>
+  m_cursoln.<span class="kwd">init</span>(NO_PIECE);
+  m_minsoln.<span class="kwd">init</span>(NO_PIECE);
+  m_maxsoln.<span class="kwd">init</span>(NO_PIECE);
+  m_nsoln:=<span class="num">0</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">const</span> g_firstRegion:<span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.31</span>] <span class="kwa">of</span> bitvec=(
+        [],      [<span class="num">0</span>],      [<span class="num">1</span>],       [<span class="num">0</span>,<span class="num">1</span>],
+        [<span class="num">2</span>],     [<span class="num">0</span>],      [<span class="num">1</span>,<span class="num">2</span>],     [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>],
+        [<span class="num">3</span>],     [<span class="num">0</span>],      [<span class="num">1</span>],       [<span class="num">0</span>,<span class="num">1</span>],
+        [<span class="num">2</span>,<span class="num">3</span>],   [<span class="num">0</span>],      [<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>],   [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>],
+        [<span class="num">4</span>],     [<span class="num">0</span>],      [<span class="num">1</span>],       [<span class="num">0</span>,<span class="num">1</span>],
+        [<span class="num">2</span>],     [<span class="num">0</span>],      [<span class="num">1</span>,<span class="num">2</span>],     [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>],
+        [<span class="num">3</span>,<span class="num">4</span>],   [<span class="num">0</span>],      [<span class="num">1</span>],       [<span class="num">1</span>,<span class="num">2</span>],
+        [<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>], [<span class="num">0</span>],      [<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>], [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>]
+);
+
+<span class="kwa">function</span> <span class="kwd">calc_bad_islands</span>(boardVec:bitvec;row:<span class="kwb">longint</span>):goodbad;
+
+<span class="kwa">var</span> tofill,boardmask,bottom,startregion:bitvec;
+    filled:<span class="kwb">boolean</span>;
+
+<span class="kwa">begin</span>
+   toFill:=[<span class="num">0</span>.<span class="num">.31</span>]-boardVec;
+   <span class="com">{Compensate for odd rows.}</span>
+   <span class="kwc">if</span> row <span class="kwa">and</span> <span class="num">1</span>&lt;&gt;<span class="num">0</span> <span class="kwc">then</span>
+     <span class="kwa">begin</span>
+       <span class="kwd">dec</span>(row);
+       <span class="kwb">cardinal</span>(toFill):=<span class="kwb">cardinal</span>(tofill) <span class="kwa">shl</span> N_COL;
+     <span class="kwa">end</span>;
+
+   boardMask := BOARD_MASK; <span class="com">{all but the first two bits}</span>
+   <span class="kwc">if</span> row&gt;<span class="num">4</span> <span class="kwc">then</span>
+      <span class="kwb">cardinal</span>(boardMask):=<span class="kwb">cardinal</span>(boardmask) <span class="kwa">shr</span> ((row-<span class="num">4</span>)*N_COL);
+   toFill:=tofill*boardMask;
+
+   <span class="com">{a little pre-work to speed things up}</span>
+   filled:=toFill*LAST_ROW=LAST_ROW;
+   bottom:=LAST_ROW;
+   <span class="kwc">while</span> bottom*toFill=bottom <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       toFill:=tofill-bottom;
+       <span class="kwb">cardinal</span>(bottom):=<span class="kwb">cardinal</span>(bottom) <span class="kwa">shr</span> N_COL;
+     <span class="kwa">end</span>;
+
+   <span class="kwc">if</span> filled <span class="kwa">or</span> (row&lt;<span class="num">4</span>) <span class="kwc">then</span>
+      startRegion := bottom * toFill
+   <span class="kwc">else</span>
+     <span class="kwa">begin</span>
+       startRegion := g_firstRegion[<span class="kwb">cardinal</span>(toFill*TOP_ROW)];
+       <span class="kwc">if</span> startRegion=[] <span class="kwc">then</span>
+          <span class="kwa">begin</span>
+            startRegion := <span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(toFill) <span class="kwa">shr</span> N_COL)*TOP_ROW;
+            startRegion := g_firstRegion[<span class="kwb">cardinal</span>(startRegion)];
+            <span class="kwb">cardinal</span>(startRegion) := <span class="kwb">cardinal</span>(startregion) <span class="kwa">shl</span> N_COL;
+          <span class="kwa">end</span>;
+        startRegion:=startregion+<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(startRegion) <span class="kwa">shl</span> N_COL)*toFill;
+     <span class="kwa">end</span>;
+
+   <span class="kwc">while</span> toFill&lt;&gt;[] <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       <span class="kwc">if</span> <span class="kwd">badRegion</span>(toFill, startRegion) <span class="kwc">then</span>
+          <span class="kwa">begin</span>
+            <span class="kwc">if</span> toFill&lt;&gt;[] <span class="kwc">then</span>
+              calc_bad_islands:=ALWAYS_BAD
+            <span class="kwc">else</span>
+              calc_bad_islands:=BAD;
+            exit;
+          <span class="kwa">end</span>;
+       startRegion := [<span class="kwd">first_set_bit</span>(toFill)];
+     <span class="kwa">end</span>;
+
+   calc_bad_islands:=GOOD;
+<span class="kwa">end</span>;
+
+
+<span class="kwa">function</span> <span class="kwd">has_bad_islands</span>(boardvec:bitvec;row:<span class="kwb">longint</span>):goodbad;
+
+<span class="kwa">var</span> last_row:bitvec;
+    isodd:parity;
+    isclosed:fixed;
+
+<span class="kwa">begin</span>
+   <span class="com">{skip over any filled rows}</span>
+   <span class="kwc">while</span> boardVec*TOP_ROW=TOP_ROW <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       <span class="kwb">cardinal</span>(boardVec):=<span class="kwb">cardinal</span>(boardvec) <span class="kwa">shr</span> N_COL;
+       <span class="kwd">inc</span>(row);
+     <span class="kwa">end</span>;
+
+   has_bad_islands:=bad;
+   <span class="kwc">with</span> g_islandInfo[<span class="kwb">cardinal</span>(boardvec*(TOP_ROW+SECOND_ROW))] <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       last_row:=<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(boardvec) <span class="kwa">shr</span> (<span class="num">2</span>*N_COL))*TOP_ROW;
+       isOdd:=<span class="kwd">parity</span>(row <span class="kwa">and</span> <span class="num">1</span>);
+
+       <span class="kwc">if</span> <span class="kwa">not</span>(<span class="kwb">cardinal</span>(last_row) <span class="kwa">in</span> alwaysBad[<span class="kwd">parity</span>(row <span class="kwa">and</span> <span class="num">1</span>)]) <span class="kwc">then</span>
+         <span class="kwc">if</span> boardVec*<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(<span class="kwb">cardinal</span>(TOP_ROW) <span class="kwa">shl</span> N_COL*<span class="num">3</span>))=[] <span class="kwc">then</span>
+           <span class="kwa">begin</span>
+             isClosed:=<span class="kwd">fixed</span>(row&gt;<span class="num">6</span>); <span class="com">{because we track 3 rows}</span>
+               <span class="kwc">if</span> <span class="kwa">not</span>(<span class="kwb">cardinal</span>(last_row) <span class="kwa">in</span> is_known[isClosed,isOdd]) <span class="kwc">then</span>
+                 <span class="kwc">if</span> boardVec&lt;&gt;[] <span class="kwc">then</span>
+                   <span class="kwa">begin</span>
+                     has_bad_islands:=<span class="kwd">calc_bad_islands</span>(boardvec,row);
+                     <span class="kwd">include</span>(is_known[isClosed,isOdd],<span class="kwb">cardinal</span>(last_row));
+                     <span class="kwc">if</span> has_bad_islands&lt;&gt;good <span class="kwc">then</span>
+                       <span class="kwd">include</span>(is_known[isClosed,isOdd],<span class="kwb">cardinal</span>(last_row));
+                   <span class="kwa">end</span>
+                 <span class="kwc">else</span>
+                   has_bad_islands:=good
+               <span class="kwc">else</span>
+                 <span class="kwc">if</span> <span class="kwa">not</span>(<span class="kwb">cardinal</span>(last_row) <span class="kwa">in</span> has_bad[isClosed,isOdd]) <span class="kwc">then</span>
+                   has_bad_islands:=good;
+           <span class="kwa">end</span>
+         <span class="kwc">else</span>
+           has_bad_islands:=<span class="kwd">calc_bad_islands</span>(boardvec,row);
+     <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">const</span> g_flip:<span class="kwa">array</span>[<span class="num">0</span>.<span class="num">.31</span>] <span class="kwa">of</span> bitvec=(
+        [],        [<span class="num">4</span>],        [<span class="num">3</span>],        [<span class="num">3</span>,<span class="num">4</span>],
+        [<span class="num">2</span>],       [<span class="num">2</span>,<span class="num">4</span>],      [<span class="num">2</span>,<span class="num">3</span>],      [<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>],
+        [<span class="num">1</span>],       [<span class="num">1</span>,<span class="num">4</span>],      [<span class="num">1</span>,<span class="num">3</span>],      [<span class="num">1</span>,<span class="num">3</span>,<span class="num">4</span>],
+        [<span class="num">1</span>,<span class="num">2</span>],     [<span class="num">1</span>,<span class="num">2</span>,<span class="num">4</span>],    [<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>],    [<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>],
+        [<span class="num">0</span>],       [<span class="num">0</span>,<span class="num">4</span>],      [<span class="num">0</span>,<span class="num">3</span>],      [<span class="num">0</span>,<span class="num">3</span>,<span class="num">4</span>],
+        [<span class="num">0</span>,<span class="num">2</span>],     [<span class="num">0</span>,<span class="num">2</span>,<span class="num">4</span>],    [<span class="num">0</span>,<span class="num">2</span>,<span class="num">3</span>],    [<span class="num">0</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>],
+        [<span class="num">0</span>,<span class="num">1</span>],     [<span class="num">0</span>,<span class="num">1</span>,<span class="num">4</span>],    [<span class="num">0</span>,<span class="num">1</span>,<span class="num">3</span>],    [<span class="num">0</span>,<span class="num">1</span>,<span class="num">3</span>,<span class="num">4</span>],
+        [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>],   [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">4</span>],  [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>],  [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>]
+);
+
+<span class="kwa">function</span> <span class="kwd">flipTwoRows</span>(bits:bitvec):bitvec;<span class="kwa">inline</span>;
+
+<span class="kwa">var</span> flipped:<span class="kwb">cardinal</span>;
+
+<span class="kwa">begin</span>
+   flipped:=<span class="kwb">cardinal</span>(g_flip[<span class="kwb">cardinal</span>(bits) <span class="kwa">shr</span> N_COL]) <span class="kwa">shl</span> N_COL;
+   fliptworows:=<span class="kwd">bitvec</span>(flipped <span class="kwa">or</span> <span class="kwb">cardinal</span>(g_flip[<span class="kwb">cardinal</span>(bits*TOP_ROW)]));
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">mark_bad</span>(<span class="kwa">var</span> info:IslandInfo;n:<span class="kwb">byte</span>;eo:parity;always:<span class="kwb">boolean</span>);<span class="kwa">inline</span>;
+
+<span class="kwa">begin</span>
+  <span class="kwc">with</span> info <span class="kwc">do</span>
+   <span class="kwa">begin</span>
+     <span class="kwd">include</span>(has_bad[OPEN,eo],n);
+     <span class="kwd">include</span>(has_bad[CLOSED,eo],n);
+
+     <span class="kwc">if</span> always <span class="kwc">then</span>
+       <span class="kwd">include</span>(alwaysBad[eo],n);
+   <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> calc_always_bad;
+
+<span class="kwa">var</span> i,iWord:<span class="kwb">cardinal</span>;
+    boardvec:bitvec;
+    hasbad:goodbad;
+    always:<span class="kwb">boolean</span>;
+    flipped:^islandinfo;
+
+<span class="kwa">begin</span>
+   <span class="kwc">for</span> iWord:=<span class="num">1</span> <span class="kwc">to</span> MAX_ISLAND_OFFSET-<span class="num">1</span> <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+      flipped := &#64;g_islandInfo[<span class="kwb">cardinal</span>(<span class="kwd">flipTwoRows</span>(<span class="kwd">bitvec</span>(iWord)))];
+      <span class="kwc">for</span> i:=<span class="num">0</span> <span class="kwc">to</span> <span class="num">31</span> <span class="kwc">do</span>
+        <span class="kwa">begin</span>
+          boardvec:=<span class="kwd">bitvec</span>((i <span class="kwa">shl</span> (<span class="num">2</span>*N_COL)) <span class="kwa">or</span> iWord);
+          <span class="kwc">if</span> <span class="kwa">not</span>(i <span class="kwa">in</span> g_islandInfo[iWord].is_known[OPEN,EVEN]) <span class="kwc">then</span>
+            <span class="kwa">begin</span>
+              hasBad:=<span class="kwd">calc_bad_islands</span>(boardvec,<span class="num">0</span>);
+              <span class="kwc">if</span> hasBad&lt;&gt;good <span class="kwc">then</span>
+                <span class="kwa">begin</span>
+                 always:=hasBad=ALWAYS_BAD;
+                 <span class="kwd">mark_bad</span>(g_islandInfo[iWord], i, EVEN, always);
+                 <span class="kwd">mark_bad</span>(flipped^,<span class="kwb">cardinal</span>(g_flip[i]), ODD, always);
+              <span class="kwa">end</span>;
+            <span class="kwa">end</span>;
+      <span class="kwa">end</span>;
+      flipped^.is_known[OPEN,odd]:=[<span class="num">0</span>.<span class="num">.31</span>];
+      g_islandInfo[iWord].is_known[OPEN,even]:=[<span class="num">0</span>.<span class="num">.31</span>];
+   <span class="kwa">end</span>
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> <span class="kwd">record_solution</span>(<span class="kwa">var</span> s:Soln);
+
+<span class="kwa">var</span> spun:soln;
+
+<span class="kwa">begin</span>
+   s.setcells;
+   <span class="kwd">inc</span>(m_nSoln,<span class="num">2</span>); <span class="com">{add solution and its rotation}</span>
+
+   <span class="kwc">if</span> m_minSoln.isEmpty <span class="kwc">then</span>
+     <span class="kwa">begin</span>
+       m_minSoln := s;
+       m_maxSoln := s;
+       exit;
+     <span class="kwa">end</span>;
+
+   <span class="kwc">if</span> s.<span class="kwd">lessThan</span>(m_minSoln) <span class="kwc">then</span>
+      m_minSoln := s
+   <span class="kwc">else if</span> m_maxSoln.<span class="kwd">lessThan</span>(s) <span class="kwc">then</span>
+      m_maxSoln := s;
+
+   s.<span class="kwd">spin</span>(spun);
+   <span class="kwc">if</span> spun.<span class="kwd">lessThan</span>(m_minSoln) <span class="kwc">then</span>
+      m_minSoln := spun
+   <span class="kwc">else if</span> m_maxSoln.<span class="kwd">lessThan</span>(spun) <span class="kwc">then</span>
+      m_maxSoln := spun;
+<span class="kwa">end</span>;
+
+<span class="kwa">function</span> <span class="kwd">gen_all_solutions</span>(boardVec,placedPieces:bitvec;row:<span class="kwb">byte</span>):<span class="kwb">cardinal</span>;
+
+<span class="kwa">var</span> ipiece:piecenr;
+    iorient:<span class="kwb">byte</span>;
+    piece:bitvec;
+
+<span class="kwa">begin</span>
+   <span class="kwc">while</span> boardVec*TOP_ROW=TOP_ROW <span class="kwc">do</span>
+     <span class="kwa">begin</span>
+       <span class="kwb">cardinal</span>(boardVec):=<span class="kwb">cardinal</span>(boardvec) <span class="kwa">shr</span> N_COL;
+       <span class="kwd">inc</span>(row);
+     <span class="kwa">end</span>;
+   gen_all_solutions:=<span class="num">0</span>;
+   <span class="kwc">with</span> cache[((<span class="kwb">cardinal</span>(boardvec)*
+              (<span class="kwb">cardinal</span>(placedpieces) <span class="com">{shl 3}</span> + <span class="num">1</span>)
+              <span class="kwa">xor</span> row <span class="kwa">shl</span> <span class="num">5</span>)) <span class="kwa">mod</span> <span class="num">131071</span>] <span class="kwc">do</span>
+     <span class="kwc">if</span> (krow&lt;&gt;row) <span class="kwa">or</span> (<span class="kwd">bitvec</span>(<span class="kwb">cardinal</span>(kpiecevec))&lt;&gt;placedpieces) <span class="kwa">or</span> (kboardvec&lt;&gt;boardvec) <span class="kwc">then</span>
+       <span class="kwa">begin</span>
+         <span class="kwc">with</span> g_okpieces[row,s_firstOne[<span class="kwb">cardinal</span>([<span class="num">0</span>..N_COL-<span class="num">1</span>]-boardVec)]] <span class="kwc">do</span>
+           <span class="kwc">for</span> ipiece:=<span class="num">0</span> <span class="kwc">to</span> N_PIECE_TYPE-<span class="num">1</span> <span class="kwc">do</span>
+             <span class="kwc">if</span> <span class="kwa">not</span>(ipiece <span class="kwa">in</span> placedpieces) <span class="kwc">then</span>
+               <span class="kwc">for</span> iorient:=<span class="num">1</span> <span class="kwc">to</span> npieces[ipiece] <span class="kwc">do</span> <span class="com">{start with 1, npieces[x] can be zero}</span>
+                 <span class="kwa">begin</span>
+                   piece:=pieceVec[iPiece,iOrient-<span class="num">1</span>];
+                   <span class="com">{check if piece conflicts with other pieces or if we get a bad island.}</span>
+                   <span class="kwc">if</span> (piece*boardVec=[]) <span class="kwa">and</span> (<span class="kwd">has_bad_islands</span>(boardVec+piece,row)=good) <span class="kwc">then</span>
+                     <span class="kwa">begin</span>
+                       m_curSoln.<span class="kwd">pushPiece</span>(piece,iPiece,row);
+                       <span class="com">{recurse or record solution}</span>
+                       <span class="kwc">if</span> placedPieces+[ipiece]&lt;&gt;ALL_PIECE_MASK <span class="kwc">then</span>
+                         <span class="kwd">inc</span>(gen_all_solutions,<span class="kwd">gen_all_solutions</span>(boardVec+piece,placedPieces+[ipiece],row))
+                       <span class="kwc">else</span>
+                         <span class="kwa">begin</span>
+                           <span class="kwd">record_solution</span>(m_curSoln);
+                           <span class="kwd">inc</span>(gen_all_solutions);
+                         <span class="kwa">end</span>;
+                       m_curSoln.<span class="kwd">popPiece</span>();
+                     <span class="kwa">end</span>;
+                <span class="kwa">end</span>;
+         <span class="kwc">if</span> gen_all_solutions=<span class="num">0</span> <span class="kwc">then</span>
+           <span class="kwa">begin</span>
+             krow:=row;
+             kpiecevec:=<span class="kwb">word</span>(<span class="kwb">cardinal</span>(placedpieces));
+             kboardvec:=boardvec;
+           <span class="kwa">end</span>;
+      <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">begin</span>
+   <span class="kwc">if</span> paramcount &gt; <span class="num">2</span> <span class="kwc">then</span>
+     <span class="kwd">halt</span>(<span class="num">1</span>); <span class="com">{spec says this is an error}</span>
+
+   <span class="kwd">textrec</span>(output).flushfunc:=<span class="kwa">nil</span>;
+
+   gen_all_orientations;
+   calc_always_bad;
+   init_board;
+   <span class="kwd">filldword</span>(cache,<span class="kwd">sizeof</span>(cache) <span class="kwa">shr</span> <span class="num">2</span>,<span class="num">$ffffffff</span>);
+   <span class="kwd">gen_all_solutions</span>([], [], <span class="num">0</span>);
+
+   <span class="kwd">writeln</span>(m_nSoln,<span class="str">' solutions found'</span>);
+   writeln;
+   m_minSoln.<span class="kwd">write</span>(output);
+   writeln;
+   m_maxSoln.<span class="kwd">write</span>(output);
+   writeln;
+<span class="kwa">end</span>.

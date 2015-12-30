@@ -1,0 +1,73 @@
+<span class="com">{ The Computer Language Benchmark Game</span>
+<span class="com">  http://benchmarksgame.alioth.debian.org</span>
+<span class="com"></span>
+<span class="com">  contributed by Le Duc Hieu</span>
+<span class="com">  a translation of the C program contributed by Mr Ledhug</span>
+<span class="com">}</span>
+
+<span class="com">{$OPTIMIZATION LOOPUNROLL,LEVEL3}</span>
+<span class="com">{$INLINE+}</span>
+
+<span class="kwa">Uses</span> GMP;
+
+<span class="kwa">Var</span>
+  tmp1, tmp2, acc, den, num: MPZ_T;
+  <span class="slc">// Main</span>
+  d, k, i: LongWord;
+  n      : <span class="kwb">LongInt</span>;
+
+<span class="kwa">Function</span> <span class="kwd">ExtractDigit</span>(nth: LongWord): LongWord; <span class="kwa">inline</span>;
+  <span class="kwa">Begin</span>
+    <span class="slc">// joggling between tmp1 and tmp2, so GMP don't have to use temp buffers</span>
+    <span class="kwd">mpz_mul_ui</span>(tmp1, num, nth);
+    <span class="kwd">mpz_add</span>(tmp2, tmp1, acc);
+    <span class="kwd">mpz_tdiv_q</span>(tmp1, tmp2, den);
+
+    ExtractDigit := <span class="kwd">mpz_get_ui</span>(tmp1)
+  <span class="kwa">End</span>;
+
+<span class="kwa">Procedure</span> <span class="kwd">EliminateDigit</span>(d: LongWord); <span class="kwa">inline</span>;
+  <span class="kwa">Begin</span>
+    <span class="kwd">mpz_submul_ui</span>(acc, den, d);
+    <span class="kwd">mpz_mul_ui</span>(acc, acc, <span class="num">10</span>);
+    <span class="kwd">mpz_mul_ui</span>(num, num, <span class="num">10</span>);
+  <span class="kwa">End</span>;
+
+<span class="kwa">Procedure</span> <span class="kwd">NextTerm</span>(k: LongWord);
+  <span class="kwa">Var</span> k2: LongWord;
+
+  <span class="kwa">Begin</span>
+    k2 := k * <span class="num">2</span> + <span class="num">1</span>;
+
+    <span class="kwd">mpz_addmul_ui</span>(acc, num, <span class="num">2</span>);
+    <span class="kwd">mpz_mul_ui</span>(acc, acc, k2);
+    <span class="kwd">mpz_mul_ui</span>(den, den, k2);
+    <span class="kwd">mpz_mul_ui</span>(num, num, k)
+  <span class="kwa">End</span>;
+
+<span class="kwa">Begin</span>
+  <span class="kwd">val</span>(<span class="kwd">ParamStr</span>(<span class="num">1</span>), n);
+
+  <span class="kwd">mpz_init</span>(tmp1);
+  <span class="kwd">mpz_init</span>(tmp2);
+
+  <span class="kwd">mpz_init_set_ui</span>(acc, <span class="num">0</span>);
+  <span class="kwd">mpz_init_set_ui</span>(den, <span class="num">1</span>);
+  <span class="kwd">mpz_init_set_ui</span>(num, <span class="num">1</span>);
+
+  i := <span class="num">0</span>;
+  k := <span class="num">0</span>;
+  <span class="kwc">while</span> (i &lt; n) <span class="kwc">do</span> <span class="kwa">begin</span>
+    <span class="kwd">inc</span>(k);
+    <span class="kwd">NextTerm</span>(k);
+    <span class="kwc">if</span> <span class="kwd">mpz_cmp</span>(num, acc) &gt; <span class="num">0</span> <span class="kwc">then</span> continue;
+
+    d := <span class="kwd">ExtractDigit</span>(<span class="num">3</span>);
+    <span class="kwc">if</span> d &lt;&gt; <span class="kwd">ExtractDigit</span>(<span class="num">4</span>) <span class="kwc">then</span> continue;
+
+    <span class="kwd">write</span>(<span class="kwd">chr</span>(<span class="kwd">ord</span>(<span class="str">'0'</span>) + d));
+    <span class="kwd">inc</span>(i);
+    <span class="kwc">if</span> (i <span class="kwa">mod</span> <span class="num">10</span> = <span class="num">0</span>) <span class="kwa">or</span> (i = n) <span class="kwc">then</span> <span class="kwd">writeln</span>(<span class="esc">#9</span>+<span class="str">':'</span>, i);
+    <span class="kwd">EliminateDigit</span>(d)
+  <span class="kwa">end</span>
+<span class="kwa">End</span>.

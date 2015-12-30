@@ -1,0 +1,221 @@
+#lang racket/base
+
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; Based on a Python version:</span>
+<span class="slc">;;   contributed by Olof Kraigher</span>
+<span class="slc">;;    modified by Tupteq</span>
+<span class="slc">;;   contributed by Matthew Flatt</span>
+<span class="slc">;;   optimized by Eli Barzilay</span>
+
+(<span class="kwa">require</span> racket/cmdline)
+
+(<span class="kwa">define</span> width <span class="num">5</span>)
+(<span class="kwa">define</span> height <span class="num">10</span>)
+(<span class="kwa">define</span> size (* width height))
+
+(<span class="kwa">define</span> (<span class="kwa">valid-xy</span>? x y)
+  (<span class="kwa">and</span> (<span class="kwa">0</span> . &lt;= . x)
+       (<span class="kwa">x</span> . &lt; . width)
+       (<span class="kwa">0</span> . &lt;= . y)
+       (<span class="kwa">y</span> . &lt; . height)))
+
+(<span class="kwa">define</span> (<span class="kwa">mover</span> fun)
+  (<span class="kwa">let</span> ([t (<span class="kwa">make-vector</span> size)])
+    (<span class="kwa">for</span> ([p (<span class="kwa">in-range</span> size)])
+      (<span class="kwa">vector-set</span>! t p (<span class="kwa">let</span>*-values ([(<span class="kwa">y</span> x) (<span class="kwa">quotient</span>/remainder p width)]
+                                     [(<span class="kwa">x</span> y) (<span class="kwa">fun</span> x y)])
+                         (<span class="kwa">if</span> (<span class="kwa">valid-xy</span>? x y) (+ x (* y width)) -<span class="num">1</span>))))
+    t))
+
+(<span class="kwa">define</span> E
+  (<span class="kwa">mover</span> (<span class="kwa">lambda</span> (<span class="kwa">x</span> y) (<span class="kwa">values</span> (<span class="kwa">add1</span> x) y))))
+(<span class="kwa">define</span> W
+  (<span class="kwa">mover</span> (<span class="kwa">lambda</span> (<span class="kwa">x</span> y) (<span class="kwa">values</span> (<span class="kwa">sub1</span> x) y))))
+(<span class="kwa">define</span> NE
+  (<span class="kwa">mover</span> (<span class="kwa">lambda</span> (<span class="kwa">x</span> y) (<span class="kwa">values</span> (+ x (<span class="kwa">bitwise-and</span> y <span class="num">1</span>)) (<span class="kwa">sub1</span> y)))))
+(<span class="kwa">define</span> NW
+  (<span class="kwa">mover</span> (<span class="kwa">lambda</span> (<span class="kwa">x</span> y) (<span class="kwa">values</span> (<span class="kwa">sub1</span> (+ x (<span class="kwa">bitwise-and</span> y <span class="num">1</span>))) (<span class="kwa">sub1</span> y)))))
+(<span class="kwa">define</span> SE
+  (<span class="kwa">mover</span> (<span class="kwa">lambda</span> (<span class="kwa">x</span> y) (<span class="kwa">values</span> (+ x (<span class="kwa">bitwise-and</span> y <span class="num">1</span>)) (<span class="kwa">add1</span> y)))))
+(<span class="kwa">define</span> SW
+  (<span class="kwa">mover</span> (<span class="kwa">lambda</span> (<span class="kwa">x</span> y) (<span class="kwa">values</span> (<span class="kwa">sub1</span> (+ x (<span class="kwa">bitwise-and</span> y <span class="num">1</span>))) (<span class="kwa">add1</span> y)))))
+
+(<span class="kwa">define</span> rotate-list (<span class="kwa">list</span> E NE NW W SW SE E))
+(<span class="kwa">define</span> (<span class="kwa">rotate</span> dir)
+  (<span class="kwa">cadr</span> (<span class="kwa">memq</span> dir rotate-list)))
+
+(<span class="kwa">define</span> flip-alist (<span class="kwa">list</span> (<span class="kwa">cons</span> E W) (<span class="kwa">cons</span> NE NW) (<span class="kwa">cons</span> NW NE)
+                         (<span class="kwa">cons</span> W E) (<span class="kwa">cons</span> SW SE) (<span class="kwa">cons</span> SE SW)))
+(<span class="kwa">define</span> (<span class="kwa">flip</span> dir) (<span class="kwa">cdr</span> (<span class="kwa">assq</span> dir flip-alist)))
+
+(<span class="kwa">define</span> movers (<span class="kwa">list</span> E W NE NW SE SW))
+
+(<span class="kwa">define</span> (<span class="kwa">valid</span>? p)
+  (<span class="kwa">p</span> . &gt;= . <span class="num">0</span>))
+
+(<span class="kwa">define</span> (<span class="kwa">clear</span>? board pos)
+  (<span class="kwa">not</span> (<span class="kwa">bitwise-bit-set</span>? board pos)))
+(<span class="kwa">define</span> (<span class="kwa">set</span> board pos)
+  (<span class="kwa">bitwise-ior</span> board (<span class="kwa">arithmetic-shift</span> <span class="num">1</span> pos)))
+
+(<span class="kwa">define</span> (<span class="kwa">zero-count</span> board)
+  (<span class="kwa">for</span>/fold ([count <span class="num">0</span>]) ([i (<span class="kwa">in-range</span> size)])
+    (<span class="kwa">if</span> (<span class="kwa">clear</span>? board i) (<span class="kwa">add1</span> count) count)))
+
+(<span class="kwa">define</span> (<span class="kwa">find-free-cell</span> board)
+  (<span class="kwa">for</span>/or ([p (<span class="kwa">in-range</span> <span class="num">0</span> size)])
+    (<span class="kwa">and</span> (<span class="kwa">clear</span>? board p) p)))
+
+(<span class="kwa">define</span> (<span class="kwa">flood-fill</span> board p)
+  (<span class="kwa">for</span>/fold ([board (<span class="kwa">set</span> board p)]) ([mover (<span class="kwa">in-list</span> movers)])
+    (<span class="kwa">let</span> ([p (<span class="kwa">vector-ref</span> mover p)])
+      (<span class="kwa">if</span> (<span class="kwa">and</span> (<span class="kwa">valid</span>? p) (<span class="kwa">clear</span>? board p))
+        (<span class="kwa">flood-fill</span> board p)
+        board))))
+
+(<span class="kwa">define</span> (<span class="kwa">no-islands</span>? mask)
+  (<span class="kwa">let</span> ([zeros (<span class="kwa">zero-count</span> mask)])
+    (<span class="kwa">and</span> (<span class="kwa">zeros</span> . &gt;= . <span class="num">5</span>)
+         (<span class="kwa">let</span> loop ([mask mask] [zeros zeros])
+           (<span class="kwa">if</span> (= mask #x3FFFFFFFFFFFF)
+             #t
+             (<span class="kwa">let</span>* ([p (<span class="kwa">find-free-cell</span> mask)]
+                    [mask (<span class="kwa">flood-fill</span> mask p)]
+                    [new-zeros (<span class="kwa">zero-count</span> mask)])
+               (<span class="kwa">and</span> ((<span class="kwa">-</span> zeros new-zeros) . &gt;= . <span class="num">5</span>)
+                    (<span class="kwa">loop</span> mask new-zeros))))))))
+
+(<span class="kwa">define</span> (<span class="kwa">get-bitmask</span> p piece)
+  (<span class="kwa">let</span> ([mask (<span class="kwa">arithmetic-shift</span> <span class="num">1</span> p)])
+    (<span class="kwa">let</span> loop ([p p] [cells piece] [mask mask])
+      (<span class="kwa">if</span> (<span class="kwa">null</span>? cells)
+        mask
+        (<span class="kwa">let</span> ([p (<span class="kwa">vector-ref</span> (<span class="kwa">car</span> cells) p)])
+          (<span class="kwa">and</span> (<span class="kwa">valid</span>? p) (<span class="kwa">loop</span> p (<span class="kwa">cdr</span> cells) (<span class="kwa">set</span> mask p))))))))
+
+(<span class="kwa">define</span> (<span class="kwa">all-bitmasks</span> piece color)
+  (<span class="kwa">let</span> ([pieces
+         (<span class="kwa">let-values</span> ([(<span class="kwa">accum</span> piece)
+                       (<span class="kwa">for</span>/fold ([accum null] [piece piece])
+                                 ([orientations (<span class="kwa">in-range</span> <span class="num">2</span>)])
+                         (<span class="kwa">let-values</span> ([(<span class="kwa">accum</span> piece)
+                                       (<span class="kwa">for</span>/fold ([accum accum] [piece piece])
+                                                 ([orientations (<span class="kwa">in-range</span> (<span class="kwa">-</span> <span class="num">6</span> (* <span class="num">3</span> (<span class="kwa">if</span> (= color <span class="num">4</span>) <span class="num">1 0</span>))))])
+                                         (<span class="kwa">values</span> (<span class="kwa">cons</span> piece accum)
+                                                 (<span class="kwa">map</span> rotate piece)))])
+                           (<span class="kwa">values</span> accum (<span class="kwa">map</span> flip piece))))])
+           accum)])
+    (<span class="kwa">reverse</span>
+     (<span class="kwa">for</span>*/fold ([accum null])
+                ([piece (<span class="kwa">in-list</span> pieces)]
+                 [p (<span class="kwa">in-range</span> <span class="num">0</span> size)])
+       (<span class="kwa">let</span> ([mask (<span class="kwa">get-bitmask</span> p piece)])
+         (<span class="kwa">if</span> (<span class="kwa">and</span> mask (<span class="kwa">no-islands</span>? mask)) (<span class="kwa">cons</span> mask accum) accum))))))
+
+(<span class="kwa">define</span> generate-bitmasks-pieces
+  (<span class="kwa">list</span> (<span class="kwa">list</span> E  E  E  SE)
+        (<span class="kwa">list</span> SE SW W  SW)
+        (<span class="kwa">list</span> W  W  SW SE)
+        (<span class="kwa">list</span> E  E  SW SE)
+        (<span class="kwa">list</span> NW W  NW SE SW)
+        (<span class="kwa">list</span> E  E  NE W)
+        (<span class="kwa">list</span> NW NE NE W)
+        (<span class="kwa">list</span> NE SE E  NE)
+        (<span class="kwa">list</span> SE SE E  SE)
+        (<span class="kwa">list</span> E  NW NW NW)))
+(<span class="kwa">define</span> (<span class="kwa">generate-bitmasks</span>)
+  (<span class="kwa">let</span> ([masks-at-cell
+         (<span class="kwa">list-</span>&gt;vector
+          (<span class="kwa">for</span>/list ([i (<span class="kwa">in-range</span> size)])
+            (<span class="kwa">list-</span>&gt;vector (<span class="kwa">for</span>/list ([j (<span class="kwa">in-range</span> <span class="num">10</span>)]) null))))])
+    (<span class="kwa">for</span> ([piece (<span class="kwa">in-list</span> generate-bitmasks-pieces)]
+          [color (<span class="kwa">in-naturals</span>)])
+      (<span class="kwa">let</span> loop ([masks (<span class="kwa">sort</span> (<span class="kwa">all-bitmasks</span> piece color) &gt;)]
+                 [cell-bit (<span class="kwa">sub1</span> size)]
+                 [cell-counter (<span class="kwa">sub1</span> size)])
+        (<span class="kwa">if</span> (<span class="kwa">null</span>? masks)
+          masks-at-cell
+          (<span class="kwa">if</span> (<span class="kwa">bitwise-bit-set</span>? (<span class="kwa">car</span> masks) cell-bit)
+            (<span class="kwa">let</span> ([vec (<span class="kwa">vector-ref</span> masks-at-cell cell-counter)])
+              (<span class="kwa">vector-set</span>! vec color (<span class="kwa">cons</span> (<span class="kwa">car</span> masks) (<span class="kwa">vector-ref</span> vec color)))
+              (<span class="kwa">loop</span> (<span class="kwa">cdr</span> masks) cell-bit cell-counter))
+            (<span class="kwa">loop</span> masks (<span class="kwa">sub1</span> cell-bit) (<span class="kwa">sub1</span> cell-counter))))))
+    (<span class="kwa">for</span> ([v (<span class="kwa">in-vector</span> masks-at-cell)])
+      (<span class="kwa">for</span> ([j (<span class="kwa">in-naturals</span>)]
+            [val (<span class="kwa">in-vector</span> v)])
+        (<span class="kwa">vector-set</span>! v j (<span class="kwa">reverse</span> val))))
+    masks-at-cell))
+
+(<span class="kwa">define</span> masks-at-cell (<span class="kwa">generate-bitmasks</span>))
+
+(<span class="kwa">define</span> masks (<span class="kwa">make-vector</span> <span class="num">10 0</span>))
+(<span class="kwa">define</span> to-go <span class="num">0</span>)
+(<span class="kwa">define</span> solutions (<span class="kwa">mcons</span> #f #f)) <span class="slc">; keeps (min max) solutions</span>
+
+(<span class="kwa">define</span> (<span class="kwa">solve-cell</span>! cell board)
+  (<span class="kwa">when</span> (<span class="kwa">and</span> (<span class="kwa">positive</span>? to-go) (<span class="kwa">not</span> (<span class="kwa">negative</span>? cell)))
+    <span class="slc">;; Need solutions and not off board</span>
+    (<span class="kwa">cond</span> [(= board #x3FFFFFFFFFFFF)
+           <span class="slc">;; Solved</span>
+           (<span class="kwa">add-solutions</span>!)]
+          [(<span class="kwa">not</span> (<span class="kwa">clear</span>? board cell))
+           <span class="slc">;; Cell full, so try next</span>
+           (<span class="kwa">solve-cell</span>! (<span class="kwa">sub1</span> cell) board)]
+          [else
+           <span class="slc">;; Recur</span>
+           (<span class="kwa">for</span>* ([color (<span class="kwa">in-range</span> <span class="num">10</span>)]
+                  #:when (<span class="kwa">zero</span>? (<span class="kwa">vector-ref</span> masks color))
+                  [mask (<span class="kwa">in-list</span> (<span class="kwa">vector-ref</span> (<span class="kwa">vector-ref</span> masks-at-cell cell)
+                                             color))]
+                  #:when (<span class="kwa">zero</span>? (<span class="kwa">bitwise-and</span> mask board)))
+             (<span class="kwa">vector-set</span>! masks color mask)
+             (<span class="kwa">solve-cell</span>! (<span class="kwa">sub1</span> cell) (<span class="kwa">bitwise-ior</span> board mask))
+             (<span class="kwa">vector-set</span>! masks color <span class="num">0</span>))])))
+
+(<span class="kwa">define</span> (<span class="kwa">add-solutions</span>!)
+  (<span class="kwa">define</span> (<span class="kwa">add</span>! solution)
+    (<span class="kwa">cond</span> [(<span class="kwa">not</span> (<span class="kwa">mcar</span> solutions))
+           (<span class="kwa">set-mcar</span>! solutions solution)
+           (<span class="kwa">set-mcdr</span>! solutions solution)]
+          [(<span class="kwa">bytes</span>&lt;? solution (<span class="kwa">mcar</span> solutions))
+           (<span class="kwa">set-mcar</span>! solutions solution)]
+          [(<span class="kwa">bytes</span>&gt;? solution (<span class="kwa">mcdr</span> solutions))
+           (<span class="kwa">set-mcdr</span>! solutions solution)]))
+  (<span class="kwa">let</span>* ([s (<span class="kwa">list-</span>&gt;bytes
+             (<span class="kwa">for</span>/list ([pos (<span class="kwa">in-range</span> size)])
+               (<span class="kwa">for</span>/or ([color (<span class="kwa">in-range</span> <span class="num">10</span>)])
+                       (<span class="kwa">and</span> (<span class="kwa">not</span> (<span class="kwa">clear</span>? (<span class="kwa">vector-ref</span> masks color) pos))
+                            (+ color (<span class="kwa">char-</span>&gt;integer #\<span class="num">0</span>))))))]
+         [ns (<span class="kwa">make-bytes</span> size)])
+    <span class="slc">;; Inverse</span>
+    (<span class="kwa">for</span>* ([y (<span class="kwa">in-range</span> height)]
+           [x (<span class="kwa">in-range</span> width)])
+      (<span class="kwa">bytes-set</span>! ns (+ x (* y width))
+                  (<span class="kwa">bytes-ref</span> s (+ (<span class="kwa">-</span> width (+ x <span class="num">1</span>))
+                                  (* width (<span class="kwa">-</span> height (+ y <span class="num">1</span>)))))))
+    <span class="slc">;; Keep first and last only</span>
+    (<span class="kwa">add</span>! s)
+    (<span class="kwa">add</span>! ns)
+    (<span class="kwa">set</span>! to-go (<span class="kwa">-</span> to-go <span class="num">2</span>))))
+
+(<span class="kwa">define</span> (<span class="kwa">print-solution</span> solution)
+  (<span class="kwa">let</span> ([solution (<span class="kwa">bytes-</span>&gt;string/utf-8 solution)])
+    (<span class="kwa">for</span> ([y (<span class="kwa">in-range</span> height)])
+      (<span class="kwa">when</span> (<span class="kwa">odd</span>? y) (<span class="kwa">display</span> <span class="str">&quot; &quot;</span>))
+      (<span class="kwa">for</span> ([x (<span class="kwa">in-range</span> width)])
+        (<span class="kwa">printf</span> <span class="str">&quot;~a &quot;</span> (<span class="kwa">string-ref</span> solution (+ x (* y width)))))
+      (<span class="kwa">printf</span> <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>))
+    (<span class="kwa">newline</span>)))
+
+(<span class="kwa">define</span> (<span class="kwa">solve</span>! n)
+  (<span class="kwa">set</span>! to-go n)
+  (<span class="kwa">solve-cell</span>! (<span class="kwa">sub1</span> size) <span class="num">0</span>))
+
+(<span class="kwa">command-line</span> #:args (<span class="kwa">n</span>)
+  (<span class="kwa">let</span> ([n (<span class="kwa">string-</span>&gt;number n)])
+    (<span class="kwa">solve</span>! n)
+    (<span class="kwa">printf</span> <span class="str">&quot;~a solutions found</span><span class="esc">\n\n</span><span class="str">&quot;</span> (<span class="kwa">-</span> n to-go))
+    (<span class="kwa">print-solution</span> (<span class="kwa">mcar</span> solutions))
+    (<span class="kwa">print-solution</span> (<span class="kwa">mcdr</span> solutions))))

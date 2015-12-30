@@ -1,0 +1,295 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;; contributed by Mike Pall</span>
+<span class="slc">;; java port by Stefan Krause</span>
+<span class="slc">;; clojure port by Koji Yusa</span>
+<span class="slc">;; this code uses jgmplib library</span>
+
+(ns pidigits
+  (:gen-class)
+  (:import (clojure.asm Opcodes Type Label ClassWriter)))
+
+<span class="slc">;; Compose matrix with numbers on the right.</span>
+(<span class="kwa">defn</span> compose_r [bq br bs bt GI]
+  (<span class="kwc">let</span> [q (GI <span class="num">0</span>) r (GI <span class="num">1</span>) s (GI <span class="num">2</span>) t (GI <span class="num">3</span>) u (GI <span class="num">4</span>) v (GI <span class="num">5</span>) w (GI <span class="num">6</span>)] 
+    (.mul u r bs)
+    (.mul r r bq)
+    (.mul v t br)
+    (.add r r v)
+    (.mul t t bt)
+    (.add t t u)
+    (.mul s s bt)
+    (.mul u q bs)
+    (.add s s u)
+    (.mul q q bq)))
+
+<span class="slc">;; Compose matrix with numbers on the left.</span>
+(<span class="kwa">defn</span> compose_l [bq br bs bt GI]
+  (<span class="kwc">let</span> [q (GI <span class="num">0</span>) r (GI <span class="num">1</span>) s (GI <span class="num">2</span>) t (GI <span class="num">3</span>) u (GI <span class="num">4</span>) v (GI <span class="num">5</span>) w (GI <span class="num">6</span>)] 
+    (.mul r r bt)
+    (.mul u q br)
+    (.add r r u)
+    (.mul u t bs)
+    (.mul t t bt)
+    (.mul v s br)
+    (.add t t v)
+    (.mul s s bq)
+    (.add s s u)
+    (.mul q q bq)))
+
+<span class="slc">;; Extract one digit.</span>
+(<span class="kwa">defn</span> extract [j GI]
+  (<span class="kwc">let</span> [q (GI <span class="num">0</span>) r (GI <span class="num">1</span>) s (GI <span class="num">2</span>) t (GI <span class="num">3</span>) u (GI <span class="num">4</span>) v (GI <span class="num">5</span>) w (GI <span class="num">6</span>)] 
+    (.mul u q j)
+    (.add u u r)
+    (.mul v s j)
+    (.add v v t)
+    (.div w u v)
+    (.intValue w)))
+
+<span class="slc">;; Print one digit. Returns 1 for the last digit.</span>
+(<span class="kwa">defn</span> prdigit [y i n]
+  (printf <span class="str">&quot;%s&quot;</span> y) 
+  (<span class="kwc">if</span> (or (= (mod i <span class="num">10</span>) <span class="num">0</span>) (= i n))
+    (do
+      (<span class="kwc">if</span> (not= (mod i <span class="num">10</span>) <span class="num">0</span>)
+        (printf <span class="str">&quot;%s&quot;</span> (apply str (<span class="kwd">repeat</span> (- <span class="num">10</span> (mod i <span class="num">10</span>)) <span class="str">&quot; &quot;</span>))))
+      (printf <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:%s</span><span class="esc">\n</span><span class="str">&quot;</span> i)))
+  (= i n)) 
+
+<span class="slc">;; Generate successive digits of PI.</span>
+(<span class="kwa">defn</span> digits [^long n GI]
+  (<span class="kwc">let</span> [q (GI <span class="num">0</span>) r (GI <span class="num">1</span>) s (GI <span class="num">2</span>) t (GI <span class="num">3</span>) u (GI <span class="num">4</span>) v (GI <span class="num">5</span>) w (GI <span class="num">6</span>)] 
+    (do
+      (.set q <span class="num">1</span>)
+      (.set r <span class="num">0</span>)
+      (.set s <span class="num">0</span>)
+      (.set t <span class="num">1</span>)
+      (.set u <span class="num">0</span>)
+      (.set v <span class="num">0</span>)
+      (.set w <span class="num">0</span>)
+      (<span class="kwb">loop</span> [k (int <span class="num">1</span>) i (int <span class="num">1</span>)]
+        (<span class="kwc">let</span> [y (extract <span class="num">3</span> GI)]
+          (<span class="kwc">if</span> (= y (extract <span class="num">4</span> GI))
+            (<span class="kwc">if</span> (prdigit y i n)
+              k
+              (do
+                (compose_r <span class="num">10</span> (* -<span class="num">10</span> y) <span class="num">0 1</span> GI)
+                (<span class="kwb">recur</span> k (inc i))))
+            (do
+              (compose_l k (+ (* <span class="num">4</span> k) <span class="num">2</span>) <span class="num">0</span> (+ (* <span class="num">2</span> k) <span class="num">1</span>) GI)
+              (<span class="kwb">recur</span> (inc k) i))))))))
+
+<span class="slc">;; deassempled GmpInteger</span>
+(<span class="kwa">defn</span> makeGmpInteger []
+  (<span class="kwc">let</span> [cw (ClassWriter. <span class="num">0</span>)]
+    (.visit cw Opcodes/V1_6 (bit-or Opcodes/ACC_PUBLIC Opcodes/ACC_SUPER) <span class="str">&quot;GmpInteger&quot;</span> nil <span class="str">&quot;java/lang/Object&quot;</span> nil)
+    (.visitSource cw <span class="str">&quot;GmpInteger.java&quot;</span> nil)
+    (doto (.visitField cw Opcodes/ACC_PRIVATE <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span> nil nil)
+      (.visitEnd))
+    (<span class="kwc">let</span> [l0 (Label.) l1 (Label.) l2 (Label.) l3 (Label.)]
+      (doto (.visitMethod cw Opcodes/ACC_PUBLIC <span class="str">&quot;&lt;init&gt;&quot;</span> <span class="str">&quot;()V&quot;</span> nil nil)
+        (.visitCode)
+        (.visitLabel l0)
+        (.visitLineNumber <span class="num">12</span> l0)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitMethodInsn Opcodes/INVOKESPECIAL <span class="str">&quot;java/lang/Object&quot;</span> <span class="str">&quot;&lt;init&gt;&quot;</span> <span class="str">&quot;()V&quot;</span>)
+        (.visitLabel l1)
+        (.visitLineNumber <span class="num">13</span> l1)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitMethodInsn Opcodes/INVOKESPECIAL <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;mpz_init&quot;</span> <span class="str">&quot;()V&quot;</span>)
+        (.visitLabel l2)
+        (.visitLineNumber <span class="num">14</span> l2)
+        (.visitInsn Opcodes/RETURN)
+        (.visitLabel l3)
+        (.visitLocalVariable <span class="str">&quot;this&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil, l0 l3 <span class="num">0</span>)
+        (.visitMaxs <span class="num">1 1</span>)
+        (.visitEnd)))
+    (<span class="kwc">let</span> [l0 (Label.) l1 (Label.) l2 (Label.) l3 (Label.)]
+      (doto (.visitMethod cw Opcodes/ACC_PUBLIC <span class="str">&quot;&lt;init&gt;&quot;</span> <span class="str">&quot;(I)V&quot;</span> nil nil)
+        (.visitCode)
+        (.visitLabel l0)
+        (.visitLineNumber <span class="num">17</span> l0)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitMethodInsn Opcodes/INVOKESPECIAL <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;&lt;init&gt;&quot;</span> <span class="str">&quot;()V&quot;</span>)
+        (.visitLabel l1)
+        (.visitLineNumber <span class="num">18</span> l1)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitVarInsn Opcodes/ILOAD <span class="num">1</span>)
+        (.visitMethodInsn Opcodes/INVOKESTATIC <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;mpz_set_si&quot;</span> <span class="str">&quot;(JI)V&quot;</span>)
+        (.visitLabel l2)
+        (.visitLineNumber <span class="num">19</span> l2)
+        (.visitInsn Opcodes/RETURN)
+        (.visitLabel l3)
+        (.visitLocalVariable <span class="str">&quot;this&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l3 <span class="num">0</span>)
+        (.visitLocalVariable <span class="str">&quot;value&quot;</span>  <span class="str">&quot;I&quot;</span> nil l0 l3 <span class="num">1</span>)
+        (.visitMaxs <span class="num">3 2</span>)
+        (.visitEnd)))
+    (<span class="kwc">let</span> [l0 (Label.) l1 (Label.)]
+      (doto (.visitMethod cw Opcodes/ACC_PUBLIC <span class="str">&quot;set&quot;</span> <span class="str">&quot;(I)V&quot;</span> nil nil)
+        (.visitCode)
+        (.visitLabel l0)
+        (.visitLineNumber <span class="num">21</span> l0)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitVarInsn Opcodes/ILOAD <span class="num">1</span>)
+        (.visitMethodInsn Opcodes/INVOKESTATIC <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;mpz_set_si&quot;</span> <span class="str">&quot;(JI)V&quot;</span>)
+        (.visitInsn Opcodes/RETURN)
+        (.visitLabel l1)
+        (.visitLocalVariable <span class="str">&quot;this&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l1 <span class="num">0</span>)
+        (.visitLocalVariable <span class="str">&quot;value&quot;</span> <span class="str">&quot;I&quot;</span> nil l0 l1 <span class="num">1</span>)
+        (.visitMaxs <span class="num">3 2</span>)
+        (.visitEnd)))
+    (<span class="kwc">let</span> [l0 (Label.) l1 (Label.)]
+      (doto (.visitMethod cw Opcodes/ACC_PUBLIC <span class="str">&quot;mul&quot;</span> <span class="str">&quot;(LGmpInteger;I)V&quot;</span> nil nil)
+        (.visitCode)
+        (.visitLabel l0)
+        (.visitLineNumber <span class="num">23</span> l0)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">1</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitVarInsn Opcodes/ILOAD <span class="num">2</span>)
+        (.visitMethodInsn Opcodes/INVOKESTATIC <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;mpz_mul_si&quot;</span> <span class="str">&quot;(JJI)V&quot;</span>)
+        (.visitInsn Opcodes/RETURN)
+        (.visitLabel l1)
+        (.visitLocalVariable <span class="str">&quot;this&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l1 <span class="num">0</span>)
+        (.visitLocalVariable <span class="str">&quot;src&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l1 <span class="num">1</span>)
+        (.visitLocalVariable <span class="str">&quot;val&quot;</span> <span class="str">&quot;I&quot;</span> nil l0 l1 <span class="num">2</span>)
+        (.visitMaxs <span class="num">5 3</span>)
+        (.visitEnd)))
+    (<span class="kwc">let</span> [l0 (Label.) l1 (Label.)]
+      (doto (.visitMethod cw Opcodes/ACC_PUBLIC <span class="str">&quot;add&quot;</span> <span class="str">&quot;(LGmpInteger;LGmpInteger;)V&quot;</span> nil nil)
+        (.visitCode)
+        (.visitLabel l0)
+        (.visitLineNumber <span class="num">25</span> l0)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">1</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">2</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitMethodInsn Opcodes/INVOKESTATIC <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;mpz_add&quot;</span> <span class="str">&quot;(JJJ)V&quot;</span>)
+        (.visitInsn Opcodes/RETURN)
+        (.visitLabel l1)
+        (.visitLocalVariable <span class="str">&quot;this&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l1 <span class="num">0</span>)
+        (.visitLocalVariable <span class="str">&quot;op1&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l1 <span class="num">1</span>)
+        (.visitLocalVariable <span class="str">&quot;op2&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l1 <span class="num">2</span>)
+        (.visitMaxs <span class="num">6 3</span>)
+        (.visitEnd)))
+    (<span class="kwc">let</span> [l0 (Label.) l1 (Label.)]
+      (doto (.visitMethod cw Opcodes/ACC_PUBLIC <span class="str">&quot;div&quot;</span> <span class="str">&quot;(LGmpInteger;LGmpInteger;)V&quot;</span> nil nil)
+        (.visitCode)
+        (.visitLabel l0)
+        (.visitLineNumber <span class="num">27</span> l0)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">1</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">2</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitMethodInsn Opcodes/INVOKESTATIC <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;mpz_tdiv_q&quot;</span> <span class="str">&quot;(JJJ)V&quot;</span>)
+        (.visitInsn Opcodes/RETURN)
+        (.visitLabel l1)
+        (.visitLocalVariable <span class="str">&quot;this&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l1 <span class="num">0</span>)
+        (.visitLocalVariable <span class="str">&quot;op1&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l1 <span class="num">1</span>)
+        (.visitLocalVariable <span class="str">&quot;op2&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l1 <span class="num">2</span>)
+        (.visitMaxs <span class="num">6 3</span>)
+        (.visitEnd)))
+    (<span class="kwc">let</span> [l0 (Label.) l1 (Label.)]
+      (doto (.visitMethod cw Opcodes/ACC_PUBLIC <span class="str">&quot;intValue&quot;</span> <span class="str">&quot;()I&quot;</span> nil nil)
+        (.visitCode)
+        (.visitLabel l0)
+        (.visitLineNumber <span class="num">29</span> l0)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitMethodInsn Opcodes/INVOKESTATIC <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;mpz_get_si&quot;</span> <span class="str">&quot;(J)I&quot;</span>)
+        (.visitInsn Opcodes/IRETURN)
+        (.visitLabel l1)
+        (.visitLocalVariable <span class="str">&quot;this&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l1 <span class="num">0</span>)
+        (.visitMaxs <span class="num">2 1</span>)
+        (.visitEnd)))
+    (<span class="kwc">let</span> [l0 (Label.) l1 (Label.)]
+      (doto (.visitMethod cw Opcodes/ACC_PUBLIC <span class="str">&quot;doubleValue&quot;</span> <span class="str">&quot;()D&quot;</span> nil nil)
+        (.visitCode)
+        (.visitLabel l0)
+        (.visitLineNumber <span class="num">31</span> l0)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitMethodInsn Opcodes/INVOKESTATIC <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;mpz_get_d&quot;</span> <span class="str">&quot;(J)D&quot;</span>)
+        (.visitInsn Opcodes/DRETURN)
+        (.visitLabel l1)
+        (.visitLocalVariable <span class="str">&quot;this&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l1 <span class="num">0</span>)
+        (.visitMaxs <span class="num">2 1</span>)
+        (.visitEnd)))
+    (<span class="kwc">let</span> [l0 (Label.) l1 (Label.) l2 (Label.)]
+      (doto (.visitMethod cw Opcodes/ACC_PROTECTED <span class="str">&quot;finalize&quot;</span> <span class="str">&quot;()V&quot;</span> nil nil)
+        (.visitCode)
+        (.visitLabel l0)
+        (.visitLineNumber <span class="num">41</span> l0)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitVarInsn Opcodes/ALOAD <span class="num">0</span>)
+        (.visitFieldInsn Opcodes/GETFIELD <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;pointer&quot;</span> <span class="str">&quot;J&quot;</span>)
+        (.visitMethodInsn Opcodes/INVOKESPECIAL <span class="str">&quot;GmpInteger&quot;</span> <span class="str">&quot;mpz_clear&quot;</span> <span class="str">&quot;(J)V&quot;</span>)
+        (.visitLabel l1)
+        (.visitLineNumber <span class="num">42</span> l1)
+        (.visitInsn Opcodes/RETURN)
+        (.visitLabel l2)
+        (.visitLocalVariable <span class="str">&quot;this&quot;</span> <span class="str">&quot;LGmpInteger;&quot;</span> nil l0 l2 <span class="num">0</span>)
+        (.visitMaxs <span class="num">3 1</span>)
+        (.visitEnd)))
+    (doto (.visitMethod cw (bit-or Opcodes/ACC_PRIVATE Opcodes/ACC_NATIVE) <span class="str">&quot;mpz_init&quot;</span> <span class="str">&quot;()V&quot;</span> nil nil)
+      (.visitEnd))
+    (doto (.visitMethod cw (bit-or Opcodes/ACC_PRIVATE Opcodes/ACC_NATIVE) <span class="str">&quot;mpz_clear&quot;</span> <span class="str">&quot;(J)V&quot;</span> nil nil)
+      (.visitEnd))
+    (doto (.visitMethod cw (bit-or Opcodes/ACC_PRIVATE Opcodes/ACC_STATIC Opcodes/ACC_NATIVE) <span class="str">&quot;mpz_mul_si&quot;</span> <span class="str">&quot;(JJI)V&quot;</span> nil nil)
+      (.visitEnd))
+    (doto (.visitMethod cw (bit-or Opcodes/ACC_PRIVATE Opcodes/ACC_STATIC Opcodes/ACC_NATIVE) <span class="str">&quot;mpz_add&quot;</span> <span class="str">&quot;(JJJ)V&quot;</span> nil nil)
+      (.visitEnd))
+    (doto (.visitMethod cw (bit-or Opcodes/ACC_PRIVATE Opcodes/ACC_STATIC Opcodes/ACC_NATIVE) <span class="str">&quot;mpz_tdiv_q&quot;</span> <span class="str">&quot;(JJJ)V&quot;</span> nil nil)
+      (.visitEnd))
+    (doto (.visitMethod cw (bit-or Opcodes/ACC_PRIVATE Opcodes/ACC_STATIC Opcodes/ACC_NATIVE) <span class="str">&quot;mpz_set_si&quot;</span> <span class="str">&quot;(JI)V&quot;</span> nil nil)
+      (.visitEnd))
+    (doto (.visitMethod cw (bit-or Opcodes/ACC_PRIVATE Opcodes/ACC_STATIC Opcodes/ACC_NATIVE) <span class="str">&quot;mpz_get_si&quot;</span> <span class="str">&quot;(J)I&quot;</span> nil nil)
+      (.visitEnd))
+    (doto (.visitMethod cw (bit-or Opcodes/ACC_PRIVATE Opcodes/ACC_STATIC Opcodes/ACC_NATIVE) <span class="str">&quot;mpz_get_d&quot;</span> <span class="str">&quot;(J)D&quot;</span> nil nil)
+      (.visitEnd))
+    (<span class="kwc">let</span> [l0 (Label.) l1 (Label.)]
+      (doto (.visitMethod cw Opcodes/ACC_STATIC <span class="str">&quot;&lt;clinit&gt;&quot;</span> <span class="str">&quot;()V&quot;</span> nil nil)
+        (.visitCode)
+        (.visitLabel l0)
+        (.visitLineNumber <span class="num">36</span> l0)
+        (.visitLdcInsn <span class="str">&quot;jgmplib&quot;</span>)
+        (.visitMethodInsn Opcodes/INVOKESTATIC <span class="str">&quot;java/lang/System&quot;</span> <span class="str">&quot;loadLibrary&quot;</span> <span class="str">&quot;(Ljava/lang/String;)V&quot;</span>)
+        (.visitLabel l1)
+        (.visitLineNumber <span class="num">37</span> l1)
+        (.visitInsn Opcodes/RETURN)
+        (.visitMaxs <span class="num">1 0</span>)
+        (.visitEnd)))
+    (.visitEnd cw)
+    (<span class="kwc">let</span> [ba (.toByteArray cw)
+          dcl (clojure.lang.DynamicClassLoader.)]
+      (.defineClass dcl <span class="str">&quot;GmpInteger&quot;</span> ba nil))))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+
+  <span class="slc">;; load class</span>
+  (<span class="kwa">def</span> GmpInt (makeGmpInteger)) 
+
+  <span class="slc">;; use reflection familiar with compile</span>
+  (<span class="kwa">def</span> q (.. GmpInt newInstance))
+  (<span class="kwa">def</span> r (.. GmpInt newInstance))
+  (<span class="kwa">def</span> s (.. GmpInt newInstance))
+  (<span class="kwa">def</span> t (.. GmpInt newInstance))
+  (<span class="kwa">def</span> u (.. GmpInt newInstance))
+  (<span class="kwa">def</span> v (.. GmpInt newInstance))
+  (<span class="kwa">def</span> w (.. GmpInt newInstance))
+
+  (<span class="kwa">def</span> GI [q r s t u v w])
+
+  (<span class="kwc">let</span> [n (try (Integer/parseInt (<span class="kwd">first</span> args))
+               (catch NumberFormatException e <span class="num">27</span>))]
+    (digits n GI))
+  (flush))
+

@@ -1,0 +1,266 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;;   contributed by Alexey Voznyuk</span>
+<span class="slc">;;</span>
+
+(<span class="kwa">defpackage</span> #:smp-utils
+  (:use :cl :sb-alien :sb-thread)
+  (:export #:affinity #:apic-core-map))
+
+(<span class="kwa">in-package</span> :smp-utils)
+
+(<span class="kwa">defun</span> cpuset-&gt;list (<span class="kwa">cpuset</span>)
+  (<span class="kwa">loop</span> :for i :from <span class="num">0</span> :below <span class="num">128</span>
+     :unless (<span class="kwa">zerop</span> (<span class="kwa">ldb</span> (<span class="kwa">byte</span> <span class="num">1</span> (<span class="kwa">mod</span> i <span class="num">8</span>)) (<span class="kwa">elt</span> cpuset (<span class="kwa">truncate</span> i <span class="num">8</span>))))
+     :collect i))
+
+(<span class="kwa">defun</span> list-&gt;cpuset (<span class="kwa">cpuset-list</span>)
+  (<span class="kwa">loop</span> :with cpuset = (<span class="kwa">make-array</span> <span class="num">16</span> :element-type '(<span class="kwa">unsigned-byte</span> <span class="num">8</span>))
+     :for i :from <span class="num">0</span> :below <span class="num">128</span>
+     :when (<span class="kwa">find</span> i cpuset-list :test #'=)
+     :do (<span class="kwa">setf</span> (<span class="kwa">ldb</span> (<span class="kwa">byte</span> <span class="num">1</span> (<span class="kwa">mod</span> i <span class="num">8</span>)) (<span class="kwa">elt</span> cpuset (<span class="kwa">truncate</span> i <span class="num">8</span>))) <span class="num">1</span>)
+     :finally (<span class="kwa">return</span> cpuset)))
+
+(<span class="kwa">defun</span> affinity (<span class="kwa">thread</span>)
+  (<span class="kwa">with-alien</span> ((<span class="kwa">alien-cpuset</span> (<span class="kwa">array</span> unsigned-char <span class="num">16</span>)))
+    (<span class="kwa">let</span> ((<span class="kwa">retcode</span> (<span class="kwa">alien-funcall</span> (<span class="kwa">extern-alien</span> <span class="str">&quot;pthread_getaffinity_np&quot;</span> 
+                                                (<span class="kwa">function</span> int 
+                                                          unsigned-long 
+                                                          unsigned-long 
+                                                          (* unsigned-char)))
+                                  (<span class="kwa">sb-thread</span>::thread-os-thread thread)
+                                  <span class="num">16</span>
+                                  (<span class="kwa">cast</span> alien-cpuset (* unsigned-char)))))
+      (<span class="kwa">when</span> (<span class="kwa">zerop</span> retcode)
+        (<span class="kwa">values</span> t (<span class="kwa">loop</span> :with cpuset = (<span class="kwa">make-array</span> <span class="num">16</span> :element-type '(<span class="kwa">unsigned-byte</span> <span class="num">8</span>))
+                     :for i :from <span class="num">0</span> :below <span class="num">16</span>
+                     :do (<span class="kwa">setf</span> (<span class="kwa">elt</span> cpuset i) (<span class="kwa">deref</span> alien-cpuset i))
+                     :finally (<span class="kwa">return</span> (<span class="kwa">cpuset-</span>&gt;list cpuset))))))))
+
+(<span class="kwa">defun</span> (<span class="kwa">setf</span> affinity) (<span class="kwa">affinity</span> thread)
+  (<span class="kwa">with-alien</span> ((<span class="kwa">alien-cpuset</span> (<span class="kwa">array</span> unsigned-char <span class="num">16</span>)))
+    (<span class="kwa">loop</span> :with cpuset = (<span class="kwa">list-</span>&gt;cpuset affinity)
+       :for i :from <span class="num">0</span> :below <span class="num">16</span>
+       :do (<span class="kwa">setf</span> (<span class="kwa">deref</span> alien-cpuset i) (<span class="kwa">elt</span> cpuset i)))
+    (<span class="kwa">zerop</span> (<span class="kwa">alien-funcall</span> (<span class="kwa">extern-alien</span> <span class="str">&quot;pthread_setaffinity_np&quot;</span> 
+                                        (<span class="kwa">function</span> int 
+                                                  unsigned-long 
+                                                  unsigned-long 
+                                                  (* unsigned-char)))
+                          (<span class="kwa">sb-thread</span>::thread-os-thread thread)
+                          <span class="num">16</span>
+                          (<span class="kwa">cast</span> alien-cpuset (* unsigned-char))))))
+
+(<span class="kwa">defun</span> apic-core-map (<span class="kwa">cpuset-list</span>)
+  (<span class="kwa">let</span> ((<span class="kwa">default-map</span> (<span class="kwa">mapcar</span> #'list cpuset-list cpuset-list)))
+    (<span class="kwa">unless</span> (<span class="kwa">probe-file</span> #p<span class="str">&quot;/proc/cpuinfo&quot;</span>)
+      (<span class="kwa">return-from</span> apic-core-map default-map))
+    (<span class="kwa">with-open-file</span> (<span class="kwa">cpuinfo</span> #p<span class="str">&quot;/proc/cpuinfo&quot;</span>)
+      (<span class="kwa">flet</span> ((<span class="kwa">parse-key-value</span> (<span class="kwa">line</span> key)
+               (<span class="kwa">when</span> (<span class="kwa">and</span> (&gt; (<span class="kwa">length</span> line) (<span class="kwa">length</span> key))
+                          (<span class="kwa">string</span>= line key :end1 (<span class="kwa">length</span> key)))
+                 (<span class="kwa">let</span> ((<span class="kwa">value-offset</span> (<span class="kwa">position</span> #\: line :start (<span class="kwa">length</span> key))))
+                   (<span class="kwa">when</span> value-offset
+                     (<span class="kwa">parse-integer</span> line :start (<span class="kwa">1</span>+ value-offset) :junk-allowed t))))))
+        (<span class="kwa">loop</span> :with current-cpu = nil
+           :for line = (<span class="kwa">read-line</span> cpuinfo nil nil)
+           :while line
+           :do (<span class="kwa">multiple-value-bind</span> (<span class="kwa">processor</span> apicid)
+                   (<span class="kwa">values</span> (<span class="kwa">parse-key-value</span> line <span class="str">&quot;processor&quot;</span>)
+                           (<span class="kwa">parse-key-value</span> line <span class="str">&quot;apicid&quot;</span>))
+                 (<span class="kwa">cond</span> ((<span class="kwa">and</span> current-cpu apicid) (<span class="kwa">setf</span> (<span class="kwa">first</span> (<span class="kwa">find</span> current-cpu default-map :key #'second)) apicid
+                                                       current-cpu nil))
+                       (<span class="kwa">processor</span> (<span class="kwa">setf</span> current-cpu processor))))
+           :finally (<span class="kwa">return</span> (<span class="kwa">sort</span> default-map #'&lt; :key #'first)))))))
+  
+
+(<span class="kwa">defpackage</span> #:chameneos-redux
+  (:use :cl :smp-utils))
+
+(<span class="kwa">in-package</span> :chameneos-redux)
+
+<span class="slc">;;</span>
+<span class="slc">;; Game DSL compiler</span>
+<span class="slc">;;</span>
+
+(<span class="kwa">defmacro</span> declare-colors-map (&amp;rest transformations)
+  `(<span class="kwa">progn</span>
+     (<span class="kwa">defun</span> complement-color (<span class="kwa">color-a</span> color-b)
+       (<span class="kwa">cond</span>
+         ,&#64;(<span class="kwa">loop</span>
+              :for (<span class="kwa">test-a</span> kw-plus test-b kw-arrow test-result) :in transformations
+              :do (<span class="kwa">assert</span> (<span class="kwa">and</span> (<span class="kwa">eq</span> kw-plus '+) (<span class="kwa">eq</span> kw-arrow '-&gt;)))
+              :collect `((<span class="kwa">and</span> (<span class="kwa">eq</span> color-a ',test-a) (<span class="kwa">eq</span> color-b ',test-b))
+                         ',test-result))
+         (<span class="kwa">t</span> (<span class="kwa">error</span> <span class="str">&quot;Invalid colors combinations&quot;</span>))))
+     (<span class="kwa">defun</span> print-colors ()
+       (<span class="kwa">format</span> t <span class="str">&quot;~{~{~a + ~a -&gt; ~a~%~}~}~%&quot;</span>
+               (<span class="kwa">list</span> ,&#64;(<span class="kwa">loop</span>
+                          :for (<span class="kwa">test-a</span> kw-plus test-b) :in transformations
+                          :collect `(<span class="kwa">list</span> ,(<span class="kwa">string-downcase</span> (<span class="kwa">string</span> test-a))
+                                          ,(<span class="kwa">string-downcase</span> (<span class="kwa">string</span> test-b))
+                                          (<span class="kwa">string-downcase</span>
+                                           (<span class="kwa">string</span> (<span class="kwa">complement-color</span> ',test-a
+                                                                     ',test-b))))))))))
+
+(<span class="kwa">defun</span> spell-number (<span class="kwa">number</span>)
+  (<span class="kwa">with-output-to-string</span> (<span class="kwa">result-string</span>)
+    (<span class="kwa">loop</span>
+       :for char :across (<span class="kwa">the</span> simple-string (<span class="kwa">format</span> nil <span class="str">&quot;~a&quot;</span> number))
+       :do (<span class="kwa">format</span> result-string <span class="str">&quot; ~r&quot;</span> (<span class="kwa">-</span> (<span class="kwa">char-code</span> char) (<span class="kwa">char-code</span> #\<span class="num">0</span>))))))
+
+(<span class="kwa">defmacro</span> spin-wait (<span class="kwa">condition</span> &amp;key no-spin)
+  (<span class="kwa">let</span> ((<span class="kwa">yield-spin</span> `(<span class="kwa">loop</span> :until ,condition :do (<span class="kwa">sb-thread</span>:thread-yield))))
+    (<span class="kwa">if</span> no-spin
+        yield-spin
+        `(<span class="kwa">loop</span>
+            :repeat <span class="num">16384</span>
+            :do (<span class="kwa">when</span> ,condition
+                  (<span class="kwa">return</span>))
+            :finally ,yield-spin))))
+
+(<span class="kwa">defstruct</span> chameneo
+  (<span class="kwa">color</span> 'none :type symbol)
+  (<span class="kwa">meet-count</span> <span class="num">0</span> :type fixnum)
+  (<span class="kwa">same-count</span> <span class="num">0</span> :type fixnum)
+  (<span class="kwa">meet-wait</span> nil :type boolean))
+
+(<span class="kwa">defmacro</span> with-games ((&amp;rest descriptions) &amp;body body)
+  (<span class="kwa">if</span> (<span class="kwa">null</span> descriptions)
+      `(<span class="kwa">progn</span> ,&#64;body)
+      (<span class="kwa">destructuring-bind</span> (<span class="kwa">game-name</span> &amp;rest colors)
+          (<span class="kwa">car</span> descriptions)
+        (<span class="kwa">let</span>* ((<span class="kwa">colors-count</span> (<span class="kwa">length</span> colors))
+               (<span class="kwa">worker-binds</span> (<span class="kwa">loop</span> :repeat colors-count :collect (<span class="kwa">gensym</span>)))
+               (<span class="kwa">chameneos</span> (<span class="kwa">gensym</span> <span class="str">&quot;CHAMENEOS&quot;</span>))
+               (<span class="kwa">action-cas</span> (<span class="kwa">gensym</span> <span class="str">&quot;ACTION-CAS&quot;</span>)))
+          `(<span class="kwa">let</span> ((,chameneos (<span class="kwa">coerce</span> (<span class="kwa">list</span> ,&#64;(<span class="kwa">loop</span> :repeat colors-count :collect `(<span class="kwa">make-chameneo</span>)))
+                                     'simple-vector))
+                 (,action-cas (<span class="kwa">list</span> <span class="num">0</span>))
+                 ,&#64;worker-binds)
+             (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">simple-vector</span> ,colors-count) ,chameneos)
+                      (<span class="kwa">type</span> cons ,action-cas)
+                      (<span class="kwa">type</span> (<span class="kwa">or</span> null sb-thread:thread) ,&#64;worker-binds))
+             (<span class="kwa">flet</span> ((,(<span class="kwa">intern</span> (<span class="kwa">format</span> nil <span class="str">&quot;RUN-~a&quot;</span> game-name)) (<span class="kwa">count</span> threads-affinity smp-p)
+                      (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum count) (<span class="kwa">type</span> list threads-affinity) (<span class="kwa">type</span> boolean smp-p))
+                      (<span class="kwa">setf</span> (<span class="kwa">car</span> ,action-cas) (<span class="kwa">the</span> fixnum (<span class="kwa">ash</span> count ,(<span class="kwa">integer-length</span> (<span class="kwa">1</span>+ colors-count)))))
+                      (<span class="kwa">flet</span> ((<span class="kwa">color-worker</span> (<span class="kwa">id</span> color)
+                               (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">integer</span> <span class="num">0</span> ,(<span class="kwa">1-</span> colors-count)) id) (<span class="kwa">type</span> symbol color))
+                               (<span class="kwa">lambda</span> ()
+                                 (<span class="kwa">setf</span> (<span class="kwa">affinity</span> sb-thread:*current-thread*) threads-affinity)
+                                 (<span class="kwa">let</span> ((<span class="kwa">state</span> (<span class="kwa">car</span> ,action-cas))
+                                       (<span class="kwa">self</span> (<span class="kwa">elt</span> ,chameneos id)))
+                                   (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">integer</span> <span class="num">0</span> ,most-positive-fixnum) state)
+                                            (<span class="kwa">type</span> chameneo self))
+                                   (<span class="kwa">setf</span> (<span class="kwa">chameneo-color</span> self) color)
+                                   (<span class="kwa">loop</span>
+                                      (<span class="kwa">when</span> (<span class="kwa">zerop</span> state)
+                                        (<span class="kwa">return</span>))
+                                      (<span class="kwa">let</span>* ((<span class="kwa">peer-id</span> (<span class="kwa">logand</span> state ,(<span class="kwa">1-</span> (<span class="kwa">ash</span> <span class="num">1</span> (<span class="kwa">integer-length</span> (<span class="kwa">1</span>+ colors-count))))))
+                                             (<span class="kwa">new-state</span> (<span class="kwa">if</span> (<span class="kwa">zerop</span> peer-id)
+                                                            (<span class="kwa">logior</span> state (<span class="kwa">1</span>+ id))
+                                                            (<span class="kwa">-</span> state peer-id ,(<span class="kwa">ash</span> <span class="num">1</span> (<span class="kwa">integer-length</span> (<span class="kwa">1</span>+ colors-count)))))))
+                                        (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">integer</span> <span class="num">0</span> ,(<span class="kwa">1</span>+ colors-count)) peer-id)
+                                                 (<span class="kwa">type</span> (<span class="kwa">integer</span> <span class="num">0</span> ,most-positive-fixnum) new-state))
+                                        (<span class="kwa">let</span> ((<span class="kwa">prev-state</span> (<span class="kwa">sb-ext</span>:compare-and-swap (<span class="kwa">car</span> ,action-cas) state new-state)))
+                                          (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">integer</span> <span class="num">0</span> ,most-positive-fixnum) prev-state))
+                                          (<span class="kwa">if</span> (= prev-state state)
+                                              (<span class="kwa">progn</span> 
+                                                (<span class="kwa">if</span> (<span class="kwa">zerop</span> peer-id)
+                                                    (<span class="kwa">progn</span>
+                                                      (<span class="kwa">if</span> smp-p
+                                                          (<span class="kwa">spin-wait</span> (<span class="kwa">chameneo-meet-wait</span> self))
+                                                          (<span class="kwa">spin-wait</span> (<span class="kwa">chameneo-meet-wait</span> self) :no-spin t))
+                                                      (<span class="kwa">setf</span> (<span class="kwa">chameneo-meet-wait</span> self) nil))
+                                                    (<span class="kwa">let</span> ((<span class="kwa">peer</span> (<span class="kwa">elt</span> ,chameneos (<span class="kwa">1-</span> peer-id))))
+                                                      (<span class="kwa">when</span> (= id (<span class="kwa">1-</span> peer-id))
+                                                        (<span class="kwa">incf</span> (<span class="kwa">chameneo-same-count</span> self))
+                                                        (<span class="kwa">incf</span> (<span class="kwa">chameneo-same-count</span> peer)))
+                                                      (<span class="kwa">let</span> ((<span class="kwa">new-color</span> (<span class="kwa">complement-color</span> (<span class="kwa">chameneo-color</span> self)
+                                                                                         (<span class="kwa">chameneo-color</span> peer))))
+                                                        (<span class="kwa">declare</span> (<span class="kwa">type</span> symbol new-color))
+                                                        (<span class="kwa">setf</span> (<span class="kwa">chameneo-color</span> self) new-color
+                                                              (<span class="kwa">chameneo-color</span> peer) new-color)
+                                                        (<span class="kwa">incf</span> (<span class="kwa">chameneo-meet-count</span> self))
+                                                        (<span class="kwa">incf</span> (<span class="kwa">chameneo-meet-count</span> peer))
+                                                        (<span class="kwa">setf</span> (<span class="kwa">chameneo-meet-wait</span> peer) t))))
+                                                (<span class="kwa">setf</span> state (<span class="kwa">car</span> ,action-cas)))
+                                              (<span class="kwa">setf</span> state prev-state)))))))))
+                        ,&#64;(<span class="kwa">loop</span> :for color :in colors :for thread-index :from <span class="num">0</span>
+                             :collect `(<span class="kwa">setf</span> ,(<span class="kwa">elt</span> worker-binds thread-index)
+                                             (<span class="kwa">sb-thread</span>:make-thread (<span class="kwa">color-worker</span> ,thread-index ',color)
+                                                                    :name ,(<span class="kwa">format</span> nil <span class="str">&quot;chameneos-worker-~a-~a/~a&quot;</span>
+                                                                                   (<span class="kwa">string-downcase</span> (<span class="kwa">string</span> color))
+                                                                                   thread-index
+                                                                                   colors-count)))))
+                      nil)
+                    (,(<span class="kwa">intern</span> (<span class="kwa">format</span> nil <span class="str">&quot;WAIT-~a&quot;</span> game-name)) ()
+                      ,&#64;(<span class="kwa">loop</span> :for i :from <span class="num">0</span> :below colors-count :collect `(<span class="kwa">sb-thread</span>:join-thread ,(<span class="kwa">elt</span> worker-binds i)))
+                      (<span class="kwa">format</span> t ,(<span class="kwa">format</span> nil <span class="str">&quot;~{ ~a~}~~%&quot;</span> (<span class="kwa">loop</span> :for color :in colors :collect (<span class="kwa">string-downcase</span> (<span class="kwa">string</span> color)))))
+                      (<span class="kwa">loop</span> :for i :from <span class="num">0</span> :below ,colors-count
+                         :summing (<span class="kwa">chameneo-meet-count</span> (<span class="kwa">elt</span> ,chameneos i)) :into total :of-type fixnum
+                         :do (<span class="kwa">format</span> t <span class="str">&quot;~a~a~%&quot;</span>
+                                     (<span class="kwa">chameneo-meet-count</span> (<span class="kwa">elt</span> ,chameneos i))
+                                     (<span class="kwa">spell-number</span> (<span class="kwa">chameneo-same-count</span> (<span class="kwa">elt</span> ,chameneos i))))
+                         :finally (<span class="kwa">format</span> t <span class="str">&quot;~a~%~%&quot;</span> (<span class="kwa">spell-number</span> total)))))
+               (<span class="kwa">with-games</span> (,&#64;(<span class="kwa">cdr</span> descriptions))
+                 ,&#64;body)))))))
+                      
+
+<span class="slc">;;</span>
+<span class="slc">;; Game contents</span>
+<span class="slc">;;</span>
+
+(<span class="kwa">progn</span>
+  (<span class="kwa">declare-colors-map</span>
+   (<span class="kwa">blue</span> + blue -&gt; blue)
+   (<span class="kwa">blue</span> + red -&gt; yellow)
+   (<span class="kwa">blue</span> + yellow -&gt; red)
+   (<span class="kwa">red</span> + blue -&gt; yellow)
+   (<span class="kwa">red</span> + red -&gt; red)
+   (<span class="kwa">red</span> + yellow -&gt; blue)
+   (<span class="kwa">yellow</span> + blue -&gt; red)
+   (<span class="kwa">yellow</span> + red -&gt; blue)
+   (<span class="kwa">yellow</span> + yellow -&gt; yellow))
+
+  (<span class="kwa">defun</span> run-games (<span class="kwa">count</span> current-affinity)
+    (<span class="kwa">declare</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>))
+             (<span class="kwa">type</span> fixnum count)
+             (<span class="kwa">type</span> list current-affinity))
+    (<span class="kwa">let</span>* ((<span class="kwa">active-cores</span> (<span class="kwa">length</span> current-affinity))
+           (<span class="kwa">smp-p</span> (&gt; active-cores <span class="num">1</span>)))
+      (<span class="kwa">with-games</span> ((<span class="kwa">game-a</span> blue red yellow)
+                   (<span class="kwa">game-b</span> blue red yellow red yellow blue red yellow red blue))
+        (<span class="kwa">if</span> smp-p
+            (<span class="kwa">multiple-value-bind</span> (<span class="kwa">affinity-a</span> affinity-b)
+                (<span class="kwa">if</span> (&lt; active-cores <span class="num">4</span>)
+                    (<span class="kwa">values</span> current-affinity current-affinity)
+                    (<span class="kwa">let</span> ((<span class="kwa">apic-map</span> (<span class="kwa">apic-core-map</span> current-affinity)))
+                      (<span class="kwa">declare</span> (<span class="kwa">type</span> list apic-map))
+                      (<span class="kwa">values</span> (<span class="kwa">list</span> (<span class="kwa">second</span> (<span class="kwa">elt</span> apic-map <span class="num">0</span>)) (<span class="kwa">second</span> (<span class="kwa">elt</span> apic-map <span class="num">1</span>)))
+                              (<span class="kwa">list</span> (<span class="kwa">second</span> (<span class="kwa">elt</span> apic-map <span class="num">2</span>)) (<span class="kwa">second</span> (<span class="kwa">elt</span> apic-map <span class="num">3</span>))))))
+              (<span class="kwa">run-game-a</span> count affinity-a smp-p)
+              (<span class="kwa">run-game-b</span> count affinity-b smp-p)
+              (<span class="kwa">wait-game-a</span>)
+              (<span class="kwa">wait-game-b</span>))
+            (<span class="kwa">progn</span> (<span class="kwa">run-game-a</span> count current-affinity smp-p)
+                   (<span class="kwa">wait-game-a</span>)
+                   (<span class="kwa">run-game-b</span> count current-affinity smp-p)
+                   (<span class="kwa">wait-game-b</span>))))))
+  
+  (<span class="kwa">defun</span> main (&amp;optional force-count)
+    (<span class="kwa">let</span>* ((<span class="kwa">args</span> (<span class="kwa">cdr</span> sb-ext:*posix-argv*))
+           (<span class="kwa">count</span> (<span class="kwa">or</span> force-count (<span class="kwa">if</span> args (<span class="kwa">parse-integer</span> (<span class="kwa">car</span> args)) <span class="num">600</span>))))
+      (<span class="kwa">print-colors</span>)
+      (<span class="kwa">multiple-value-bind</span> (<span class="kwa">success-p</span> current-affinity)
+          (<span class="kwa">affinity</span> sb-thread:*current-thread*)
+        (<span class="kwa">unless</span> success-p
+          (<span class="kwa">error</span> <span class="str">&quot;Failed to retrieve current thread affinity&quot;</span>))
+        (<span class="kwa">run-games</span> count current-affinity)))))
+
+
+(<span class="kwa">in-package</span> :cl-user)
+
+(<span class="kwa">defun</span> main ()
+  (<span class="kwa">chameneos-redux</span>::main))

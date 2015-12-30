@@ -1,0 +1,170 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;</span>
+<span class="slc">;; Adapted from the C (gcc) code by Lorenzo Bolla</span>
+
+(<span class="kwa">declaim</span> (<span class="kwa">optimize</span> (<span class="kwa">speed</span> <span class="num">3</span>) (<span class="kwa">safety</span> <span class="num">0</span>) (<span class="kwa">debug</span> <span class="num">0</span>)))
+
+(<span class="kwa">define-alien-type</span> mp-limb-t unsigned-int)
+(<span class="kwa">define-alien-type</span> mp-bitcnt-t unsigned-long)
+(<span class="kwa">define-alien-type</span> mpz-struct
+				   (<span class="kwa">struct</span> nil
+						   (<span class="kwa">mp-alloc</span> int)
+						   (<span class="kwa">mp-size</span> int)
+						   (<span class="kwa">mp-d</span> mp-limb-t)))
+(<span class="kwa">define-alien-type</span> mpz-ptr (* mpz-struct))
+(<span class="kwa">define-alien-type</span> mpz-srcptr (* mpz-struct))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> mpz-init))
+(<span class="kwa">define-alien-routine</span> (<span class="str">&quot;__gmpz_init&quot;</span> mpz-init)
+					  void
+					  (<span class="kwa">a</span> mpz-ptr))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> mpz-init-set-ui))
+(<span class="kwa">define-alien-routine</span> (<span class="str">&quot;__gmpz_init_set_ui&quot;</span> mpz-init-set-ui)
+					  void
+					  (<span class="kwa">a</span> mpz-ptr)
+					  (<span class="kwa">b</span> unsigned-long))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> mpz-get-ui))
+(<span class="kwa">define-alien-routine</span> (<span class="str">&quot;__gmpz_get_ui&quot;</span> mpz-get-ui)
+					  unsigned-long
+					  (<span class="kwa">a</span> mpz-srcptr))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> mpz-set-ui))
+(<span class="kwa">define-alien-routine</span> (<span class="str">&quot;__gmpz_set_ui&quot;</span> mpz-set-ui)
+					  void
+					  (<span class="kwa">a</span> mpz-ptr)
+					  (<span class="kwa">b</span> unsigned-long))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> mpz-cmp))
+(<span class="kwa">define-alien-routine</span> (<span class="str">&quot;__gmpz_cmp&quot;</span> mpz-cmp)
+					  int
+					  (<span class="kwa">a</span> mpz-srcptr)
+					  (<span class="kwa">b</span> mpz-srcptr))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> mpz-add))
+(<span class="kwa">define-alien-routine</span> (<span class="str">&quot;__gmpz_add&quot;</span> mpz-add)
+					  void
+					  (<span class="kwa">a</span> mpz-ptr)
+					  (<span class="kwa">b</span> mpz-srcptr)
+					  (<span class="kwa">c</span> mpz-srcptr))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> mpz-mul-2exp))
+(<span class="kwa">define-alien-routine</span> (<span class="str">&quot;__gmpz_mul_2exp&quot;</span> mpz-mul-2exp)
+					  void
+					  (<span class="kwa">a</span> mpz-ptr)
+					  (<span class="kwa">b</span> mpz-srcptr)
+					  (<span class="kwa">c</span> mp-bitcnt-t))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> mpz-fdiv-qr))
+(<span class="kwa">define-alien-routine</span> (<span class="str">&quot;__gmpz_fdiv_qr&quot;</span> mpz-fdiv-qr)
+					  void
+					  (<span class="kwa">a</span> mpz-ptr)
+					  (<span class="kwa">b</span> mpz-ptr)
+					  (<span class="kwa">c</span> mpz-srcptr)
+					  (<span class="kwa">d</span> mpz-srcptr))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> mpz-mul-ui))
+(<span class="kwa">define-alien-routine</span> (<span class="str">&quot;__gmpz_mul_ui&quot;</span> mpz-mul-ui)
+					  void
+					  (<span class="kwa">a</span> mpz-ptr)
+					  (<span class="kwa">b</span> mpz-srcptr)
+					  (<span class="kwa">c</span> unsigned-long))
+
+(<span class="kwa">declaim</span> (<span class="kwa">inline</span> mpz-submul-ui))
+(<span class="kwa">define-alien-routine</span> (<span class="str">&quot;__gmpz_submul_ui&quot;</span> mpz-submul-ui)
+					  void
+					  (<span class="kwa">a</span> mpz-ptr)
+					  (<span class="kwa">b</span> mpz-srcptr)
+					  (<span class="kwa">c</span> unsigned-long))
+
+(<span class="kwa">defvar</span> *libgmp-so* (<span class="kwa">load-shared-object</span> <span class="str">&quot;libgmp.so&quot;</span>))
+(<span class="kwa">defvar</span> *tmp1*)
+(<span class="kwa">defvar</span> *tmp2*)
+(<span class="kwa">defvar</span> *num*)
+(<span class="kwa">defvar</span> *acc*)
+(<span class="kwa">defvar</span> *den*)
+
+(<span class="kwa">defun</span> init ()
+  (<span class="kwa">setf</span> *tmp1* (<span class="kwa">make-alien</span> mpz-struct))
+  (<span class="kwa">setf</span> *tmp2* (<span class="kwa">make-alien</span> mpz-struct))
+  (<span class="kwa">setf</span> *num* (<span class="kwa">make-alien</span> mpz-struct))
+  (<span class="kwa">setf</span> *acc* (<span class="kwa">make-alien</span> mpz-struct))
+  (<span class="kwa">setf</span> *den* (<span class="kwa">make-alien</span> mpz-struct)))
+
+(<span class="kwa">defun</span> cleanup ()
+  (<span class="kwa">free-alien</span> *tmp1*)
+  (<span class="kwa">free-alien</span> *tmp2*)
+  (<span class="kwa">free-alien</span> *num*)
+  (<span class="kwa">free-alien</span> *acc*)
+  (<span class="kwa">free-alien</span> *den*))
+
+(<span class="kwa">defun</span> extract-digit ()
+  (<span class="kwa">if</span> (&gt; (<span class="kwa">mpz-cmp</span> *num* *acc*) <span class="num">0</span>)
+	-<span class="num">1</span>
+	(<span class="kwa">progn</span>
+	  (<span class="kwa">mpz-mul-2exp</span> *tmp1* *num* <span class="num">1</span>)
+	  (<span class="kwa">mpz-add</span> *tmp1* *tmp1* *num*)
+	  (<span class="kwa">mpz-add</span> *tmp1* *tmp1* *acc*)
+	  (<span class="kwa">mpz-fdiv-qr</span> *tmp1* *tmp2* *tmp1* *den*)
+	  (<span class="kwa">mpz-add</span> *tmp2* *tmp2* *num*)
+	  (<span class="kwa">if</span> (&gt;= (<span class="kwa">mpz-cmp</span> *tmp2* *den*) <span class="num">0</span>)
+		-<span class="num">1</span>
+		(<span class="kwa">mpz-get-ui</span> *tmp1*)))))
+
+(<span class="kwa">defun</span> next-term (<span class="kwa">k</span>)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum k))
+  (<span class="kwa">let</span> ((<span class="kwa">y2</span> (<span class="kwa">1</span>+ (* <span class="num">2</span> k))))
+	(<span class="kwa">mpz-mul-2exp</span> *tmp1* *num* <span class="num">1</span>)
+	(<span class="kwa">mpz-add</span> *acc* *acc* *tmp1*)
+	(<span class="kwa">mpz-mul-ui</span> *acc* *acc* y2)
+	(<span class="kwa">mpz-mul-ui</span> *num* *num* k)
+	(<span class="kwa">mpz-mul-ui</span> *den* *den* y2)))
+
+(<span class="kwa">defun</span> eliminate-digit (<span class="kwa">d</span>)
+  (<span class="kwa">mpz-submul-ui</span> *acc* *den* d)
+  (<span class="kwa">mpz-mul-ui</span> *acc* *acc* <span class="num">10</span>)
+  (<span class="kwa">mpz-mul-ui</span> *num* *num* <span class="num">10</span>))
+
+(<span class="kwa">defun</span> pidigits (<span class="kwa">n</span>)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum n))
+  (<span class="kwa">let</span> ((<span class="kwa">d</span> <span class="num">0</span>)
+		(<span class="kwa">k</span> <span class="num">0</span>)
+		(<span class="kwa">i</span> <span class="num">0</span>)
+		(<span class="kwa">m</span> <span class="num">0</span>))
+	(<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum d k i m))
+	(<span class="kwa">mpz-init</span> *tmp1*)
+	(<span class="kwa">mpz-init</span> *tmp2*)
+	(<span class="kwa">mpz-init-set-ui</span> *num* <span class="num">1</span>)
+	(<span class="kwa">mpz-init-set-ui</span> *acc* <span class="num">0</span>)
+	(<span class="kwa">mpz-init-set-ui</span> *den* <span class="num">1</span>)
+	(<span class="kwa">loop</span>
+	  (<span class="kwa">loop</span>
+		(<span class="kwa">incf</span> k)
+		(<span class="kwa">next-term</span> k)
+		(<span class="kwa">setf</span> d (<span class="kwa">extract-digit</span>))
+		(<span class="kwa">unless</span> (= d -<span class="num">1</span>)
+		  (<span class="kwa">return</span>)))
+	  (<span class="kwa">format</span> t <span class="str">&quot;~D&quot;</span> d)
+	  (<span class="kwa">incf</span> i)
+	  (<span class="kwa">setf</span> m (<span class="kwa">rem</span> i <span class="num">10</span>))
+	  (<span class="kwa">when</span> (= m <span class="num">0</span>)
+		(<span class="kwa">format</span> t <span class="str">&quot;	:~D~%&quot;</span> i))
+	  (<span class="kwa">when</span> (&gt;= i n)
+		(<span class="kwa">return</span>))
+	  (<span class="kwa">eliminate-digit</span> d))
+	(<span class="kwa">unless</span> (= m <span class="num">0</span>)
+	  (<span class="kwa">format</span> t <span class="str">&quot;	:~D~%&quot;</span> n))))
+
+(<span class="kwa">defun</span> main (&amp;optional n-supplied)
+  (<span class="kwa">let</span> ((<span class="kwa">n</span> (<span class="kwa">or</span> n-supplied
+			   (<span class="kwa">parse-integer</span> (<span class="kwa">or</span> (<span class="kwa">car</span> (<span class="kwa">last</span> #+sbcl sb-ext:*posix-argv*
+											 #+clisp ext:*args*
+											 #+cmu extensions:*command-line-strings*
+											 #+gcl  si::*command-args*))
+								  <span class="str">&quot;2000&quot;</span>)))))
+	(<span class="kwa">init</span>)
+	(<span class="kwa">pidigits</span> n)
+	(<span class="kwa">cleanup</span>)))
+

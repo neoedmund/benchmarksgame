@@ -1,0 +1,20 @@
+
+Wed, 20 May 2015 09:48:02 GMT
+
+MAKE:
+/usr/bin/gnatchop -r -w threadring.gnat-6.gnat
+splitting threadring.gnat-6.gnat into:
+   threadring.adb
+   execute_threadring.adb
+/usr/bin/gnatmake -O3 -fomit-frame-pointer -march=native -msse3 -mfpmath=sse -gnatNp -f threadring.adb -o threadring.gnat-6.gnat_run 
+gcc-4.9 -c -O3 -fomit-frame-pointer -march=native -msse3 -mfpmath=sse -gnatNp threadring.adb
+gcc-4.9 -c -O3 -fomit-frame-pointer -march=native -msse3 -mfpmath=sse -gnatNp execute_threadring.adb
+gnatbind -x threadring.ali
+gnatlink threadring.ali -O3 -fomit-frame-pointer -march=native -msse3 -mfpmath=sse -o threadring.gnat-6.gnat_run
+0.67s to complete and log all make actions
+
+COMMAND LINE:
+./threadring.gnat-6.gnat_run 50000000
+
+PROGRAM OUTPUT:
+292

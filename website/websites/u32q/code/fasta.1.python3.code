@@ -1,0 +1,85 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># modified by Ian Osgood</span>
+<span class="slc"># modified again by Heinrich Acker</span>
+<span class="slc"># modified by Justin Peel</span>
+<span class="slc"># 2to3</span>
+
+<span class="kwa">import</span> sys, bisect
+
+alu = (
+   <span class="str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG'</span>
+   <span class="str">'GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA'</span>
+   <span class="str">'CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT'</span>
+   <span class="str">'ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA'</span>
+   <span class="str">'GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG'</span>
+   <span class="str">'AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC'</span>
+   <span class="str">'AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span>)
+
+iub = <span class="kwb">list</span>(<span class="kwb">zip</span>(<span class="str">'acgtBDHKMNRSVWY'</span>, [<span class="num">0.27</span>, <span class="num">0.12</span>, <span class="num">0.12</span>, <span class="num">0.27</span>] + [<span class="num">0.02</span>]*<span class="num">11</span>))
+
+homosapiens = [
+    (<span class="str">'a'</span>, <span class="num">0.3029549426680</span>),
+    (<span class="str">'c'</span>, <span class="num">0.1979883004921</span>),
+    (<span class="str">'g'</span>, <span class="num">0.1975473066391</span>),
+    (<span class="str">'t'</span>, <span class="num">0.3015094502008</span>),
+]
+
+
+<span class="kwa">def</span> <span class="kwd">genRandom</span>(ia = <span class="num">3877</span>, ic = <span class="num">29573</span>, im = <span class="num">139968</span>):
+    seed = <span class="num">42</span>
+    imf = <span class="kwb">float</span>(im)
+    <span class="kwa">while</span> <span class="num">1</span>:
+        seed = (seed * ia + ic) % im
+        <span class="kwa">yield</span> seed / imf
+
+Random = <span class="kwd">genRandom</span>()
+
+<span class="kwa">def</span> <span class="kwd">makeCumulative</span>(table):
+    P = []
+    C = []
+    prob = <span class="num">0</span>.
+    <span class="kwa">for</span> char, p <span class="kwa">in</span> table:
+        prob += p
+        P += [prob]
+        C += [char]
+    <span class="kwa">return</span> (P, C)
+
+<span class="kwa">def</span> <span class="kwd">repeatFasta</span>(src, n):
+    width = <span class="num">60</span>
+    r = <span class="kwb">len</span>(src)
+    s = src + src + src[:n % r]
+    <span class="kwa">for</span> j <span class="kwa">in</span> <span class="kwb">range</span>(n // width):
+        i = j*width % r
+        <span class="kwa">print</span>(s[i:i+width])
+    <span class="kwa">if</span> n % width:
+        <span class="kwa">print</span>(s[-(n % width):])
+
+<span class="kwa">def</span> <span class="kwd">randomFasta</span>(table, n):
+    width = <span class="num">60</span>
+    r = <span class="kwb">range</span>(width)
+    gR = Random.__next__
+    bb = bisect.bisect
+    jn = <span class="str">''</span>.join
+    probs, chars = <span class="kwd">makeCumulative</span>(table)
+    <span class="kwa">for</span> j <span class="kwa">in</span> <span class="kwb">range</span>(n // width):
+        x = <span class="kwd">jn</span>([chars[<span class="kwd">bb</span>(probs, <span class="kwd">gR</span>())] <span class="kwa">for</span> i <span class="kwa">in</span> r])
+        <span class="kwa">print</span>(x)
+    <span class="kwa">if</span> n % width:
+        <span class="kwa">print</span>(<span class="kwd">jn</span>([chars[<span class="kwd">bb</span>(probs, <span class="kwd">gR</span>())] <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(n % width)]))
+
+<span class="kwa">def</span> <span class="kwd">main</span>():
+    n = <span class="kwb">int</span>(sys.argv[<span class="num">1</span>])
+
+    <span class="kwa">print</span>(<span class="str">'&gt;ONE Homo sapiens alu'</span>)
+    <span class="kwd">repeatFasta</span>(alu, n*<span class="num">2</span>)
+
+    <span class="kwa">print</span>(<span class="str">'&gt;TWO IUB ambiguity codes'</span>)
+    <span class="kwd">randomFasta</span>(iub, n*<span class="num">3</span>)
+
+    <span class="kwa">print</span>(<span class="str">'&gt;THREE Homo sapiens frequency'</span>)
+    <span class="kwd">randomFasta</span>(homosapiens, n*<span class="num">5</span>)
+
+<span class="kwd">main</span>()
+

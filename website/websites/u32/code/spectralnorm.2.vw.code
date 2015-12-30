@@ -1,0 +1,58 @@
+<span class="com">&quot;* The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">    contributed by Paolo Bonzini *&quot;</span>!
+
+!<span class="kwc">Array</span> <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">multiplyAtAv</span>
+   ^(<span class="kwa">self</span> multiplyAv) multiplyAtv! !
+
+!<span class="kwc">Array</span> <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">multiplyAtv</span>
+   <span class="kwd">| n atv sum |</span>
+   n :<span class="kwb">=</span> <span class="kwa">self</span> size.
+   atv :<span class="kwb">=</span> <span class="kwc">Array</span> <span class="kwb">new:</span> n.
+   <span class="num">1</span> <span class="kwb">to:</span> n <span class="kwb">do:</span> [<span class="kwd">:i</span>|
+      sum :<span class="kwb">=</span> <span class="num">0.0</span>d0.
+      <span class="num">1</span> <span class="kwb">to:</span> n <span class="kwb">do:</span> [<span class="kwd">:j</span>|
+         sum :<span class="kwb">=</span> sum <span class="kwb">+</span> ((j <span class="kwb">matrixA:</span> i) <span class="kwb">*</span> (<span class="kwa">self</span> <span class="kwb">at:</span> j)) ].
+      atv <span class="kwb">at:</span> i <span class="kwb">put:</span> sum].
+   ^atv! !
+
+!<span class="kwc">Array</span> <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">multiplyAv</span>
+   <span class="kwd">| n av sum |</span>
+   n :<span class="kwb">=</span> <span class="kwa">self</span> size.
+   av :<span class="kwb">=</span> <span class="kwc">Array</span> <span class="kwb">new:</span> n.
+   <span class="num">1</span> <span class="kwb">to:</span> n <span class="kwb">do:</span> [<span class="kwd">:i</span>|
+      sum :<span class="kwb">=</span> <span class="num">0.0</span>d0.
+      <span class="num">1</span> <span class="kwb">to:</span> n <span class="kwb">do:</span> [<span class="kwd">:j</span>|
+         sum :<span class="kwb">=</span> sum <span class="kwb">+</span> ((i <span class="kwb">matrixA:</span> j) <span class="kwb">*</span> (<span class="kwa">self</span> <span class="kwb">at:</span> j)) ].
+      av <span class="kwb">at:</span> i <span class="kwb">put:</span> sum].
+   ^av! !
+
+
+!<span class="kwc">SmallInteger</span> <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">matrixA:</span> anInteger
+   ^<span class="num">1.0</span>d0 <span class="kwb">/</span> ((<span class="kwa">self</span> <span class="kwb">+</span> anInteger <span class="kwb">-</span> <span class="num">2</span>) <span class="kwb">*</span> (<span class="kwa">self</span> <span class="kwb">+</span> anInteger <span class="kwb">-</span> <span class="num">1</span>) <span class="kwb">/</span><span class="num">2</span>  <span class="kwb">+</span> <span class="kwa">self</span>)! !
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">spectralnorm:</span> n
+   <span class="kwd">| u v vBv vv |</span>
+   u :<span class="kwb">=</span> <span class="kwc">Array</span> <span class="kwb">new:</span> n <span class="kwb">withAll:</span> <span class="num">1.0</span>d0.
+   <span class="num">10</span> <span class="kwb">timesRepeat:</span>
+      [v :<span class="kwb">=</span> u multiplyAtAv.
+       u :<span class="kwb">=</span> v multiplyAtAv].
+   vBv :<span class="kwb">=</span> <span class="num">0.0</span>d0.
+   vv :<span class="kwb">=</span> <span class="num">0.0</span>d0.
+   <span class="num">1</span> <span class="kwb">to:</span> n <span class="kwb">do:</span>
+      [<span class="kwd">:i</span> |
+       vBv :<span class="kwb">=</span> vBv <span class="kwb">+</span> ((u <span class="kwb">at:</span> i) <span class="kwb">*</span> (v <span class="kwb">at:</span> i)).
+       vv :<span class="kwb">=</span> vv <span class="kwb">+</span> ((v <span class="kwb">at:</span> i) <span class="kwb">*</span> (v <span class="kwb">at:</span> i))].
+   ^(vBv <span class="kwb">/</span> vv) sqrt! !
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmark scripts'</span>!
+<span class="kwb">spectralnorm2</span>
+   <span class="kwa">self</span> stdout <span class="kwb">print:</span> (<span class="kwa">self</span> <span class="kwb">spectralnorm:</span> <span class="kwa">self</span> arg) <span class="kwb">digits:</span> <span class="num">9</span>; nl.
+   ^<span class="str">''</span>! !

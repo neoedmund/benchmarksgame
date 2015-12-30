@@ -1,0 +1,280 @@
+<span class="com">/**</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Mike Pall</span>
+<span class="com">   java port by Stefan Krause</span>
+<span class="com">   Data Parallel adaptation by Sassa NF</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> java.util.concurrent.*;
+
+<span class="kwa">public class</span> pidigits {
+   <span class="kwa">final static</span> <span class="kwb">int</span> 
+      <span class="slc">// plain int values</span>
+      FOUR = <span class="num">0</span>, BQ = <span class="num">1</span>, BR = <span class="num">2</span>, BT = <span class="num">3</span>, 
+      <span class="slc">// GMP integers</span>
+      V = <span class="num">4</span>, ER1 = <span class="num">5</span>, Q1 = <span class="num">6</span>, R1 = <span class="num">7</span>, T1 = <span class="num">8</span>, U1 = <span class="num">9</span>, ES1 = <span class="num">10</span>, ER = <span class="num">11</span>, 
+      <span class="slc">// these are always available</span>
+      Q = <span class="num">12</span>, R = <span class="num">13</span>, T = <span class="num">14</span>, U = <span class="num">15</span>; 
+
+   <span class="kwa">final static</span> <span class="kwb">int</span> SPIN = <span class="num">1000</span>;
+
+   <span class="kwb">long</span> [] values = <span class="kwa">new</span> <span class="kwb">long</span>[ <span class="num">16</span> ];
+   Semaphore [] sema = <span class="kwa">new</span> Semaphore[ values.length ];
+   Semaphore allDone = <span class="kwa">new</span> <span class="kwd">Semaphore</span>( <span class="num">0</span> );
+   Semaphore moreWork = <span class="kwa">new</span> <span class="kwd">Semaphore</span>( <span class="num">0</span> );
+   <span class="kwa">final static</span> <span class="kwb">int</span> ADD = <span class="num">0</span>, MUL = <span class="num">1</span>, DIV_Q_R = <span class="num">2</span>;
+
+   ExecutorService executor = Executors.<span class="kwd">newFixedThreadPool</span>( <span class="num">3</span> );
+
+   <span class="kwb">int</span> i;
+   StringBuilder strBuf = <span class="kwa">new</span> <span class="kwd">StringBuilder</span>(<span class="num">1000000</span>);
+   <span class="kwa">final</span> <span class="kwb">int</span> n;
+
+   <span class="kwa">private</span> <span class="kwd">pidigits</span>(<span class="kwb">int</span> n)
+   {
+      <span class="kwa">this</span>.n=n;
+   }
+
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">acquire</span>( Semaphore s, <span class="kwb">int</span> permits )
+   {
+     <span class="kwb">int</span> i = SPIN;
+     <span class="kwa">while</span>( !s.<span class="kwd">tryAcquire</span>( permits ) ) <span class="kwa">if</span> ( --i &lt;= <span class="num">0</span> ) <span class="kwa">break</span>;
+
+     <span class="slc">// now, if i &lt;= 0, then the semaphore is definitely not acquired</span>
+     <span class="kwa">if</span> ( i &lt;= <span class="num">0</span> )
+     {
+       <span class="kwa">try</span>
+       {
+         s.<span class="kwd">acquire</span>( permits );
+       }
+       <span class="kwa">catch</span>( Exception e )
+       {}
+     }
+   }
+
+   <span class="kwa">public class</span> exec <span class="kwa">implements</span> Runnable
+   {
+     exec [] seq_tasks;
+     <span class="kwb">int</span> instr, dest, op1, op2, op3 = -<span class="num">1</span>;
+
+     <span class="kwa">public</span> <span class="kwd">exec</span>( exec[] tasks )
+     {
+       seq_tasks = tasks;
+     }
+
+     <span class="kwa">public</span> <span class="kwd">exec</span>( <span class="kwb">int</span> ins, <span class="kwb">int</span> d, <span class="kwb">int</span> o1, <span class="kwb">int</span> o2 )
+     {
+       instr = ins; dest = d; op1 = o1; op2 = o2;
+     }
+
+     <span class="kwa">public</span> <span class="kwd">exec</span>( <span class="kwb">int</span> ins, <span class="kwb">int</span> d, <span class="kwb">int</span> o1, <span class="kwb">int</span> o2, <span class="kwb">int</span> o3 )
+     {
+       <span class="kwa">this</span>( ins, d, o2, o3 ); op3 = o1;
+     }
+
+     <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>()
+     {
+       <span class="kwd">_run</span>();
+       <span class="kwd">acquire</span>( moreWork, <span class="num">1</span> ); <span class="slc">// leave the thread spinning until more work arrives</span>
+                               <span class="slc">// - unparking takes ages on some boxes</span>
+     }
+
+     <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">_run</span>()
+     {
+       <span class="kwa">if</span> ( seq_tasks != null )
+       {
+         <span class="kwa">for</span>( exec r: seq_tasks ) r.<span class="kwd">_run</span>();
+         allDone.<span class="kwd">release</span>();
+         <span class="kwa">return</span>;
+       }
+
+       <span class="slc">// the while loop makes sure the thread doesn't get preempted</span>
+       <span class="slc">// - don't care about the CPU going wild; it would be idle otherwise anyway</span>
+       <span class="kwd">acquire</span>( sema[ op1 ], <span class="num">1</span> ); sema[ op1 ].<span class="kwd">release</span>();
+       <span class="kwd">acquire</span>( sema[ op2 ], <span class="num">1</span> ); sema[ op2 ].<span class="kwd">release</span>();
+
+       <span class="kwa">if</span> ( instr == MUL )
+       {
+         GmpUtil.<span class="kwd">mpz_mul_si</span>( values[ dest ], values[ op1 ], (<span class="kwb">int</span>)values[ op2 ] );
+       }
+       <span class="kwa">else if</span> ( instr == ADD )
+       {
+         GmpUtil.<span class="kwd">mpz_add</span>( values[ dest ], values[ op1 ], values[ op2 ] );
+       }
+       <span class="kwa">else if</span> ( instr == DIV_Q_R )
+       {
+         GmpUtil.<span class="kwd">mpz_tdiv_qr</span>( values[ dest ], values[ op3 ], values[ op1 ], values[ op2 ] );
+         sema[ op3 ].<span class="kwd">release</span>();
+       }
+
+       sema[ dest ].<span class="kwd">release</span>();
+     }
+   };
+
+   <span class="slc">// compose_r = ( q,r; s,t ) = ( bq, br; bs, bt ) x (q,r; s,t)</span>
+   <span class="slc">// bs == 0, hence s == 0 and multiplications involving bs and s aren't here (br*s, bt*s)</span>
+   <span class="slc">// bt == 1 hence multiplications involving bt aren't here (s*bt, t*bt)</span>
+
+   <span class="slc">// compose_l = ( q,r; s,t ) = (q,r; s,t) x ( bq, br; bs, bt )</span>
+   <span class="slc">// extract = ( q*3 + r )/( s*3 + t ) compared to ( q*4 + r )/( s*4 + t )</span>
+   <span class="slc">// the latter is the same as computing quotient and remainder of ( q*4 + r )/( s*4 + t );</span>
+   <span class="slc">// if the remainder is greater or equal to q,</span>
+   <span class="slc">// then the quotient is the same as of ( 3*q + r )/( s*3 + t ) since s==0</span>
+   <span class="kwa">final</span> exec[] COMPOSE_R = <span class="kwa">new</span> exec[]{ 
+      <span class="kwa">new</span> <span class="kwd">exec</span>( <span class="kwa">new</span> exec[]{ <span class="kwa">new</span> <span class="kwd">exec</span>( MUL, Q1, Q, BQ ),
+            <span class="kwa">new</span> <span class="kwd">exec</span>( MUL, U1, Q1, FOUR ) } ), <span class="slc">// now U is always Q*4</span>
+      <span class="kwa">new</span> <span class="kwd">exec</span>( <span class="kwa">new</span> exec[]{ <span class="kwa">new</span> <span class="kwd">exec</span>( MUL, V, T, BR ),
+         <span class="kwa">new</span> <span class="kwd">exec</span>( ADD, R1, R1, V ) } ),
+      <span class="kwa">new</span> <span class="kwd">exec</span>( <span class="kwa">new</span> exec[]{ <span class="kwa">new</span> <span class="kwd">exec</span>( MUL, R1, R, BQ ) } )
+      };
+
+   <span class="kwa">final</span> exec[] COMPOSE_L = <span class="kwa">new</span> exec[]{ 
+      <span class="slc">// digit extraction logic here</span>
+      <span class="kwa">new</span> <span class="kwd">exec</span>( <span class="kwa">new</span> exec[]{ <span class="kwa">new</span> <span class="kwd">exec</span>( ADD, ES1, U, R ),
+         <span class="slc">// DIV_Q_R is approx the same cost as two muls</span>
+         <span class="slc">// so this splits the work roughly equally</span>
+         <span class="kwa">new</span> <span class="kwd">exec</span>( DIV_Q_R, ER, ER1, ES1, T ) } ), 
+                                                   
+         <span class="slc">// compose_l</span>
+      <span class="kwa">new</span> <span class="kwd">exec</span>( <span class="kwa">new</span> exec[]{ <span class="kwa">new</span> <span class="kwd">exec</span>( MUL, R1, R, BT ),
+         <span class="kwa">new</span> <span class="kwd">exec</span>( ADD, R1, R1, V ) } ),
+      <span class="kwa">new</span> <span class="kwd">exec</span>( <span class="kwa">new</span> exec[]{ <span class="kwa">new</span> <span class="kwd">exec</span>( MUL, V, Q, BR ),
+         <span class="kwa">new</span> <span class="kwd">exec</span>( MUL, T1, T, BT ) } ),
+      <span class="kwa">new</span> <span class="kwd">exec</span>( <span class="kwa">new</span> exec[]{ <span class="kwa">new</span> <span class="kwd">exec</span>( MUL, Q1, Q, BQ ),
+         <span class="kwa">new</span> <span class="kwd">exec</span>( MUL, U1, Q1, FOUR ) } ) <span class="slc">// now U is always Q*4</span>
+      };
+
+
+   <span class="kwa">private</span> <span class="kwb">boolean</span> <span class="kwd">multi_threaded_compute</span>( exec[] code, <span class="kwb">int</span> bq, <span class="kwb">int</span> br, <span class="kwb">int</span> bt, <span class="kwb">boolean</span> compare )
+   {
+     allDone.<span class="kwd">drainPermits</span>();
+
+     <span class="kwa">for</span>( <span class="kwb">int</span> i = BQ; i &lt; Q; ++i ) sema[ i ].<span class="kwd">drainPermits</span>();
+
+     values[ BQ ] = bq;
+     sema[ BQ ].<span class="kwd">release</span>();
+     values[ BR ] = br;
+     sema[ BR ].<span class="kwd">release</span>();
+     values[ BT ] = bt;
+     sema[ BT ].<span class="kwd">release</span>();
+
+     <span class="kwa">for</span>( <span class="kwb">int</span> i = compare ? <span class="num">1</span>: <span class="num">0</span>; i &lt; code.length; ++i )
+     {
+       executor.<span class="kwd">execute</span>( code[ i ] ); <span class="slc">// we are one thread, so skip code[ 0 ], </span>
+                                      <span class="slc">// if comparing the remainder is needed</span>
+       moreWork.<span class="kwd">release</span>();
+     }
+
+     <span class="kwa">if</span> ( !compare ) <span class="kwa">return</span> false;
+
+     code[ <span class="num">0</span> ].<span class="kwd">_run</span>();
+
+     <span class="slc">// ER1 &gt;= Q means the remainder of (4*q+r)/t contains q,</span>
+     <span class="slc">// and the quotient is the same as (3*q+r)/t</span>
+     <span class="kwb">boolean</span> r = GmpUtil.<span class="kwd">mpz_cmp</span>( values[ ER1 ], values[ Q ] ) &gt;= <span class="num">0</span>; 
+                                                                
+     <span class="kwd">acquire</span>( allDone, code.length );
+
+     <span class="kwa">return</span> r;
+   }
+
+   <span class="com">/* Print one digit. Returns 1 for the last digit. */</span>
+   <span class="kwa">private</span> <span class="kwb">boolean</span> <span class="kwd">printDigit</span>(<span class="kwb">int</span> y)
+   {
+      strBuf.<span class="kwd">append</span>((<span class="kwb">char</span>)(y+<span class="str">'0'</span>));
+      <span class="kwa">if</span> (++i % <span class="num">10</span> == <span class="num">0</span> || i == n) {
+         <span class="kwa">if</span> (i%<span class="num">10</span>!=<span class="num">0</span>) <span class="kwa">for</span> (<span class="kwb">int</span> j=<span class="num">10</span>-(i%<span class="num">10</span>);j&gt;<span class="num">0</span>;j--) { strBuf.<span class="kwd">append</span>(<span class="str">&quot; &quot;</span>); }
+         strBuf.<span class="kwd">append</span>(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>).<span class="kwd">append</span>(i).<span class="kwd">append</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+      }
+      <span class="kwa">return</span> i == n;
+   }
+
+   <span class="com">/* Generate successive digits of PI. */</span>
+   <span class="kwb">void</span> <span class="kwd">printAll</span>()
+   {
+     <span class="kwb">int</span> k = <span class="num">1</span>;
+     <span class="kwa">for</span>( <span class="kwb">int</span> i = V; i &lt; values.length; ++i ) values[ i ] = GmpUtil.<span class="kwd">mpz_init</span>();
+
+     GmpUtil.<span class="kwd">mpz_set_si</span>( values[ Q ], <span class="num">1</span> );
+     GmpUtil.<span class="kwd">mpz_set_si</span>( values[ T ], <span class="num">1</span> );
+     GmpUtil.<span class="kwd">mpz_set_si</span>( values[ R ], <span class="num">0</span> );
+     GmpUtil.<span class="kwd">mpz_set_si</span>( values[ U ], <span class="num">4</span> ); <span class="slc">// U = Q*4 - invariant</span>
+     values[ FOUR ] = <span class="num">4</span>;
+
+     <span class="slc">// these are initially unavailable</span>
+     <span class="kwa">for</span>( <span class="kwb">int</span> i = <span class="num">0</span>; i &lt; sema.length; ++i ) sema[ i ] = <span class="kwa">new</span> <span class="kwd">Semaphore</span>( <span class="num">0</span> );
+
+     sema[ Q ].<span class="kwd">release</span>(); <span class="slc">// these are always avalable</span>
+     sema[ R ].<span class="kwd">release</span>();
+     sema[ FOUR ].<span class="kwd">release</span>();
+     sema[ T ].<span class="kwd">release</span>();
+     sema[ U ].<span class="kwd">release</span>();
+     i = <span class="num">0</span>;
+     <span class="kwa">for</span> (;;) {
+       <span class="kwa">if</span> ( <span class="kwd">multi_threaded_compute</span>( COMPOSE_L, k, <span class="num">4</span>*k+<span class="num">2</span>, <span class="num">2</span>*k+<span class="num">1</span>, true ) ) {
+         <span class="kwb">int</span> y = GmpUtil.<span class="kwd">mpz_get_si</span>( values[ ER ] );
+       
+         <span class="slc">// compare == false - computation is in background; foreground thread can print</span>
+         <span class="kwd">multi_threaded_compute</span>( COMPOSE_R, <span class="num">10</span>, -<span class="num">10</span>*y, <span class="num">1</span>, false ); 
+ 
+         <span class="kwb">boolean</span> r = <span class="kwd">printDigit</span>(y);
+         <span class="kwd">acquire</span>( allDone,  COMPOSE_R.length ); <span class="slc">// wait for the COMPOSE_R to complete</span>
+
+         <span class="kwa">if</span> ( r ) {
+           System.out.<span class="kwd">print</span>( strBuf );
+           System.out.<span class="kwd">flush</span>();
+           <span class="slc">// don't have to be this nice in a one-shot run</span>
+           <span class="kwa">for</span>( <span class="kwb">int</span> i = V; i &lt; values.length; ++i ) GmpUtil.<span class="kwd">mpz_clear</span>( values[ i ] ); 
+           <span class="kwa">return</span>;
+         }
+       } <span class="kwa">else</span> {
+         <span class="kwb">long</span> g = values[ T ];
+         values[ T ] = values[ T1 ];
+         values[ T1 ] = g; <span class="slc">// to save on init/GC costs</span>
+         k++;
+       }
+       <span class="kwb">long</span> g = values[ Q ];
+       values[ Q ] = values[ Q1 ];
+       values[ Q1 ] = g;
+       g = values[ R ];
+       values[ R ] = values[ R1 ];
+       values[ R1 ] = g;
+       g = values[ U1 ];
+       values[ U1 ] = values[ U ];
+       values[ U ] = g;
+     }
+   }
+
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args){
+      pidigits spigot = <span class="kwa">new</span> <span class="kwd">pidigits</span>(Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]));
+      spigot.<span class="kwd">printAll</span>();
+      System.<span class="kwd">exit</span>(<span class="num">0</span>);
+   }
+}
+
+<span class="kwa">class</span> GmpUtil {
+   <span class="kwa">static</span> {
+      System.<span class="kwd">loadLibrary</span>(<span class="str">&quot;jpargmp&quot;</span>);
+   }
+
+   <span class="kwa">static native</span> <span class="kwb">long</span> <span class="kwd">mpz_init</span>();
+
+   <span class="kwa">static native</span> <span class="kwb">void</span> <span class="kwd">mpz_clear</span>(<span class="kwb">long</span> src);
+
+   <span class="kwa">static native</span> <span class="kwb">void</span> <span class="kwd">mpz_mul_si</span>(<span class="kwb">long</span> dest, <span class="kwb">long</span> src,
+         <span class="kwb">int</span> val);
+
+   <span class="kwa">static native</span> <span class="kwb">void</span> <span class="kwd">mpz_add</span>(<span class="kwb">long</span> dest, <span class="kwb">long</span> src,
+         <span class="kwb">long</span> src2);
+
+   <span class="kwa">static native</span> <span class="kwb">void</span> <span class="kwd">mpz_set_si</span>(<span class="kwb">long</span> src, <span class="kwb">int</span> value);
+
+   <span class="kwa">static native</span> <span class="kwb">int</span> <span class="kwd">mpz_get_si</span>(<span class="kwb">long</span> src);
+
+   <span class="kwa">static native</span> <span class="kwb">int</span> <span class="kwd">mpz_cmp</span>(<span class="kwb">long</span> dest, <span class="kwb">long</span> src);
+
+   <span class="kwa">static native</span> <span class="kwb">void</span> <span class="kwd">mpz_tdiv_qr</span>(<span class="kwb">long</span> q, <span class="kwb">long</span> r, <span class="kwb">long</span> n,
+         <span class="kwb">long</span> d);
+}

@@ -1,0 +1,410 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by Joshua Landau</span>
+
+<span class="kwa">use</span> std::sync::Arc;
+<span class="kwa">use</span> std::sync::atomic::{AtomicUsize, Ordering};
+<span class="kwa">use</span> std::thread;
+
+
+<span class="kwa">const</span> DIGITS: [&amp;'<span class="kwa">static</span> str; <span class="num">10</span>] = [
+   <span class="str">&quot;zero&quot;</span>, <span class="str">&quot;one&quot;</span>, <span class="str">&quot;two&quot;</span>, <span class="str">&quot;three&quot;</span>, <span class="str">&quot;four&quot;</span>,
+   <span class="str">&quot;five&quot;</span>, <span class="str">&quot;six&quot;</span>, <span class="str">&quot;seven&quot;</span>, <span class="str">&quot;eight&quot;</span>, <span class="str">&quot;nine&quot;</span>,
+];
+
+<span class="kwa">fn</span> wordy_num(num: usize) -&gt; String {
+   <span class="kwa">let mut</span> out = String::new();
+   <span class="kwa">for</span> char <span class="kwa">in</span> num.to_string().chars() {
+      out.push_str(<span class="str">&quot; &quot;</span>);
+      out.push_str(DIGITS[char.to_digit(<span class="num">10</span>).unwrap() <span class="kwa">as</span> usize]);
+   }
+   out
+}
+
+
+#[derive(Clone, Copy)]
+#[repr(u8)]
+<span class="kwa">enum</span> Color {
+   Red = <span class="num">0</span>,
+   Yellow = <span class="num">1</span>,
+   Blue = <span class="num">2</span>,
+}
+
+<span class="kwa">impl</span> Color {
+   <span class="kwa">fn</span> show(&amp;<span class="kwa">self</span>) -&gt; &amp;'<span class="kwa">static</span> str {
+      <span class="kwa">use</span> Color::*;
+      <span class="kwa">match</span> *<span class="kwa">self</span> {
+         Red =&gt; <span class="str">&quot;red&quot;</span>,
+         Yellow =&gt; <span class="str">&quot;yellow&quot;</span>,
+         Blue =&gt; <span class="str">&quot;blue&quot;</span>,
+      }
+   }
+}
+
+<span class="kwa">fn</span> complement_color(left: Color, right: Color) -&gt; Color {
+   <span class="kwa">use</span> Color::*;
+   <span class="kwa">match</span> ((left <span class="kwa">as</span> u8) &lt;&lt; <span class="num">2</span>) | (right <span class="kwa">as</span> u8) {
+      <span class="num">0</span>b_00_00 =&gt; Red,
+      <span class="num">0</span>b_00_01 =&gt; Blue,
+      <span class="num">0</span>b_00_10 =&gt; Yellow,
+      <span class="num">0</span>b_01_00 =&gt; Blue,
+      <span class="num">0</span>b_01_01 =&gt; Yellow,
+      <span class="num">0</span>b_01_10 =&gt; Red,
+      <span class="num">0</span>b_10_00 =&gt; Yellow,
+      <span class="num">0</span>b_10_01 =&gt; Red,
+      _      =&gt; Blue,
+   }
+}
+
+
+#[derive(Default)]
+<span class="kwa">struct</span> AtomicColor(AtomicUsize);
+
+<span class="kwa">impl</span> AtomicColor {
+   <span class="kwa">fn</span> load(&amp;<span class="kwa">self</span>, order: Ordering) -&gt; Color {
+      <span class="kwa">use</span> Color::*;
+      <span class="kwa">match self</span><span class="num">.0</span>.load(order) {
+         <span class="num">0</span> =&gt; Red,
+         <span class="num">1</span> =&gt; Yellow,
+         _ =&gt; Blue,
+      }
+   }
+
+   <span class="kwa">fn</span> store(&amp;<span class="kwa">self</span>, color: Color, order: Ordering) {
+      <span class="kwa">self</span><span class="num">.0</span>.store(color <span class="kwa">as</span> usize, order)
+   }
+}
+
+
+<span class="slc">// Each Chameneos is atomic to allow safe, fast</span>
+<span class="slc">// parallel thread access. Unfortunately this</span>
+<span class="slc">// this is a bit wordy, but it works out OK.</span>
+#[derive(Default)]
+<span class="kwa">struct</span> ChameneosState {
+   name: u8,
+   color: AtomicColor,
+   meet_count: AtomicUsize,
+   meet_same_count: AtomicUsize,
+}
+
+<span class="kwa">impl</span> ChameneosState {
+   <span class="kwa">fn</span> name(&amp;<span class="kwa">self</span>) -&gt; u8 {
+      <span class="kwa">self</span>.name
+   }
+
+   <span class="kwa">fn</span> color(&amp;<span class="kwa">self</span>) -&gt; Color {
+      <span class="kwa">self</span>.color.load(Ordering::Acquire)
+   }
+
+   <span class="kwa">fn</span> meet(&amp;<span class="kwa">self</span>, same: bool, color: Color) {
+      <span class="kwa">let</span> new = <span class="kwa">self</span>.meet_count.load(Ordering::Acquire) + <span class="num">1</span>;
+      <span class="kwa">self</span>.meet_count.store(new, Ordering::Release);
+      <span class="kwa">if</span> same {
+         <span class="kwa">let</span> new = <span class="kwa">self</span>.meet_same_count.load(Ordering::Acquire) + <span class="num">1</span>;
+         <span class="kwa">self</span>.meet_same_count.store(new, Ordering::Release);
+      }
+      <span class="kwa">self</span>.color.store(color, Ordering::Release);
+   }
+}
+
+
+#[derive(Copy, Clone)]
+<span class="kwa">struct</span> Chameneos {
+   idx: u32
+}
+
+<span class="kwa">impl</span> Chameneos {
+   <span class="kwa">fn</span> is_valid(&amp;<span class="kwa">self</span>) -&gt; bool {
+      <span class="kwa">self</span>.idx != <span class="num">0</span>
+   }
+
+   <span class="kwa">fn</span> get&lt;'st&gt;(&amp;<span class="kwa">self</span>, shared: &amp;'st Shared) -&gt; &amp;'st ChameneosState {
+      &amp;shared.states[(<span class="kwa">self</span>.idx &amp; BLOCK) <span class="kwa">as</span> usize]
+   }
+}
+
+
+<span class="kwa">struct</span> Shared {
+   <span class="slc">// We can only store 12 due to overflow</span>
+   <span class="slc">// when the maximum number of pairs are</span>
+   <span class="slc">// created, so no need for a large buffer.</span>
+   <span class="slc">// Using 16 avoids bounds checks.</span>
+   states: [ChameneosState; <span class="num">16</span>],
+   <span class="slc">// Bottom block is mall, rest are queue slots</span>
+   atomic_queue: AtomicUsize,
+   meetings_had: AtomicUsize,
+   meetings_limit: usize,
+}
+
+<span class="kwa">impl</span> Shared {
+   <span class="kwa">fn</span> null_task(&amp;<span class="kwa">self</span>) -&gt; Chameneos {
+      <span class="kwa">self</span>.task_at(<span class="num">0</span>)
+   }
+
+   <span class="kwa">fn</span> task_at(&amp;<span class="kwa">self</span>, idx: u32) -&gt; Chameneos {
+      Chameneos { idx: idx }
+   }
+
+   <span class="kwa">fn</span> load(&amp;<span class="kwa">self</span>, order: Ordering) -&gt; u32 {
+      <span class="kwa">self</span>.atomic_queue.load(order) <span class="kwa">as</span> u32
+   }
+
+   <span class="kwa">fn</span> store(&amp;<span class="kwa">self</span>, val: u32, order: Ordering) {
+      <span class="kwa">self</span>.atomic_queue.store(val <span class="kwa">as</span> usize, order)
+   }
+
+   <span class="kwa">fn</span> compare_and_swap(&amp;<span class="kwa">self</span>, current: u32, new: u32, order: Ordering) -&gt; u32 {
+      <span class="kwa">self</span>.atomic_queue.compare_and_swap(current <span class="kwa">as</span> usize, new <span class="kwa">as</span> usize, order) <span class="kwa">as</span> u32
+   }
+}
+
+
+<span class="kwa">const</span> BLOCK: u32 = <span class="num">0</span>b1111;
+<span class="kwa">const</span> BLOCK_LEN: u32 = <span class="num">4</span>;
+<span class="kwa">const</span> QUEUE_LEN: u32 = <span class="num">32</span> / BLOCK_LEN;
+<span class="kwa">const</span> QUEUE_STOPPED: u32 = !<span class="num">0</span>;
+
+<span class="kwa">struct</span> State {
+   cache: u32,
+}
+
+<span class="kwa">impl</span> State {
+   <span class="kwa">fn</span> new(shared: &amp;Shared) -&gt; State {
+      State { cache: shared.load(Ordering::SeqCst) }
+   }
+
+   <span class="kwa">fn</span> run(&amp;<span class="kwa">mut self</span>, shared: &amp;Shared) -&gt; Option&lt;(TransactionalQueue, Chameneos, u8)&gt; {
+      <span class="kwa">let</span> cache = &amp;<span class="kwa">mut self</span>.cache;
+
+      <span class="kwa">if</span> *cache == QUEUE_STOPPED {
+         None
+      }
+      <span class="kwa">else</span> {
+         <span class="kwa">let mut</span> queue = TransactionalQueue {
+            set_state: *cache,
+            cache: cache
+         };
+         <span class="kwa">let</span> count = queue.take_count();
+         <span class="kwa">let</span> mall = queue.take(shared);
+         Some((queue, mall, count))
+      }
+   }
+
+   <span class="kwa">fn</span> register_meeting(&amp;<span class="kwa">mut self</span>, shared: &amp;Shared, count: u8) -&gt; bool {
+      <span class="kwa">if</span> count != <span class="num">0</span> { <span class="kwa">return true</span>; }
+
+      <span class="kwa">let</span> meetings_had = shared.meetings_had.fetch_add(<span class="num">1</span>, Ordering::Acquire);
+      <span class="kwa">if</span> meetings_had &lt; shared.meetings_limit {
+         shared.atomic_queue.fetch_add(<span class="num">0</span>b11111111, Ordering::AcqRel);
+         <span class="kwa">return true</span>;
+      }
+      <span class="slc">// Oops, we couldn't actually do that</span>
+      shared.store(QUEUE_STOPPED, Ordering::SeqCst);
+      <span class="kwa">false</span>
+   }
+}
+
+
+<span class="kwa">struct</span> TransactionalQueue&lt;'a&gt; {
+   set_state: u32,
+   cache: &amp;'a <span class="kwa">mut</span> u32,
+}
+
+<span class="kwa">impl</span>&lt;'a&gt; TransactionalQueue&lt;'a&gt; {
+   <span class="kwa">fn</span> submit(<span class="kwa">mut self</span>, shared: &amp;Shared, mall: Chameneos, count: u8) -&gt; bool {
+      <span class="kwa">self</span>.set_state &lt;&lt;= BLOCK_LEN;
+      <span class="kwa">self</span>.set_state |= mall.idx;
+
+      <span class="kwa">self</span>.set_state &lt;&lt;= <span class="num">8</span>;
+      <span class="kwa">self</span>.set_state |= count <span class="kwa">as</span> u32;
+
+      <span class="kwa">let</span> actual = shared.compare_and_swap(
+         *<span class="kwa">self</span>.cache,    <span class="slc">// expected current value</span>
+         <span class="kwa">self</span>.set_state,  <span class="slc">// wanted value</span>
+         Ordering::Release
+      );
+
+      <span class="kwa">let</span> worked = actual == *<span class="kwa">self</span>.cache;
+      *<span class="kwa">self</span>.cache = <span class="kwa">if</span> worked { <span class="kwa">self</span>.set_state } <span class="kwa">else</span> { actual };
+      worked
+   }
+
+   <span class="kwa">fn</span> cancel(&amp;<span class="kwa">mut self</span>, shared: &amp;Shared) {
+      *<span class="kwa">self</span>.cache = shared.load(Ordering::Relaxed);
+   }
+
+   <span class="kwa">fn</span> take_count(&amp;<span class="kwa">mut self</span>) -&gt; u8 {
+      <span class="kwa">let</span> ret = (<span class="kwa">self</span>.set_state &amp; <span class="num">0</span>b11111111) <span class="kwa">as</span> u8;
+      <span class="kwa">self</span>.set_state &gt;&gt;= <span class="num">8</span>;
+      ret
+   }
+
+   <span class="kwa">fn</span> take(&amp;<span class="kwa">mut self</span>, shared: &amp;Shared) -&gt; Chameneos {
+      <span class="kwa">let</span> ret = <span class="kwa">self</span>.set_state &amp; BLOCK;
+      <span class="kwa">self</span>.set_state &gt;&gt;= BLOCK_LEN;
+      shared.task_at(ret)
+   }
+
+   <span class="kwa">fn</span> put(&amp;<span class="kwa">mut self</span>, first: Chameneos, second: Chameneos) {
+      <span class="kwa">let</span> zeros = <span class="kwa">self</span>.set_state.leading_zeros();
+      <span class="kwa">let</span> shift = (QUEUE_LEN - (zeros / BLOCK_LEN)) * BLOCK_LEN;
+      <span class="kwa">self</span>.set_state |= ((first.idx &lt;&lt; BLOCK_LEN) | second.idx) &lt;&lt; shift;
+   }
+}
+
+
+<span class="slc">// Runs threads from the shared thread pool.</span>
+<span class="slc">// Uses optimistic concurrency to queue and</span>
+<span class="slc">// deque threads, as well as to take from the</span>
+<span class="slc">// mall.</span>
+<span class="kwa">fn</span> thread_executor(<span class="kwa">mut</span> task: Chameneos, shared: &amp;Shared) {
+   <span class="kwa">let mut</span> state = State::new(shared);
+   <span class="kwa">let mut</span> mall = shared.null_task();
+
+   <span class="kwa">loop</span> {
+      <span class="kwa">let mut</span> task_tmp = task;
+      <span class="kwa">let mut</span> mall_tmp = mall;
+      <span class="kwa">let mut</span> count;
+
+      {
+         <span class="kwa">let</span> (<span class="kwa">mut</span> queue, new_mall, new_count) = <span class="kwa">match</span> state.run(shared) {
+            Some(x) =&gt; x,
+            None =&gt; <span class="kwa">return</span>,
+         };
+         count = new_count;
+
+         <span class="kwa">if</span> mall_tmp.is_valid() {
+            queue.put(task_tmp, mall_tmp);
+            task_tmp = queue.take(shared);
+         }
+         <span class="kwa">else if</span> !task_tmp.is_valid() {
+            task_tmp = queue.take(shared);
+            <span class="kwa">if</span> !task_tmp.is_valid() {
+               std::thread::sleep_ms(<span class="num">1</span>);
+               queue.cancel(shared);
+               <span class="kwa">continue</span>;
+            }
+         }
+
+         mall_tmp = new_mall;
+         <span class="kwa">if</span> !mall_tmp.is_valid() {
+            <span class="kwa">let</span> replacement_task = queue.take(shared);
+            <span class="kwa">if</span> queue.submit(shared, task_tmp, count) {
+               task = replacement_task;
+               mall = shared.null_task();
+            }
+            <span class="kwa">continue</span>;
+         }
+
+         <span class="kwa">if</span> count == <span class="num">0</span> {
+            queue.cancel(shared);
+            <span class="kwa">continue</span>;
+         }
+
+         count -= <span class="num">1</span>;
+
+         <span class="kwa">if</span> !queue.submit(shared, shared.null_task(), count) {
+            <span class="kwa">continue</span>;
+         }
+         task = task_tmp;
+         mall = mall_tmp;
+      }
+
+      <span class="kwa">if</span> !state.register_meeting(shared, count) { <span class="kwa">return</span>; }
+
+      <span class="kwa">let</span> actor_ref = task_tmp.get(shared);
+      <span class="kwa">let</span> mall_ref = mall.get(shared);
+
+      <span class="kwa">let</span> same = actor_ref.name() == mall_ref.name();
+      <span class="kwa">let</span> new_color = complement_color(actor_ref.color(), mall_ref.color());
+
+      actor_ref.meet(same, new_color);
+      mall_ref.meet(same, new_color);
+   }
+}
+
+
+<span class="kwa">fn</span> run_for(meetings_limit: usize, colors: &amp;[Color]) -&gt; Vec&lt;(usize, usize)&gt; {
+   <span class="kwa">let</span> num_threads = colors.len();
+
+   <span class="kwa">let</span> x = || Default::default();
+   <span class="kwa">let mut</span> states: [ChameneosState; <span class="num">16</span>] = [
+      x(), x(), x(), x(), x(), x(), x(), x(),
+      x(), x(), x(), x(), x(), x(), x(), x(),
+   ];
+
+   <span class="kwa">for</span> (i, &amp;color) <span class="kwa">in</span> colors.iter().enumerate() {
+      <span class="kwa">let</span> idx = i + <span class="num">1</span>;
+      <span class="kwa">let</span> chameneos_state = &amp;<span class="kwa">mut</span> states[idx];
+      chameneos_state.name = idx <span class="kwa">as</span> u8;
+      chameneos_state.color.store(color, Ordering::Release);
+   }
+
+   <span class="kwa">let</span> shared = Arc::new(Shared {
+      atomic_queue: AtomicUsize::new((meetings_limit % <span class="num">255</span>) + <span class="num">1</span>),
+      meetings_had: AtomicUsize::new(<span class="num">0</span>),
+      meetings_limit: meetings_limit / <span class="num">255</span>,
+      states: states,
+   });
+
+   <span class="kwa">let</span> threads: Vec&lt;_&gt; = (<span class="num">0</span>..num_threads).map(|i| {
+      <span class="kwa">let</span> task = shared.task_at((i + <span class="num">1</span>) <span class="kwa">as</span> u32);
+      <span class="kwa">let</span> shared = shared.clone();
+      thread::spawn(<span class="kwa">move</span> || thread_executor(task, &amp;shared))
+   }).collect();
+
+   <span class="kwa">for</span> thread <span class="kwa">in</span> threads {
+      thread.join().unwrap();
+   }
+
+   <span class="kwa">let</span> output = &amp;shared.states[..];
+
+   output[<span class="num">1</span>..colors.len() + <span class="num">1</span>].iter().map(|ch| (
+      ch.meet_count.load(Ordering::SeqCst),
+      ch.meet_same_count.load(Ordering::SeqCst),
+   )).collect()
+}
+
+
+<span class="kwa">fn</span> main() {
+   <span class="kwa">use</span> Color::*;
+   <span class="kwa">let</span> small = [Blue, Red, Yellow];
+   <span class="kwa">let</span> large = [Blue, Red, Yellow, Red, Yellow, Blue, Red, Yellow, Red, Blue];
+
+   <span class="kwa">let</span> num_meetings = std::env::args_os().nth(<span class="num">1</span>)
+      .and_then(|s| s.into_string().ok())
+      .and_then(|n| n.parse().ok())
+      .unwrap_or(<span class="num">600</span>);
+
+   <span class="kwa">let</span> colors = [Blue, Red, Yellow];
+   <span class="kwa">for</span> &amp;left <span class="kwa">in</span> &amp;colors {
+      <span class="kwa">for</span> &amp;right <span class="kwa">in</span> &amp;colors {
+         <span class="kwa">let</span> complement = complement_color(left, right);
+         println!(<span class="str">&quot;{} + {} -&gt; {}&quot;</span>, left.show(), right.show(), complement.show());
+      }
+   }
+
+   <span class="kwa">let</span> threads: Vec&lt;(&amp;[_], _)&gt; = vec![
+      (&amp;small, thread::spawn(<span class="kwa">move</span> || run_for(num_meetings, &amp;small))),
+      (&amp;large, thread::spawn(<span class="kwa">move</span> || run_for(num_meetings, &amp;large))),
+   ];
+
+   <span class="kwa">for</span> (colors, thread) <span class="kwa">in</span> threads {
+      println!(<span class="str">&quot;&quot;</span>);
+
+      <span class="kwa">for</span> color <span class="kwa">in</span> colors { print!(<span class="str">&quot; {}&quot;</span>, color.show()); }
+      println!(<span class="str">&quot;&quot;</span>);
+
+      <span class="kwa">let mut</span> total_count = <span class="num">0</span>;
+      <span class="kwa">for</span> (meet_count, meet_same_count) <span class="kwa">in</span> thread.join().unwrap() {
+         println!(<span class="str">&quot;{}{}&quot;</span>, meet_count, wordy_num(meet_same_count));
+         total_count += meet_count;
+      }
+
+      println!(<span class="str">&quot;{}&quot;</span>, wordy_num(total_count));
+   }
+
+   println!(<span class="str">&quot;&quot;</span>);
+}

@@ -1,0 +1,72 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">* contributed by Premysl Hruby</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;stdlib.h&gt;</span>
+<span class="ppc">#include &lt;pthread.h&gt;</span>
+<span class="ppc">#include &lt;string.h&gt;</span>
+<span class="ppc">#include &lt;limits.h&gt;</span>
+
+<span class="ppc">#define THREADS (503)</span>
+
+
+<span class="kwb">struct</span> stack {
+   <span class="kwb">char</span> x[PTHREAD_STACK_MIN];
+};
+
+
+<span class="com">/* staticaly initialize mutex[0] mutex */</span>
+<span class="kwb">static</span> pthread_mutex_t mutex[THREADS]; 
+<span class="kwb">static int</span> data[THREADS];
+<span class="kwb">static struct</span> stack stacks[THREADS];
+<span class="com">/* stacks must be defined staticaly, or my i386 box run of virtual memory for this</span>
+<span class="com"> * process while creating thread +- #400 */</span>
+
+<span class="kwb">static void</span>* <span class="kwd">thread</span>(<span class="kwb">void</span> *num)
+{
+   <span class="kwb">int</span> l = (<span class="kwb">int</span>)num;
+   <span class="kwb">int</span> r = (l+<span class="num">1</span>) % THREADS;
+   <span class="kwb">int</span> token;
+
+   <span class="kwa">while</span>(<span class="num">1</span>) {
+      <span class="kwd">pthread_mutex_lock</span>(mutex + l);
+      token = data[l];
+      <span class="kwa">if</span> (token) {
+         data[r] = token - <span class="num">1</span>;
+         <span class="kwd">pthread_mutex_unlock</span>(mutex + r);
+      }
+      <span class="kwa">else</span> {
+         <span class="kwd">printf</span>(<span class="str">&quot;%i</span><span class="esc">\n</span><span class="str">&quot;</span>, l+<span class="num">1</span>);
+         <span class="kwd">exit</span>(<span class="num">0</span>);
+      }
+   }
+}
+
+
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> **argv)
+{
+   <span class="kwb">int</span> i;
+   pthread_t cthread;
+   pthread_attr_t stack_attr;
+
+   <span class="kwa">if</span> (argc != <span class="num">2</span>)
+      <span class="kwd">exit</span>(<span class="num">255</span>);
+   data[<span class="num">0</span>] = <span class="kwd">atoi</span>(argv[<span class="num">1</span>]);
+
+   <span class="kwd">pthread_attr_init</span>(&amp;stack_attr);
+      
+   <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; THREADS; i++) {
+      <span class="kwd">pthread_mutex_init</span>(mutex + i, NULL);
+      <span class="kwd">pthread_mutex_lock</span>(mutex + i);
+
+      <span class="kwd">pthread_attr_setstack</span>(&amp;stack_attr, &amp;stacks[i], <span class="kwa">sizeof</span>(<span class="kwb">struct</span> stack)); 
+      <span class="kwd">pthread_create</span>(&amp;cthread, &amp;stack_attr, thread, (<span class="kwb">void</span>*)i);
+   }
+
+   <span class="kwd">pthread_mutex_unlock</span>(mutex + <span class="num">0</span>);
+   <span class="kwd">pthread_join</span>(cthread, NULL);   
+}

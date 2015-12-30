@@ -1,0 +1,61 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Isaac Gouy </span>
+<span class="com">*/</span>
+
+<span class="slc">/// &lt;reference path=&quot;/usr/local/src/typescript/node.d.ts&quot; /&gt;</span>
+
+
+<span class="kwa">class</span> TreeNode {
+   <span class="kwb">constructor</span>(
+      <span class="kwa">private</span> left: TreeNode, 
+      <span class="kwa">private</span> right: TreeNode, 
+      <span class="kwa">private</span> item: <span class="kwb">number</span>
+   ) { }
+
+   <span class="kwd">check</span>(): <span class="kwb">number</span> {
+      <span class="kwa">if</span> (<span class="kwa">this</span>.left) {
+         <span class="kwa">return this</span>.item + <span class="kwa">this</span>.left.<span class="kwd">check</span>() - <span class="kwa">this</span>.right.<span class="kwd">check</span>()
+      }
+      <span class="kwa">else</span> {
+         <span class="kwa">return this</span>.item
+      }
+   }
+}
+
+<span class="kwa">function</span> <span class="kwd">bottomUpTree</span>(item: <span class="kwb">number</span>, depth: <span class="kwb">number</span>): TreeNode {
+   <span class="kwa">if</span> (depth &gt; <span class="num">0</span>) {
+      <span class="slc">// &quot;new TreeNode(&quot; must be on same line as &quot;return&quot; </span>
+      <span class="kwa">return new</span> <span class="kwd">TreeNode</span>(
+         <span class="kwd">bottomUpTree</span>(<span class="num">2</span>*item-<span class="num">1</span>, depth-<span class="num">1</span>),
+         <span class="kwd">bottomUpTree</span>(<span class="num">2</span>*item, depth-<span class="num">1</span>),
+         item
+      )
+   }
+   <span class="kwa">else</span> {
+      <span class="kwa">return new</span> <span class="kwd">TreeNode</span>(undefined,undefined,item)
+   }
+}
+
+
+<span class="kwa">const</span> n = +process.argv[<span class="num">2</span>]
+<span class="kwa">const</span> minDepth = <span class="num">4</span>
+<span class="kwa">const</span> maxDepth = n
+<span class="kwa">const</span> stretchDepth = n + <span class="num">1</span>
+
+<span class="kwa">let</span> check = <span class="kwd">bottomUpTree</span>(<span class="num">0</span>,stretchDepth).<span class="kwd">check</span>()
+console.<span class="kwd">log</span>(<span class="str">&quot;stretch tree of depth &quot;</span> + stretchDepth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + check)
+
+<span class="kwa">const</span> longLivedTree = <span class="kwd">bottomUpTree</span>(<span class="num">0</span>,maxDepth)
+<span class="kwa">for</span> (<span class="kwa">let</span> depth=minDepth; depth&lt;=maxDepth; depth+=<span class="num">2</span>) {
+   <span class="kwa">let</span> iterations = <span class="num">1</span> &lt;&lt; (maxDepth - depth + minDepth)
+
+   check = <span class="num">0</span>;
+   <span class="kwa">for</span> (<span class="kwa">let</span> i=<span class="num">1</span>; i&lt;=iterations; i++) {
+      check += <span class="kwd">bottomUpTree</span>(i,depth).<span class="kwd">check</span>()
+      check += <span class="kwd">bottomUpTree</span>(-i,depth).<span class="kwd">check</span>()
+   }
+   console.<span class="kwd">log</span>(iterations*<span class="num">2</span> + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">trees of depth &quot;</span> + depth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + check)
+}
+console.<span class="kwd">log</span>(<span class="str">&quot;long lived tree of depth &quot;</span> + maxDepth + <span class="str">&quot;</span><span class="esc">\t</span> <span class="str">check: &quot;</span> + longLivedTree.<span class="kwd">check</span>())
+

@@ -1,0 +1,119 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by Joshua Landau</span>
+
+<span class="slc">// Custom locks for 2-stage locking</span>
+<span class="kwa">mod</span> locks {
+   <span class="kwa">use</span> std::sync::{Condvar, Mutex};
+   <span class="kwa">use</span> std::sync::atomic::{AtomicUsize, Ordering};
+   <span class="kwa">use</span> std::thread;
+
+   <span class="kwa">pub struct</span> Lock {
+      condvar: Condvar,
+      is_set: Mutex&lt;bool&gt;
+   }
+
+   <span class="kwa">impl</span> Lock {
+      <span class="kwa">pub fn</span> new(unlocked: bool) -&gt; Lock {
+         Lock { condvar: Condvar::new(), is_set: Mutex::new(unlocked) }
+      }
+
+      <span class="kwa">pub fn</span> lock(&amp;<span class="kwa">self</span>) {
+         <span class="kwa">let mut</span> set = <span class="kwa">self</span>.is_set.lock().unwrap();
+         <span class="kwa">while</span> !*set {
+            set = <span class="kwa">self</span>.condvar.wait(set).unwrap();
+         }
+         *set = <span class="kwa">false</span>;
+      }
+
+      <span class="kwa">pub fn</span> unlock(&amp;<span class="kwa">self</span>) {
+         <span class="kwa">let mut</span> set = <span class="kwa">self</span>.is_set.lock().unwrap();
+         *set = <span class="kwa">true</span>;
+         <span class="kwa">self</span>.condvar.notify_one();
+      }
+   }
+
+   <span class="kwa">const</span> EMPTY: usize = ::std::usize::MAX;
+   <span class="kwa">pub struct</span> SpinLock(AtomicUsize);
+
+   <span class="kwa">impl</span> SpinLock {
+      <span class="kwa">pub fn</span> new(value: Option&lt;usize&gt;) -&gt; SpinLock {
+         SpinLock(AtomicUsize::new(value.unwrap_or(EMPTY)))
+      }
+
+      <span class="kwa">pub fn</span> lock(&amp;<span class="kwa">self</span>) -&gt; usize {
+         <span class="kwa">loop</span> {
+            <span class="kwa">let</span> gotten = <span class="kwa">self</span><span class="num">.0</span>.swap(EMPTY, Ordering::SeqCst);
+            <span class="kwa">if</span> gotten != EMPTY {
+               <span class="kwa">return</span> gotten;
+            }
+            thread::yield_now();
+         }
+      }
+
+      <span class="kwa">pub fn</span> unlock(&amp;<span class="kwa">self</span>, value: usize) {
+         <span class="kwa">self</span><span class="num">.0</span>.store(value, Ordering::SeqCst);
+      }
+   }
+}
+
+<span class="kwa">use</span> std::sync::Arc;
+<span class="kwa">use</span> std::thread;
+
+<span class="kwa">use</span> locks::{Lock, SpinLock};
+
+<span class="kwa">fn</span> start(n_tasks: usize, token: usize) {
+   <span class="kwa">let</span> locks: Vec&lt;_&gt; = (<span class="num">0</span>..n_tasks).map(|i|
+      Arc::new(Lock::new(i == <span class="num">1</span> || i == <span class="num">2</span>))
+   ).collect();
+
+   <span class="kwa">let</span> io: Vec&lt;_&gt; = (<span class="num">0</span>..n_tasks).map(|i|
+      Arc::new(SpinLock::new(<span class="kwa">if</span> i == <span class="num">1</span> { Some(token) } <span class="kwa">else</span> { None }))
+   ).collect();
+
+   <span class="kwa">let</span> threads: Vec&lt;_&gt; = (<span class="num">0</span>..n_tasks).map(|i| {
+      <span class="kwa">let</span> lock   = locks[i].clone();
+      <span class="kwa">let</span> input  = io[i].clone();
+      <span class="kwa">let</span> output = io[(i + <span class="num">1</span>) % n_tasks].clone();
+      <span class="kwa">let</span> unlock = locks[(i + <span class="num">2</span>) % n_tasks].clone();
+
+      thread::spawn(<span class="kwa">move</span> || roundtrip(i + <span class="num">1</span>, lock, input, output, unlock))
+   }).collect();
+
+   <span class="kwa">for</span> thread <span class="kwa">in</span> threads {
+      thread.join().unwrap();
+   }
+}
+
+<span class="kwa">fn</span> roundtrip(
+   thread_id: usize,
+   lock:   Arc&lt;Lock&gt;,
+   input:  Arc&lt;SpinLock&gt;,
+   output: Arc&lt;SpinLock&gt;,
+   unlock: Arc&lt;Lock&gt;,
+) {
+   <span class="kwa">loop</span> {
+      lock.lock();
+      <span class="kwa">let</span> input_value = input.lock();
+      output.unlock(input_value.saturating_sub(<span class="num">1</span>));
+      unlock.unlock();
+
+      <span class="kwa">if</span> input_value == <span class="num">1</span> { println!(<span class="str">&quot;{}&quot;</span>, thread_id); }
+      <span class="kwa">if</span> input_value &lt;= <span class="num">1</span> { <span class="kwa">return</span>; }
+   }
+}
+
+<span class="kwa">fn</span> main() {
+   <span class="kwa">let</span> args = &amp;<span class="kwa">mut</span> std::env::args_os();
+   <span class="kwa">let</span> token = args.skip(<span class="num">1</span>).next()
+      .and_then(|s| s.into_string().ok())
+      .and_then(|n| n.parse().ok())
+      .unwrap_or(<span class="num">1000</span>);
+   <span class="kwa">let</span> n_tasks = args.next()
+      .and_then(|s| s.into_string().ok())
+      .and_then(|n| n.parse().ok())
+      .unwrap_or(<span class="num">503</span>);
+   start(n_tasks, token);
+}

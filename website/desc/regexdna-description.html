@@ -1,0 +1,22 @@
+  <section>
+    <h3>Variance</h3>
+    <p>Some language implementations have regex built-in; some provide a regex library; some use a third-party regex library. Some &ndash; coincidentally &ndash; <a href="https://www.reddit.com/r/rust/comments/39unje/ahocorasick_fast_multisubstring_matching/cs6lnxp">reduce this work to substring matching</a>. 
+  </section>
+  <section>
+    <h3>The work</h3>
+    <p>The work is to use the same simple regex patterns and actions to manipulate FASTA format data. Don't optimize away the work.
+  </section>
+  <section>
+    <h3>How to implement</h3>
+    <p>We ask that contributed programs not only give the correct result, but also <b>use the same algorithm</b> to calculate that result.
+    <p>Each program should:
+    <ul>
+      <li><p>read all of a redirected <a href="http://en.wikipedia.org/wiki/Fasta_format">FASTA format</a> file from stdin, and record the sequence length
+      <li><p>use the same simple regex pattern match-replace to remove FASTA sequence descriptions and all linefeed characters, and record the sequence length
+      <li><p>use the same simple regex patterns, representing DNA 8-mers and their reverse complement (with a wildcard in one position), and (one pattern at a time) count matches in the redirected file
+      <li><p>write the regex pattern and count
+      <li><p>use the same simple regex patterns to make IUB code alternatives explicit, and (one pattern at a time) match-replace the pattern in the redirect file, and record the sequence length
+      <li><p>write the 3 recorded sequence lengths
+    </ul>
+    <p><b>diff</b> program output for this 100KB <a href="../download/regexdna-input.txt">input file</a> (generated with the <a href="./performance.php?test=fasta">fasta program</a> N = 10000) with this <a href="../download/regexdna-output.txt">output file</a> to check your program is correct, before you <a href="./play.html">contribute your program</a>.
+  </section>

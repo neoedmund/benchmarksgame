@@ -1,0 +1,76 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- Contributed by Jacob Sparre Andersen (with help from Alex Mason)</span>
+<span class="slc">--</span>
+<span class="slc">-- Compile with:</span>
+<span class="slc">--    gnatmake -gnat05 -gnatE -gnato -gnatv -gnati1 -gnatf -m -O3 -funroll-loops -funwind-tables -gnatn -fomit-frame-pointer -march=native thread_ring</span>
+
+<span class="kwa">with</span> Ada.Text_IO;
+<span class="kwa">with</span> Ada.Command_line;
+
+<span class="kwa">procedure</span> ThreadRing <span class="kwa">is</span>
+   Ring_Size : <span class="kwa">constant</span> := <span class="num">503</span>;
+   <span class="kwa">type</span> Ring_Index <span class="kwa">is mod</span> Ring_Size;
+
+   <span class="kwa">package</span> Ring_Text_IO <span class="kwa">is new</span> Ada.Text_IO.Modular_IO (Ring_Index);
+
+   <span class="kwa">protected type</span> Store <span class="kwa">is</span>
+      <span class="kwa">entry</span> Put  (Item : <span class="kwa">in</span>     <span class="kwb">Integer</span>);
+      <span class="kwa">entry</span> Take (Item :    <span class="kwa">out</span> <span class="kwb">Integer</span>);
+   <span class="kwa">private</span>
+      Value : <span class="kwb">Integer</span>;
+      Full  : <span class="kwb">Boolean</span> := <span class="kwd">False</span>;
+   <span class="kwa">end</span> Store;
+
+   <span class="kwa">protected body</span> Store <span class="kwa">is</span>
+      <span class="kwa">entry</span> Put (Item : <span class="kwa">in</span>     <span class="kwb">Integer</span>) <span class="kwa">when not</span> Full <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Value := Item;
+         Full := <span class="kwd">True</span>;
+      <span class="kwa">end</span> Put;
+
+      <span class="kwa">entry</span> Take (Item :    <span class="kwa">out</span> <span class="kwb">Integer</span>) <span class="kwa">when</span> Full <span class="kwa">is</span>
+      <span class="kwa">begin</span>
+         Item := Value;
+         Full := <span class="kwd">False</span>;
+      <span class="kwa">end</span> Take;
+   <span class="kwa">end</span> Store;
+
+   <span class="kwa">type</span> Store_Ring <span class="kwa">is array</span> (Ring_Index) <span class="kwa">of</span> Store;
+   Stores : Store_Ring;
+
+   <span class="kwa">task type</span> Node <span class="kwa">is</span>
+      <span class="kwa">entry</span> Initialize (Identifier  : <span class="kwa">in</span>     Ring_Index);
+   <span class="kwa">end</span> Node;
+
+   <span class="kwa">task body</span> Node <span class="kwa">is</span>
+      ID    : Ring_Index;
+      Token : <span class="kwb">Integer</span>;
+   <span class="kwa">begin</span>
+      <span class="kwa">accept</span> Initialize (Identifier  : <span class="kwa">in</span>     Ring_Index) <span class="kwa">do</span>
+         ID := Identifier;
+      <span class="kwa">end</span> Initialize;
+
+      <span class="kwa">loop</span>
+         Stores (ID).Take (Token);
+
+         <span class="kwa">if</span> Token = <span class="num">0</span> <span class="kwa">then</span>
+            Ring_Text_IO.Put (ID, Width =&gt; <span class="num">0</span>);
+            Ada.Text_IO.New_Line;
+         <span class="kwa">end if</span>;
+
+         Stores (ID + <span class="num">1</span>).Put (Token - <span class="num">1</span>);
+
+         <span class="kwa">exit when</span> Token &lt; <span class="num">0</span>;
+      <span class="kwa">end loop</span>;
+   <span class="kwa">end</span> Node;
+
+   <span class="kwa">type</span> Node_Ring <span class="kwa">is array</span> (Ring_Index) <span class="kwa">of</span> Node;
+   Nodes : Node_Ring;
+<span class="kwa">begin</span>
+   <span class="kwa">for</span> ID <span class="kwa">in</span> Nodes<span class="kwd">'Range</span> <span class="kwa">loop</span>
+      Nodes (ID).Initialize (Identifier =&gt; ID);
+   <span class="kwa">end loop</span>;
+
+   Stores (<span class="num">1</span>).Put (<span class="kwb">Integer</span><span class="kwd">'Value</span> (Ada.Command_Line.Argument (<span class="num">1</span>)));
+<span class="kwa">end</span> ThreadRing;

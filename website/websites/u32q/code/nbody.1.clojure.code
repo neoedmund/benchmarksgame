@@ -1,0 +1,232 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; contributed by Johannes Friestad</span>
+<span class="slc">;; modified by Marko Kocic</span>
+<span class="slc">;; modified slightly by Andy Fingerhut so it would compile and run on</span>
+<span class="slc">;; Clojure 1.2 and 1.3</span>
+
+(ns nbody
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+
+<span class="slc">;; Handle slight difference in function name between Clojure 1.2 and</span>
+<span class="slc">;; 1.3.</span>
+(<span class="kwa">defmacro</span> my-unchecked-inc-int [&amp; args]
+  (<span class="kwc">if</span> (and (== (*clojure-version* :major) <span class="num">1</span>)
+           (== (*clojure-version* :minor) <span class="num">2</span>))
+    `(unchecked-inc ~&#64;args)
+    `(unchecked-inc-int ~&#64;args)))
+
+(definterface IBody
+  (^String name [])
+  (^double mass [])
+  (^double x [])
+  (^double y [])
+  (^double z [])
+  (^double vx [])
+  (^double vy [])
+  (^double vz [])
+  (clone [] <span class="str">&quot;returns copy of self&quot;</span>)
+  (p_BANG_ [^double x ^double y ^double z] <span class="str">&quot;set position&quot;</span>)
+  (p_dt_BANG_ [^double dt] <span class="str">&quot;update position&quot;</span>)
+  (v_dt_BANG_ [^double dt other] <span class="str">&quot;update velocity&quot;</span>)
+  (v_BANG_ [^double vx ^double vy ^double vz] <span class="str">&quot;set velocity&quot;</span>)
+  (v_PLUS__BANG_ [^double vx ^double vy ^double vz] <span class="str">&quot;add to velocity&quot;</span>)
+  (energy [nbodies] <span class="str">&quot;energy relative to nbodies&quot;</span>))
+
+
+(deftype Body [^String name
+               ^double mass
+               ^{:unsynchronized-mutable true :tag double} x
+               ^{:unsynchronized-mutable true :tag double} y
+               ^{:unsynchronized-mutable true :tag double} z
+               ^{:unsynchronized-mutable true :tag double} vx
+               ^{:unsynchronized-mutable true :tag double} vy
+               ^{:unsynchronized-mutable true :tag double} vz ]
+  IBody
+  (name [this] name)
+  (x [this] x)
+  (y [this] y)
+  (z [this] z)
+  (vx [this] vx)
+  (vy [this] vy)
+  (vz [this] vz)
+  (mass [this] mass)
+  (clone [this] (Body. name mass x y z vx vy vz))
+
+  (p! [this nx ny nz]
+    (set! x nx) (set! y ny) (set! z nz)
+    this)
+
+  (v! [this nvx nvy nvz]
+    (set! vx nvx) (set! vy nvy) (set! vz nvz)
+    this)
+
+  (v+! [this dvx dvy dvz]
+    (set! vx (+ vx dvx))
+    (set! vy (+ vy dvy))
+    (set! vz (+ vz dvz)))
+
+  (p-dt! [this dt]
+    (set! x (+ x (* dt vx)))
+    (set! y (+ y (* dt vy)))
+    (set! z (+ z (* dt vz)))
+    this )
+
+  (v-dt! [this dt other]
+    (<span class="kwc">let</span> [^Body b other
+          dx (- x (.x b))
+          dy (- y (.y b))
+          dz (- z (.z b))
+          dsq (+ (* dx dx)
+                (+ (* dy dy)
+                  (* dz dz)))
+          mag (/ dt (* dsq (Math/sqrt dsq)))
+          m1 (- (* (.mass b) mag))
+          m2 (* mass mag) ]
+      <span class="slc">; own velocity</span>
+      (set! vx (+ vx (* dx m1)))
+      (set! vy (+ vy (* dy m1)))
+      (set! vz (+ vz (* dz m1)))
+      <span class="slc">; v of other</span>
+      (.v+! b (* dx m2) (* dy m2) (* dz m2))
+      this ))
+
+  (energy [this nbodies]
+    (<span class="kwc">let</span> [v-sq (+ (* vx vx) (* vy vy) (* vz vz))
+          e (* <span class="num">1</span>/<span class="num">2</span> mass v-sq)  <span class="slc">; kinetic energy: 1/2 * m * v^2</span>
+          f (<span class="kwa">fn</span> [e ^Body b]
+              (<span class="kwc">let</span> [dx (- x (.x b))
+                    dy (- y (.y b))
+                    dz (- z (.z b))
+                    dist (Math/sqrt
+                           (+ (* dx dx) (* dy dy) (* dz dz))) ]
+                (- e (/ (* mass (.mass b))
+                       dist)))) ]
+      (reduce f e nbodies)))
+
+  Object
+  (toString [this]
+    (<span class="kwc">let</span> [fmt <span class="str">&quot; %s mass %.3f</span><span class="esc">\n</span> <span class="str">p: [%.3f %.3f %.3f]</span><span class="esc">\n</span> <span class="str">v: [%.3f %.3f %.3f]</span><span class="esc">\n</span><span class="str">&quot;</span>]
+      (format fmt name mass x y z vx vy vz (type x)))) )
+
+(<span class="kwc">let</span> [solar-mass (* <span class="num">4</span> Math/PI Math/PI)
+      days-year <span class="num">365.24</span> ]
+  (<span class="kwa">defn</span> mk-body [b-name &amp; args]
+    (<span class="kwc">let</span> [{:keys [x y z vx vy vz mass]} (apply hash-map args) ]
+      (Body. (name b-name) (* mass solar-mass) x y z
+        (* vx days-year) (* vy days-year) (* vz days-year)))))
+
+<span class="slc">; Data for initial state</span>
+(<span class="kwa">def</span> +data+
+  (list
+    (mk-body :sun
+      :x <span class="num">0.0</span>
+      :y <span class="num">0.0</span>
+      :z <span class="num">0.0</span>
+      :vx <span class="num">0.0</span>
+      :vy <span class="num">0.0</span>
+      :vz <span class="num">0.0</span>
+      :mass <span class="num">1.0</span> )
+    (mk-body :jupiter
+      :x <span class="num">4.84143144246472090e+00</span>
+      :y -<span class="num">1.16032004402742839e+00</span>
+      :z -<span class="num">1.03622044471123109e-01</span>
+      :vx <span class="num">1.66007664274403694e-03</span>
+      :vy <span class="num">7.69901118419740425e-03</span>
+      :vz -<span class="num">6.90460016972063023e-05</span>
+      :mass <span class="num">9.54791938424326609e-04</span> )
+    (mk-body :saturn
+      :x <span class="num">8.34336671824457987e+00</span>
+      :y <span class="num">4.12479856412430479e+00</span>
+      :z -<span class="num">4.03523417114321381e-01</span>
+      :vx -<span class="num">2.76742510726862411e-03</span>
+      :vy <span class="num">4.99852801234917238e-03</span>
+      :vz <span class="num">2.30417297573763929e-05</span>
+      :mass <span class="num">2.85885980666130812e-04</span> )
+    (mk-body :uranus
+      :x <span class="num">1.28943695621391310e+01</span>
+      :y -<span class="num">1.51111514016986312e+01</span>
+      :z -<span class="num">2.23307578892655734e-01</span>
+      :vx <span class="num">2.96460137564761618e-03</span>
+      :vy <span class="num">2.37847173959480950e-03</span>
+      :vz -<span class="num">2.96589568540237556e-05</span>
+      :mass <span class="num">4.36624404335156298e-05</span> )
+    (mk-body :neptune
+      :x <span class="num">1.53796971148509165e+01</span>
+      :y -<span class="num">2.59193146099879641e+01</span>
+      :z <span class="num">1.79258772950371181e-01</span>
+      :vx <span class="num">2.68067772490389322e-03</span>
+      :vy <span class="num">1.62824170038242295e-03</span>
+      :vz -<span class="num">9.51592254519715870e-05</span>
+      :mass <span class="num">5.15138902046611451e-05</span> ) ))
+
+
+(<span class="kwa">def</span> bodies)
+
+(<span class="kwa">defn</span> init-state []
+  <span class="slc">;; Initialize state</span>
+  <span class="slc">;; clone is a convenience for repeated runs in the REPL.</span>
+  (<span class="kwa">def</span> bodies (into-array Object (<span class="kwd">map</span> #(.clone ^Body %) +data+)))
+  (<span class="kwc">let</span> [[px py pz] (reduce (<span class="kwa">fn</span> [[px py pz] ^Body b]
+                             (vector
+                              (+ px (* (.vx b) (.mass b)))
+                              (+ py (* (.vy b) (.mass b)))
+                              (+ pz (* (.vz b) (.mass b))) ))
+                           [<span class="num">0.0 0.0 0.0</span>]
+                           bodies)
+        ^Body sun (aget ^objects bodies <span class="num">0</span>)
+        mass (.mass sun) ]
+    (.v! sun (/ (- px) mass) (/ (- py) mass) (/ (- pz) mass))))
+
+(<span class="kwa">defn</span> energy
+  <span class="slc">;; Total energy for current state</span>
+  ([] (energy bodies)) <span class="slc">; total</span>
+  ([bodies]              <span class="slc">; loop</span>
+    (if-not bodies <span class="num">0.0</span>
+      (+ (.energy ^Body (<span class="kwd">first</span> bodies) (next bodies))
+        (energy (next bodies))))))
+
+(<span class="kwa">defn</span> advance [dt]
+  <span class="slc">;; Move system one dt timestep forwards</span>
+  (<span class="kwc">let</span> [^objects bodies bodies
+        len (int (alength bodies))
+        dt (double dt) ]
+    (<span class="kwb">dotimes</span> [i len]
+      (<span class="kwc">let</span> [^Body body (aget bodies i) ]
+        <span class="slc">; update velocity</span>
+        (<span class="kwb">loop</span> [j (my-unchecked-inc-int i) ]
+          (<span class="kwc">when</span> (&lt; j len)
+            (<span class="kwc">let</span> [^Body nbody (aget bodies j)]
+              (.v-dt! body dt nbody)
+              (<span class="kwb">recur</span> (my-unchecked-inc-int j)))))
+        <span class="slc">; update position</span>
+        (.p-dt! body dt)))))
+
+
+(<span class="kwa">defn</span> usage [exit-code]
+  (printf <span class="str">&quot;usage: %s n</span><span class="esc">\n</span><span class="str">&quot;</span> *file*)
+  (printf <span class="str">&quot;    n, a positive integer, is the number of simulation steps to run</span><span class="esc">\n</span><span class="str">&quot;</span>)
+  (flush)
+  (. System (exit exit-code)))
+
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">when</span> (not= (count args) <span class="num">1</span>)
+    (usage <span class="num">1</span>))
+  (<span class="kwa">def</span> n
+       (<span class="kwc">let</span> [arg (nth args <span class="num">0</span>)]
+         (<span class="kwc">when</span> (not (re-matches #<span class="str">&quot;^\d+$&quot;</span> arg))
+           (usage <span class="num">1</span>))
+         (<span class="kwc">let</span> [temp (. Integer valueOf arg <span class="num">10</span>)]
+           (<span class="kwc">when</span> (&lt; temp <span class="num">1</span>)
+             (usage <span class="num">1</span>))
+           temp)))
+  (init-state)
+  (printf <span class="str">&quot;%.9f</span><span class="esc">\n</span><span class="str">&quot;</span> (energy))
+  (<span class="kwb">dotimes</span> [_ (int n)]
+    (advance <span class="num">0.01</span>))
+  (printf <span class="str">&quot;%.9f</span><span class="esc">\n</span><span class="str">&quot;</span> (energy))
+  (flush))

@@ -1,0 +1,65 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Ugorji Nwoke</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;strconv&quot;</span>
+)
+
+<span class="kwa">const</span> minDepth = <span class="num">4</span>
+
+<span class="kwa">type</span> treeNode <span class="kwa">struct</span> {
+   left, right *treeNode
+   item        <span class="kwb">int</span>
+}
+
+<span class="kwa">func</span> (n *treeNode) <span class="kwd">itemCheck</span>() <span class="kwb">int</span> {
+   <span class="kwa">if</span> n.left == <span class="kwb">nil</span> {
+      <span class="kwa">return</span> n.item
+   }
+   <span class="kwa">return</span> n.item + n.left.<span class="kwd">itemCheck</span>() - n.right.<span class="kwd">itemCheck</span>()
+}
+
+<span class="kwa">func</span> <span class="kwd">bottomUp</span>(item, depth <span class="kwb">int</span>) *treeNode {
+   <span class="kwa">if</span> depth &gt; <span class="num">0</span> {
+      <span class="kwa">return</span> &amp;treeNode{
+         <span class="kwd">bottomUp</span>(<span class="num">2</span>*item-<span class="num">1</span>, depth-<span class="num">1</span>),
+         <span class="kwd">bottomUp</span>(<span class="num">2</span>*item, depth-<span class="num">1</span>),
+         item,
+      }
+   }
+   <span class="kwa">return</span> &amp;treeNode{<span class="kwb">nil</span>, <span class="kwb">nil</span>, item}
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   n := <span class="num">0</span>
+   <span class="kwa">if</span> <span class="kwb">len</span>(os.Args) &gt; <span class="num">1</span> {
+      <span class="kwa">if</span> n2, err2 := strconv.<span class="kwd">ParseInt</span>(os.Args[<span class="num">1</span>], <span class="num">10</span>, <span class="num">0</span>); err2 == <span class="kwb">nil</span> {
+         n = <span class="kwb">int</span>(n2)
+      }
+   }
+   maxDepth := n
+   <span class="kwa">if</span> minDepth+<span class="num">2</span> &gt; n {
+      maxDepth = minDepth + <span class="num">2</span>
+   }
+   stretchDepth := maxDepth + <span class="num">1</span>
+   check := <span class="kwd">bottomUp</span>(<span class="num">0</span>, stretchDepth).<span class="kwd">itemCheck</span>()
+   fmt.<span class="kwd">Printf</span>(<span class="str">&quot;stretch tree of depth</span> <span class="ipl">%v</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%v</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, stretchDepth, check)
+   longLivedTree := <span class="kwd">bottomUp</span>(<span class="num">0</span>, maxDepth)
+   <span class="kwa">for</span> depth := minDepth; depth &lt;= maxDepth; depth += <span class="num">2</span> {
+      interactions := <span class="num">1</span> &lt;&lt; <span class="kwb">uint</span>(maxDepth-depth+minDepth)
+      check = <span class="num">0</span>
+      <span class="kwa">for</span> i := <span class="num">1</span>; i &lt;= interactions; i++ {
+         check += <span class="kwd">bottomUp</span>(i, depth).<span class="kwd">itemCheck</span>()
+         check += <span class="kwd">bottomUp</span>(-i, depth).<span class="kwd">itemCheck</span>()
+      }
+      fmt.<span class="kwd">Printf</span>(<span class="str">&quot;</span><span class="ipl">%v</span><span class="str"></span><span class="esc">\t</span> <span class="str">trees of depth</span> <span class="ipl">%v</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%v</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, (interactions * <span class="num">2</span>), depth, check)
+   }
+   fmt.<span class="kwd">Printf</span>(<span class="str">&quot;long lived tree of depth</span> <span class="ipl">%v</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%v</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, maxDepth, longLivedTree.<span class="kwd">itemCheck</span>())
+}

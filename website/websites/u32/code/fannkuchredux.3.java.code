@@ -1,0 +1,220 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * Contributed by Oleg Mazurov, October 2010</span>
+<span class="com"> *</span>
+<span class="com"> * This version is submitted for comparison purpose only.</span>
+<span class="com"> * It's intended to show the effect of array bound check elimination in Java.</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.util.concurrent.atomic.AtomicInteger;
+
+<span class="kwa">public final class</span> fannkuchredux <span class="kwa">implements</span> Runnable
+{
+    <span class="kwa">private static final</span> <span class="kwb">int</span> NCHUNKS = <span class="num">240</span>;
+    <span class="kwa">private static</span>       <span class="kwb">int</span> CHUNKSZ;
+    <span class="kwa">private static</span>       <span class="kwb">int</span> NTASKS;
+    <span class="kwa">private static</span> <span class="kwb">int</span> n;
+    <span class="kwa">private static</span> <span class="kwb">int</span>[] Fact;
+    <span class="kwa">private static</span> <span class="kwb">int</span>[] maxFlips;
+    <span class="kwa">private static</span> <span class="kwb">int</span>[] chkSums;
+    <span class="kwa">private static</span> AtomicInteger taskId;
+    
+    <span class="kwb">int</span>[] p, pp, count;
+
+    <span class="kwa">public</span> <span class="kwd">fannkuchredux</span>()
+    {
+        p     = <span class="kwa">new</span> <span class="kwb">int</span>[n];
+        pp    = <span class="kwa">new</span> <span class="kwb">int</span>[n];
+        count = <span class="kwa">new</span> <span class="kwb">int</span>[n+<span class="num">1</span>];
+    }
+
+    <span class="kwb">void</span> <span class="kwd">runTask</span>( <span class="kwb">int</span> task )
+    {
+        <span class="kwb">int</span> idxMin = task*CHUNKSZ;
+        <span class="kwb">int</span> idxMax = Math.<span class="kwd">min</span>( Fact[n], idxMin+CHUNKSZ );
+
+	<span class="slc">// first permutation</span>
+        <span class="kwa">for</span> ( <span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; ++i ) {
+           p[i] = i;
+        }
+        <span class="kwa">for</span> ( <span class="kwb">int</span> i=n-<span class="num">1</span>, idx=idxMin; i&gt;<span class="num">0</span>; --i ) {
+            <span class="kwb">int</span> d = idx / Fact[i];
+            count[i] = d;
+            idx = idx % Fact[i];
+
+            System.<span class="kwd">arraycopy</span>( p, <span class="num">0</span>, pp, <span class="num">0</span>, i+<span class="num">1</span> );
+            <span class="kwa">for</span> ( <span class="kwb">int</span> j=<span class="num">0</span>; j&lt;=i; ++j ) {
+                p[j] = j+d &lt;= i ? pp[j+d] : pp[j+d-i-<span class="num">1</span>];
+            }
+        }
+
+        <span class="kwb">int</span> p0=<span class="num">0</span>,p1=<span class="num">0</span>,p2=<span class="num">0</span>,p3=<span class="num">0</span>,p4=<span class="num">0</span>,p5=<span class="num">0</span>,p6=<span class="num">0</span>,p7=<span class="num">0</span>,p8=<span class="num">0</span>,p9=<span class="num">0</span>,p10=<span class="num">0</span>,p11=<span class="num">0</span>;
+	<span class="kwa">switch</span> ( n ) {
+	<span class="kwa">case</span> <span class="num">12</span>:  p11 = p[<span class="num">11</span>];
+	<span class="kwa">case</span> <span class="num">11</span>:  p10 = p[<span class="num">10</span>];
+	<span class="kwa">case</span> <span class="num">10</span>:  p9 = p[<span class="num">9</span>];
+	<span class="kwa">case</span> <span class="num">9</span>:   p8 = p[<span class="num">8</span>];
+	<span class="kwa">case</span> <span class="num">8</span>:   p7 = p[<span class="num">7</span>];
+	<span class="kwa">case</span> <span class="num">7</span>:   p6 = p[<span class="num">6</span>];
+	<span class="kwa">case</span> <span class="num">6</span>:   p5 = p[<span class="num">5</span>];
+	<span class="kwa">case</span> <span class="num">5</span>:   p4 = p[<span class="num">4</span>];
+	<span class="kwa">case</span> <span class="num">4</span>:   p3 = p[<span class="num">3</span>];
+	<span class="kwa">case</span> <span class="num">3</span>:   p2 = p[<span class="num">2</span>];
+	<span class="kwa">case</span> <span class="num">2</span>:   p1 = p[<span class="num">1</span>];
+	<span class="kwa">case</span> <span class="num">1</span>:   p0 = p[<span class="num">0</span>];
+	}
+
+        <span class="kwb">int</span> maxflips = <span class="num">0</span>;
+        <span class="kwb">int</span> chksum = <span class="num">0</span>;
+
+        <span class="kwa">for</span> ( <span class="kwb">int</span> i=idxMin; i&lt;idxMax; ++i ) {
+
+	    <span class="slc">// count flips</span>
+            <span class="kwa">if</span> ( p0 != <span class="num">0</span> ) {
+		<span class="kwb">int</span> pp0 = p0, pp1 = p1, pp2 = p2, pp3 = p3, pp4 = p4, pp5 = p5,
+		    pp6 = p6, pp7 = p7, pp8 = p8, pp9 = p9, pp10 = p10, pp11 = p11;
+	        <span class="kwb">int</span> flips = <span class="num">1</span>;
+		<span class="kwa">for</span> ( ;; ++flips ) {
+		    <span class="kwb">int</span> t = pp0;
+		    <span class="kwa">switch</span> ( t ) {
+		    <span class="kwa">case</span> <span class="num">1</span>: pp0 = pp1; pp1 = t; <span class="kwa">break</span>;
+		    <span class="kwa">case</span> <span class="num">2</span>: pp0 = pp2; pp2 = t; <span class="kwa">break</span>;
+		    <span class="kwa">case</span> <span class="num">3</span>: pp0 = pp3; pp3 = t;
+	        	    t = pp2; pp2 = pp1; pp1 = t;
+			    <span class="kwa">break</span>;
+		    <span class="kwa">case</span> <span class="num">4</span>: pp0 = pp4; pp4 = t;
+			    t = pp3; pp3 = pp1; pp1 = t;
+			    <span class="kwa">break</span>;
+		    <span class="kwa">case</span> <span class="num">5</span>: pp0 = pp5; pp5 = t;
+			    t = pp4; pp4 = pp1; pp1 = t;
+			    t = pp3; pp3 = pp2; pp2 = t;
+			    <span class="kwa">break</span>;
+		    <span class="kwa">case</span> <span class="num">6</span>: pp0 = pp6; pp6 = t;
+			    t = pp5; pp5 = pp1; pp1 = t;
+			    t = pp4; pp4 = pp2; pp2 = t;
+			    <span class="kwa">break</span>;
+		    <span class="kwa">case</span> <span class="num">7</span>: pp0 = pp7; pp7 = t;
+			    t = pp6; pp6 = pp1; pp1 = t;
+			    t = pp5; pp5 = pp2; pp2 = t;
+			    t = pp4; pp4 = pp3; pp3 = t;
+			    <span class="kwa">break</span>;
+		    <span class="kwa">case</span> <span class="num">8</span>: pp0 = pp8; pp8 = t;
+			    t = pp7; pp7 = pp1; pp1 = t;
+			    t = pp6; pp6 = pp2; pp2 = t;
+			    t = pp5; pp5 = pp3; pp3 = t;
+			    <span class="kwa">break</span>;
+		    <span class="kwa">case</span> <span class="num">9</span>: pp0 = pp9; pp9 = t;
+			    t = pp8; pp8 = pp1; pp1 = t;
+			    t = pp7; pp7 = pp2; pp2 = t;
+			    t = pp6; pp6 = pp3; pp3 = t;
+			    t = pp5; pp5 = pp4; pp4 = t;
+			    <span class="kwa">break</span>;
+		    <span class="kwa">case</span> <span class="num">10</span>: pp0 = pp10; pp10 = t;
+			    t = pp9; pp9 = pp1; pp1 = t;
+			    t = pp8; pp8 = pp2; pp2 = t;
+			    t = pp7; pp7 = pp3; pp3 = t;
+			    t = pp6; pp6 = pp4; pp4 = t;
+			    <span class="kwa">break</span>;
+		    <span class="kwa">case</span> <span class="num">11</span>: pp0 = pp11; pp11 = t;
+			    t = pp10; pp10 = pp1; pp1 = t;
+			    t = pp9; pp9 = pp2; pp2 = t;
+			    t = pp8; pp8 = pp3; pp3 = t;
+			    t = pp7; pp7 = pp4; pp4 = t;
+			    t = pp6; pp6 = pp5; pp5 = t;
+			    <span class="kwa">break</span>;
+		    }
+		    <span class="kwa">if</span> ( pp0 == <span class="num">0</span> ) <span class="kwa">break</span>;
+		}
+
+                maxflips = Math.<span class="kwd">max</span>( maxflips, flips );
+		chksum += (i&amp;<span class="num">1</span>)==<span class="num">0</span> ? flips : -flips;
+            }
+
+	    <span class="slc">// next permutation</span>
+	    <span class="kwb">int</span> t = p0; p0 = p1; p1 = t;
+            <span class="kwb">int</span> k=<span class="num">1</span>; 
+            <span class="kwa">while</span> ( ++count[k] &gt; k ) {
+		count[k++] = <span class="num">0</span>;
+		<span class="kwa">switch</span> ( k ) {
+		<span class="kwa">case</span> <span class="num">11</span>: t = p11; p11 = p0; p0 = t;
+		<span class="kwa">case</span> <span class="num">10</span>: t = p10; p10 = p0; p0 = t;
+		<span class="kwa">case</span> <span class="num">9</span>:  t = p9; p9 = p0; p0 = t;
+		<span class="kwa">case</span> <span class="num">8</span>:  t = p8; p8 = p0; p0 = t;
+		<span class="kwa">case</span> <span class="num">7</span>:  t = p7; p7 = p0; p0 = t;
+		<span class="kwa">case</span> <span class="num">6</span>:  t = p6; p6 = p0; p0 = t;
+		<span class="kwa">case</span> <span class="num">5</span>:  t = p5; p5 = p0; p0 = t;
+		<span class="kwa">case</span> <span class="num">4</span>:  t = p4; p4 = p0; p0 = t;
+		<span class="kwa">case</span> <span class="num">3</span>:  t = p3; p3 = p0; p0 = t;
+		<span class="kwa">case</span> <span class="num">2</span>:  t = p2; p2 = p0; p0 = p1; p1 = t;
+		}
+            }
+        }
+
+	maxFlips[task] = maxflips;
+	chkSums[task]  = chksum;
+    }
+
+    <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>()
+    {
+        <span class="kwb">int</span> task;
+        <span class="kwa">while</span> ( ( task = taskId.<span class="kwd">getAndIncrement</span>() ) &lt; NTASKS ) {
+	    <span class="kwd">runTask</span>( task );
+        }
+    }
+
+    <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">printResult</span>( <span class="kwb">int</span> n, <span class="kwb">int</span> res, <span class="kwb">int</span> chk )
+    {
+        System.out.<span class="kwd">println</span>( chk+<span class="str">&quot;</span><span class="esc">\n</span><span class="str">Pfannkuchen(&quot;</span>+n+<span class="str">&quot;) = &quot;</span>+res );
+    }
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>( String[] args )
+    {
+	<span class="slc">// Inititalize</span>
+        n = args.length &gt; <span class="num">0</span> ? Integer.<span class="kwd">parseInt</span>( args[<span class="num">0</span>] ) : <span class="num">12</span>;
+        <span class="kwa">if</span> ( n &lt;= <span class="num">0</span> || n &gt; <span class="num">12</span> ) {         <span class="slc">// 13! won't fit into int</span>
+            <span class="kwd">printResult</span>( n, -<span class="num">1</span>, -<span class="num">1</span> );
+            <span class="kwa">return</span>;
+        }
+
+        Fact = <span class="kwa">new</span> <span class="kwb">int</span>[n+<span class="num">1</span>];
+        Fact[<span class="num">0</span>] = <span class="num">1</span>;
+        <span class="kwa">for</span> ( <span class="kwb">int</span> i=<span class="num">1</span>; i&lt;Fact.length; ++i ) {
+            Fact[i] = Fact[i-<span class="num">1</span>] * i;
+        }
+        
+        CHUNKSZ = (Fact[n] + NCHUNKS - <span class="num">1</span>) / NCHUNKS;
+	NTASKS = (Fact[n] + CHUNKSZ - <span class="num">1</span>) / CHUNKSZ;
+        maxFlips = <span class="kwa">new</span> <span class="kwb">int</span>[NTASKS];
+        chkSums  = <span class="kwa">new</span> <span class="kwb">int</span>[NTASKS];
+        taskId = <span class="kwa">new</span> <span class="kwd">AtomicInteger</span>(<span class="num">0</span>);
+
+	<span class="slc">// Go parallel </span>
+        <span class="kwb">int</span> nthreads = Runtime.<span class="kwd">getRuntime</span>().<span class="kwd">availableProcessors</span>()-<span class="num">1</span>;
+        Thread[] threads = <span class="kwa">new</span> Thread[nthreads];
+        <span class="kwa">for</span> ( <span class="kwb">int</span> i=<span class="num">0</span>; i&lt;nthreads; ++i ) {
+            threads[i] = <span class="kwa">new</span> <span class="kwd">Thread</span>( <span class="kwa">new</span> <span class="kwd">fannkuchredux</span>() );
+            threads[i].<span class="kwd">start</span>();
+        }
+	<span class="kwa">new</span> <span class="kwd">fannkuchredux</span>().<span class="kwd">run</span>();
+        <span class="kwa">for</span> ( Thread t : threads ) {
+            <span class="kwa">try</span> {
+                t.<span class="kwd">join</span>();
+            }
+            <span class="kwa">catch</span> ( InterruptedException e ) {}
+        }
+        
+	<span class="slc">// Reduce the results</span>
+        <span class="kwb">int</span> res = <span class="num">0</span>;
+        <span class="kwa">for</span> ( <span class="kwb">int</span> v : maxFlips ) {
+            res = Math.<span class="kwd">max</span>( res, v );
+        }
+        <span class="kwb">int</span> chk = <span class="num">0</span>;
+        <span class="kwa">for</span> ( <span class="kwb">int</span> v : chkSums ) {
+            chk += v;
+        }
+        
+        <span class="kwd">printResult</span>( n, res, chk );
+    }
+}

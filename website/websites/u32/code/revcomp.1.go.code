@@ -1,0 +1,199 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Krzysztof Kowalczyk</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;bytes&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;io&quot;</span>
+   <span class="str">&quot;log&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+)
+
+<span class="kwa">var</span> comptbl = [<span class="num">256</span>]<span class="kwb">uint8</span>{}
+
+<span class="kwa">func</span> <span class="kwd">build_comptbl</span>() {
+   l1 := []<span class="kwb">byte</span>(<span class="str">&quot;UACBDKRWSN&quot;</span>)
+   l2 := []<span class="kwb">byte</span>(<span class="str">&quot;ATGVHMYWSN&quot;</span>)
+   l1_lower := bytes.<span class="kwd">ToLower</span>(l1)
+   l2_lower := bytes.<span class="kwd">ToLower</span>(l2)
+   <span class="kwa">for</span> i, c1 := <span class="kwa">range</span> l1 {
+      c2 := l2[i]
+      comptbl[c1] = c2
+      comptbl[c2] = c1
+      comptbl[l1_lower[i]] = c2
+      comptbl[l2_lower[i]] = c1
+   }
+   comptbl[<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>
+}
+
+<span class="kwa">const</span> CHUNK_SIZE = <span class="num">1024</span> * <span class="num">128</span>
+<span class="kwa">const</span> BUF_SIZE = <span class="num">1024</span> * <span class="num">1024</span> * <span class="num">243</span>
+<span class="kwa">const</span> (
+   START   = <span class="num">0</span>
+   IN_HDR  = <span class="num">1</span>
+   IN_DATA = <span class="num">2</span>
+)
+
+<span class="kwa">type</span> ChunkInfo <span class="kwa">struct</span> {
+   i, end <span class="kwb">int</span>
+   last   <span class="kwb">bool</span>
+}
+
+<span class="kwa">type</span> PrintJob <span class="kwa">struct</span> {
+   data []<span class="kwb">byte</span>
+   last <span class="kwb">bool</span>
+}
+
+<span class="kwa">var</span> buf []<span class="kwb">byte</span>
+<span class="kwa">var</span> start_fasta_hdr <span class="kwb">int</span>
+<span class="kwa">var</span> start_fasta_data <span class="kwb">int</span>
+<span class="kwa">var</span> state <span class="kwb">int</span> = START
+<span class="kwa">var</span> chunker_chan <span class="kwa">chan</span> ChunkInfo
+<span class="kwa">var</span> printer_chan <span class="kwa">chan</span> PrintJob
+<span class="kwa">var</span> done_chan <span class="kwa">chan</span> <span class="kwb">bool</span>
+
+<span class="kwa">func</span> <span class="kwd">printer</span>(jobs <span class="kwa">chan</span> PrintJob, done <span class="kwa">chan</span> <span class="kwb">bool</span>) {
+   <span class="kwa">for</span> {
+      job := &lt;-jobs
+      <span class="kwa">if</span> <span class="kwb">nil</span> != job.data {
+         os.Stdout.<span class="kwd">Write</span>(job.data)
+      }
+      <span class="kwa">if</span> job.last {
+         done &lt;- <span class="kwb">true</span>
+         <span class="kwa">return</span>
+      }
+   }
+}
+
+<span class="kwa">func</span> <span class="kwd">add_printer_job</span>(data []<span class="kwb">byte</span>, last <span class="kwb">bool</span>) {
+   <span class="kwa">var</span> j PrintJob
+   j.data = data
+   j.last = last
+   printer_chan &lt;- j
+}
+
+<span class="slc">// TODO: this one can print a bit earlier</span>
+<span class="kwa">func</span> <span class="kwd">reverse</span>(strand []<span class="kwb">byte</span>) {
+   i := <span class="num">0</span>
+   end := <span class="kwb">len</span>(strand) - <span class="num">1</span>
+   <span class="kwa">for</span> i &lt; end {
+      c := strand[i]
+      <span class="kwa">if</span> c == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> {
+         i += <span class="num">1</span>
+         c = strand[i]
+      }
+      cend := strand[end]
+      <span class="kwa">if</span> cend == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> {
+         end -= <span class="num">1</span>
+         cend = strand[end]
+      }
+      strand[i] = comptbl[cend]
+      strand[end] = comptbl[c]
+      i += <span class="num">1</span>
+      end -= <span class="num">1</span>
+   }
+}
+
+<span class="kwa">func</span> <span class="kwd">print_fasta</span>(start, end <span class="kwb">int</span>) {
+   <span class="kwd">reverse</span>(buf[start:end])
+   <span class="kwd">add_printer_job</span>(buf[start:end], <span class="kwb">false</span>)
+}
+
+<span class="kwa">func</span> <span class="kwd">process_chunk_data</span>(i, end <span class="kwb">int</span>) <span class="kwb">int</span> {
+   pos := bytes.<span class="kwd">IndexByte</span>(buf[i:end], <span class="str">'&gt;'</span>)
+   <span class="kwa">if</span> -<span class="num">1</span> == pos {
+      i = end
+      <span class="kwa">return</span> IN_DATA
+   }
+   i = i + pos
+   <span class="kwd">print_fasta</span>(start_fasta_data, i)
+   start_fasta_hdr = i
+   <span class="kwa">return</span> <span class="kwd">process_chunk_start</span>(i, end)
+}
+
+<span class="kwa">func</span> <span class="kwd">process_chunk_hdr</span>(i, end <span class="kwb">int</span>) <span class="kwb">int</span> {
+   <span class="kwa">for</span> ; i &lt; end; i++ {
+      <span class="kwa">if</span> buf[i] == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> {
+         <span class="kwd">add_printer_job</span>(buf[start_fasta_hdr:i+<span class="num">1</span>], <span class="kwb">false</span>)
+         start_fasta_data = i + <span class="num">1</span>
+         <span class="kwa">return</span> <span class="kwd">process_chunk_data</span>(i+<span class="num">1</span>, end)
+      }
+   }
+   <span class="kwa">return</span> IN_HDR
+}
+
+<span class="kwa">func</span> <span class="kwd">process_chunk_start</span>(i, end <span class="kwb">int</span>) <span class="kwb">int</span> {
+   <span class="kwa">if</span> buf[i] != <span class="str">'&gt;'</span> {
+      <span class="kwb">panic</span>(<span class="str">&quot;Unexpected&quot;</span>)
+   }
+   start_fasta_hdr = i
+   <span class="kwa">return</span> <span class="kwd">process_chunk_hdr</span>(i+<span class="num">1</span>, end)
+}
+
+<span class="kwa">func</span> <span class="kwd">process_chunk</span>(i, end <span class="kwb">int</span>) {
+   <span class="kwa">if</span> state == START {
+      state = <span class="kwd">process_chunk_start</span>(i, end)
+   } <span class="kwa">else if</span> state == IN_HDR {
+      state = <span class="kwd">process_chunk_hdr</span>(i, end)
+   } <span class="kwa">else</span> {
+      state = <span class="kwd">process_chunk_data</span>(i, end)
+   }
+}
+
+<span class="kwa">func</span> <span class="kwd">chunker</span>(chunks <span class="kwa">chan</span> ChunkInfo, done <span class="kwa">chan</span> <span class="kwb">bool</span>) {
+   <span class="kwa">for</span> {
+      ci := &lt;-chunks
+      <span class="kwa">if</span> ci.last {
+         <span class="kwa">if</span> state != IN_DATA {
+            <span class="kwb">panic</span>(<span class="str">&quot;unexpected state&quot;</span>)
+         }
+         <span class="kwd">print_fasta</span>(start_fasta_data, ci.end)
+         <span class="kwd">add_printer_job</span>(<span class="kwb">nil</span>, <span class="kwb">true</span>)
+         done &lt;- <span class="kwb">true</span>
+         <span class="kwa">return</span>
+      } <span class="kwa">else</span> {
+         <span class="kwd">process_chunk</span>(ci.i, ci.end)
+      }
+   }
+}
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   runtime.<span class="kwd">GOMAXPROCS</span>(<span class="num">4</span>)
+   <span class="kwd">build_comptbl</span>()
+   buf = <span class="kwb">make</span>([]<span class="kwb">byte</span>, BUF_SIZE, BUF_SIZE)
+   chunker_chan = <span class="kwb">make</span>(<span class="kwa">chan</span> ChunkInfo, <span class="num">128</span>)
+   printer_chan = <span class="kwb">make</span>(<span class="kwa">chan</span> PrintJob, <span class="num">16</span>)
+   done_chan = <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">bool</span>, <span class="num">2</span>)
+   <span class="kwa">go</span> <span class="kwd">chunker</span>(chunker_chan, done_chan)
+   <span class="kwa">go</span> <span class="kwd">printer</span>(printer_chan, done_chan)
+   i := <span class="num">0</span>
+   <span class="kwa">for</span> {
+      n, err := os.Stdin.<span class="kwd">Read</span>(buf[i : i+CHUNK_SIZE])
+      <span class="kwa">if</span> n &gt; <span class="num">0</span> {
+         <span class="kwa">var</span> ci ChunkInfo
+         ci.i = i
+         ci.end = i + n
+         ci.last = <span class="kwb">false</span>
+         chunker_chan &lt;- ci
+         i += n
+      } <span class="kwa">else</span> {
+         <span class="kwa">if</span> err == io.EOF {
+            <span class="kwa">var</span> ci ChunkInfo
+            ci.end = i
+            ci.last = <span class="kwb">true</span>
+            chunker_chan &lt;- ci
+            <span class="kwa">break</span>
+         }
+         log.<span class="kwd">Fatalf</span>(fmt.<span class="kwd">Sprintf</span>(<span class="str">&quot;Unexpected error:</span> <span class="ipl">%s</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>), err.<span class="kwd">Error</span>())
+      }
+   }
+   <span class="slc">// wait for both chunker and printer</span>
+   &lt;-done_chan
+   &lt;-done_chan
+}

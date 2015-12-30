@@ -1,0 +1,118 @@
+<span class="com">&quot;* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Paolo Bonzini </span>
+<span class="com">   modified by Isaac Gouy *&quot;</span>!
+
+
+<span class="kwc">Object</span> <span class="kwb">subclass:</span> <span class="kwd">#PermGeneratorRedux</span>
+   <span class="kwb">instanceVariableNames:</span> <span class="str">'timesRotated perm atEnd'</span>
+   <span class="kwb">classVariableNames:</span> <span class="str">''</span>
+   <span class="kwb">poolDictionaries:</span> <span class="str">''</span>
+   <span class="kwb">category:</span> <span class="str">'Shootout'</span>!
+
+
+!<span class="kwc">Array</span> <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">pfannkuchen</span>
+   <span class="kwd">| first complement a b k |</span>
+   k :<span class="kwb">=</span> <span class="num">0</span>.
+   [ (first :<span class="kwb">=</span> <span class="kwa">self</span> <span class="kwb">at:</span> <span class="num">1</span>) <span class="kwb">==</span> <span class="num">1</span> ] <span class="kwb">whileFalse:</span> [
+      k :<span class="kwb">=</span> k <span class="kwb">+</span> <span class="num">1</span>.
+      complement :<span class="kwb">=</span> first <span class="kwb">+</span> <span class="num">1</span>.
+      <span class="num">1</span> <span class="kwb">to:</span> first <span class="kwb">//</span> <span class="num">2</span> <span class="kwb">do:</span> [ <span class="kwd">:i</span> |
+         a :<span class="kwb">=</span> <span class="kwa">self</span> <span class="kwb">at:</span> i.
+         b :<span class="kwb">=</span> <span class="kwa">self</span> <span class="kwb">at:</span> complement <span class="kwb">-</span> i.
+         <span class="kwa">self</span> <span class="kwb">at:</span> i <span class="kwb">put:</span> b.
+         <span class="kwa">self</span> <span class="kwb">at:</span> complement <span class="kwb">-</span> i <span class="kwb">put:</span> a.
+      ]
+   ].
+   ^k! !
+
+
+
+!<span class="kwc">PermGeneratorRedux</span> <span class="kwb">methodsFor:</span> <span class="str">'initialize-release'</span>!
+<span class="kwb">initialize:</span> size
+   perm :<span class="kwb">=</span> (<span class="num">1</span> <span class="kwb">to:</span> size) asArray.
+   timesRotated :<span class="kwb">=</span> <span class="kwc">Array</span> <span class="kwb">new:</span> size <span class="kwb">withAll:</span> <span class="num">0</span>.
+   atEnd :<span class="kwb">=</span> <span class="kwa">false</span>.
+   permCount :<span class="kwb">=</span> <span class="num">0</span>! !
+
+
+
+!<span class="kwc">PermGeneratorRedux</span> <span class="kwb">methodsFor:</span> <span class="str">'initialize-release'</span>!
+<span class="kwb">makeNext</span>
+   <span class="kwd">| temp remainder |</span>
+   <span class="com">&quot;* Generate the next permutation. *&quot;</span>
+   <span class="num">2</span> <span class="kwb">to:</span> perm size <span class="kwb">do:</span> [ <span class="kwd">:r</span> |
+      <span class="com">&quot;* Rotate the first r items to the left. *&quot;</span>
+      temp :<span class="kwb">=</span> perm <span class="kwb">at:</span> <span class="num">1</span>.
+      <span class="num">1</span> <span class="kwb">to:</span> r <span class="kwb">-</span> <span class="num">1</span> <span class="kwb">do:</span> [ <span class="kwd">:i</span> | perm <span class="kwb">at:</span> i <span class="kwb">put:</span> (perm <span class="kwb">at:</span> i <span class="kwb">+</span> <span class="num">1</span>) ].
+      perm <span class="kwb">at:</span> r <span class="kwb">put:</span> temp.
+
+      remainder :<span class="kwb">=</span> timesRotated <span class="kwb">at:</span> r <span class="kwb">put:</span> ((timesRotated <span class="kwb">at:</span> r) <span class="kwb">+</span> <span class="num">1</span>) <span class="esc">\\</span> r.
+      remainder <span class="kwb">=</span> <span class="num">0</span> <span class="kwb">ifFalse:</span> [ ^<span class="kwa">self</span> ].
+
+      <span class="com">&quot;* After r rotations, the first r items are in their original positions.</span>
+<span class="com">      Go on rotating the first r+1 items. *&quot;</span>
+   ].
+
+   <span class="com">&quot;* We are past the final permutation. *&quot;</span>
+   atEnd :<span class="kwb">=</span> <span class="kwa">true</span>! !
+
+
+
+!<span class="kwc">PermGeneratorRedux</span> <span class="kwb">methodsFor:</span> <span class="str">'benchmarks'</span>!
+<span class="kwb">maxPfannkuchenTo:</span> output
+   <span class="kwd">| max permutation checksum permCount flipsCount |</span>
+   max :<span class="kwb">=</span> <span class="num">0</span>.
+   permCount :<span class="kwb">=</span> <span class="num">0</span>.
+   checksum :<span class="kwb">=</span> <span class="num">0</span>.
+   [<span class="kwa">self</span> atEnd] <span class="kwb">whileFalse:</span>
+      [permutation :<span class="kwb">=</span> <span class="kwa">self</span> next.
+      permCount :<span class="kwb">=</span> permCount <span class="kwb">+</span> <span class="num">1</span>.
+      (permCount <span class="kwb">=</span> <span class="num">1048576</span>) <span class="kwb">ifTrue:</span> [permCount :<span class="kwb">=</span> <span class="num">0</span>].
+      flipsCount :<span class="kwb">=</span> permutation pfannkuchen.
+      checksum :<span class="kwb">=</span> permCount odd <span class="kwb">ifTrue:</span> [checksum<span class="kwb">+</span>flipsCount] <span class="kwb">ifFalse:</span> [checksum<span class="kwb">-</span>flipsCount].
+      max :<span class="kwb">=</span> max <span class="kwb">max:</span> flipsCount].
+   output <span class="kwb">print:</span> checksum; nl.
+   ^max! !
+
+
+
+!<span class="kwc">PermGeneratorRedux</span> <span class="kwb">methodsFor:</span> <span class="str">'accessing'</span>!
+<span class="kwb">atEnd</span>
+   ^atEnd! !
+
+
+
+!<span class="kwc">PermGeneratorRedux</span> <span class="kwb">methodsFor:</span> <span class="str">'accessing'</span>!
+<span class="kwb">next</span>
+   <span class="kwd">| result |</span>
+   result :<span class="kwb">=</span> perm copy.
+   <span class="kwa">self</span> makeNext.
+   ^result! !
+
+
+
+!<span class="kwc">PermGeneratorRedux</span> class <span class="kwb">methodsFor:</span> <span class="str">'instance creation'</span>!
+<span class="kwb">new:</span> size
+   ^<span class="kwa">self</span> new
+      <span class="kwb">initialize:</span> size;
+      yourself! !
+
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">fannkuchRedux:</span> n <span class="kwb">to:</span> output
+   ^(<span class="kwc">PermGeneratorRedux</span> <span class="kwb">new:</span> n) <span class="kwb">maxPfannkuchenTo:</span> output! !
+
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmark scripts'</span>!
+<span class="kwb">fannkuchredux</span>
+   <span class="kwd">| n f |</span>
+   n :<span class="kwb">=</span> <span class="kwa">self</span> arg.
+   f :<span class="kwb">=</span> <span class="kwa">self</span> <span class="kwb">fannkuchRedux:</span> n <span class="kwb">to:</span> <span class="kwa">self</span> stdout.
+   <span class="kwa">self</span> stdout
+      <span class="kwb">nextPutAll:</span> <span class="str">'Pfannkuchen('</span>, n printString, <span class="str">') = '</span>;
+      <span class="kwb">print:</span> f; nl.
+   ^<span class="str">''</span>! !

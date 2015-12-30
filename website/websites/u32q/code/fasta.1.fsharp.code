@@ -1,0 +1,84 @@
+﻿<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Contributed by Valentin Kraevskiy</span>
+
+<span class="kwa">let</span> im = <span class="num">139968</span>
+<span class="kwa">let</span> ia = <span class="num">3877</span>
+<span class="kwa">let</span> ic = <span class="num">29573</span>
+<span class="kwa">let mutable</span> seed = <span class="num">42</span>;
+
+<span class="kwa">let inline</span> random max =
+    seed &lt;- (seed * ia + ic) % im
+    max * <span class="kwb">float</span> seed / <span class="kwb">float</span> im
+
+<span class="kwa">let</span> alu =
+    <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG\</span>
+<span class="str">     GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA\</span>
+<span class="str">     CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT\</span>
+<span class="str">     ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA\</span>
+<span class="str">     GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG\</span>
+<span class="str">     AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC\</span>
+<span class="str">     AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span><span class="kwd">B</span>
+
+<span class="kwa">let</span> makeCumulative = 
+    <span class="kwd">List</span>.fold (<span class="kwa">fun</span> (cp, res) (c, p) -&gt; cp + p, (c, cp + p) :: res) (<span class="num">0.0</span>, []) 
+    &gt;&gt; snd &gt;&gt; <span class="kwd">List</span>.toArray
+
+<span class="kwa">let</span> homoSapiens = 
+    makeCumulative
+        ['a'<span class="kwd">B</span>, <span class="num">0.3029549426680</span>
+         'c'<span class="kwd">B</span>, <span class="num">0.1979883004921</span>
+         'g'<span class="kwd">B</span>, <span class="num">0.1975473066391</span>
+         't'<span class="kwd">B</span>, <span class="num">0.3015094502008</span>]
+     
+<span class="kwa">let</span> iub = 
+    makeCumulative 
+        ['a'<span class="kwd">B</span>, <span class="num">0.27</span>; 'c'<span class="kwd">B</span>, <span class="num">0.12</span>; 'g'<span class="kwd">B</span>, <span class="num">0.12</span>
+         't'<span class="kwd">B</span>, <span class="num">0.27</span>; '<span class="kwd">B'B</span>, <span class="num">0.02</span>; '<span class="kwd">D'B</span>, <span class="num">0.02</span>
+         '<span class="kwd">H'B</span>, <span class="num">0.02</span>; '<span class="kwd">K'B</span>, <span class="num">0.02</span>; '<span class="kwd">M'B</span>, <span class="num">0.02</span>
+         '<span class="kwd">N'B</span>, <span class="num">0.02</span>; '<span class="kwd">R'B</span>, <span class="num">0.02</span>; '<span class="kwd">S'B</span>, <span class="num">0.02</span>
+         '<span class="kwd">V'B</span>, <span class="num">0.02</span>; '<span class="kwd">W'B</span>, <span class="num">0.02</span>; '<span class="kwd">Y'B</span>, <span class="num">0.02</span>]
+
+<span class="kwa">let inline</span> selectRandom (f: _ [])  =     
+    <span class="kwa">let</span> r = random <span class="num">1.0</span> 
+    <span class="kwa">let rec</span> find = <span class="kwa">function</span>
+        | <span class="num">0</span> -&gt; fst f.[<span class="num">0</span>]
+        | n <span class="kwa">when</span> r &lt; snd f.[n] -&gt; fst f.[n]
+        | n -&gt; find (n - <span class="num">1</span>)
+    find &lt;| f.<span class="kwd">Length</span> - <span class="num">1</span>
+   
+<span class="kwa">let</span> width = <span class="num">60</span> 
+<span class="kwa">let</span> stream = <span class="kwd">System</span>.<span class="kwd">Console</span>.<span class="kwd">OpenStandardOutput</span> ()
+<span class="kwa">let</span> buffer = <span class="kwd">Array</span>.create <span class="num">1024 0uy</span>
+<span class="kwa">let mutable</span> index = <span class="num">0</span>
+<span class="kwa">let inline</span> flush () =    
+    stream.<span class="kwd">Write</span> (buffer, <span class="num">0</span>, index)
+    index &lt;- <span class="num">0</span>
+<span class="kwa">let inline</span> write b = 
+    buffer.[index] &lt;- b
+    index &lt;- index + <span class="num">1</span>
+    <span class="kwa">if</span> index = buffer.<span class="kwd">Length</span> <span class="kwa">then</span> flush ()        
+    
+<span class="kwa">let</span> randomFasta desc table n =
+    <span class="kwd">Array</span>.iter write desc
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">1</span> .. n <span class="kwa">do</span>
+        write &lt;| selectRandom table
+        <span class="kwa">if</span> i % width = <span class="num">0</span> <span class="kwa">then</span> write '<span class="esc">\n</span>'<span class="kwd">B</span>
+    <span class="kwa">if</span> n % width &lt;&gt; <span class="num">0</span> <span class="kwa">then</span> write '<span class="esc">\n</span>'<span class="kwd">B</span>
+
+<span class="kwa">let</span> repeatFasta desc (table : byte []) n =
+    <span class="kwd">Array</span>.iter write desc 
+    <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">1</span> .. n <span class="kwa">do</span>
+        write &lt;| table.[(i - <span class="num">1</span>) % table.<span class="kwd">Length</span>]
+        <span class="kwa">if</span> i % width = <span class="num">0</span> <span class="kwa">then</span> write '<span class="esc">\n</span>'<span class="kwd">B</span>
+    <span class="kwa">if</span> n % width &lt;&gt; <span class="num">0</span> <span class="kwa">then</span> write '<span class="esc">\n</span>'<span class="kwd">B</span>
+        
+[&lt;<span class="kwd">EntryPoint</span>&gt;]
+<span class="kwa">let</span> main args =
+    <span class="kwa">let</span> n = <span class="kwa">try</span> <span class="kwb">int</span> args.[<span class="num">0</span>] <span class="kwa">with</span> _ -&gt; <span class="num">1000</span>
+    repeatFasta <span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span><span class="kwd">B</span> alu (<span class="num">2</span> * n)
+    randomFasta <span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span><span class="kwd">B</span> iub (<span class="num">3</span> * n)
+    randomFasta <span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span><span class="kwd">B</span> homoSapiens  (<span class="num">5</span> * n)
+    flush ()
+    <span class="num">0</span>

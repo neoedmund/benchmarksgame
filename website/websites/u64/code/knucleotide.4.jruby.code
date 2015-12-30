@@ -1,0 +1,39 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org</span>
+<span class="slc">#</span>
+<span class="slc"># contributed by Aaron Tavistock</span>
+
+<span class="kwa">def</span> <span class="kwd">frequency</span>(seq, keys<span class="opt">)</span>
+  counts = Hash.<span class="kwd">new</span>(<span class="num">0</span><span class="opt">)</span>
+  keys.each <span class="kwa">do</span> |key|
+    last_index = <span class="num">0</span>
+    <span class="kwa">while</span> last_index = seq.<span class="kwd">index</span>(key, last_index+<span class="num">1</span><span class="opt">)</span>
+      counts[key] += <span class="num">1</span>
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+  counts
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">percentage</span>(seq, keys<span class="opt">)</span>
+  <span class="kwd">frequency</span>(seq, keys<span class="opt">)</span>.sort { |a,b| b[1] &lt;=&gt; a[1] }.map <span class="kwa">do</span> |key, value|
+    <span class="str">&quot;%s %.3f&quot;</span> % [ key.upcase, ( (value*<span class="num">100</span><span class="opt">)</span>.to_f / seq.size<span class="opt">)</span> ]
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+<span class="kwa">def</span> <span class="kwd">count</span>(seq, keys<span class="opt">)</span>
+  <span class="kwd">frequency</span>(seq, keys<span class="opt">)</span>.map <span class="kwa">do</span> |key, value|
+    <span class="str">&quot;</span><span class="ipl">#{value.to_s}</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">#{key.upcase}</span><span class="str">&quot;</span>
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+
+_, seq = <span class="kwc">STDIN</span>.read.<span class="kwd">scan</span>(<span class="kwc">/(\n&gt;THREE[^\n]*\n)([^&gt;]*)\n/</span><span class="opt">)</span>.flatten
+seq.<span class="kwd">force_encoding</span>(<span class="str">'ASCII-8BIT'</span><span class="opt">)</span>
+seq.gsub!(<span class="kwc">/\s/</span>, <span class="str">''</span><span class="opt">)</span>
+
+singles = %<span class="kwd">w</span>(a t c g<span class="opt">)</span>
+doubles = singles.map { |a| singles.map { |b| &quot;#{a}<span class="slc">#{b}&quot; }}.flatten</span>
+chains  = %<span class="kwd">w</span>(ggt ggta ggtatt ggtattttaatt ggtattttaatttatagt<span class="opt">)</span>
+
+print <span class="str">&quot;</span><span class="ipl">#{percentage(seq, singles).join(&quot;\n&quot;)}</span><span class="str"></span><span class="esc">\n\n</span><span class="str">&quot;</span>
+print <span class="str">&quot;</span><span class="ipl">#{percentage(seq, doubles).join(&quot;\n&quot;)}</span><span class="str"></span><span class="esc">\n\n</span><span class="str">&quot;</span>
+print <span class="str">&quot;</span><span class="ipl">#{count(seq, chains).join(&quot;\n&quot;)}</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>

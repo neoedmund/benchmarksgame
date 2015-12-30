@@ -1,0 +1,164 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   converted to C++ from D by Rafal Rusin</span>
+<span class="com">   modified by Vaclav Haisman</span>
+<span class="com">   modified by The Anh to compile with g++ 4.3.2</span>
+<span class="com">   modified by Branimir Maksimovic</span>
+<span class="com">   modified by Kim Walisch</span>
+<span class="com">   modified by Tavis Bohne</span>
+<span class="com"></span>
+<span class="com">   compiles with gcc fasta.cpp -std=c++11 -O2</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;algorithm&gt;</span>
+<span class="ppc">#include &lt;array&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;numeric&gt;</span>
+
+<span class="kwb">struct</span> IUB
+{
+    <span class="kwb">float</span> p;
+    <span class="kwb">char</span> c;
+};
+
+std::array&lt;<span class="kwb">char</span>, <span class="num">288</span>&gt; alu = 
+{
+    <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>
+    <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>
+    <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>
+    <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>
+    <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>
+    <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>
+    <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>
+};
+
+std::array&lt;IUB,<span class="num">15</span>&gt; iub =
+{{
+    { <span class="num">0.27</span>f, <span class="str">'a'</span> },
+    { <span class="num">0.12</span>f, <span class="str">'c'</span> },
+    { <span class="num">0.12</span>f, <span class="str">'g'</span> },
+    { <span class="num">0.27</span>f, <span class="str">'t'</span> },
+    { <span class="num">0.02</span>f, <span class="str">'B'</span> },
+    { <span class="num">0.02</span>f, <span class="str">'D'</span> },
+    { <span class="num">0.02</span>f, <span class="str">'H'</span> },
+    { <span class="num">0.02</span>f, <span class="str">'K'</span> },
+    { <span class="num">0.02</span>f, <span class="str">'M'</span> },
+    { <span class="num">0.02</span>f, <span class="str">'N'</span> },
+    { <span class="num">0.02</span>f, <span class="str">'R'</span> },
+    { <span class="num">0.02</span>f, <span class="str">'S'</span> },
+    { <span class="num">0.02</span>f, <span class="str">'V'</span> },
+    { <span class="num">0.02</span>f, <span class="str">'W'</span> },
+    { <span class="num">0.02</span>f, <span class="str">'Y'</span> }
+}};
+
+std::array&lt;IUB, <span class="num">4</span>&gt; homosapiens =
+{{
+    { <span class="num">0.3029549426680</span>f, <span class="str">'a'</span> },
+    { <span class="num">0.1979883004921</span>f, <span class="str">'c'</span> },
+    { <span class="num">0.1975473066391</span>f, <span class="str">'g'</span> },
+    { <span class="num">0.3015094502008</span>f, <span class="str">'t'</span> }
+}};
+
+<span class="kwb">float</span> <span class="kwd">gen_random</span>(<span class="kwb">float</span> max = <span class="num">1.0</span>f)
+{
+    <span class="kwb">static const int</span> IM = <span class="num">139968</span>, IA = <span class="num">3877</span>, IC = <span class="num">29573</span>;
+    <span class="kwb">static int</span> last = <span class="num">42</span>;
+    last = (last * IA + IC) % IM;
+    <span class="kwa">return</span> max * last * (<span class="num">1.0</span>f / IM);
+}
+
+<span class="kwc">template</span>&lt;<span class="kwc">class</span> iterator_type&gt;
+<span class="kwc">class</span> repeat_functor_type {
+<span class="kwc">public</span>:
+    <span class="kwd">repeat_functor_type</span>(iterator_type first, iterator_type last)
+      : <span class="kwd">first</span>(first), <span class="kwd">current</span>(first), <span class="kwd">last</span>(last)
+    { }
+    <span class="kwb">char</span> <span class="kwc">operator</span>()()
+    {
+        <span class="kwa">if</span> (current == last)
+            current = first;
+        iterator_type p = current;
+        ++current;
+        <span class="kwa">return</span> *p;
+    }
+<span class="kwc">private</span>:
+    iterator_type first;
+    iterator_type current;
+    iterator_type last;
+};
+<span class="kwc">template</span>&lt;<span class="kwc">class</span> iterator_type&gt;
+repeat_functor_type&lt;iterator_type&gt; 
+    <span class="kwd">make_repeat_functor</span>(iterator_type first, iterator_type last)
+{<span class="kwa">return</span> repeat_functor_type&lt;iterator_type&gt;(first, last);}
+
+<span class="kwc">template</span>&lt;<span class="kwc">class</span> iterator_type&gt;
+<span class="kwc">class</span> random_functor_type {
+<span class="kwc">public</span>:
+    <span class="kwd">random_functor_type</span>(iterator_type first, iterator_type last)
+      : <span class="kwd">first</span>(first), <span class="kwd">last</span>(last)
+    { }
+    <span class="kwb">char</span> <span class="kwc">operator</span>()()
+    {
+        <span class="kwb">const float</span> p = <span class="kwd">gen_random</span>(<span class="num">1.0</span>f);
+        <span class="kwc">auto</span> result = std::<span class="kwd">find_if</span>(first, last, [p] (IUB i) { <span class="kwa">return</span> p &lt;= i.p; });
+        <span class="kwa">return</span> result-&gt;c;
+    }
+<span class="kwc">private</span>:
+    iterator_type first;
+    iterator_type last;
+};
+<span class="kwc">template</span>&lt;<span class="kwc">class</span> iterator_type&gt;
+random_functor_type&lt;iterator_type&gt; 
+    <span class="kwd">make_random_functor</span>(iterator_type first, iterator_type last)
+{<span class="kwa">return</span> random_functor_type&lt;iterator_type&gt;(first, last);}
+
+<span class="kwc">template</span>&lt;<span class="kwc">class</span> iterator_type&gt;
+<span class="kwb">void</span> <span class="kwd">make_cumulative</span>(iterator_type first, iterator_type last)
+{
+    std::<span class="kwd">partial_sum</span>(first, last, first,
+        [] (IUB l, IUB r) -&gt; IUB { r.p += l.p; <span class="kwa">return</span> r; });
+}
+
+<span class="kwc">template</span> &lt;<span class="kwc">class</span> F&gt;
+<span class="kwb">void</span> <span class="kwd">make</span>(<span class="kwb">const char</span>* desc, <span class="kwb">int</span> n, F functor)
+{
+    std::cout &lt;&lt; <span class="str">'&gt;'</span> &lt;&lt; desc &lt;&lt; <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+    <span class="kwb">const int</span> MAXLINE = <span class="num">60</span>;
+    <span class="kwb">char</span> line[MAXLINE + <span class="num">1</span>];
+    <span class="kwa">while</span> (n &gt; <span class="num">0</span>)
+    {
+        <span class="kwb">int</span> thisline = n;
+        <span class="kwa">if</span> (thisline &gt; MAXLINE) 
+            thisline = MAXLINE;
+
+        <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;thisline; ++i)
+            line[i] = <span class="kwd">functor</span>();
+
+        line[thisline] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+        std::cout.<span class="kwd">write</span>(line, thisline+<span class="num">1</span>);
+        n -= thisline;
+    }
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[])
+{
+    <span class="kwb">int</span> n = <span class="num">1000</span>;
+    <span class="kwa">if</span> (argc &lt; <span class="num">2</span> || (n = std::<span class="kwd">atoi</span>(argv[<span class="num">1</span>])) &lt;= <span class="num">0</span>) {
+        std::cerr &lt;&lt; <span class="str">&quot;usage: &quot;</span> &lt;&lt; argv[<span class="num">0</span>] &lt;&lt; <span class="str">&quot; length</span><span class="esc">\n</span><span class="str">&quot;</span>;
+        <span class="kwa">return</span> <span class="num">1</span>;
+    }
+
+    std::cout.<span class="kwd">sync_with_stdio</span>(<span class="kwa">false</span>);
+    <span class="kwd">make_cumulative</span>(iub.<span class="kwd">begin</span>(), iub.<span class="kwd">end</span>());
+    <span class="kwd">make_cumulative</span>(homosapiens.<span class="kwd">begin</span>(), homosapiens.<span class="kwd">end</span>());
+
+    <span class="slc">//alu must drop the trailing zero stuck on by string literals :(</span>
+    <span class="kwd">make</span>(<span class="str">&quot;ONE Homo sapiens alu&quot;</span>      , n * <span class="num">2</span>, 
+        <span class="kwd">make_repeat_functor</span>(alu.<span class="kwd">begin</span>(), alu.<span class="kwd">end</span>()-<span class="num">1</span>)); 
+    <span class="kwd">make</span>(<span class="str">&quot;TWO IUB ambiguity codes&quot;</span>   , n * <span class="num">3</span>, 
+        <span class="kwd">make_random_functor</span>(iub.<span class="kwd">begin</span>(), iub.<span class="kwd">end</span>()));
+    <span class="kwd">make</span>(<span class="str">&quot;THREE Homo sapiens frequency&quot;</span>, n * <span class="num">5</span>, 
+        <span class="kwd">make_random_functor</span>(homosapiens.<span class="kwd">begin</span>(), homosapiens.<span class="kwd">end</span>()));
+    <span class="kwa">return</span> <span class="num">0</span>;
+}

@@ -1,0 +1,9 @@
+
+Sun, 15 Mar 2015 03:56:33 GMT
+
+COMMAND LINE:
+/usr/local/src/perl-5.20.2_no_ithreads_no_multi/bin/perl fannkuchredux.perl 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

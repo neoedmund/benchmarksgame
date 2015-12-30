@@ -1,0 +1,60 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Rex Kerr</span>
+<span class="com"> * algorithm follows Java version #4 by Anthony Donnefort</span>
+<span class="com"> * removed deprecated api by Benedikt Nordhoff</span>
+<span class="com"> */</span>
+
+<span class="kwa">object</span> revcomp <span class="kwa">extends</span> java.io.ByteArrayOutputStream {
+  <span class="kwa">val</span> input = <span class="kwa">new</span> Array[Byte](<span class="num">8192</span>)
+
+  <span class="kwa">val</span> table = <span class="kwa">new</span> Array[Byte](<span class="num">128</span>)
+  <span class="kwa">for</span> (i &lt;- <span class="num">0</span> to <span class="num">127</span>) { <span class="kwd">table</span>(i) = i.toByte }
+  <span class="kwa">for</span> ((i,o) &lt;- <span class="str">&quot;ACGTUMRWSYKVHDB&quot;</span>.toList zip <span class="str">&quot;TGCAAKYWSRMBDHVN&quot;</span>.toList) {
+    <span class="kwd">table</span>(i) = o.toByte
+    <span class="kwd">table</span>(i.toLower) = o.toByte
+  }
+
+  <span class="kwa">def</span> rcOut = {
+    <span class="kwa">if</span> (count &gt; <span class="num">0</span>) {
+      <span class="kwa">var</span> begin = <span class="num">0</span>
+      <span class="kwa">var</span> end = count-<span class="num">1</span>
+      <span class="kwa">while</span> (<span class="kwd">buf</span>(begin) != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span> &amp;&amp; begin &lt; count) { begin += <span class="num">1</span> }
+      <span class="kwa">while</span> (begin &lt;= end) {
+        <span class="kwa">if</span> (<span class="kwd">buf</span>(begin) == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) begin += <span class="num">1</span>
+        <span class="kwa">if</span> (<span class="kwd">buf</span>(end) == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) end -= <span class="num">1</span>
+        <span class="kwa">if</span> (begin&lt;=end) {
+          <span class="kwa">val</span> temp = <span class="kwd">buf</span>(begin)
+          <span class="kwd">buf</span>(begin) = <span class="kwd">table</span>(<span class="kwd">buf</span>(end))
+          <span class="kwd">buf</span>(end) = <span class="kwd">table</span>(temp)
+          begin += <span class="num">1</span>
+          end -= <span class="num">1</span>
+        }
+      }
+      System.out.<span class="kwd">write</span>(buf,<span class="num">0</span>,count)
+    }
+  }
+  
+  <span class="kwa">def</span> <span class="kwd">main</span>(args:Array[String]) = {
+    <span class="kwa">var</span> n = <span class="num">0</span>
+    <span class="kwa">do</span> {
+      n = System.<span class="kwa">in</span>.<span class="kwd">read</span>(input)
+      <span class="kwa">if</span> (n &gt; <span class="num">0</span>) {
+        <span class="kwa">var</span> i = <span class="num">0</span>
+        <span class="kwa">var</span> i0 = <span class="num">0</span>
+        <span class="kwa">while</span> (i &lt; n) {
+          <span class="kwa">if</span> (<span class="kwd">input</span>(i)==<span class="str">'&gt;'</span>) {
+            <span class="kwa">if</span> (i&gt;i0) <span class="kwd">write</span>(input,i0,i-i0)
+            rcOut
+            reset
+            i0 = i
+          }
+          i += <span class="num">1</span>
+        }
+        <span class="kwa">if</span> (i0&lt;n) <span class="kwd">write</span>(input,i0,n-i0)
+      }
+    } <span class="kwa">while</span> (n != -<span class="num">1</span>)
+    rcOut
+  }
+}

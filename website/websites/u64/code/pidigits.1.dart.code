@@ -1,0 +1,51 @@
+<span class="com">/* The Computer Language Benchmarks game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Jos Hirth,</span>
+<span class="com">   transliterated from Mario Pernici's Python program</span>
+<span class="com">   (which was transliterated from Mike Pall's Lua program)</span>
+<span class="com">*/</span>
+
+<span class="kwa">void</span> main(args){
+  <span class="kwb">int</span> i = <span class="num">0</span>, k = <span class="num">0</span>, ns = <span class="num">0</span>,
+      k1 = <span class="num">1</span>,
+      n = <span class="num">1</span>, a = <span class="num">0</span>, d = <span class="num">1</span>, t = <span class="num">0</span>, u = <span class="num">0</span>,
+      N;
+
+  N = args.length &gt; <span class="num">0</span> ? <span class="kwb">int</span>.parse(args[<span class="num">0</span>]) : <span class="num">100</span>;
+
+  <span class="kwa">do</span>{
+    k += <span class="num">1</span>;
+    t = n&lt;&lt;<span class="num">1</span>;
+    n *= k;
+    a += t;
+    k1 += <span class="num">2</span>;
+    a *= k1;
+    d *= k1;
+    <span class="kwa">if</span> (a &gt;= n){
+      <span class="kwb">int</span> q = n * <span class="num">3</span> + a;
+      t = q ~/ d;
+      u = q % d;
+      u += n;
+      <span class="kwa">if</span> (d &gt; u){
+        ns = ns * <span class="num">10</span> + t;
+        i += <span class="num">1</span>;
+        <span class="kwa">if</span> (i % <span class="num">10</span> == <span class="num">0</span>){
+          print(<span class="str">'${pad(ns)}</span><span class="esc">\t</span><span class="str">:$i'</span>);
+          ns = <span class="num">0</span>;
+        }
+        <span class="kwa">if</span> (i &gt;= N){
+          <span class="kwa">break</span>;
+        }
+        a -= d * t;
+        a *= <span class="num">10</span>;
+        n *= <span class="num">10</span>;
+      }
+    }
+  }<span class="kwa">while</span>(<span class="kwa">true</span>);
+}
+<span class="slc">// Pads a number with up to 9 leading zeros.</span>
+pad(<span class="kwb">int</span> v){
+  <span class="kwa">var</span> s = <span class="str">'000000000$v'</span>;
+  <span class="kwa">return</span> s.substring(s.length - <span class="num">10</span>, s.length);
+}

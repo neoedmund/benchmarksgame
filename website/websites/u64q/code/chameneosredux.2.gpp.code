@@ -1,0 +1,252 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   based on Java by Tomas Dzetkulic</span>
+<span class="com"></span>
+<span class="com">   compiles with g++ chameneos.cpp -std=c++11 -O2 -pthread</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;atomic&gt;</span>
+<span class="ppc">#include &lt;cstdint&gt;</span>
+<span class="ppc">#include &lt;cstdio&gt;</span>
+<span class="ppc">#include &lt;functional&gt;</span>
+<span class="ppc">#include &lt;mutex&gt;</span>
+<span class="ppc">#include &lt;thread&gt;</span>
+<span class="ppc">#include &lt;vector&gt;</span>
+
+<span class="kwb">void</span> <span class="kwd">PrintLnNum</span>(<span class="kwb">int</span> num) {
+  <span class="kwb">char</span> x[<span class="num">16</span>];
+  <span class="kwb">const char</span> digits[<span class="num">10</span>][<span class="num">16</span>] = {
+    <span class="str">&quot;zero&quot;</span>, <span class="str">&quot;one&quot;</span>, <span class="str">&quot;two&quot;</span>, <span class="str">&quot;three&quot;</span>, <span class="str">&quot;four&quot;</span>, 
+    <span class="str">&quot;five&quot;</span>, <span class="str">&quot;six&quot;</span>, <span class="str">&quot;seven&quot;</span>, <span class="str">&quot;eight&quot;</span>, <span class="str">&quot;nine&quot;</span>
+  };
+  <span class="kwd">sprintf</span>(x, <span class="str">&quot;%d&quot;</span>, num);
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; x[i]; ++i) {
+    <span class="kwd">printf</span>(<span class="str">&quot; %s&quot;</span>, digits[x[i]-<span class="str">'0'</span>]);
+  }
+  <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+}
+
+<span class="kwb">struct</span> ColorHelper {
+  <span class="kwb">enum</span> Color { blue = <span class="num">0</span>, red, yellow };
+  <span class="kwc">inline</span> <span class="kwb">static</span> Color <span class="kwd">AddColors</span>(Color c1, Color c2) {
+    <span class="kwa">switch</span> ( c1 ) {
+      <span class="kwa">case</span> blue: <span class="kwa">switch</span> ( c2 ) {
+        <span class="kwa">case</span> blue:   <span class="kwa">return</span> blue;
+        <span class="kwa">case</span> red:    <span class="kwa">return</span> yellow;
+        <span class="kwa">case</span> yellow: <span class="kwa">return</span> red;
+      }
+      <span class="kwa">case</span> red: <span class="kwa">switch</span> ( c2 ) {
+        <span class="kwa">case</span> blue:   <span class="kwa">return</span> yellow;
+        <span class="kwa">case</span> red:    <span class="kwa">return</span> red;
+        <span class="kwa">case</span> yellow: <span class="kwa">return</span> blue;
+      }
+      <span class="kwa">case</span> yellow: <span class="kwa">switch</span> ( c2 ) {
+        <span class="kwa">case</span> blue:   <span class="kwa">return</span> red;
+        <span class="kwa">case</span> red:    <span class="kwa">return</span> blue;
+        <span class="kwa">case</span> yellow: <span class="kwa">return</span> yellow;
+      }
+    }
+  }
+  <span class="kwb">static</span> <span class="kwc">inline</span> <span class="kwb">const char</span>* <span class="kwd">GetColorString</span>(Color c) {
+    <span class="kwa">switch</span> (c) {
+      <span class="kwa">case</span> blue:   <span class="kwa">return</span> <span class="str">&quot;blue&quot;</span>;
+      <span class="kwa">case</span> red:    <span class="kwa">return</span> <span class="str">&quot;red&quot;</span>;
+      <span class="kwa">case</span> yellow: <span class="kwa">return</span> <span class="str">&quot;yellow&quot;</span>;
+    }
+  }
+};
+
+<span class="kwb">struct</span> Chameneos {
+  <span class="kwd">Chameneos</span>(<span class="kwb">int</span> name, ColorHelper::Color init_color) :
+      <span class="kwd">name_</span>(name), <span class="kwd">num_meetings_</span>(<span class="num">0</span>), <span class="kwd">num_met_self_</span>(<span class="num">0</span>), <span class="kwd">color_</span>(init_color) {
+  }
+  <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">NotifyMeeting</span>(<span class="kwb">int</span> name, ColorHelper::Color new_color) {
+    <span class="slc">// Yay, I have met someone!</span>
+    ++num_meetings_;
+    <span class="slc">// Is it myself?</span>
+    <span class="kwa">if</span> (name == name_) {
+      <span class="slc">// Oh noh, I met myself!</span>
+      ++num_met_self_;
+    }
+    color_ = new_color;
+  }
+  <span class="kwc">inline</span> <span class="kwb">int</span> <span class="kwd">GetName</span>() <span class="kwb">const</span> {
+    <span class="kwa">return</span> name_;
+  }
+  <span class="kwc">inline</span> ColorHelper::Color <span class="kwd">GetColor</span>() <span class="kwb">const</span> {
+    <span class="kwa">return</span> color_;
+  }
+  <span class="kwc">inline</span> <span class="kwb">int</span> <span class="kwd">GetNumMeetings</span>() <span class="kwb">const</span> {
+    <span class="kwa">return</span> num_meetings_;
+  }
+  <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">PrintStats</span>() <span class="kwb">const</span> {
+    <span class="kwd">printf</span>(<span class="str">&quot;%d&quot;</span>, num_meetings_);
+    <span class="kwd">PrintLnNum</span>(num_met_self_);
+  }
+  <span class="kwb">int</span> name_ <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">64</span>)));
+  <span class="kwb">int</span> num_meetings_;
+  <span class="kwb">int</span> num_met_self_;
+  ColorHelper::Color color_;
+};
+
+<span class="kwc">template</span>&lt;typename Queue&gt;
+<span class="kwc">class</span> Mall {
+<span class="kwc">public</span>:
+  <span class="kwd">Mall</span>(std::<span class="kwb">int_fast32_t</span> max_num_meetings, 
+       std::function&lt;<span class="kwb">void</span>()&gt; finish_callback)
+      : <span class="kwd">waiting_chameneos_</span>(<span class="kwc">nullptr</span>), <span class="kwd">num_meetings_</span>(<span class="num">0</span>), 
+        <span class="kwd">max_num_meetings_</span>(max_num_meetings), 
+        <span class="kwd">finish_callback_</span>(finish_callback) {}
+  <span class="slc">// Returns true iff the current thread can continue running the</span>
+  <span class="slc">// current chameneos. Otherwise chameneos is waiting and the thread is</span>
+  <span class="slc">// free to work on another one.</span>
+  <span class="kwc">inline</span> <span class="kwb">bool</span> <span class="kwd">Meet</span>(Chameneos* chameneos, Queue* queue);
+  <span class="kwc">inline</span> std::<span class="kwb">int_fast32_t</span> <span class="kwd">NumMeetings</span>() {
+    <span class="kwa">return</span> num_meetings_.<span class="kwd">load</span>(std::memory_order_relaxed);
+  }
+<span class="kwc">private</span>:
+  std::atomic&lt;Chameneos*&gt; waiting_chameneos_ <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">64</span>)));
+  std::atomic&lt;std::<span class="kwb">int_fast32_t</span>&gt; num_meetings_ <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">64</span>)));
+  <span class="kwb">const</span> std::<span class="kwb">int_fast32_t</span> max_num_meetings_ <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">64</span>)));
+  <span class="kwb">const</span> std::function&lt;<span class="kwb">void</span>()&gt; finish_callback_;
+};
+
+<span class="kwc">template</span>&lt;<span class="kwb">size_t</span> num_chameneoses&gt;
+<span class="kwc">class</span> Queue {
+<span class="kwc">public</span>:
+  <span class="kwd">Queue</span>(Chameneos* chameneoses) 
+      : <span class="kwd">waiting_bitmask_</span>((<span class="num">1</span>&lt;&lt;num_chameneoses)-<span class="num">1</span>), <span class="kwd">chameneoses_</span>(chameneoses) {}
+  <span class="slc">// Add chameneos to the waiting queue.</span>
+  <span class="kwb">void</span> <span class="kwd">Add</span>(Chameneos* chameneos) {
+    <span class="kwb">const int</span> index = chameneos - chameneoses_;
+    <span class="slc">// Add it's index to the waiting bitmask.</span>
+    waiting_bitmask_.<span class="kwd">fetch_add</span>(<span class="num">1</span> &lt;&lt; index, std::memory_order_release);
+  }
+  <span class="kwb">void</span> <span class="kwd">Run</span>(Mall&lt;Queue&gt;* mall, <span class="kwb">int</span> primary_index, std::atomic&lt;<span class="kwb">bool</span>&gt;* finished) {
+    <span class="kwb">int</span> next_index[<span class="num">1</span>&lt;&lt;num_chameneoses];
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">1</span>; i &lt; (<span class="num">1</span>&lt;&lt;num_chameneoses); ++i) {
+      <span class="kwb">int</span> j = primary_index;
+      <span class="kwa">while</span> ((i &amp; (<span class="num">1</span>&lt;&lt;j)) == <span class="num">0</span>) {
+        j = (j + <span class="num">1</span>) % num_chameneoses;
+      }
+      next_index[i] = j;
+    }
+    <span class="kwa">while</span> (!finished-&gt;<span class="kwd">load</span>(std::memory_order_relaxed)) {
+      std::<span class="kwb">int_fast32_t</span> current_mask = 
+          waiting_bitmask_.<span class="kwd">load</span>(std::memory_order_relaxed);
+      <span class="kwa">if</span> (current_mask == <span class="num">0</span>) {
+        std::this_thread::<span class="kwd">yield</span>();
+      } <span class="kwa">else</span> {
+        <span class="kwb">int const</span> index = next_index[current_mask];
+        <span class="kwa">if</span> (waiting_bitmask_.<span class="kwd">compare_exchange_weak</span>(
+            current_mask, current_mask - (<span class="num">1</span>&lt;&lt;index),
+            std::memory_order_consume, std::memory_order_relaxed)) {
+          <span class="slc">// Continue meeting until not queued.</span>
+          <span class="kwa">while</span> (mall-&gt;<span class="kwd">Meet</span>(chameneoses_ + index, <span class="kwa">this</span>)) ;
+        }
+      }
+    }
+  }
+<span class="kwc">private</span>:
+  std::atomic&lt;std::<span class="kwb">int_fast32_t</span>&gt; waiting_bitmask_ <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">64</span>)));
+  Chameneos* <span class="kwb">const</span> chameneoses_ <span class="kwd">__attribute__</span>((<span class="kwd">aligned</span>(<span class="num">64</span>)));
+};
+
+<span class="kwc">template</span>&lt;typename Queue&gt;
+<span class="kwc">inline</span> <span class="kwb">bool</span> Mall&lt;Queue&gt;::<span class="kwd">Meet</span>(Chameneos* chameneos, Queue* queue) {
+  Chameneos* other = <span class="kwc">nullptr</span>;
+  <span class="kwa">while</span> (<span class="num">1</span>) {
+    <span class="kwa">if</span> (waiting_chameneos_.<span class="kwd">compare_exchange_weak</span>(
+          other, chameneos, 
+          std::memory_order_relaxed, std::memory_order_relaxed)) {
+      <span class="slc">// We're waiting.</span>
+      <span class="kwa">return false</span>;
+    }
+    <span class="kwa">do</span> {
+      <span class="kwa">if</span> (waiting_chameneos_.<span class="kwd">compare_exchange_weak</span>(
+            other, <span class="kwc">nullptr</span>, 
+            std::memory_order_consume, std::memory_order_relaxed)) {
+        <span class="kwb">const int</span> num_meetings = 
+            num_meetings_.<span class="kwd">fetch_add</span>(<span class="num">1</span>, std::memory_order_relaxed);
+        <span class="kwa">if</span> (num_meetings &lt; max_num_meetings_) {
+          <span class="kwa">if</span> (num_meetings + <span class="num">1</span> == max_num_meetings_) {
+            <span class="kwd">finish_callback_</span>();
+          }
+          ColorHelper::Color <span class="kwb">const</span> new_color =
+              ColorHelper::<span class="kwd">AddColors</span>(chameneos-&gt;<span class="kwd">GetColor</span>(), other-&gt;<span class="kwd">GetColor</span>());
+          other-&gt;<span class="kwd">NotifyMeeting</span>(chameneos-&gt;<span class="kwd">GetName</span>(), new_color);
+          chameneos-&gt;<span class="kwd">NotifyMeeting</span>(other-&gt;<span class="kwd">GetName</span>(), new_color);
+          queue-&gt;<span class="kwd">Add</span>(other);
+          <span class="slc">// We can continue meeting.</span>
+          <span class="kwa">return true</span>;
+        } <span class="kwa">else</span> {
+          num_meetings_.<span class="kwd">fetch_sub</span>(<span class="num">1</span>, std::memory_order_release);
+          <span class="slc">// We are done.</span>
+          <span class="kwa">return false</span>;
+        }
+      }
+    } <span class="kwa">while</span> (other != <span class="kwc">nullptr</span>);
+  }
+}
+
+<span class="kwc">template</span>&lt;<span class="kwb">size_t</span> num_chameneoses&gt;
+<span class="kwb">void</span> <span class="kwd">RunChameneos</span>(
+    <span class="kwb">const</span> std::array&lt;ColorHelper::Color, num_chameneoses&gt;&amp; colors, 
+    <span class="kwb">int</span> num_meetings) {
+  std::vector&lt;Chameneos&gt; chameneoses;
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; num_chameneoses; ++i) {
+    chameneoses.<span class="kwd">emplace_back</span>(<span class="com">/*name=*/</span>i + <span class="num">1</span>, colors[i]);
+  }
+  Queue&lt;num_chameneoses&gt; <span class="kwd">queue</span>(chameneoses.<span class="kwd">data</span>());
+  std::atomic&lt;<span class="kwb">bool</span>&gt; <span class="kwd">finished</span>(<span class="kwa">false</span>);
+  <span class="kwc">auto</span> finish_callback = [&amp;finished]() {
+    finished.<span class="kwd">store</span>(<span class="kwa">true</span>, std::memory_order_relaxed);
+  };
+  Mall&lt;Queue&lt;num_chameneoses&gt;&gt; <span class="kwd">mall</span>(num_meetings, finish_callback);
+  std::vector&lt;std::thread&gt; <span class="kwd">threads</span>(num_chameneoses);
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; num_chameneoses; ++i) {
+    threads[i] = std::<span class="kwd">thread</span>(
+        &amp;Queue&lt;num_chameneoses&gt;::Run, &amp;queue, &amp;mall, i, &amp;finished);
+  }
+  <span class="kwa">for</span> (ColorHelper::Color i : colors) {
+    <span class="kwd">printf</span>(<span class="str">&quot; %s&quot;</span>, ColorHelper::<span class="kwd">GetColorString</span>(i));
+  }
+  <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; num_chameneoses; ++i) {
+    threads[i].<span class="kwd">join</span>();
+  }
+  <span class="kwb">int</span> num_meetings_sum = <span class="num">0</span>;
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; num_chameneoses; ++i) {
+    chameneoses[i].<span class="kwd">PrintStats</span>();
+    num_meetings_sum += chameneoses[i].<span class="kwd">GetNumMeetings</span>();
+  }
+  <span class="kwd">PrintLnNum</span>(num_meetings_sum);
+  <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[]) {
+  <span class="kwb">int</span> n = <span class="num">6000</span>;
+  <span class="kwa">if</span> (argc == <span class="num">2</span>) {
+    n = std::<span class="kwd">atoi</span>(argv[<span class="num">1</span>]);
+  }
+  <span class="kwa">for</span> (ColorHelper::Color i : 
+       {ColorHelper::blue, ColorHelper::red, ColorHelper::yellow}) {
+    <span class="kwa">for</span> (ColorHelper::Color j : 
+         {ColorHelper::blue, ColorHelper::red, ColorHelper::yellow}) {
+      <span class="kwd">printf</span>(<span class="str">&quot;%s + %s -&gt; %s</span><span class="esc">\n</span><span class="str">&quot;</span>, 
+             ColorHelper::<span class="kwd">GetColorString</span>(i), 
+             ColorHelper::<span class="kwd">GetColorString</span>(j), 
+             ColorHelper::<span class="kwd">GetColorString</span>(ColorHelper::<span class="kwd">AddColors</span>(i, j)));
+    }
+  }
+  <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>);
+  <span class="kwd">RunChameneos</span>(std::array&lt;ColorHelper::Color, <span class="num">3</span>&gt;{ 
+    ColorHelper::blue, ColorHelper::red, ColorHelper::yellow }, n);
+  <span class="kwd">RunChameneos</span>(std::array&lt;ColorHelper::Color, <span class="num">10</span>&gt;{ 
+    ColorHelper::blue, ColorHelper::red, ColorHelper::yellow,
+    ColorHelper::red, ColorHelper::yellow, ColorHelper::blue,
+    ColorHelper::red, ColorHelper::yellow, ColorHelper::red,
+    ColorHelper::blue }, n);
+  <span class="kwa">return</span> <span class="num">0</span>;
+}

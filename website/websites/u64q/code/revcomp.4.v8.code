@@ -1,0 +1,148 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">    contributed by Joe Farro</span>
+<span class="com">    parts taken from solution contributed by </span>
+<span class="com">    Jos Hirth which was modified by 10iii</span>
+<span class="com">*/</span>
+
+<span class="kwa">var</span> comp = [];
+comp[<span class="num">65</span>] = <span class="str">'T'</span>;
+comp[<span class="num">66</span>] = <span class="str">'V'</span>;
+comp[<span class="num">67</span>] = <span class="str">'G'</span>;
+comp[<span class="num">68</span>] = <span class="str">'H'</span>;
+comp[<span class="num">71</span>] = <span class="str">'C'</span>;
+comp[<span class="num">72</span>] = <span class="str">'D'</span>;
+comp[<span class="num">75</span>] = <span class="str">'M'</span>;
+comp[<span class="num">77</span>] = <span class="str">'K'</span>;
+comp[<span class="num">78</span>] = <span class="str">'N'</span>;
+comp[<span class="num">82</span>] = <span class="str">'Y'</span>;
+comp[<span class="num">83</span>] = <span class="str">'S'</span>;
+comp[<span class="num">84</span>] = <span class="str">'A'</span>;
+comp[<span class="num">85</span>] = <span class="str">'A'</span>;
+comp[<span class="num">86</span>] = <span class="str">'B'</span>;
+comp[<span class="num">87</span>] = <span class="str">'W'</span>;
+comp[<span class="num">89</span>] = <span class="str">'R'</span>;
+comp[<span class="num">97</span>] = <span class="str">'T'</span>;
+comp[<span class="num">98</span>] = <span class="str">'V'</span>;
+comp[<span class="num">99</span>] = <span class="str">'G'</span>;
+comp[<span class="num">100</span>] = <span class="str">'H'</span>;
+comp[<span class="num">103</span>] = <span class="str">'C'</span>;
+comp[<span class="num">104</span>] = <span class="str">'D'</span>;
+comp[<span class="num">107</span>] = <span class="str">'M'</span>;
+comp[<span class="num">109</span>] = <span class="str">'K'</span>;
+comp[<span class="num">110</span>] = <span class="str">'N'</span>;
+comp[<span class="num">114</span>] = <span class="str">'Y'</span>;
+comp[<span class="num">115</span>] = <span class="str">'S'</span>;
+comp[<span class="num">116</span>] = <span class="str">'A'</span>;
+comp[<span class="num">117</span>] = <span class="str">'A'</span>;
+comp[<span class="num">118</span>] = <span class="str">'B'</span>;
+comp[<span class="num">119</span>] = <span class="str">'W'</span>;
+comp[<span class="num">121</span>] = <span class="str">'R'</span>;
+
+<span class="kwa">var</span> LA_LEN = <span class="num">995</span>;
+
+<span class="kwa">function</span> <span class="kwd">LinkedArray</span>(prev) {
+    <span class="kwa">this</span>.prev = prev;
+    <span class="kwa">this</span>.next = undefined;
+    <span class="kwa">this</span>.pos = <span class="num">0</span>;
+    <span class="kwa">this</span>.data = [];
+}
+
+<span class="kwa">function</span> <span class="kwd">reverse</span>(la) {
+
+    <span class="kwa">var</span> comps = comp,
+        i,
+        lines = la.data,
+        lnIdx = la.pos - <span class="num">1</span>,
+        line = lines[lnIdx],
+        c = <span class="num">1</span>,
+        buff = [<span class="str">''</span>],
+        buffIdx = <span class="num">1</span>,
+        rev = <span class="kwa">new</span> <span class="kwd">Array</span>(<span class="num">61</span>);
+
+    rev[<span class="num">0</span>] = <span class="str">''</span>;
+
+    <span class="kwa">for</span> (; <span class="kwa">true</span>; ) {
+
+        <span class="kwa">for</span> (i = line.length; i-- &gt; <span class="num">0</span>; ++c) {
+            rev[c] = comps[line.<span class="kwd">charCodeAt</span>(i)];
+            <span class="kwa">if</span> (c === <span class="num">60</span>) {
+                buff[buffIdx] = rev.<span class="kwd">join</span>(<span class="str">''</span>);
+                buffIdx++;
+                c = <span class="num">0</span>;
+            }
+        }
+
+        lnIdx--;
+        line = lines[lnIdx];
+
+        <span class="kwa">if</span> (line !== undefined) {
+            <span class="kwa">continue</span>;
+        }
+
+        la = la.prev;
+        <span class="kwa">if</span> (la === undefined) {
+            <span class="kwa">if</span> (c &gt; <span class="num">1</span>) {
+                buff[buffIdx] = rev.<span class="kwd">join</span>(<span class="str">''</span>).<span class="kwd">substr</span>(<span class="num">0</span>, c-<span class="num">1</span>);
+                buffIdx++;
+            }
+            buff[buffIdx] = <span class="str">''</span>;
+            buffIdx++;
+            <span class="kwa">if</span> (buffIdx &lt; buff.length) {
+                <span class="kwd">write</span>(buff.<span class="kwd">slice</span>(<span class="num">0</span>,buffIdx).<span class="kwd">join</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>));
+            } <span class="kwa">else</span> {
+                <span class="kwd">write</span>(buff.<span class="kwd">join</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>));
+            }
+            <span class="kwa">return</span>;
+        }
+
+        lines = la.data;
+        lnIdx = la.pos;
+        lnIdx--;
+        line = lines[lnIdx];
+        <span class="kwd">write</span>(buff.<span class="kwd">join</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>));
+        buffIdx = <span class="num">1</span>;
+    }
+}
+
+<span class="kwa">var</span> line,
+    headLA = <span class="kwa">new</span> <span class="kwd">LinkedArray</span>(),
+    la = headLA,
+    lnIdx = <span class="num">0</span>,
+    lines = la.data;
+
+<span class="kwd">write</span>(<span class="kwd">readline</span>());
+
+<span class="kwa">for</span> (line = <span class="kwd">readline</span>(); line !== undefined; line = <span class="kwd">readline</span>()) {
+    <span class="kwa">if</span> (line[<span class="num">0</span>] !== <span class="str">'&gt;'</span>) {
+
+        <span class="kwa">if</span> (lnIdx === LA_LEN) {
+
+            la.pos = LA_LEN;
+
+            <span class="kwa">if</span> (la.next === undefined) {
+                la = la.next = <span class="kwa">new</span> <span class="kwd">LinkedArray</span>(la);
+            } <span class="kwa">else</span> {
+                la = la.next;
+            }
+            lines = la.data;
+            lines[<span class="num">0</span>] = line;
+            lnIdx = la.pos = <span class="num">1</span>;
+        } <span class="kwa">else</span> {
+            lines[lnIdx] = line;
+            lnIdx++;
+        }
+    } <span class="kwa">else</span> {
+        lc = <span class="num">0</span>;
+        la.pos = lnIdx;
+        <span class="kwd">reverse</span>(la, comp);
+        <span class="kwd">write</span>(line);
+        la = headLA;
+        lines = la.data;
+        la.pos = <span class="num">0</span>;
+        lnIdx = <span class="num">0</span>;
+    }
+}
+la.pos = lnIdx;
+<span class="kwd">reverse</span>(la, comp);

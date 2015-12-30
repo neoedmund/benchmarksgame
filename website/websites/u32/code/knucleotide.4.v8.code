@@ -1,0 +1,230 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Contributed by Jesse Millikan</span>
+<span class="com">   Modified by Matt Baker</span>
+<span class="com">   Modified by Joe Farro (ArrayBuffer and TypedArrays)</span>
+<span class="com">*/</span>
+
+
+<span class="kwa">function</span> <span class="kwd">charToInt</span>(str) {
+    <span class="kwa">switch</span> (str) {
+        <span class="kwa">case</span> <span class="str">'a'</span>: <span class="kwa">return</span> <span class="num">0</span>;
+        <span class="kwa">case</span> <span class="str">'c'</span>: <span class="kwa">return</span> <span class="num">1</span>;
+        <span class="kwa">case</span> <span class="str">'g'</span>: <span class="kwa">return</span> <span class="num">2</span>;
+        <span class="kwa">case</span> <span class="str">'t'</span>: <span class="kwa">return</span> <span class="num">3</span>;
+    }
+}
+
+<span class="kwa">function</span> <span class="kwd">toStr</span>(num, len) {
+    <span class="kwa">var</span> res = <span class="str">''</span>;
+    <span class="kwa">while</span> (len &gt; <span class="num">0</span>) {
+        <span class="kwa">switch</span> (num &amp; <span class="num">3</span>) {
+            <span class="kwa">case</span> <span class="num">0</span>: res = <span class="str">'A'</span> + res; <span class="kwa">break</span>;
+            <span class="kwa">case</span> <span class="num">1</span>: res = <span class="str">'C'</span> + res; <span class="kwa">break</span>;
+            <span class="kwa">case</span> <span class="num">2</span>: res = <span class="str">'G'</span> + res; <span class="kwa">break</span>;
+            <span class="kwa">case</span> <span class="num">3</span>: res = <span class="str">'T'</span> + res; <span class="kwa">break</span>;
+        }
+        num = num &gt;&gt;&gt; <span class="num">2</span>;
+        len--;
+    }
+    <span class="kwa">return</span> res;
+}
+
+<span class="kwa">function</span> <span class="kwd">toUint</span>(str) {
+
+    <span class="kwa">var</span> offset = <span class="num">2</span> * str.length,
+        <span class="kwb">uint</span> = <span class="kwa">new</span> <span class="kwd">Uint32Array</span>(<span class="kwa">new</span> <span class="kwd">ArrayBuffer</span>(<span class="num">4</span>)),
+        i = <span class="num">0</span>;
+
+    <span class="kwa">while</span> (offset) {
+        offset -= <span class="num">2</span>;
+        <span class="kwb">uint</span>[<span class="num">0</span>] |= (<span class="kwd">charToInt</span>(str[i]) &lt;&lt; offset);
+        i++;
+    }
+    <span class="kwa">return</span> <span class="kwb">uint</span>[<span class="num">0</span>];
+}
+
+
+<span class="kwa">var</span> dataLength = <span class="num">0</span>;
+
+<span class="kwa">var</span> byLength = [],
+    data1 = {},
+    data2 = {},
+    data3 = {},
+    data4 = {},
+    data6 = {},
+    data12 = {},
+    data18 = {};
+
+byLength[<span class="num">1</span>] = data1;
+byLength[<span class="num">2</span>] = data2;
+byLength[<span class="num">3</span>] = data3;
+byLength[<span class="num">4</span>] = data4;
+byLength[<span class="num">6</span>] = data6;
+byLength[<span class="num">12</span>] = data12;
+byLength[<span class="num">18</span>] = data18;
+
+
+<span class="kwa">function</span> <span class="kwd">readInput</span>() {
+
+    <span class="slc">// key-space masks for various lengths</span>
+    <span class="kwa">var</span> m_1 = <span class="num">3</span>,            <span class="slc">// 2^2 - 1</span>
+        m_2 = <span class="num">15</span>,           <span class="slc">// 2^4 - 1</span>
+        m_3 = <span class="num">63</span>,           <span class="slc">// 2^6 - 1</span>
+        m_4 = <span class="num">255</span>,          <span class="slc">// 2^8 - 1</span>
+        m_6 = <span class="num">4095</span>,         <span class="slc">// 2^12 - 1</span>
+        m_12 = <span class="num">16777215</span>,    <span class="slc">// 2^24 - 1</span>
+        m_18 = <span class="num">262143</span>;      <span class="slc">// 2^18 - 1, (smaller bc split between 2 uint32)</span>
+
+    <span class="kwa">var</span> buf = <span class="kwa">new</span> <span class="kwd">ArrayBuffer</span>(<span class="num">8</span>),
+        uint32 = <span class="kwa">new</span> <span class="kwd">Uint32Array</span>(buf, <span class="num">0</span>, <span class="num">1</span>),
+        uint32_l = <span class="kwa">new</span> <span class="kwd">Uint32Array</span>(buf, <span class="num">4</span>, <span class="num">1</span>);
+
+    <span class="kwa">var</span> len = <span class="num">0</span>,
+        l,
+        i,
+        <span class="kwb">char</span>,
+        b,
+        u8,
+        u32,
+        u32_l;
+
+    <span class="kwa">while</span> (<span class="kwd">readline</span>().<span class="kwd">substr</span>(<span class="num">0</span>, <span class="num">3</span>) !== <span class="str">'&gt;TH'</span>) {
+    }
+
+    l = <span class="kwd">readline</span>();
+    i = <span class="num">0</span>;
+    len = l.length;
+
+    <span class="slc">// the first-line is a special case as not all the counts should start</span>
+    <span class="slc">// saving immediately</span>
+    <span class="kwa">while</span> (i &lt; <span class="num">18</span>) {
+
+        <span class="kwb">char</span> = <span class="kwd">charToInt</span>(l[i]);
+
+        u32_l = uint32_l[<span class="num">0</span>] = uint32_l[<span class="num">0</span>] &lt;&lt; <span class="num">2</span> | uint32[<span class="num">0</span>] &gt;&gt;&gt; <span class="num">16</span>;
+        u32 = uint32[<span class="num">0</span>] = uint32[<span class="num">0</span>] &lt;&lt; <span class="num">2</span> | <span class="kwb">char</span>;
+
+        <span class="kwa">if</span> (i &gt; <span class="num">10</span>) {
+            u32 &amp;= m_12;
+            data12[u32] = (data12[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+        }
+
+        <span class="kwa">if</span> (i &gt; <span class="num">16</span>) {
+            u32_l &amp;= m_18;
+            u32 &amp;= m_18;
+            <span class="kwa">if</span> (b = data18[u32_l]) {
+               b[u32] = (b[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+            } <span class="kwa">else</span> {
+                (data18[u32_l] = {})[u32] = <span class="num">1</span>;
+            }
+        }
+
+        <span class="kwa">if</span> (i &gt; <span class="num">4</span>) {
+            u32 &amp;= m_6;
+            data6[u32] = (data6[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+        }
+
+        <span class="kwa">if</span> (i &gt; <span class="num">2</span>) {
+            u32 &amp;= m_4;
+            data4[u32] = (data4[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+        }
+
+        <span class="kwa">if</span> (i &gt; <span class="num">1</span>) {
+            u32 &amp;= m_3;
+            data3[u32] = (data3[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+        }
+
+        <span class="kwa">if</span> (i &gt; <span class="num">0</span>) {
+            u32 &amp;= m_2;
+            data2[u32] = (data2[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+        }
+
+        u32 &amp;= m_1;
+        data1[u32] = (data1[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+        i++;
+    }
+
+    <span class="slc">// use do-loop bc want to preserve `i` position on first line</span>
+    <span class="kwa">do</span> {
+
+        len = l.length;
+        dataLength += len;
+        <span class="kwa">while</span> (i &lt; len) {
+
+            <span class="kwb">char</span> = <span class="kwd">charToInt</span>(l[i]);
+            i++;
+
+            u32_l = uint32_l[<span class="num">0</span>] = (uint32_l[<span class="num">0</span>] &lt;&lt; <span class="num">2</span> | uint32[<span class="num">0</span>] &gt;&gt;&gt; <span class="num">16</span>) &amp; m_18;
+            u32 = uint32[<span class="num">0</span>] = uint32[<span class="num">0</span>] &lt;&lt; <span class="num">2</span> | <span class="kwb">char</span>;
+
+            u32 &amp;= m_12;
+            data12[u32] = (data12[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+            
+            u32 &amp;= m_18;
+            <span class="kwa">if</span> (b = data18[u32_l]) {
+               b[u32] = (b[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+            } <span class="kwa">else</span> {
+                (data18[u32_l] = {})[u32] = <span class="num">1</span>;
+            }
+
+            u32 &amp;= m_6;
+            data6[u32] = (data6[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+            u32 &amp;= m_4;
+            data4[u32] = (data4[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+            u32 &amp;= m_3;
+            data3[u32] = (data3[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+            u32 &amp;= m_2;
+            data2[u32] = (data2[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+            u32 &amp;= m_1;
+            data1[u32] = (data1[u32] || <span class="num">0</span>) + <span class="num">1</span>;
+        }
+        i = <span class="num">0</span>;
+    } <span class="kwa">while</span> ((l = <span class="kwd">readline</span>()) &amp;&amp; l[<span class="num">0</span>] !== <span class="str">'&gt;'</span>)
+}
+
+
+<span class="kwa">function</span> <span class="kwd">sortCounts</span>(seqLen) {
+
+    <span class="kwa">var</span> data = byLength[seqLen],
+        keys = Object.<span class="kwd">keys</span>(data),
+        pctFactor = <span class="num">100</span> / (dataLength - seqLen + <span class="num">1</span>);
+
+    keys.<span class="kwd">sort</span>(<span class="kwa">function</span>(a, b) {
+        <span class="kwa">return</span> data[b] - data[a];
+    });
+
+    keys.<span class="kwd">forEach</span>(<span class="kwa">function</span>(code) {
+        <span class="kwd">print</span>(<span class="kwd">toStr</span>(code, seqLen), (data[code] * pctFactor).<span class="kwd">toFixed</span>(<span class="num">3</span>));
+    });
+    <span class="kwd">print</span>();
+}
+
+
+<span class="kwa">function</span> <span class="kwd">printCount</span>(s, s2) {
+
+    <span class="kwa">var</span> len,
+        count;
+
+    <span class="kwa">if</span> (s2) {
+        len = s.length + s2.length;
+        count = byLength[len][<span class="kwd">toUint</span>(s)][<span class="kwd">toUint</span>(s2)];
+        s += s2;
+    } <span class="kwa">else</span> {
+        len = s.length;
+        count = byLength[len][<span class="kwd">toUint</span>(s)];
+    }
+    <span class="kwd">print</span>(count + <span class="str">'</span><span class="esc">\t</span><span class="str">'</span> + s.<span class="kwd">toUpperCase</span>());
+}
+
+<span class="kwd">readInput</span>();
+
+<span class="kwd">sortCounts</span>(<span class="num">1</span>);
+<span class="kwd">sortCounts</span>(<span class="num">2</span>);
+
+<span class="kwd">printCount</span>(<span class="str">'ggt'</span>);
+<span class="kwd">printCount</span>(<span class="str">'ggta'</span>);
+<span class="kwd">printCount</span>(<span class="str">'ggtatt'</span>);
+<span class="kwd">printCount</span>(<span class="str">'ggtattttaatt'</span>);
+<span class="kwd">printCount</span>(<span class="str">'ggtatttta'</span>, <span class="str">'atttatagt'</span>);

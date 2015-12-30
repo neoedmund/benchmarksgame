@@ -1,0 +1,29 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># Contributed by David Eccles (gringer)</span>
+
+<span class="kwa">use</span> strict;
+<span class="kwa">use</span> feature <span class="str">'say'</span>;
+
+<span class="kwc">local</span> $/ = <span class="str">&quot;&gt;&quot;</span>;
+<span class="kwa">while</span> (<span class="kwc">my</span> <span class="kwb">$entry</span> = &lt;STDIN&gt;) {
+   <span class="kwc">chomp</span> <span class="kwb">$entry</span>;
+
+   <span class="kwc">my</span> (<span class="kwb">$header</span>, <span class="kwb">$seq</span>) = <span class="kwc">split</span> <span class="kwd">/\n/</span>, <span class="kwb">$entry</span>, <span class="num">2</span>;
+   <span class="kwa">next unless</span> <span class="kwb">$header</span>;
+
+   {
+      <span class="kwc">local</span> $/ = <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>;
+      <span class="kwc">say</span> <span class="str">&quot;&gt;&quot;</span>, <span class="kwb">$header</span>;
+
+      <span class="kwb">$seq</span> =  <span class="kwc">reverse</span> <span class="kwb">$seq</span>;
+      <span class="kwb">$seq</span> =~ tr{wsatugcyrkmbdhvnATUGCYRKMBDHV<span class="esc">\n</span>}
+              {WSTAACGRYMKVHDBNTAACGRYMKVHDB}d;
+
+		<span class="kwa">for</span>(<span class="kwc">my</span> <span class="kwb">$pos</span> = <span class="num">0</span>; <span class="kwb">$pos</span> &lt; <span class="kwc">length</span>(<span class="kwb">$seq</span>); <span class="kwb">$pos</span> += <span class="num">60</span>){
+			<span class="kwc">say substr</span>(<span class="kwb">$seq</span>, <span class="kwb">$pos</span>, <span class="num">60</span>);
+		}
+   }
+}
+

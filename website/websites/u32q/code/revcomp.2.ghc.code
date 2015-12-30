@@ -1,0 +1,79 @@
+<span class="slc">--</span>
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">--</span>
+<span class="slc">-- Contributed by Sterling Clover</span>
+<span class="slc">-- Heavily inspired by contribution from Don Stewart</span>
+<span class="slc">-- Inlining improvements by Don Stewart.</span>
+<span class="slc">-- GHC 7.8.1 fix by Ersin Er</span>
+<span class="slc">--</span>
+
+<span class="kwd">import qualified</span> Data.ByteString.Char8 <span class="kwd">as</span> S
+<span class="kwd">import</span> Data.ByteString.Internal
+<span class="kwd">import</span> Data.ByteString.Unsafe
+<span class="kwd">import</span> Foreign
+<span class="kwd">import</span> Control.Arrow
+<span class="kwd">import</span> GHC.Base
+<span class="kwd">import</span> GHC.Ptr
+<span class="kwd">import</span> GHC.<span class="kwb">IO</span>
+
+main = <span class="kwc">uncurry</span> proc =&lt;&lt; clines `<span class="kwc">fmap</span>` S.<span class="kwc">getContents</span>
+
+proc [] _ = <span class="kwc">return</span> ()
+proc (h:hs) (b:bs) = S.<span class="kwc">putStrLn</span> h &gt;&gt; revcomp b &gt;&gt; writeFasta b &gt;&gt; proc hs bs
+
+writeFasta t
+    | S.<span class="kwc">null</span> t  = <span class="kwc">return</span> ()
+    | <span class="kwc">otherwise</span> = S.<span class="kwc">putStrLn</span> l &gt;&gt; writeFasta r
+    <span class="kwd">where</span> (l,r) = S.<span class="kwc">splitAt</span> <span class="num">60</span> t
+
+clines :: ByteString -&gt; ([ByteString],[ByteString])
+clines ps = clines' ps ([],[])
+    <span class="kwd">where</span>
+      <span class="com">{-# INLINE clines' #-}</span>
+      clines' ps <span class="kwc">accum</span>&#64;(f,s)
+          | <span class="kwc">otherwise</span> = <span class="kwd">case</span> S.<span class="kwc">elemIndex</span> '<span class="esc">\n</span>' ps <span class="kwd">of</span>
+                          Just n  -&gt; clines'' (S.<span class="kwc">drop</span> (n+<span class="num">1</span>) ps) (f++[S.<span class="kwc">take</span> n ps],s)
+      clines'' ps <span class="kwc">accum</span>&#64;(f,s)
+          | <span class="kwc">otherwise</span> = <span class="kwd">case</span> S.<span class="kwc">elemIndex</span> '&gt;' ps <span class="kwd">of</span>
+                      Nothing -&gt; (f,s++[S.<span class="kwc">filter</span> (/='<span class="esc">\n</span>') ps])
+                      Just n  -&gt; clines' (S.<span class="kwc">drop</span> n ps) (f,s++[S.<span class="kwc">filter</span> (/='<span class="esc">\n</span>') . S.<span class="kwc">take</span> n $ ps])
+
+<span class="com">{-# INLINE comps #-}</span>
+comps = <span class="kwc">map</span> (<span class="kwc">ord</span> *** c2w) [
+    ('A' , 'T'), ( 'a' , 'T'), ( 'C' , 'G'), ( 'c' , 'G'), ( 'G' , 'C'),
+    ('g' , 'C'), ( 'T' , 'A'), ( 't' , 'A'), ( 'U' , 'A'), ( 'u' , 'A'),
+    ('M' , 'K'), ( 'm' , 'K'), ( 'R' , 'Y'), ( 'r' , 'Y'), ( 'Y' , 'R'),
+    ('y' , 'R'), ( 'K' , 'M'), ( 'k' , 'M'), ( 'V' , 'B'), ( 'v' , 'B'),
+    ('H' , 'D'), ( 'h' , 'D'), ( 'D' , 'H'), ( 'd' , 'H'), ( 'B' , 'V'), ( 'b' , 'V')]
+
+ca :: Ptr Word8
+ca = inlinePerformIO $ <span class="kwd">do</span>
+       a &lt;- mallocArray <span class="num">200</span>
+       <span class="kwc">mapM_</span> (<span class="kwc">uncurry</span> (pokeByteOff a)) $ <span class="kwc">zip</span> [<span class="num">0</span>.<span class="num">.199</span>::<span class="kwb">Int</span>] [<span class="num">0</span>.<span class="num">.199</span>::Word8]
+       <span class="kwc">mapM_</span> (<span class="kwc">uncurry</span> (pokeByteOff a)) comps
+       <span class="kwc">return</span> a
+
+comp :: Word# -&gt; Word#
+comp c = rw8 ca (word2Int# c)
+
+revcomp (PS fp s (I# l)) = withForeignPtr fp $ \p -&gt; rc (p `plusPtr` s) <span class="num">0</span># (l -# <span class="num">1</span>#)
+  <span class="kwd">where</span>
+    rc :: Ptr Word8 -&gt; <span class="kwb">Int</span># -&gt; <span class="kwb">Int</span># -&gt; <span class="kwb">IO</span> ()
+    rc p i j  = rc' i j
+        <span class="kwd">where</span>
+          rc' i j
+              | isTrue# (i &lt;# j) = <span class="kwd">do</span>
+                          <span class="kwd">let</span> x = rw8 p i
+                          ww8 p i (comp (rw8 p j))
+                          ww8 p j (comp x)
+                          rc' (i +# <span class="num">1</span>#) (j -# <span class="num">1</span>#)
+              | isTrue# (i ==# j) = ww8 p i (comp (rw8 p i))
+              | <span class="kwc">otherwise</span> =  <span class="kwc">return</span> ()
+
+rw8 :: Ptr Word8 -&gt; <span class="kwb">Int</span># -&gt; Word#
+rw8 (Ptr a) i = <span class="kwd">case</span> readWord8OffAddr# a i realWorld#  <span class="kwd">of</span> (# _, x #) -&gt;  x
+<span class="com">{-# INLINE rw8 #-}</span>
+
+ww8 :: Ptr Word8 -&gt; <span class="kwb">Int</span># -&gt; Word# -&gt; <span class="kwb">IO</span> ()
+ww8 (Ptr a) i x  = <span class="kwb">IO</span> $ \s -&gt; <span class="kwd">case</span> writeWord8OffAddr# a i x s <span class="kwd">of</span> s2 -&gt; (# s2, () #)

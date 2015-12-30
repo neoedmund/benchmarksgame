@@ -1,0 +1,70 @@
+#lang racket/base
+
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;;; Translated directly from the C# version by Isaac Gouy</span>
+<span class="slc">;;; contributed by Matthew Flatt</span>
+
+<span class="slc">;; This version uses unsafe operations</span>
+
+(<span class="kwa">require</span> racket/cmdline
+	 racket/require (<span class="kwa">for-syntax</span> racket/base)
+	 (<span class="kwa">rename-in</span>
+          (<span class="kwa">filtered-in</span>
+           (<span class="kwa">lambda</span> (<span class="kwa">name</span>) (<span class="kwa">regexp-replace</span> #rx<span class="str">&quot;unsafe-&quot;</span> name <span class="str">&quot;&quot;</span>))
+           racket/unsafe/ops)
+          [fx-&gt;fl -&gt;fl])
+         (<span class="kwa">only-in</span> racket/flonum make-flvector))
+
+
+(<span class="kwa">define</span> (<span class="kwa">Approximate</span> n)
+  (<span class="kwa">let</span> ([u (<span class="kwa">make-flvector</span> n <span class="num">1.0</span>)]
+        [v (<span class="kwa">make-flvector</span> n <span class="num">0.0</span>)])
+    <span class="slc">;; 20 steps of the power method</span>
+    (<span class="kwa">for</span> ([i (<span class="kwa">in-range</span> <span class="num">10</span>)])
+      (<span class="kwa">MultiplyAtAv</span> n u v)
+      (<span class="kwa">MultiplyAtAv</span> n v u))
+    
+    <span class="slc">;; B=AtA         A multiplied by A transposed</span>
+    <span class="slc">;; v.Bv /(v.v)   eigenvalue of v</span>
+    (<span class="kwa">let</span> loop ([i <span class="num">0</span>][vBv <span class="num">0.0</span>][vv <span class="num">0.0</span>])
+      (<span class="kwa">if</span> (= i n)
+          (<span class="kwa">flsqrt</span> (<span class="kwa">fl</span>/ vBv vv))
+          (<span class="kwa">let</span> ([vi (<span class="kwa">flvector-ref</span> v i)])
+            (<span class="kwa">loop</span> (<span class="kwa">add1</span> i)
+                  (<span class="kwa">fl</span>+ vBv (<span class="kwa">fl</span>* (<span class="kwa">flvector-ref</span> u i) vi))
+                  (<span class="kwa">fl</span>+ vv (<span class="kwa">fl</span>* vi vi))))))))
+
+<span class="slc">;; return element i,j of infinite matrix A</span>
+(<span class="kwa">define</span> (<span class="kwa">A</span> i j)
+  (<span class="kwa">fl</span>/ <span class="num">1.0</span> (<span class="kwa">fl</span>+ (<span class="kwa">fl</span>* (<span class="kwa">-</span>&gt;fl (+ i j))
+                     (<span class="kwa">fl</span>/ (<span class="kwa">-</span>&gt;fl (+ i (+ j <span class="num">1</span>))) <span class="num">2.0</span>)) 
+                (<span class="kwa">-</span>&gt;fl (+ i <span class="num">1</span>)))))
+
+<span class="slc">;; multiply vector v by matrix A</span>
+(<span class="kwa">define</span> (<span class="kwa">MultiplyAv</span> n v Av)
+  (<span class="kwa">for</span> ([i (<span class="kwa">in-range</span> n)])
+    (<span class="kwa">flvector-set</span>! Av i 
+                   (<span class="kwa">for</span>/fold ([r <span class="num">0.0</span>])
+                       ([j (<span class="kwa">in-range</span> n)])
+                     (<span class="kwa">fl</span>+ r (<span class="kwa">fl</span>* (<span class="kwa">A</span> i j) (<span class="kwa">flvector-ref</span> v j)))))))
+
+<span class="slc">;; multiply vector v by matrix A transposed</span>
+(<span class="kwa">define</span> (<span class="kwa">MultiplyAtv</span> n v Atv)
+  (<span class="kwa">for</span> ([i (<span class="kwa">in-range</span> n)])
+    (<span class="kwa">flvector-set</span>! Atv i
+                   (<span class="kwa">for</span>/fold ([r <span class="num">0.0</span>])
+                       ([j (<span class="kwa">in-range</span> n)])
+                     (<span class="kwa">fl</span>+ r (<span class="kwa">fl</span>* (<span class="kwa">A</span> j i) (<span class="kwa">flvector-ref</span> v j)))))))
+
+<span class="slc">;; multiply vector v by matrix A and then by matrix A transposed </span>
+(<span class="kwa">define</span> (<span class="kwa">MultiplyAtAv</span> n v AtAv)
+  (<span class="kwa">let</span> ([u (<span class="kwa">make-flvector</span> n <span class="num">0.0</span>)])
+    (<span class="kwa">MultiplyAv</span> n v u)
+    (<span class="kwa">MultiplyAtv</span> n u AtAv)))
+
+(<span class="kwa">printf</span> <span class="str">&quot;~a</span><span class="esc">\n</span><span class="str">&quot;</span>
+        (<span class="kwa">real-</span>&gt;decimal-string
+         (<span class="kwa">Approximate</span> (<span class="kwa">command-line</span> #:args (<span class="kwa">n</span>) (<span class="kwa">string-</span>&gt;number n)))
+         <span class="num">9</span>))

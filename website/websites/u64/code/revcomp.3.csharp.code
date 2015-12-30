@@ -1,0 +1,100 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Isaac Gouy</span>
+<span class="com">   modified by Robert F. Tobler to perform actual computations on byte arrays</span>
+<span class="com">   modified again by Robert F. Tobler to use BinaryWriter with larger buffers</span>
+<span class="com">*/</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.IO;
+<span class="kwa">using</span> System.Text;
+<span class="kwa">using</span> System.Collections.Generic;
+
+<span class="kwa">class</span> revcomp
+{
+   <span class="kwa">static</span> <span class="kwb">byte</span>[] <span class="kwd">ByteArray</span>(<span class="kwb">string</span> line)
+   {
+      <span class="kwb">byte</span>[] array = <span class="kwa">new</span> <span class="kwb">byte</span>[line.Length];
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; line.Length; i++)
+         array[i] = (<span class="kwb">byte</span>)line[i];
+      <span class="kwa">return</span> array;
+   }
+
+   <span class="kwb">const byte</span> Gt = (<span class="kwb">byte</span>)<span class="str">'&gt;'</span>;
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(<span class="kwb">string</span>[] args){
+      <span class="kwd">InitializeComplements</span>();
+
+      List&lt;<span class="kwb">byte</span>[]&gt; builder = <span class="kwa">new</span> List&lt;<span class="kwb">byte</span>[]&gt;();
+      <span class="kwb">string</span> line;
+      <span class="kwb">byte</span>[] array, desc = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">0</span>];
+
+      <span class="kwa">using</span> (StreamReader r = <span class="kwa">new</span> <span class="kwd">StreamReader</span>(Console.<span class="kwd">OpenStandardInput</span>())) {
+         <span class="kwa">using</span> (BinaryWriter w = <span class="kwa">new</span> <span class="kwd">BinaryWriter</span>(Console.<span class="kwd">OpenStandardOutput</span>())) {
+            <span class="kwa">while</span> ((line = r.<span class="kwd">ReadLine</span>()) != <span class="kwa">null</span>) {
+               array = <span class="kwd">ByteArray</span>(line);
+               <span class="kwb">byte</span> c = array[<span class="num">0</span>];
+               <span class="kwa">if</span> (c == Gt) {
+                  <span class="kwa">if</span> (desc.Length &gt; <span class="num">0</span>) {
+                     <span class="kwd">WriteReverseFasta</span>(desc, builder, w);
+                     builder.<span class="kwd">Clear</span>();
+                  }
+                  desc = array;
+               }
+               <span class="kwa">else if</span> (c != <span class="str">';'</span>) {
+                  builder.<span class="kwd">Add</span>(array);
+               }
+            }
+            <span class="kwa">if</span> (builder.Count &gt; <span class="num">0</span>) {
+               <span class="kwd">WriteReverseFasta</span>(desc, builder, w);
+            }
+         }
+      }
+   }
+
+   <span class="kwa">static</span> <span class="kwb">byte</span>[] iubComp = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">256</span>];
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">InitializeComplements</span>(){
+      <span class="kwa">for</span> (<span class="kwb">byte</span> i = <span class="num">0</span>; i &lt; <span class="num">255</span>; i++) iubComp[i] = i;
+          
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'A'</span>] = (<span class="kwb">byte</span>)<span class="str">'T'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'a'</span>] = (<span class="kwb">byte</span>)<span class="str">'T'</span>;
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'B'</span>] = (<span class="kwb">byte</span>)<span class="str">'V'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'b'</span>] = (<span class="kwb">byte</span>)<span class="str">'V'</span>;
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'C'</span>] = (<span class="kwb">byte</span>)<span class="str">'G'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'c'</span>] = (<span class="kwb">byte</span>)<span class="str">'G'</span>;
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'D'</span>] = (<span class="kwb">byte</span>)<span class="str">'H'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'d'</span>] = (<span class="kwb">byte</span>)<span class="str">'H'</span>;
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'G'</span>] = (<span class="kwb">byte</span>)<span class="str">'C'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'g'</span>] = (<span class="kwb">byte</span>)<span class="str">'C'</span>;
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'H'</span>] = (<span class="kwb">byte</span>)<span class="str">'D'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'h'</span>] = (<span class="kwb">byte</span>)<span class="str">'D'</span>;
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'K'</span>] = (<span class="kwb">byte</span>)<span class="str">'M'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'k'</span>] = (<span class="kwb">byte</span>)<span class="str">'M'</span>;
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'M'</span>] = (<span class="kwb">byte</span>)<span class="str">'K'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'m'</span>] = (<span class="kwb">byte</span>)<span class="str">'K'</span>;
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'R'</span>] = (<span class="kwb">byte</span>)<span class="str">'Y'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'r'</span>] = (<span class="kwb">byte</span>)<span class="str">'Y'</span>;
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'T'</span>] = (<span class="kwb">byte</span>)<span class="str">'A'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'t'</span>] = (<span class="kwb">byte</span>)<span class="str">'A'</span>;
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'V'</span>] = (<span class="kwb">byte</span>)<span class="str">'B'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'v'</span>] = (<span class="kwb">byte</span>)<span class="str">'B'</span>;
+      iubComp[(<span class="kwb">byte</span>)<span class="str">'Y'</span>] = (<span class="kwb">byte</span>)<span class="str">'R'</span>; iubComp[(<span class="kwb">byte</span>)<span class="str">'y'</span>] = (<span class="kwb">byte</span>)<span class="str">'R'</span>;
+   }
+
+   <span class="kwb">const byte</span> Lf = (<span class="kwb">byte</span>)<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+   <span class="kwb">const int</span> LineLength = <span class="num">61</span>;
+   <span class="kwb">const int</span> BufferSize = LineLength * <span class="num">269</span>; <span class="slc">// about 16k</span>
+   <span class="kwa">static</span> <span class="kwb">byte</span>[] buffer = <span class="kwa">new</span> <span class="kwb">byte</span>[BufferSize];
+
+   <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">WriteReverseFasta</span>(<span class="kwb">byte</span>[] desc, List&lt;<span class="kwb">byte</span>[]&gt; b, BinaryWriter w) {
+      w.<span class="kwd">Write</span>(desc); w.<span class="kwd">Write</span>(Lf);
+      <span class="kwb">int</span> bi = <span class="num">0</span>;
+      <span class="kwb">int</span> trigger = LineLength - <span class="num">1</span>;
+      <span class="kwa">for</span> (<span class="kwb">int</span> rli = b.Count-<span class="num">1</span>; rli &gt;= <span class="num">0</span>; rli--) {
+         <span class="kwb">byte</span>[] line = b[rli];
+         <span class="kwa">for</span> (<span class="kwb">int</span> rci = line.Length-<span class="num">1</span>; rci &gt;= <span class="num">0</span>; rci--) {
+            buffer[bi++] = iubComp[line[rci]];
+            <span class="kwa">if</span> (bi == trigger) {
+               buffer[bi++] = Lf; trigger += LineLength;
+               <span class="kwa">if</span> (bi &gt;= BufferSize) {
+                  w.<span class="kwd">Write</span>(buffer); bi = <span class="num">0</span>; trigger = LineLength - <span class="num">1</span>;
+               }
+            }
+         }
+      }
+      <span class="kwa">if</span> (bi &gt; <span class="num">0</span>) {
+          <span class="kwa">if</span> (buffer[bi-<span class="num">1</span>] != Lf) buffer[bi++] = Lf;
+          w.<span class="kwd">Write</span>(buffer, <span class="num">0</span>, bi);
+      }
+   }
+}

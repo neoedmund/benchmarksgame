@@ -1,0 +1,117 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># Contributed by Aaron Tavistock</span>
+
+ALU = <span class="str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span>
+
+IUB = [
+  [<span class="str">'a'</span>, <span class="num">0.27</span>],
+  [<span class="str">'c'</span>, <span class="num">0.12</span>],
+  [<span class="str">'g'</span>, <span class="num">0.12</span>],
+  [<span class="str">'t'</span>, <span class="num">0.27</span>],
+  [<span class="str">'B'</span>, <span class="num">0.02</span>],
+  [<span class="str">'D'</span>, <span class="num">0.02</span>],
+  [<span class="str">'H'</span>, <span class="num">0.02</span>],
+  [<span class="str">'K'</span>, <span class="num">0.02</span>],
+  [<span class="str">'M'</span>, <span class="num">0.02</span>],
+  [<span class="str">'N'</span>, <span class="num">0.02</span>],
+  [<span class="str">'R'</span>, <span class="num">0.02</span>],
+  [<span class="str">'S'</span>, <span class="num">0.02</span>],
+  [<span class="str">'V'</span>, <span class="num">0.02</span>],
+  [<span class="str">'W'</span>, <span class="num">0.02</span>],
+  [<span class="str">'Y'</span>, <span class="num">0.02</span>],
+]
+
+HOMOSAPIENS = [
+  [<span class="str">'a'</span>, <span class="num">0.3029549426680</span>],
+  [<span class="str">'c'</span>, <span class="num">0.1979883004921</span>],
+  [<span class="str">'g'</span>, <span class="num">0.1975473066391</span>],
+  [<span class="str">'t'</span>, <span class="num">0.3015094502008</span>],
+]
+
+<span class="kwa">class</span> RandomSequence
+
+  GR_IM = <span class="num">139968.0</span>
+  GR_IA = <span class="num">3877.0</span>
+  GR_IC = <span class="num">29573.0</span>
+
+  attr_reader <span class="kwc">:value</span>
+
+  <span class="kwa">def</span> <span class="kwd">initialize</span>(seed_value, map, size<span class="opt">)</span>
+    <span class="kwb">&#64;size</span> = size
+    <span class="kwb">&#64;value</span> = seed_value
+    <span class="kwb">&#64;output_buffer</span> = <span class="str">''</span>
+    <span class="kwd">generate_map_value_method</span>(map<span class="opt">)</span>
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> <span class="kwd">render</span>(label<span class="opt">)</span>
+    puts <span class="str">&quot;&gt;</span><span class="ipl">#{label}</span><span class="str">&quot;</span>
+    full_row_count, last_row_size = <span class="kwb">&#64;size</span>.<span class="kwd">divmod</span>(<span class="num">60</span><span class="opt">)</span>
+    <span class="kwa">while</span> (full_row_count &gt; <span class="num">0</span><span class="opt">)</span>
+      puts <span class="kwd">output_row</span>(<span class="num">60</span><span class="opt">)</span>
+      full_row_count -= <span class="num">1</span>
+    <span class="kwa">end</span>
+    puts <span class="kwd">output_row</span>(last_row_size<span class="opt">)</span> <span class="kwa">if</span> last_row_size &gt; <span class="num">0</span>
+  <span class="kwa">end</span>
+
+  private
+
+  <span class="kwa">def</span> <span class="kwd">generate_map_value_method</span>(map<span class="opt">)</span>
+    accum_percentage = <span class="num">0.0</span>
+
+    conditions = []
+    map.each <span class="kwa">do</span> |letter, percentage|
+      accum_percentage += percentage
+      conditions &lt;&lt; %[(value &lt;= <span class="slc">#{accum_percentage} ? #{letter.ord} : ]</span>
+    <span class="kwa">end</span>
+    conditions[-<span class="num">1</span>] = <span class="str">&quot;</span><span class="ipl">#{map.last.first.ord}</span><span class="str">&quot;</span> <span class="slc"># Substitute last condition for fixed value</span>
+    conditions &lt;&lt; <span class="str">')</span><span class="str">' * (map.size - 1)</span>
+
+    instance_eval %[<span class="kwa">def</span> <span class="kwd">map_value</span>(value<span class="opt">)</span>; <span class="slc">#{conditions.join}; end]</span>
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> next_item
+    <span class="kwb">&#64;value</span> = (<span class="kwb">&#64;value</span> * GR_IA + GR_IC<span class="opt">)</span> % GR_IM
+    <span class="kwb">&#64;value</span> / GR_IM
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> <span class="kwd">output_row</span>(size<span class="opt">)</span>
+    <span class="kwb">&#64;output_buffer</span>.clear
+    <span class="kwa">while</span> (size &gt; <span class="num">0</span><span class="opt">)</span>
+      <span class="kwb">&#64;output_buffer</span> &lt;&lt; <span class="kwd">map_value</span>(next_item<span class="opt">)</span>
+      size -= <span class="num">1</span>
+    <span class="kwa">end</span>
+    <span class="kwb">&#64;output_buffer</span>
+  <span class="kwa">end</span>
+
+<span class="kwa">end</span>
+
+<span class="kwa">class</span> RepeatSequence
+
+  <span class="kwa">def</span> <span class="kwd">initialize</span>(seed_sequence, size<span class="opt">)</span>
+    repeats = (size / seed_sequence.size<span class="opt">)</span>.to_i + <span class="num">1</span>
+    seq = seed_sequence * repeats
+    <span class="kwb">&#64;sequence</span> = seq[<span class="num">0</span>,size]
+  <span class="kwa">end</span>
+
+  <span class="kwa">def</span> <span class="kwd">render</span>(label<span class="opt">)</span>
+    puts <span class="str">&quot;&gt;</span><span class="ipl">#{label}</span><span class="str">&quot;</span>
+    seq_size = <span class="kwb">&#64;sequence</span>.size - <span class="num">1</span>
+    <span class="num">0</span>.<span class="kwd">step</span>(seq_size, <span class="num">60</span><span class="opt">)</span> <span class="kwa">do</span> |x|
+      puts <span class="kwb">&#64;sequence</span>[x, <span class="num">60</span>]
+    <span class="kwa">end</span>
+  <span class="kwa">end</span>
+
+<span class="kwa">end</span>
+
+size = (<span class="kwc">ARGV</span>[<span class="num">0</span>] || <span class="num">27</span><span class="opt">)</span>.to_i
+
+one = RepeatSequence.<span class="kwd">new</span>(ALU, size*<span class="num">2</span><span class="opt">)</span>
+one.<span class="kwd">render</span>(<span class="str">'ONE Homo sapiens alu'</span><span class="opt">)</span>
+
+two = RandomSequence.<span class="kwd">new</span>(<span class="num">42</span>, IUB, size*<span class="num">3</span><span class="opt">)</span>
+two.<span class="kwd">render</span>(<span class="str">'TWO IUB ambiguity codes'</span><span class="opt">)</span>
+
+three = RandomSequence.<span class="kwd">new</span>(two.value, HOMOSAPIENS, size*<span class="num">5</span><span class="opt">)</span>
+three.<span class="kwd">render</span>(<span class="str">'THREE Homo sapiens frequency'</span><span class="opt">)</span>

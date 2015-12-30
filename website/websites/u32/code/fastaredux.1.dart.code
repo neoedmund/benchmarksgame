@@ -1,0 +1,175 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">// contributed by Jos Hirth</span>
+<span class="slc">// based on the Java/C# versions by Robert F. Tobler, Enotus, Isaac Gouy, and Alp Toker</span>
+
+<span class="kwc">import</span> <span class="str">'dart:io'</span>;
+<span class="kwc">import</span> <span class="str">'dart:typed_data'</span>;
+<span class="kwc">import</span> <span class="str">'dart:math'</span> <span class="kwc">as</span> math;
+
+<span class="kwa">const</span> <span class="kwb">int</span> LINE_LENGTH = <span class="num">60</span>;
+<span class="kwa">const</span> <span class="kwb">int</span> OUT_BUFFER_SIZE = <span class="num">256</span> * <span class="num">1024</span>;
+<span class="kwa">const</span> <span class="kwb">int</span> LOOKUP_SIZE = <span class="num">4</span> * <span class="num">1024</span>;
+<span class="kwa">const</span> <span class="kwb">double</span> LOOKUP_SCALE = (LOOKUP_SIZE - <span class="num">1</span>) / <span class="num">1</span>;
+<span class="kwa">const</span> <span class="kwb">int</span> NEW_LINE_CHARACTER = <span class="num">10</span>;
+
+<span class="slc">/// Returns the code unit of the first char.</span>
+<span class="kwb">int</span> byte (String s) =&gt; s.codeUnitAt(<span class="num">0</span>);
+
+<span class="slc">/// Returns all code units as an Uint8List.</span>
+Uint8List bytes (String s) =&gt; <span class="kwa">new</span> Uint8List.fromList(s.codeUnits);
+
+<span class="kwa">class</span> Freq {
+  <span class="kwb">int</span> c;
+  <span class="kwb">double</span> p;
+  Freq(<span class="kwa">this</span>.c, <span class="kwa">this</span>.p);
+}
+
+<span class="kwa">class</span> Random {
+  <span class="kwa">static const</span> <span class="kwb">int</span> IM = <span class="num">139968</span>;
+  <span class="kwa">static const</span> <span class="kwb">int</span> IA = <span class="num">3877</span>;
+  <span class="kwa">static const</span> <span class="kwb">int</span> IC = <span class="num">29573</span>;
+  <span class="kwa">static const</span> <span class="kwb">double</span> SCALE = LOOKUP_SCALE / IM;
+  <span class="kwa">static</span> <span class="kwb">int</span> last = <span class="num">42</span>;
+
+  <span class="kwa">static</span> <span class="kwb">double</span> next () {
+    <span class="kwa">return</span> SCALE * (last = (last * IA + IC) % IM);
+  }
+}
+
+<span class="kwa">class</span> Out {
+  <span class="kwa">static</span> Uint8List buf = <span class="kwa">new</span> Uint8List(OUT_BUFFER_SIZE);
+  <span class="kwa">static const</span> <span class="kwb">int</span> LIMIT = OUT_BUFFER_SIZE - <span class="num">2</span> * LINE_LENGTH - <span class="num">1</span>;
+  <span class="kwa">static</span> <span class="kwb">int</span> ct = <span class="num">0</span>;
+
+  <span class="kwa">static void</span> checkFlush () {
+    <span class="kwa">if</span> (ct &gt;= LIMIT) {
+      stdout.add(<span class="kwa">new</span> Uint8List.view(buf.buffer, <span class="num">0</span>, ct));
+      buf = <span class="kwa">new</span> Uint8List(OUT_BUFFER_SIZE);
+      ct = <span class="num">0</span>;
+    }
+  }
+
+  <span class="kwa">static void</span> finalFlush() {
+    stdout.add(<span class="kwa">new</span> Uint8List.view(buf.buffer, <span class="num">0</span>, ct));
+  }
+}
+
+<span class="kwa">class</span> RandomFasta {
+  <span class="kwa">static final</span> List&lt;Freq&gt; lookup = <span class="kwa">new</span> List&lt;Freq&gt;(LOOKUP_SIZE);
+
+  <span class="kwa">static void</span> makeLookup (List&lt;Freq&gt; a) {
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>, j = <span class="num">0</span>; i &lt; LOOKUP_SIZE; i++) {
+      <span class="kwa">while</span> (a[j].p &lt; i) {
+        j++;
+      }
+      lookup[i] = a[j];
+    }
+  }
+
+  <span class="kwa">static void</span> addLine (<span class="kwb">int</span> bytes) {
+    Out.checkFlush();
+    <span class="kwb">int</span> lct = Out.ct;
+    <span class="kwa">while</span> (lct &lt; Out.ct + bytes) {
+      <span class="kwb">double</span> r = Random.next();
+      <span class="kwb">int</span> ai = r.toInt();
+      <span class="kwa">while</span> (lookup[ai].p &lt; r) {
+        ai++;
+      }
+      Out.buf[lct++] = lookup[ai].c;
+    }
+    Out.buf[lct++] = NEW_LINE_CHARACTER;
+    Out.ct = lct;
+  }
+
+  <span class="kwa">static void</span> make(String desc, List&lt;Freq&gt; a, <span class="kwb">int</span> n) {
+    makeLookup(a);
+
+    Out.buf.setRange(Out.ct, Out.ct + desc.length, bytes(desc), <span class="num">0</span>);
+    Out.ct += desc.length;
+
+    <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+      <span class="kwb">int</span> bytes = math.min(LINE_LENGTH, n);
+      addLine(bytes);
+      n -= bytes;
+    }
+  }
+}
+
+<span class="kwa">class</span> RepeatFasta {
+  <span class="kwa">static void</span> make(String desc, Uint8List alu, <span class="kwb">int</span> n) {
+    Out.buf.setRange(Out.ct, Out.ct + desc.length, bytes(desc), <span class="num">0</span>);
+    Out.ct += desc.length;
+
+    Uint8List buf = <span class="kwa">new</span> Uint8List(alu.length + LINE_LENGTH);
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; buf.length; i += alu.length) {
+      buf.setRange(i, i + math.min(alu.length, buf.length - i), alu, <span class="num">0</span>);
+    }
+
+    <span class="kwb">int</span> pos = <span class="num">0</span>;
+    <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+      <span class="kwb">int</span> bytes = math.min(LINE_LENGTH, n);
+      Out.checkFlush();
+
+      Out.buf.setRange(Out.ct, Out.ct + bytes, buf, pos);
+      Out.ct += bytes;
+
+      Out.buf[Out.ct++] = NEW_LINE_CHARACTER;
+      pos = (pos + bytes) % alu.length;
+      n -= bytes;
+    }
+  }
+}
+
+<span class="kwa">void</span> main(args) {
+  <span class="kwa">final</span> String ALU =
+    <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>
+    <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>
+    <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>
+    <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>
+    <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>
+    <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>
+    <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+  <span class="kwa">final</span> List&lt;Freq&gt; IUB = [
+    <span class="kwa">new</span> Freq(byte(<span class="str">'a'</span>), <span class="num">0.27</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'c'</span>), <span class="num">0.12</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'g'</span>), <span class="num">0.12</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'t'</span>), <span class="num">0.27</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'B'</span>), <span class="num">0.02</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'D'</span>), <span class="num">0.02</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'H'</span>), <span class="num">0.02</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'K'</span>), <span class="num">0.02</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'M'</span>), <span class="num">0.02</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'N'</span>), <span class="num">0.02</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'R'</span>), <span class="num">0.02</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'S'</span>), <span class="num">0.02</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'V'</span>), <span class="num">0.02</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'W'</span>), <span class="num">0.02</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'Y'</span>), <span class="num">0.02</span>)
+  ];
+  <span class="kwa">final</span> List&lt;Freq&gt; HomoSapiens = [
+    <span class="kwa">new</span> Freq(byte(<span class="str">'a'</span>), <span class="num">0.3029549426680</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'c'</span>), <span class="num">0.1979883004921</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'g'</span>), <span class="num">0.1975473066391</span>),
+    <span class="kwa">new</span> Freq(byte(<span class="str">'t'</span>), <span class="num">0.3015094502008</span>)
+  ];
+
+  <span class="kwa">void</span> sumAndScale(List&lt;Freq&gt; a) {
+    <span class="kwb">double</span> p = <span class="num">0.0</span>;
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; a.length; i++) {
+      a[i].p = (p += a[i].p) * LOOKUP_SCALE;
+    }
+    a[a.length - <span class="num">1</span>].p = LOOKUP_SCALE;
+  }
+
+  <span class="kwb">int</span> n = args.length &gt; <span class="num">0</span> ? <span class="kwb">int</span>.parse(args[<span class="num">0</span>]) : <span class="num">200</span>;
+
+  sumAndScale(IUB);
+  sumAndScale(HomoSapiens);
+
+  RepeatFasta.make(<span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>, bytes(ALU), n * <span class="num">2</span>);
+  RandomFasta.make(<span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>, IUB, n * <span class="num">3</span>);
+  RandomFasta.make(<span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>, HomoSapiens, n * <span class="num">5</span>);
+  Out.finalFlush();
+}

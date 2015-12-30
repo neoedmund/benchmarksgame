@@ -1,0 +1,56 @@
+
+Wed, 18 Nov 2015 21:50:49 GMT
+
+MAKE:
+cp: ‘binarytrees.sbcl-3.sbcl’ and ‘./binarytrees.sbcl-3.sbcl’ are the same file
+SBCL built with: /usr/local/bin/sbcl --userinit /dev/null --batch --eval '(load "binarytrees.sbcl-3.sbcl_compile")'
+### START binarytrees.sbcl-3.sbcl_compile
+(handler-bind ((sb-ext:defconstant-uneql      (lambda (c) (abort c))))      (load (compile-file "binarytrees.sbcl-3.sbcl" ))) (save-lisp-and-die "sbcl.core" :purify t)
+### END binarytrees.sbcl-3.sbcl_compile
+
+; compiling file "/home/dunham/benchmarksgame/bench/binarytrees/binarytrees.sbcl-3.sbcl" (written 26 SEP 2015 01:01:33 PM):
+; compiling (DECLAIM (OPTIMIZE # ...))
+; compiling (DEFSTRUCT (NODE # ...) ...)
+; compiling (DEFTYPE NODE ...)
+; compiling (DEFUN CREATE-TREE ...)
+; compiling (DEFUN CHECK-TREE ...)
+; compiling (DEFUN MAIN ...)
+
+; /home/dunham/benchmarksgame_quadcore/binarytrees/tmp/binarytrees.sbcl-3.fasl written
+; compilation finished in 0:00:00.650
+[undoing binding stack and other enclosing state... done]
+[saving current Lisp image into sbcl.core:
+writing 4944 bytes from the read-only space at 0x20000000
+writing 3168 bytes from the static space at 0x20100000
+writing 46465024 bytes from the dynamic space at 0x1000000000
+done]
+### START binarytrees.sbcl-3.sbcl_run
+(main) (quit)
+### END binarytrees.sbcl-3.sbcl_run
+
+4.02s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/bin/sbcl  --noinform --core sbcl.core --userinit /dev/null --load binarytrees.sbcl-3.sbcl_run 12
+
+UNEXPECTED OUTPUT 
+
+1,4c1,7
+< stretch tree of depth 7	 check: -1
+< 128	 trees of depth 4	 check: -128
+< 32	 trees of depth 6	 check: -32
+< long lived tree of depth 6	 check: -1
+---
+> stretch tree of depth 13	 check: -1
+> 8192	 trees of depth 4	 check: -8192
+> 2048	 trees of depth 6	 check: -2048
+> 512	 trees of depth 8	 check: -512
+> 128	 trees of depth 10	 check: -128
+> 32	 trees of depth 12	 check: -32
+> long lived tree of depth 12	 check: -1
+
+PROGRAM OUTPUT:
+stretch tree of depth 7	 check: -1
+128	 trees of depth 4	 check: -128
+32	 trees of depth 6	 check: -32
+long lived tree of depth 6	 check: -1

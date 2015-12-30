@@ -1,0 +1,75 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc">#  http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc">#  contributed by Mykola Zubach</span>
+
+<span class="kwa">use</span> strict;
+<span class="kwa">use</span> threads;
+<span class="kwa">use</span> threads::shared;
+
+<span class="kwa">use</span> constant MAXITER =&gt; <span class="num">50</span>;
+<span class="kwa">use</span> constant LIMIT =&gt; <span class="num">4.0</span>;
+<span class="kwa">use</span> constant XMIN =&gt; -<span class="num">1.5</span>;
+<span class="kwa">use</span> constant YMIN =&gt; -<span class="num">1</span>;
+<span class="kwa">use</span> constant WHITE =&gt; <span class="str">&quot;\0&quot;</span>;
+<span class="kwa">use</span> constant BLACK =&gt; <span class="str">&quot;</span><span class="esc">\001</span><span class="str">&quot;</span>;
+
+<span class="kwc">my</span> (<span class="kwb">$w</span>, <span class="kwb">$h</span>, <span class="kwb">&#64;threads</span>, <span class="kwb">$invN</span>);
+<span class="kwc">my</span> <span class="kwb">&#64;jobs</span> :shared;
+<span class="kwc">my</span> <span class="kwb">&#64;picture</span> :shared;
+
+<span class="kwa">sub</span> draw_line($) {
+   <span class="kwc">my</span> <span class="kwb">$y</span> = <span class="kwc">shift</span>;
+   <span class="kwc">my</span> <span class="kwb">$line</span>;
+   <span class="kwc">my</span> <span class="kwb">$Ci</span> = <span class="kwb">$y</span> * <span class="kwb">$invN</span> + YMIN;
+X:
+   <span class="kwa">for</span> <span class="kwc">my</span> <span class="kwb">$x</span> (<span class="num">0</span> .. <span class="kwb">$w</span> - <span class="num">1</span>) {
+      <span class="kwc">my</span> (<span class="kwb">$Zr</span>, <span class="kwb">$Zi</span>, <span class="kwb">$Tr</span>, <span class="kwb">$Ti</span>);
+      <span class="kwc">my</span> <span class="kwb">$Cr</span> = <span class="kwb">$x</span> * <span class="kwb">$invN</span> + XMIN;
+
+      <span class="kwa">for</span> (<span class="num">1</span> .. MAXITER) {
+         <span class="kwb">$Zi</span> = <span class="kwb">$Zi</span> * <span class="num">2</span> * <span class="kwb">$Zr</span> + <span class="kwb">$Ci</span>;
+         <span class="kwb">$Zr</span> = <span class="kwb">$Tr</span> - <span class="kwb">$Ti</span> + <span class="kwb">$Cr</span>;
+         <span class="kwb">$Ti</span> = <span class="kwb">$Zi</span> * <span class="kwb">$Zi</span>;
+         <span class="kwb">$Tr</span> = <span class="kwb">$Zr</span> * <span class="kwb">$Zr</span>;
+         <span class="kwa">if</span> (<span class="kwb">$Tr</span> + <span class="kwb">$Ti</span> &gt; LIMIT) {
+            <span class="kwb">$line</span> .= WHITE;
+            <span class="kwa">next</span> X;
+         }
+      }
+      <span class="kwb">$line</span> .= BLACK;
+   }
+   <span class="kwb">$picture</span>[<span class="kwb">$y</span>] = <span class="kwc">pack</span> <span class="str">'B*'</span>, <span class="kwb">$line</span>;
+}
+
+<span class="kwa">sub</span> process_queue() {
+   <span class="kwa">while</span>(<span class="kwc">defined</span>(<span class="kwc">my</span> <span class="kwb">$y</span> = <span class="kwc">pop</span> <span class="kwb">&#64;jobs</span>)) {
+      draw_line(<span class="kwb">$y</span>);
+   }
+}
+
+<span class="kwa">sub</span> num_cpus() {
+   <span class="kwc">open my</span> <span class="kwb">$fh</span>, <span class="str">'&lt;/proc/cpuinfo'</span> <span class="kwc">or</span> <span class="kwa">return</span> <span class="num">4</span>;
+   <span class="kwc">my</span> <span class="kwb">$cpus</span>;
+   <span class="kwa">while</span>(&lt;<span class="kwb">$fh</span>&gt;) {
+      <span class="kwb">$cpus</span> ++ <span class="kwa">if</span> <span class="kwd">/^processor\s+:/</span>;
+   }
+   <span class="kwa">return</span> <span class="kwb">$cpus</span>;
+}
+
+<span class="slc">## MAIN()</span>
+
+<span class="kwb">$w</span> = <span class="kwb">$h</span> = <span class="kwc">shift</span> || <span class="num">200</span>;
+<span class="kwb">$invN</span> = <span class="num">2</span> / <span class="kwb">$w</span>;
+<span class="kwb">&#64;jobs</span> = (<span class="num">0</span> .. <span class="kwb">$h</span> - <span class="num">1</span>);
+
+<span class="kwa">for</span> (<span class="num">1</span> .. num_cpus()) {
+   <span class="kwc">push</span> <span class="kwb">&#64;threads</span>, threads-&gt;<span class="kwd">create</span>(\&amp;process_queue);
+}
+
+<span class="kwa">for</span> (<span class="kwb">&#64;threads</span>) {
+   <span class="kwb">$_</span>-&gt;<span class="kwc">join</span>;
+}
+
+<span class="kwc">print</span> <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str"></span><span class="ipl">$w</span> <span class="str"></span><span class="ipl">$h</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>; <span class="slc"># PBM image header</span>
+<span class="kwc">print</span> <span class="kwb">&#64;picture</span>;

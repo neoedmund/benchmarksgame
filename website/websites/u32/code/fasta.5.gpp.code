@@ -1,0 +1,164 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   converted to C++ from D by Rafal Rusin</span>
+<span class="com">   modified by Vaclav Haisman</span>
+<span class="com">   modified by The Anh to compile with g++ 4.3.2</span>
+<span class="com">   modified by Branimir Maksimovic</span>
+<span class="com">   modified by Kim Walisch</span>
+<span class="com">   modified by Tavis Bohne</span>
+<span class="com">   modified by Tomas Dzetkulic</span>
+<span class="com"></span>
+<span class="com">   compiles with gcc fasta.cpp -std=c++11 -O2</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;array&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;numeric&gt;</span>
+
+<span class="ppc">#include &lt;string.h&gt;</span>
+
+<span class="kwc">constexpr</span> <span class="kwb">int</span> MAXLINE = <span class="num">60</span>;
+<span class="kwc">constexpr</span> <span class="kwb">int</span> NUM_LINES = <span class="num">256</span>;
+
+<span class="kwc">constexpr</span> <span class="kwb">int</span> alu_len = <span class="num">287</span>;
+<span class="kwc">constexpr</span> <span class="kwb">char</span> alu[alu_len + <span class="num">1</span>] =
+  <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span>
+  <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span>
+  <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span>
+  <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span>
+  <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span>
+  <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span>
+  <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>;
+
+std::array&lt;<span class="kwb">float</span>, <span class="num">15</span>&gt; iub = {{ 
+  <span class="num">0.27</span>f, <span class="num">0.12</span>f, <span class="num">0.12</span>f, <span class="num">0.27</span>f, <span class="num">0.02</span>f,
+  <span class="num">0.02</span>f, <span class="num">0.02</span>f, <span class="num">0.02</span>f, <span class="num">0.02</span>f, <span class="num">0.02</span>f,
+  <span class="num">0.02</span>f, <span class="num">0.02</span>f, <span class="num">0.02</span>f, <span class="num">0.02</span>f, <span class="num">0.02</span>f }};
+
+<span class="kwb">const char</span> iub_c[] = <span class="str">&quot;acgtBDHKMNRSVWY&quot;</span>;  
+
+std::array&lt;<span class="kwb">float</span>, <span class="num">4</span>&gt; homosapiens = {{ 
+  <span class="num">0.3029549426680</span>f, <span class="num">0.1979883004921</span>f,
+  <span class="num">0.1975473066391</span>f, <span class="num">0.3015094502008</span>f }};
+
+<span class="kwb">const char</span> homosapiens_c[] = <span class="str">&quot;acgt&quot;</span>;
+
+<span class="kwc">class</span> alu_repeat_functor {
+<span class="kwc">public</span>:
+  <span class="kwd">alu_repeat_functor</span>() : <span class="kwd">i</span>(<span class="num">0</span>) {
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; <span class="kwa">sizeof</span>(alu2); ++i) {
+      alu2[i] = alu[i % alu_len];
+    }
+  }
+  <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">GetLine</span>(<span class="kwb">char</span>* dest) {
+    <span class="kwd">memcpy</span>(dest, alu2 + i, MAXLINE);
+    i = (i + MAXLINE) % alu_len;
+  }
+  <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">Get</span>(<span class="kwb">char</span>* dest, <span class="kwb">int</span> num) {
+    <span class="kwd">memcpy</span>(dest, alu2 + i, num);
+    i = (i + num) % alu_len;
+  }
+<span class="kwc">private</span>:
+  <span class="kwb">int</span> i;
+  <span class="kwb">char</span> alu2[<span class="kwa">sizeof</span>(alu) + MAXLINE];
+};
+
+<span class="kwc">class</span> Random {
+<span class="kwc">public</span>:
+  <span class="kwd">Random</span>() : <span class="kwd">last</span>(<span class="num">42</span>) {};
+  <span class="kwb">static</span> <span class="kwc">constexpr</span> <span class="kwb">int</span> IM = <span class="num">139968</span>, IA = <span class="num">3877</span>, IC = <span class="num">29573</span>;
+  <span class="kwc">inline</span> <span class="kwb">float</span> <span class="kwd">Get</span>(<span class="kwb">float</span> max = <span class="num">1.0</span>f) {
+    last = (last * IA + IC) % IM;
+    <span class="kwa">return</span> max * last * (<span class="num">1.0</span>f / IM);    
+  }
+<span class="kwc">private</span>:
+  <span class="kwb">int</span> last;
+} random_;
+
+<span class="kwc">template</span>&lt;<span class="kwb">int</span> size&gt;
+<span class="kwc">inline</span> <span class="kwb">int</span> <span class="kwd">binary_search</span>(<span class="kwb">const float</span>* <span class="kwb">const</span> iub, <span class="kwb">float</span> p) {
+  <span class="kwc">constexpr</span> <span class="kwb">int</span> mid = (size - <span class="num">1</span>) / <span class="num">2</span>;
+  <span class="kwa">return</span> (p &lt;= iub[mid]) ? binary_search&lt;mid + <span class="num">1</span>&gt;(iub, p)
+      : mid + <span class="num">1</span> + binary_search&lt;size - mid - <span class="num">1</span>&gt;(iub + mid + <span class="num">1</span>, p);
+}
+
+<span class="kwc">template</span>&lt;&gt;
+<span class="kwc">inline</span> <span class="kwb">int</span> binary_search&lt;<span class="num">1</span>&gt;(<span class="kwb">const float</span>* <span class="kwb">const</span> iub, <span class="kwb">float</span> p) {
+  <span class="kwa">return</span> <span class="num">0</span>;
+}
+
+<span class="kwc">template</span>&lt;typename array_type&gt;
+<span class="kwc">class</span> random_functor_type {
+<span class="kwc">public</span>:
+  <span class="kwd">random_functor_type</span>(<span class="kwb">const</span> array_type&amp; iub, <span class="kwb">const char</span>* iub_c)
+      : <span class="kwd">iub_</span>(iub) , <span class="kwd">iub_c_</span>(iub_c) {}
+  <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">Get</span>(<span class="kwb">char</span>* dest, <span class="kwb">int</span> num) {
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; num; ++i) dest[i] = <span class="kwd">GetInternal</span>();
+  }
+  <span class="kwc">inline</span> <span class="kwb">void</span> <span class="kwd">GetLine</span>(<span class="kwb">char</span>* dest) {
+    <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; MAXLINE; ++i) dest[i] = <span class="kwd">GetInternal</span>();
+  }
+<span class="kwc">private</span>:
+  <span class="kwc">inline</span> <span class="kwb">int</span> <span class="kwd">GetInternal</span>() {
+    <span class="kwa">return</span> iub_c_[binary_search&lt;std::tuple_size&lt;array_type&gt;::value&gt;(
+        iub_.<span class="kwd">data</span>(), random_.<span class="kwd">Get</span>(<span class="num">1.0</span>f))];
+  }
+  <span class="kwb">const</span> array_type iub_;
+  <span class="kwb">const char</span>* iub_c_;
+};
+
+<span class="kwc">template</span>&lt;typename array_type&gt;
+random_functor_type&lt;array_type&gt; <span class="kwd">make_random_functor_type</span>(
+      <span class="kwb">const</span> array_type&amp; x, <span class="kwb">const char</span>* y) {
+  <span class="kwa">return</span> random_functor_type&lt;array_type&gt;(x, y);
+}
+
+<span class="kwc">template</span>&lt;typename array_type&gt;
+<span class="kwb">void</span> <span class="kwd">make_cumulative</span>(array_type&amp; x) {
+  std::<span class="kwd">partial_sum</span>(x.<span class="kwd">begin</span>(), x.<span class="kwd">end</span>(), x.<span class="kwd">begin</span>(),
+                   [] (<span class="kwb">float</span> l, <span class="kwb">float</span> r) -&gt; <span class="kwb">float</span> { r += l; <span class="kwa">return</span> r; });
+}
+
+<span class="kwc">template</span> &lt;typename F&gt;
+<span class="kwb">void</span> <span class="kwd">make</span>(<span class="kwb">const char</span>* <span class="kwb">const</span> desc, <span class="kwb">int const</span> n, F functor) {
+  std::cout &lt;&lt; <span class="str">'&gt;'</span> &lt;&lt; desc &lt;&lt; <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+  <span class="kwb">char</span> line[(MAXLINE + <span class="num">1</span>) * NUM_LINES];
+  <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; NUM_LINES; ++i) {
+    line[MAXLINE + (MAXLINE + <span class="num">1</span>) * i] = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>; 
+  }
+  <span class="kwb">int</span> i = <span class="num">0</span>;
+  <span class="kwa">for</span> (; i + MAXLINE * NUM_LINES &lt;= n; i += MAXLINE * NUM_LINES) {
+    <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; NUM_LINES; ++j) {
+      functor.<span class="kwd">GetLine</span>(line + (MAXLINE + <span class="num">1</span>) * j);
+    }
+    std::cout.<span class="kwd">write</span>(line, (MAXLINE + <span class="num">1</span>) * NUM_LINES);
+  }
+  <span class="kwa">for</span> (; i + MAXLINE &lt;= n; i += MAXLINE) {
+    functor.<span class="kwd">GetLine</span>(line);
+    std::cout.<span class="kwd">write</span>(line, MAXLINE + <span class="num">1</span>);
+  }
+  <span class="kwa">if</span> (n - i) {
+    functor.<span class="kwd">Get</span>(line, n - i);
+    line[n - i]=<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>;
+    std::cout.<span class="kwd">write</span>(line, n - i + <span class="num">1</span>);
+  }
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span>(<span class="kwb">int</span> argc, <span class="kwb">char</span> *argv[]) {
+  <span class="kwb">int</span> n;
+  <span class="kwa">if</span> (argc &lt; <span class="num">2</span> || (n = std::<span class="kwd">atoi</span>(argv[<span class="num">1</span>])) &lt;= <span class="num">0</span>) {
+    std::cerr &lt;&lt; <span class="str">&quot;usage: &quot;</span> &lt;&lt; argv[<span class="num">0</span>] &lt;&lt; <span class="str">&quot; length</span><span class="esc">\n</span><span class="str">&quot;</span>;
+    <span class="kwa">return</span> <span class="num">1</span>;
+  }
+
+  std::cout.<span class="kwd">sync_with_stdio</span>(<span class="kwa">false</span>);
+  <span class="kwd">make_cumulative</span>(iub);
+  <span class="kwd">make_cumulative</span>(homosapiens);
+
+  <span class="kwd">make</span>(<span class="str">&quot;ONE Homo sapiens alu&quot;</span>, n * <span class="num">2</span>, <span class="kwd">alu_repeat_functor</span>()); 
+  <span class="kwd">make</span>(<span class="str">&quot;TWO IUB ambiguity codes&quot;</span>, n * <span class="num">3</span>, <span class="kwd">make_random_functor_type</span>(iub, iub_c));
+  <span class="kwd">make</span>(<span class="str">&quot;THREE Homo sapiens frequency&quot;</span>, n * <span class="num">5</span>, 
+       <span class="kwd">make_random_functor_type</span>(homosapiens, homosapiens_c));
+  <span class="kwa">return</span> <span class="num">0</span>;
+}

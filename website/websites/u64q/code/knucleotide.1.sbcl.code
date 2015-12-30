@@ -1,0 +1,72 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;   contributed by James McIlree</span>
+<span class="slc">;;   Modified by Juho Snellman 2005-11-19</span>
+<span class="slc">;;     * About 50% speedup on both SBCL and CMUCL</span>
+<span class="slc">;;     * Use SIMPLE-BASE-STRINGs instead of (SIMPLE-ARRAY CHARACTER) for</span>
+<span class="slc">;;       lower memory use on Unicode SBCL</span>
+<span class="slc">;;     * Declare the type of SEQUENCE in ACCUMULATE-FREQUENCIES</span>
+
+(<span class="kwa">defun</span> read-data (<span class="kwa">stream</span>)
+  (<span class="kwa">let</span> ((<span class="kwa">data</span> (<span class="kwa">make-array</span> <span class="num">0</span> :element-type 'base-char :adjustable t :fill-pointer <span class="num">0</span>)))
+    (<span class="kwa">do</span> ((<span class="kwa">line</span> (<span class="kwa">read-line</span> stream nil 'eof) (<span class="kwa">read-line</span> stream nil 'eof)))
+        ((<span class="kwa">or</span> (<span class="kwa">eq</span> line 'eof) (<span class="kwa">string</span>= <span class="str">&quot;&gt;THREE&quot;</span> line :start2 <span class="num">0</span> :end2 <span class="num">6</span>))))
+    (<span class="kwa">do</span> ((<span class="kwa">line</span> (<span class="kwa">read-line</span> stream nil 'eof) (<span class="kwa">read-line</span> stream nil 'eof)))
+        ((<span class="kwa">or</span> (<span class="kwa">eq</span> line 'eof) (<span class="kwa">char</span>= (<span class="kwa">schar</span> line <span class="num">0</span>) #\&gt;)))
+      (<span class="kwa">if</span> (<span class="kwa">not</span> (<span class="kwa">char</span>= (<span class="kwa">schar</span> line <span class="num">0</span>) #\<span class="slc">;))</span>
+          (<span class="kwa">dotimes</span> (<span class="kwa">char-index</span> (<span class="kwa">length</span> line))
+            (<span class="kwa">vector-push-extend</span> (<span class="kwa">char-upcase</span> (<span class="kwa">the</span> base-char (<span class="kwa">schar</span> line char-index))) data))))
+    (<span class="kwa">coerce</span> data 'simple-base-string)))
+
+(<span class="kwa">defun</span> accumulate-frequencies (<span class="kwa">hashmap</span> sequence offset fragment-length)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">integer</span> <span class="num">0 18</span>) fragment-length)
+           (<span class="kwa">fixnum</span> offset)
+           (<span class="kwa">type</span> (<span class="kwa">simple-base-string</span>) sequence))
+  (<span class="kwa">let</span> ((<span class="kwa">last-sequence-index</span> (<span class="kwa">-</span> (<span class="kwa">length</span> sequence) fragment-length)))
+    (<span class="kwa">do</span> ((<span class="kwa">start</span> offset (+ start fragment-length)))
+        ((&gt; start last-sequence-index))
+      (<span class="kwa">let</span> ((<span class="kwa">fragment</span> (<span class="kwa">subseq</span> sequence start (+ start fragment-length))))
+        (<span class="kwa">setf</span> (<span class="kwa">gethash</span> fragment hashmap) (<span class="kwa">1</span>+ (<span class="kwa">the</span> (<span class="kwa">integer</span> <span class="num">0 999999</span>) (<span class="kwa">gethash</span> fragment hashmap <span class="num">0</span>))))))))
+
+(<span class="kwa">defun</span> calculate-frequencies (<span class="kwa">sequence</span> fragment-length)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">integer</span> <span class="num">0 18</span>) fragment-length))
+  (<span class="kwa">let</span> ((<span class="kwa">hashmap</span> (<span class="kwa">make-hash-table</span> :test #'equal)))
+    (<span class="kwa">dotimes</span> (<span class="kwa">offset</span> fragment-length)
+      (<span class="kwa">accumulate-frequencies</span> hashmap sequence offset fragment-length))
+    hashmap))
+
+(<span class="kwa">defun</span> write-frequencies (<span class="kwa">sequence</span> length)
+  (<span class="kwa">let</span> ((<span class="kwa">sorted-frequencies</span>)
+        (<span class="kwa">sum</span> <span class="num">0</span>))
+    (<span class="kwa">declare</span> (<span class="kwa">fixnum</span> sum))
+    (<span class="kwa">maphash</span> #'(<span class="kwa">lambda</span> (<span class="kwa">k</span> v)
+                 (<span class="kwa">setf</span> sum (+ sum (<span class="kwa">the</span> fixnum v)))
+                 (<span class="kwa">setf</span> sorted-frequencies (<span class="kwa">cons</span> (<span class="kwa">cons</span> k v) sorted-frequencies))) (<span class="kwa">calculate-frequencies</span> sequence length))
+    (<span class="kwa">setf</span> sorted-frequencies (<span class="kwa">sort</span> sorted-frequencies #'(<span class="kwa">lambda</span> (<span class="kwa">v1</span> v2)
+                                                          (<span class="kwa">cond</span> ((&gt; (<span class="kwa">the</span> (<span class="kwa">integer</span> <span class="num">0 999999</span>) (<span class="kwa">cdr</span> v1)) (<span class="kwa">the</span> (<span class="kwa">integer</span> <span class="num">0 999999</span>) (<span class="kwa">cdr</span> v2))) t)
+                                                                ((&lt; (<span class="kwa">the</span> (<span class="kwa">integer</span> <span class="num">0 999999</span>) (<span class="kwa">cdr</span> v1)) (<span class="kwa">the</span> (<span class="kwa">integer</span> <span class="num">0 999999</span>) (<span class="kwa">cdr</span> v2))) nil)
+                                                                (<span class="kwa">t</span> (<span class="kwa">string</span>&lt; (<span class="kwa">car</span> v1) (<span class="kwa">car</span> v2)))))))
+    (<span class="kwa">dolist</span> (<span class="kwa">entry</span> sorted-frequencies) (<span class="kwa">format</span> t <span class="str">&quot;~A ~,3F~%&quot;</span> (<span class="kwa">car</span> entry) (* (/ (<span class="kwa">the</span> (<span class="kwa">integer</span> <span class="num">0 999999</span>) (<span class="kwa">cdr</span> entry)) sum) <span class="num">100.0</span>)))
+    (<span class="kwa">terpri</span>)))
+
+<span class="slc">;;</span>
+<span class="slc">;; Delete this before including in the shootout, test method only.</span>
+<span class="slc">;;</span>
+<span class="slc">;;(defun test-main (filename)</span>
+<span class="slc">;;  (with-open-file (stream filename)</span>
+<span class="slc">;;    (let ((sequence (read-data stream)))</span>
+<span class="slc">;;      (declare (type (simple-array * *) sequence))</span>
+<span class="slc">;;      (dolist (entry '(1 2)) (write-frequencies sequence entry))</span>
+<span class="slc">;;      (dolist (entry '(&quot;GGT&quot; &quot;GGTA&quot; &quot;GGTATT&quot; &quot;GGTATTTTAATT&quot; &quot;GGTATTTTAATTTATAGT&quot;))</span>
+<span class="slc">;;        (declare (type (simple-array * *) entry))</span>
+<span class="slc">;;        (format t &quot;~A~C~A~%&quot; (gethash entry (calculate-frequencies sequence (length entry)) 0) #\Tab entry)))))</span>
+
+(<span class="kwa">defun</span> main ()
+  (<span class="kwa">let</span> ((<span class="kwa">sequence</span> (<span class="kwa">read-data</span> *standard-input*)))
+    (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">simple-array</span> * *) sequence))
+    (<span class="kwa">dolist</span> (<span class="kwa">entry</span> '(<span class="kwa">1</span> <span class="num">2</span>)) (<span class="kwa">write-frequencies</span> sequence entry))
+    (<span class="kwa">dolist</span> (<span class="kwa">entry</span> '(<span class="str">&quot;GGT&quot;</span> <span class="str">&quot;GGTA&quot;</span> <span class="str">&quot;GGTATT&quot;</span> <span class="str">&quot;GGTATTTTAATT&quot;</span> <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>))
+      (<span class="kwa">declare</span> (<span class="kwa">type</span> (<span class="kwa">simple-array</span> * *) entry))
+      (<span class="kwa">format</span> t <span class="str">&quot;~A~C~A~%&quot;</span>
+              (<span class="kwa">gethash</span> entry (<span class="kwa">calculate-frequencies</span> sequence (<span class="kwa">length</span> entry)) <span class="num">0</span>)
+              #\Tab entry))))

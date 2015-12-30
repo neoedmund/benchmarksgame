@@ -1,0 +1,66 @@
+<span class="com">(* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   from Scala version by Otto Bommer, August 2010</span>
+<span class="com">*)</span>
+
+<span class="kwa">let</span> fannkuch n =
+   <span class="kwa">begin</span>
+   <span class="kwa">let</span> perm1 = <span class="kwc">Array</span>.create n <span class="num">0</span> <span class="kwa">in for</span> i = <span class="num">0</span> <span class="kwa">to</span> (n-<span class="num">1</span>) <span class="kwa">do</span> perm1.(i) &lt;- i <span class="kwa">done</span>;
+   <span class="kwa">let</span> perm = <span class="kwc">Array</span>.create n <span class="num">0</span> <span class="kwa">in</span>
+   <span class="kwa">let</span> count = <span class="kwc">Array</span>.create n <span class="num">0</span> <span class="kwa">in</span>
+   <span class="kwa">let</span> flips = <span class="kwb">ref</span> <span class="num">0</span> 
+   <span class="kwa">and</span> maxflips = <span class="kwb">ref</span> <span class="num">0</span> 
+   <span class="kwa">and</span> checksum = <span class="kwb">ref</span> <span class="num">0</span> 
+   <span class="kwa">and</span> nperm = <span class="kwb">ref</span> <span class="num">0</span>
+   <span class="kwa">and</span> r = <span class="kwb">ref</span> n <span class="kwa">in</span>
+   <span class="kwa">while</span> !r &gt; <span class="num">0</span> <span class="kwa">do</span> 
+<span class="com">(*      Printf.printf &quot;perm=&quot;; i := 0; while !i &lt; n do Printf.printf &quot;%d &quot; perm1.(!i); i := !i +1; done; Printf.printf &quot;\n&quot;; *)</span>
+      <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> n-<span class="num">1</span> <span class="kwa">do</span> perm.(i) &lt;- perm1.(i) <span class="kwa">done</span>;
+
+      <span class="kwa">while</span> !r != <span class="num">1</span> <span class="kwa">do</span> count.(!r-<span class="num">1</span>) &lt;- !r; r := !r - <span class="num">1</span>; <span class="kwa">done</span>;
+
+      flips := <span class="num">0</span>;
+      <span class="kwa">let</span> k = <span class="kwb">ref</span> perm.(<span class="num">0</span>) <span class="kwa">in</span>
+      <span class="kwa">while</span> !k != <span class="num">0</span> <span class="kwa">do</span>
+         <span class="kwa">let</span> t = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+         <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> !k / <span class="num">2</span> <span class="kwa">do</span>
+            t := perm.(i);
+            perm.(i) &lt;- perm.(!k - i);
+            perm.(!k - i) &lt;- !t;
+            <span class="kwa">done</span>;
+            
+         k := perm.(<span class="num">0</span>);
+         flips := !flips + <span class="num">1</span>;
+         <span class="kwa">done</span>;
+
+      maxflips := max !maxflips !flips;
+      checksum := !checksum + !flips * (<span class="num">1</span> - (!nperm <span class="kwa">land</span> <span class="num">1</span>) <span class="kwa">lsl</span> <span class="num">1</span>);
+      
+      <span class="kwa">let</span> go = <span class="kwb">ref</span> <span class="kwa">true in</span>
+      <span class="kwa">let</span> t = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">in</span>
+      <span class="kwa">while</span> !go <span class="kwa">do</span>
+         <span class="kwa">if</span> !r == n <span class="kwa">then begin</span> go := <span class="kwa">false</span>; r := <span class="num">0</span>; <span class="kwa">end</span>
+         <span class="kwa">else</span>
+            <span class="kwa">begin</span>
+            t := perm1.(<span class="num">0</span>);
+            <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> !r - <span class="num">1</span> <span class="kwa">do</span> perm1.(i) &lt;- perm1.(i+<span class="num">1</span>) <span class="kwa">done</span>;
+            perm1.(!r) &lt;- !t;
+
+            count.(!r) &lt;- count.(!r) - <span class="num">1</span>;
+            <span class="kwa">if</span> count.(!r) &gt; <span class="num">0</span> <span class="kwa">then</span> go := <span class="kwa">false</span>
+            <span class="kwa">else</span> r := !r + <span class="num">1</span>;
+            <span class="kwa">end</span>
+         <span class="kwa">done</span>;
+
+      nperm := !nperm + <span class="num">1</span>;
+      <span class="kwa">done</span>;
+
+   (!maxflips, !checksum);
+   <span class="kwa">end</span>
+
+<span class="kwa">let</span> _ =
+        <span class="kwa">let</span> n = <span class="kwa">try</span> int_of_string(<span class="kwc">Sys</span>.argv.(<span class="num">1</span>)) <span class="kwa">with</span> _ -&gt; <span class="num">7</span> <span class="kwa">in</span>
+        <span class="kwa">let</span> (maxflips, checksum) = fannkuch n <span class="kwa">in</span>
+        <span class="kwc">Printf</span>.printf <span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">Pfannkuchen(</span><span class="ipl">%d</span><span class="str">) =</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> checksum n maxflips
+

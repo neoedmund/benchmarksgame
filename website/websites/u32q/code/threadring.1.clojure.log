@@ -1,0 +1,18 @@
+
+Tue, 30 Jun 2015 23:42:44 GMT
+
+MAKE:
+mv threadring.clojure threadring.clj
+/usr/local/src/jdk1.8.0_45/bin/java -Dclojure.compile.path=. -cp .:/usr/local/src/clojure/clojure-1.7.0.jar clojure.lang.Compile threadring
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+Compiling threadring to .
+Reflection warning, threadring.clj:37:24 - call to static method valueOf on java.lang.Integer can't be resolved (argument types: unknown).
+1.55s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java -server -XX:+TieredCompilation -XX:+AggressiveOpts  -cp .:/usr/local/src/clojure/clojure-1.7.0.jar threadring 50000000
+
+PROGRAM OUTPUT:
+292
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

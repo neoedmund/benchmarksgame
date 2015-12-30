@@ -1,0 +1,34 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Contributed by Vincent Kraeutler</span>
+<span class="com">   updated for 2.8 by Rex Kerr</span>
+<span class="com">*/</span>
+<span class="kwa">import</span> scala.actors.Actor
+<span class="kwa">import</span> scala.actors.Actor._
+
+<span class="kwa">object</span> threadring {
+
+  <span class="kwa">class</span> <span class="kwd">Thread</span>(<span class="kwa">val</span> label: Int) <span class="kwa">extends</span> Actor {
+    <span class="kwa">var</span> next: Thread = null
+    <span class="kwa">def</span> <span class="kwd">act</span>() { loop { react {
+      <span class="kwa">case</span> <span class="num">0</span> =&gt; <span class="kwd">println</span>(label); System.<span class="kwd">exit</span>(<span class="num">0</span>)
+      <span class="kwa">case</span> n: Int =&gt; next ! n - <span class="num">1</span>
+    }}}
+  }
+
+  <span class="slc">// create the threads</span>
+  <span class="kwa">val</span> ring = Array.<span class="kwd">tabulate</span>(<span class="num">503</span>)(i =&gt; <span class="kwa">new</span> <span class="kwd">Thread</span>(i + <span class="num">1</span>))
+
+  <span class="slc">// hook them up</span>
+  ring.<span class="kwd">foreach</span>(t =&gt; {
+    t.next = <span class="kwd">ring</span>( t.label % ring.length )
+    t.start
+  })
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args : Array[String]) {
+    <span class="kwa">val</span> nHops = <span class="kwd">args</span>(<span class="num">0</span>).toInt
+    <span class="kwd">ring</span>(<span class="num">0</span>) ! nHops
+  }
+
+}

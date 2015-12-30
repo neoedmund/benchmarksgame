@@ -1,0 +1,44 @@
+
+Thu, 10 Dec 2015 17:26:42 GMT
+
+MAKE:
+/usr/local/src/rust-1.5.0/bin/rustc -C opt-level=3 -C target-cpu=core2  chameneosredux.rs -o chameneosredux.rust_run
+chameneosredux.rs:167:14: 167:21 warning: unnecessary parentheses around `for` head expression, #[warn(unused_parens)] on by default
+chameneosredux.rs:167     for _ in (0..nn) {
+                                   ^~~~~~~
+rm chameneosredux.rs
+5.44s to complete and log all make actions
+
+COMMAND LINE:
+./chameneosredux.rust_run 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+ blue red yellow
+4334482 zero
+3600708 zero
+4064810 zero
+ one two zero zero zero zero zero zero
+
+ blue red yellow red yellow blue red yellow red blue
+1222967 zero
+1159575 zero
+1165534 zero
+1300643 zero
+1205675 zero
+1156473 zero
+1292362 zero
+1167856 zero
+1163220 zero
+1165695 zero
+ one two zero zero zero zero zero zero
+

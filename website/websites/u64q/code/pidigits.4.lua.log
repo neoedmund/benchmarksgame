@@ -1,0 +1,15 @@
+
+Thu, 17 Sep 2015 03:35:56 GMT
+
+COMMAND LINE:
+/usr/local/src/lua-5.3.0/bin/lua  pidigits.lua-4.lua 2000
+
+PROGRAM FAILED 
+
+
+PROGRAM OUTPUT:
+
+/usr/local/src/lua-5.3.0/bin/lua: pidigits.lua-4.lua:96: attempt to call a nil value (global 'loadstring')
+stack traceback:
+	pidigits.lua-4.lua:96: in main chunk
+	[C]: in ?

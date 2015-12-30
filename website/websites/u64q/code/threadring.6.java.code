@@ -1,0 +1,82 @@
+<span class="com">/**</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Fabien Le Floc'h</span>
+<span class="com"> *</span>
+<span class="com"> * This implementation cheats by adapting closely to the benchmark specifications. </span>
+<span class="com"> * We use only 1 thread to process messages, we don't use a blocking queue but </span>
+<span class="com"> * instead a linked list. The Nodes don't map directly to a thread, even though</span>
+<span class="com"> * they are processed in a different thread (the consumer). This is probably this kind</span>
+<span class="com"> * of scheme that more advanced languages like Haskell do behind the scenes.</span>
+<span class="com"> * </span>
+<span class="com"> * I say it is a bit cheating because we don't use here a concurrent queue, because </span>
+<span class="com"> * we know everything is processed in 1 thread: the consumer except the first message.</span>
+<span class="com"> */</span>
+
+
+<span class="kwa">import</span> java.util.LinkedList;
+<span class="kwa">import</span> java.util.Queue;
+
+
+<span class="kwa">public class</span> threadring {
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) {
+        Node[] ring = <span class="kwa">new</span> Node[<span class="num">503</span>];
+        <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;ring.length; i++) {
+            ring[i] = <span class="kwa">new</span> <span class="kwd">Node</span>(i+<span class="num">1</span>);
+        }
+        <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;ring.length; i++) {
+            <span class="kwb">int</span> nextIndex = (ring[i].label % ring.length);
+            ring[i].next = ring[nextIndex];            
+        }
+        <span class="kwb">int</span> nHops = Integer.<span class="kwd">parseInt</span>(args[<span class="num">0</span>]);
+        <span class="kwa">new</span> <span class="kwd">Thread</span>(<span class="kwa">new</span> <span class="kwd">Consumer</span>()).<span class="kwd">start</span>();
+        ring[<span class="num">0</span>].<span class="kwd">sendMessage</span>(nHops);
+    }
+
+    <span class="kwa">private static</span> Queue&lt;Node&gt; q = <span class="kwa">new</span> LinkedList&lt;Node&gt;();
+
+    <span class="kwa">static class</span> Consumer <span class="kwa">implements</span> Runnable {
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+            <span class="kwa">while</span> (true) {
+                <span class="kwa">try</span> {
+                    Node node;
+                    node = q.<span class="kwd">poll</span>();
+                    <span class="kwa">if</span> (node == null) {
+                        <span class="slc">//ignore, wait for some element</span>
+                        Thread.<span class="kwd">sleep</span>(<span class="num">100</span>);
+                    } <span class="kwa">else</span> {
+                        node.<span class="kwd">run</span>();
+                    } 
+                } <span class="kwa">catch</span> (InterruptedException e) {
+                    e.<span class="kwd">printStackTrace</span>();
+                }
+            }
+        }
+    }
+    <span class="kwa">static class</span> Node <span class="kwa">implements</span> Runnable {
+        <span class="kwa">private final</span> <span class="kwb">int</span> label;
+        <span class="kwa">private</span> Node next;
+        <span class="kwa">private</span> <span class="kwb">int</span> message;
+
+        <span class="kwa">public</span> <span class="kwd">Node</span>(<span class="kwb">int</span> label) {
+            <span class="kwa">this</span>.label = label;
+        }
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">sendMessage</span>(<span class="kwb">int</span> message) {
+            <span class="kwa">this</span>.message=message;
+            q.<span class="kwd">add</span>(<span class="kwa">this</span>);            
+        }
+
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">run</span>() {
+            <span class="slc">//                System.out.println(&quot;after lock&quot;);</span>
+            <span class="kwa">if</span> (message == <span class="num">0</span>) {
+                System.out.<span class="kwd">println</span>(label);
+                System.<span class="kwd">exit</span>(<span class="num">0</span>);
+            } <span class="kwa">else</span> {
+                next.<span class="kwd">sendMessage</span>(message - <span class="num">1</span>);
+            }
+        }
+    }
+}

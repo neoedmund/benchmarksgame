@@ -1,0 +1,306 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Olof Kraigher</span>
+<span class="com">*/</span>
+<span class="kwa">import</span> scala.collection.mutable.HashMap
+<span class="kwa">import</span> scala.collection.mutable.MutableList
+
+<span class="kwa">object</span> meteor {
+  
+  <span class="kwa">object</span> Direction <span class="kwa">extends</span> Enumeration {
+    <span class="slc">// Handle the hexagonal directions on the meteor board</span>
+    
+    <span class="kwa">type</span> Direction = Value
+    <span class="kwa">val</span> NW, W, SW, SE, E, NE = Value
+
+    <span class="kwa">def</span> <span class="kwd">rotate</span>(dir : Direction, amount : Int) : Direction = 
+      <span class="slc">// Rotate a single direction a specific amount clockwise</span>
+      (dir.id + amount) % maxId
+      
+    <span class="kwa">def</span> <span class="kwd">rotate</span>(piece : Seq[Direction], amount : Int) : Seq[Direction] = 
+      <span class="slc">// Rotate a piece a specific amount clockwise</span>
+      piece.<span class="kwd">map</span>(<span class="kwd">rotate</span>(_, amount))
+    
+    <span class="kwa">def</span> <span class="kwd">flip</span>(dir : Direction) : Direction =
+      <span class="slc">// Flip a direction</span>
+      maxId - <span class="num">1</span> - dir.id
+
+    <span class="kwa">def</span> <span class="kwd">flip</span>(piece : Seq[Direction]) : Seq[Direction] =
+      <span class="slc">// Flip a piece</span>
+      piece.<span class="kwd">map</span>(flip)
+      
+    <span class="kwa">def</span> <span class="kwd">move</span>(dir : Direction, pos : (Int, Int)) : Option[(Int, Int)] = {
+      <span class="slc">// Move a position in a specific direction</span>
+      <span class="kwa">val</span> (x, y) = pos
+      <span class="kwa">val</span> oddy = y % <span class="num">2</span>
+      <span class="kwa">val</span> (nx, ny) = dir match {
+        <span class="kwa">case</span> E  =&gt; (x + <span class="num">1</span>, y)
+        <span class="kwa">case</span> W  =&gt; (x - <span class="num">1</span>, y)
+        <span class="kwa">case</span> NE =&gt; (x + oddy,     y - <span class="num">1</span>)
+        <span class="kwa">case</span> NW =&gt; (x + oddy - <span class="num">1</span>, y - <span class="num">1</span>)
+        <span class="kwa">case</span> SE =&gt; (x + oddy,     y + <span class="num">1</span>)
+        <span class="kwa">case</span> SW =&gt; (x + oddy - <span class="num">1</span>, y + <span class="num">1</span>)
+      }
+      
+      <span class="kwa">if</span> (<span class="num">0</span> &lt;= nx &amp;&amp; nx &lt; <span class="num">5</span> &amp;&amp; <span class="num">0</span> &lt;= ny &amp;&amp; ny &lt; <span class="num">10</span>)
+        <span class="kwd">Some</span>((nx, ny))
+      <span class="kwa">else</span>
+        None
+    }
+    
+    <span class="slc">// Convenient implicit conversion</span>
+    implicit <span class="kwa">def</span> <span class="kwd">DirectionToInt</span>(i : Int) : Direction = <span class="kwd">Direction</span>(i)
+  }
+
+  
+  <span class="kwa">object</span> MaskTools {
+    <span class="slc">// Methods to manipulate bit masks</span>
+    
+    <span class="kwa">import</span> Direction._
+    
+    <span class="kwa">val</span> even = (
+             <span class="num">0x1f</span>L 
+          | (<span class="num">0x1f</span>L &lt;&lt; <span class="num">10</span>) 
+          | (<span class="num">0x1f</span>L &lt;&lt; <span class="num">20</span>) 
+          | (<span class="num">0x1f</span>L &lt;&lt; <span class="num">30</span>) 
+          | (<span class="num">0x1f</span>L &lt;&lt; <span class="num">40</span>))
+    
+    <span class="kwa">val</span> odd = even &lt;&lt; <span class="num">5</span>
+    <span class="kwa">val</span> full = (<span class="num">1L</span> &lt;&lt; <span class="num">50</span>) - <span class="num">1</span>
+    <span class="kwa">val</span> west = <span class="num">0x210842108421</span>L
+    <span class="kwa">val</span> east = west &lt;&lt; <span class="num">4</span>
+          
+    <span class="kwa">def</span> <span class="kwd">firstZero</span>(mask : Long, idx : Int = <span class="num">0</span>) : Int = {
+      <span class="slc">// Find the position of the first zero bit in mask</span>
+      <span class="kwa">var</span> i = idx
+      <span class="kwa">while</span> (((mask &gt;&gt; i) &amp; <span class="num">1L</span>) == <span class="num">1L</span> &amp;&amp; i &lt;= <span class="num">63</span>) {
+        i += <span class="num">1</span>
+      }
+      <span class="kwa">return</span> i
+    } 
+       
+    <span class="kwa">def</span> <span class="kwd">expand</span>(mask : Long) : Long = {
+      <span class="slc">// Expand mask by growing it in every direction</span>
+      <span class="kwa">val</span> evenMask = mask &amp; even
+      <span class="kwa">val</span> oddMask = mask &amp; odd
+      <span class="kwa">val</span> toE = (mask &amp; ~east) &lt;&lt; <span class="num">1</span>
+      <span class="kwa">val</span> toW = (mask &amp; ~west) &gt;&gt; <span class="num">1</span>
+      <span class="kwa">val</span> toNW = (oddMask &gt;&gt; <span class="num">5</span>)  | ((evenMask &amp; ~west) &gt;&gt; <span class="num">6</span>)
+      <span class="kwa">val</span> toNE = (evenMask &gt;&gt; <span class="num">5</span>) | ((oddMask &amp; ~east) &gt;&gt; <span class="num">4</span>)
+      <span class="kwa">val</span> toSW = (oddMask &lt;&lt; <span class="num">5</span>)  | ((evenMask &amp; ~west) &lt;&lt; <span class="num">4</span>)
+      <span class="kwa">val</span> toSE = (evenMask &lt;&lt; <span class="num">5</span>) | ((oddMask &amp; ~east) &lt;&lt; <span class="num">6</span>)
+      <span class="kwa">return</span> (mask | toE | toW | toNW | toNE | toSW | toSE) &amp; full
+    }
+    
+    <span class="kwa">def</span> <span class="kwd">floodFill</span>(mask : Long, seed : Long) : Long = {
+      <span class="com">/* Flood fill starting at the seed, the mask is</span>
+<span class="com">       * used to as the boundary </span>
+<span class="com">       */</span>
+      <span class="kwa">var</span> region = <span class="num">0L</span>
+      <span class="kwa">var</span> growth = seed
+  
+      <span class="kwa">do</span> {
+        region = growth
+        growth = <span class="kwd">expand</span>(region) &amp; ~mask
+      } <span class="kwa">while</span> (growth != region)
+        
+      growth
+    }
+    
+    <span class="kwa">def</span> <span class="kwd">bitCount</span>(mask : Long) : Int = {
+      <span class="slc">// Count the number of 1:s in mask</span>
+      <span class="kwa">var</span> count = <span class="num">0</span>
+      <span class="kwa">for</span> (idx &lt;- <span class="num">0</span> until <span class="num">50</span>)
+        <span class="kwa">if</span> (((mask &gt;&gt; idx) &amp; <span class="num">1L</span>) != <span class="num">0L</span>)
+          count += <span class="num">1</span>
+      <span class="kwa">return</span> count
+    }
+    
+    <span class="kwa">def</span> <span class="kwd">noIslands</span>(mask : Long) : Boolean = {
+      <span class="slc">// Check that the mask contains no islands</span>
+      <span class="slc">// of a size not divisible by 5</span>
+      <span class="kwa">var</span> m = mask
+      <span class="kwa">var</span> lastZero = -<span class="num">1</span>
+      
+      <span class="kwa">while</span> (m != full) {
+        lastZero = <span class="kwd">firstZero</span>(m, lastZero+<span class="num">1</span>)
+        <span class="kwa">val</span> growth = <span class="kwd">floodFill</span>(mask, <span class="num">1L</span> &lt;&lt; lastZero)
+        
+        <span class="kwa">if</span> (<span class="kwd">bitCount</span>(growth) % <span class="num">5</span> != <span class="num">0</span>) {
+          <span class="kwa">return</span> false
+        }
+        
+        m |= growth
+      }
+      <span class="kwa">return</span> true
+    }
+    
+    <span class="kwa">def</span> <span class="kwd">reverse</span>(mask : Long) : Long = {
+      <span class="slc">// Bit reverse mask of 50 bits </span>
+      <span class="kwa">var</span> rev = <span class="num">0L</span>
+      <span class="kwa">for</span> (idx &lt;- <span class="num">0</span> until <span class="num">50</span>) {
+        rev |= ((mask &gt;&gt; idx) &amp; <span class="num">1</span>) &lt;&lt; (<span class="num">49</span> - idx)
+      }
+      <span class="kwa">return</span> rev
+    }
+  }
+  
+  <span class="kwa">object</span> Pieces {
+    <span class="com">/* Contains definition of all pieces</span>
+<span class="com">     * Converts pieces into masks</span>
+<span class="com">     */</span>
+    
+    <span class="kwa">import</span> MaskTools._
+    <span class="kwa">import</span> Direction._
+    
+    <span class="kwa">val</span> pieces = <span class="kwd">Vector</span>(
+        <span class="kwd">List</span>(E,  E,  E,  SE),
+        <span class="kwd">List</span>(SE, SW, W,  SW),
+        <span class="kwd">List</span>(W,  W,  SW, SE),
+        <span class="kwd">List</span>(E,  E,  SW, SE),
+        <span class="kwd">List</span>(NW, W,  NW, SE, SW),
+        <span class="kwd">List</span>(E,  E,  NE, W),
+        <span class="kwd">List</span>(NW, NE, NE, W),
+        <span class="kwd">List</span>(NE, SE, E,  NE),
+        <span class="kwd">List</span>(SE, SE, E,  SE),
+        <span class="kwd">List</span>(E,  NW, NW, NW))   
+    
+    <span class="kwa">def</span> <span class="kwd">growToMask</span>(
+             piece : Seq[Direction], 
+             pos   : (Int, Int), 
+             accum : Long = <span class="num">0L</span>) 
+                   : Option[Long] = {
+      <span class="slc">// Grow a piece into a bitmask from a starting position</span>
+      <span class="kwa">val</span> (x,y) = pos;
+      <span class="kwa">val</span> bit = (<span class="num">1L</span> &lt;&lt; (<span class="num">5</span>*y + x))
+  
+      <span class="kwa">if</span> (piece.length == <span class="num">0</span>)
+        <span class="kwd">Some</span>(accum | bit)
+      <span class="kwa">else</span>
+        <span class="kwd">move</span>(piece.head, pos) match {
+          <span class="kwa">case</span> <span class="kwd">Some</span>(newPos) =&gt; <span class="kwd">growToMask</span>(piece.tail, newPos, accum | bit)
+          <span class="kwa">case</span> None =&gt; None
+       }
+    }
+  
+    
+    <span class="kwa">def</span> <span class="kwd">allMasksOfPiece</span>(piece : Seq[Direction], rotations : Int) = {
+      <span class="com">/* Create all rotated/flipped/transposed masks of a piece</span>
+<span class="com">       * returns vector ordered by the first 1-bit position.</span>
+<span class="com">       */</span>
+      <span class="kwa">val</span> all = <span class="kwa">for</span> (doflip &lt;- <span class="kwd">List</span>(false, true);
+                     r &lt;- <span class="num">0</span> until rotations;
+                     x &lt;- <span class="num">0</span> until <span class="num">5</span>;
+                     y &lt;- <span class="num">0</span> until <span class="num">10</span>) <span class="kwa">yield</span> {
+        <span class="kwd">growToMask</span>(<span class="kwd">rotate</span>(<span class="kwa">if</span> (doflip) <span class="kwd">flip</span>(piece) <span class="kwa">else</span> piece, r), (x,y))
+      } 
+      
+      <span class="kwa">val</span> some = all.collect {<span class="kwa">case</span> <span class="kwd">Some</span>(mask) <span class="kwa">if</span> <span class="kwd">noIslands</span>(mask) =&gt; mask}
+      <span class="kwa">val</span> byFirstOne = some.<span class="kwd">groupBy</span>(mask =&gt; <span class="kwd">firstZero</span>(~mask))
+      Vector.<span class="kwd">tabulate</span>(<span class="num">50</span>)(idx =&gt; byFirstOne.<span class="kwd">getOrElse</span>(idx, <span class="kwd">Vector</span>()))
+    }
+    
+    <span class="kwa">def</span> <span class="kwd">allMasksOfColor</span>(color : Int) = 
+      <span class="com">/* Create all masks of color</span>
+<span class="com">       * The masks for color 5 is only rotated by half</span>
+<span class="com">       * producing only half the solutions where the other</span>
+<span class="com">       * half is found by reversing the first half</span>
+<span class="com">       */</span>
+      <span class="kwd">allMasksOfPiece</span>(<span class="kwd">pieces</span>(color), (<span class="kwa">if</span> (color == <span class="num">5</span>) <span class="num">3</span> <span class="kwa">else</span> <span class="num">6</span>)) 
+      
+    <span class="kwa">val</span> masksByColor = Vector.<span class="kwd">tabulate</span>(pieces.size)(allMasksOfColor)
+  }
+  
+  <span class="kwa">object</span> Solver {
+    <span class="slc">// Solves the meteor puzzle</span>
+    <span class="kwa">import</span> MaskTools.{firstZero, reverse}
+    
+    <span class="kwa">def</span> <span class="kwd">solve</span>() : Seq[String] = {
+      <span class="slc">// Solve the meteor puzzle</span>
+      
+      <span class="slc">// List of found solutions</span>
+      <span class="kwa">val</span> solutions : MutableList[String] = <span class="kwd">MutableList</span>()
+      
+      <span class="slc">// Partial solution used during recursive search</span>
+      <span class="kwa">var</span> partial : HashMap[Int, Long] = <span class="kwa">new</span> <span class="kwd">HashMap</span>()
+      
+      <span class="kwa">def</span> <span class="kwd">solve</span>(acc       : Long = <span class="num">0L</span>, 
+                lastZero  : Int = <span class="num">0</span>, 
+                remaining : Int = <span class="num">0x3ff</span>) {
+        <span class="slc">// Recursive solution search</span>
+       
+        <span class="kwa">val</span> idx = <span class="kwd">firstZero</span>(acc, lastZero)
+        
+        <span class="kwa">if</span> (remaining == <span class="num">0</span>) { 
+          solutions += <span class="kwd">show</span>(partial)
+          solutions += <span class="kwd">show</span>(partial.<span class="kwd">mapValues</span>(reverse))
+          <span class="kwa">return</span>
+        }
+        
+        <span class="kwa">var</span> color = <span class="num">0</span>
+        
+        <span class="kwa">while</span> (color &lt; <span class="num">10</span>) {
+          <span class="kwa">val</span> cmask = <span class="num">1</span> &lt;&lt; color         
+          <span class="kwa">if</span> ((remaining &amp; cmask) != <span class="num">0</span>) {
+            <span class="kwa">for</span> (mask  &lt;- Pieces.<span class="kwd">masksByColor</span>(color)(idx))
+              <span class="kwa">if</span> ((acc &amp; mask) == <span class="num">0L</span>) {
+                <span class="kwd">partial</span>(color) = mask
+                <span class="kwd">solve</span>(acc | mask, idx + <span class="num">1</span>, remaining ^ cmask)
+              }
+          }
+          color += <span class="num">1</span>
+        }
+          
+      }
+      <span class="kwd">solve</span>()
+      <span class="kwa">return</span> solutions
+    }
+     
+    <span class="kwa">def</span> <span class="kwd">show</span>(solution : collection.Map[Int, Long]) : String = {
+      <span class="slc">// Create a string representation of a solution</span>
+    
+      <span class="kwa">val</span> board : Array[Array[Char]] = Array.<span class="kwd">fill</span>(<span class="num">10</span>, <span class="num">5</span>)(<span class="str">'-'</span>)
+    
+      <span class="kwa">for</span> (color &lt;- <span class="num">0</span> to <span class="num">9</span>) { 
+        
+        <span class="kwa">val</span> mask = solution.<span class="kwd">getOrElse</span>(color, <span class="num">0L</span>)
+        <span class="kwa">val</span> colorChar = (color + <span class="str">'0'</span>).toChar
+        
+        <span class="kwa">for</span> (x &lt;- <span class="num">0</span> until <span class="num">5</span>; y &lt;- <span class="num">0</span> until <span class="num">10</span>) {
+          <span class="kwa">val</span> pos = <span class="num">1L</span> &lt;&lt; (<span class="num">5</span>*y + x)
+        
+          <span class="kwa">if</span> ((mask &amp; pos) != <span class="num">0</span>) 
+            <span class="kwd">board</span>(y)(x) = colorChar
+          
+        }
+      }
+      
+      <span class="slc">// Indent odd rows</span>
+      <span class="kwa">def</span> <span class="kwd">indent</span>(y : Int) = 
+        <span class="kwa">if</span> (y % <span class="num">2</span> == <span class="num">1</span>) <span class="str">&quot; &quot;</span> <span class="kwa">else</span> <span class="str">&quot;&quot;</span>
+      
+      <span class="slc">// Show a row</span>
+      <span class="kwa">def</span> <span class="kwd">showRow</span>(y : Int) = 
+        <span class="kwd">board</span>(y).<span class="kwd">foldLeft</span>(<span class="kwd">indent</span>(y))(_ + _ + <span class="str">&quot; &quot;</span>)
+  
+      (<span class="num">0</span> until <span class="num">10</span>).<span class="kwd">foldLeft</span>(<span class="str">&quot;&quot;</span>)((acc, y) =&gt; acc + <span class="kwd">showRow</span>(y) + <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)
+    }
+ 
+  }
+  
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]): Unit = {
+      <span class="kwa">val</span> allSolutions = Solver.<span class="kwd">solve</span>()
+      <span class="kwa">val</span> howMany = {
+        <span class="kwa">if</span> (args.length == <span class="num">1</span>)
+          args.first.toInt
+        <span class="kwa">else</span>
+          allSolutions.length
+      }
+      <span class="kwa">val</span> solutions = allSolutions.<span class="kwd">take</span>(howMany)
+      <span class="kwd">println</span>(solutions.length + <span class="str">&quot; solutions found</span><span class="esc">\n</span><span class="str">&quot;</span>)
+      <span class="kwd">println</span>(solutions.min)
+      <span class="kwd">println</span>(solutions.max)
+  }
+
+}

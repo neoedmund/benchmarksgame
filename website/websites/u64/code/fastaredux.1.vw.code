@@ -1,0 +1,282 @@
+<span class="com">&quot;* The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">    contributed by Nicolas Cellier *&quot;</span>!
+
+
+<span class="kwc">Smalltalk</span> <span class="kwb">defineClass:</span> <span class="kwd">#RepeatStreamRedux</span>
+	<span class="kwb">superclass:</span> #{<span class="kwc">Core</span>.<span class="kwc">ReadStream</span>}
+	<span class="kwb">indexedType:</span> <span class="kwd">#none</span>
+	<span class="kwb">private:</span> <span class="kwa">false</span>
+	<span class="kwb">instanceVariableNames:</span> <span class="str">'repeatPtr repeatLimit '</span>
+	<span class="kwb">classInstanceVariableNames:</span> <span class="str">''</span>
+	<span class="kwb">imports:</span> <span class="str">''</span>
+	<span class="kwb">category:</span> <span class="str">''</span>!
+
+<span class="kwc">Smalltalk</span> <span class="kwb">defineClass:</span> <span class="kwd">#RandomStreamRedux</span>
+	<span class="kwb">superclass:</span> #{<span class="kwc">Smalltalk</span>.<span class="kwc">RepeatStreamRedux</span>}
+	<span class="kwb">indexedType:</span> <span class="kwd">#none</span>
+	<span class="kwb">private:</span> <span class="kwa">false</span>
+	<span class="kwb">instanceVariableNames:</span> <span class="str">'random percentages '</span>
+	<span class="kwb">classInstanceVariableNames:</span> <span class="str">''</span>
+	<span class="kwb">imports:</span> <span class="str">''</span>
+	<span class="kwb">category:</span> <span class="str">''</span>!
+
+<span class="kwc">Smalltalk</span> <span class="kwb">defineClass:</span> <span class="kwd">#FastaReduxEnd</span>
+	<span class="kwb">superclass:</span> #{<span class="kwc">Core</span>.<span class="kwc">Exception</span>}
+	<span class="kwb">indexedType:</span> <span class="kwd">#none</span>
+	<span class="kwb">private:</span> <span class="kwa">false</span>
+	<span class="kwb">instanceVariableNames:</span> <span class="str">''</span>
+	<span class="kwb">classInstanceVariableNames:</span> <span class="str">''</span>
+	<span class="kwb">imports:</span> <span class="str">''</span>
+	<span class="kwb">category:</span> <span class="str">''</span>!
+
+<span class="kwc">Smalltalk</span> <span class="kwb">defineClass:</span> <span class="kwd">#RandomNumberRedux</span>
+	<span class="kwb">superclass:</span> #{<span class="kwc">Core</span>.<span class="kwc">Object</span>}
+	<span class="kwb">indexedType:</span> <span class="kwd">#none</span>
+	<span class="kwb">private:</span> <span class="kwa">false</span>
+	<span class="kwb">instanceVariableNames:</span> <span class="str">'seed scale multiplier increment modulus seedMax '</span>
+	<span class="kwb">classInstanceVariableNames:</span> <span class="str">''</span>
+	<span class="kwb">imports:</span> <span class="str">''</span>
+	<span class="kwb">category:</span> <span class="str">''</span>!
+
+
+<span class="kwc">Smalltalk</span>.<span class="kwc">RandomStreamRedux</span> <span class="kwb">defineSharedVariable:</span> <span class="kwd">#LookupSize</span>
+	<span class="kwb">private:</span> <span class="kwa">false</span>
+	<span class="kwb">constant:</span> <span class="kwa">false</span>
+	<span class="kwb">category:</span> <span class="str">'As yet unclassified'</span>
+	<span class="kwb">initializer:</span> <span class="kwa">nil</span>!
+
+
+
+<span class="kwc">Smalltalk</span>.<span class="kwc">RandomNumberRedux</span> <span class="kwb">defineSharedVariable:</span> <span class="kwd">#FModulus</span>
+	<span class="kwb">private:</span> <span class="kwa">false</span>
+	<span class="kwb">constant:</span> <span class="kwa">false</span>
+	<span class="kwb">category:</span> <span class="str">'As yet unclassified'</span>
+	<span class="kwb">initializer:</span> <span class="kwa">nil</span>!
+
+
+<span class="kwc">Smalltalk</span>.<span class="kwc">RandomNumberRedux</span> <span class="kwb">defineSharedVariable:</span> <span class="kwd">#Increment</span>
+	<span class="kwb">private:</span> <span class="kwa">false</span>
+	<span class="kwb">constant:</span> <span class="kwa">false</span>
+	<span class="kwb">category:</span> <span class="str">'As yet unclassified'</span>
+	<span class="kwb">initializer:</span> <span class="kwa">nil</span>!
+
+
+<span class="kwc">Smalltalk</span>.<span class="kwc">RandomNumberRedux</span> <span class="kwb">defineSharedVariable:</span> <span class="kwd">#Modulus</span>
+	<span class="kwb">private:</span> <span class="kwa">false</span>
+	<span class="kwb">constant:</span> <span class="kwa">false</span>
+	<span class="kwb">category:</span> <span class="str">'As yet unclassified'</span>
+	<span class="kwb">initializer:</span> <span class="kwa">nil</span>!
+
+
+<span class="kwc">Smalltalk</span>.<span class="kwc">RandomNumberRedux</span> <span class="kwb">defineSharedVariable:</span> <span class="kwd">#Multiplier</span>
+	<span class="kwb">private:</span> <span class="kwa">false</span>
+	<span class="kwb">constant:</span> <span class="kwa">false</span>
+	<span class="kwb">category:</span> <span class="str">'As yet unclassified'</span>
+	<span class="kwb">initializer:</span> <span class="kwa">nil</span>!
+
+
+<span class="kwc">Smalltalk</span>.<span class="kwc">RandomNumberRedux</span> <span class="kwb">defineSharedVariable:</span> <span class="kwd">#NextSeedMax</span>
+	<span class="kwb">private:</span> <span class="kwa">false</span>
+	<span class="kwb">constant:</span> <span class="kwa">false</span>
+	<span class="kwb">category:</span> <span class="str">'As yet unclassified'</span>
+	<span class="kwb">initializer:</span> <span class="kwa">nil</span>!
+
+
+<span class="kwc">Smalltalk</span>.<span class="kwc">RandomNumberRedux</span> <span class="kwb">defineSharedVariable:</span> <span class="kwd">#SeedMax</span>
+	<span class="kwb">private:</span> <span class="kwa">false</span>
+	<span class="kwb">constant:</span> <span class="kwa">false</span>
+	<span class="kwb">category:</span> <span class="str">'As yet unclassified'</span>
+	<span class="kwb">initializer:</span> <span class="kwa">nil</span>!
+
+
+
+!<span class="kwc">RepeatStreamRedux</span> class <span class="kwb">methodsFor:</span> <span class="str">'instance creation'</span>!
+
+<span class="kwb">to:</span> anInteger <span class="kwb">on:</span> aCollection
+   ^(<span class="kwa">super</span> <span class="kwb">on:</span> aCollection) <span class="kwb">to:</span> anInteger! !
+
+
+!<span class="kwc">RepeatStreamRedux</span> <span class="kwb">methodsFor:</span> <span class="str">'accessing'</span>!
+
+<span class="kwb">next</span>
+   (repeatPtr :<span class="kwb">=</span> repeatPtr <span class="kwb">+</span> <span class="num">1</span>) &gt; repeatLimit <span class="kwb">ifTrue:</span> [<span class="kwc">FastaReduxEnd</span> raise].
+   position <span class="kwb">&gt;=</span> readLimit <span class="kwb">ifTrue:</span> [ <span class="kwa">self</span> <span class="kwb">position:</span> <span class="num">0</span> ].
+   ^collection <span class="kwb">at:</span> (position :<span class="kwb">=</span> position <span class="kwb">+</span> <span class="num">1</span>)! !
+
+!<span class="kwc">RepeatStreamRedux</span> <span class="kwb">methodsFor:</span> <span class="str">'initialize-release'</span>!
+
+<span class="kwb">to:</span> anInteger
+   repeatPtr :<span class="kwb">=</span> <span class="num">0</span>.
+   repeatLimit :<span class="kwb">=</span> anInteger! !
+
+
+!<span class="kwc">RandomStreamRedux</span> class <span class="kwb">methodsFor:</span> <span class="str">'class initialization'</span>!
+
+<span class="kwb">initialize</span>
+	<span class="kwc">LookupSize</span> :<span class="kwb">=</span> <span class="num">4</span> <span class="kwb">*</span> <span class="num">1024</span>! !
+
+
+!<span class="kwc">RandomStreamRedux</span> <span class="kwb">methodsFor:</span> <span class="str">'initialize-release'</span>!
+
+<span class="kwb">cumulatedPercentagesFor:</span> aCollection <span class="kwb">scale:</span> scale
+   <span class="kwd">| size cp cumulatedPercentages |</span>
+   size :<span class="kwb">=</span> aCollection size.
+   cumulatedPercentages :<span class="kwb">=</span> <span class="kwc">Array</span> <span class="kwb">new:</span> size.
+   cp :<span class="kwb">=</span> <span class="num">0.0</span>d0.
+   <span class="num">1</span> <span class="kwb">to:</span> size <span class="kwb">do:</span> [<span class="kwd">:i</span>|
+      cumulatedPercentages <span class="kwb">at:</span> i <span class="kwb">put:</span> (cp :<span class="kwb">=</span> cp <span class="kwb">+</span> (aCollection <span class="kwb">at:</span> i) last) <span class="kwb">*</span> scale.
+   ].
+   cumulatedPercentages <span class="kwb">at:</span> size <span class="kwb">put:</span> scale.
+  ^cumulatedPercentages!
+
+<span class="kwb">on:</span> aCollection
+   <span class="kwd">| size j cumulatedPercentages scale |</span>
+   repeatPtr :<span class="kwb">=</span> <span class="num">0</span>.
+   size :<span class="kwb">=</span> <span class="kwc">LookupSize</span>.
+   scale :<span class="kwb">=</span> size <span class="kwb">-</span> <span class="num">1</span>.
+   random :<span class="kwb">=</span> <span class="kwc">RandomNumberRedux</span> <span class="kwb">to:</span> scale.
+   cumulatedPercentages :<span class="kwb">=</span> <span class="kwa">self</span> <span class="kwb">cumulatedPercentagesFor:</span> aCollection <span class="kwb">scale:</span> scale.
+   percentages :<span class="kwb">=</span> <span class="kwc">Array</span> <span class="kwb">new:</span> size.
+   collection :<span class="kwb">=</span> <span class="kwc">Array</span> <span class="kwb">new:</span> size.
+   j :<span class="kwb">=</span> <span class="num">1</span>.
+   <span class="num">1</span> <span class="kwb">to:</span> size <span class="kwb">do:</span> [<span class="kwd">:i</span> |
+      [(cumulatedPercentages <span class="kwb">at:</span> j) &lt; (i <span class="kwb">-</span> <span class="num">1</span>)] <span class="kwb">whileTrue:</span> [j :<span class="kwb">=</span> j <span class="kwb">+</span> <span class="num">1</span>].
+      collection <span class="kwb">at:</span> i <span class="kwb">put:</span> (aCollection <span class="kwb">at:</span> j) first.
+      percentages <span class="kwb">at:</span> i <span class="kwb">put:</span> (cumulatedPercentages <span class="kwb">at:</span> j).
+   ].! !
+
+!<span class="kwc">RandomStreamRedux</span> <span class="kwb">methodsFor:</span> <span class="str">'accessing'</span>!
+
+<span class="kwb">random:</span> aRandomNumber
+   random :<span class="kwb">=</span> aRandomNumber!
+
+<span class="kwb">next</span>
+   <span class="kwd">| r i |</span>
+   (repeatPtr :<span class="kwb">=</span> repeatPtr <span class="kwb">+</span> <span class="num">1</span>) &gt; repeatLimit <span class="kwb">ifTrue:</span> [<span class="kwc">FastaReduxEnd</span> raise].
+   r :<span class="kwb">=</span> random next.
+   i :<span class="kwb">=</span> r truncated.
+   [r &gt; (percentages <span class="kwb">at:</span> (i :<span class="kwb">=</span> i <span class="kwb">+</span> <span class="num">1</span>))] whileTrue.
+   ^collection <span class="kwb">at:</span> i!
+
+<span class="kwb">random</span>
+	^random! !
+
+
+!<span class="kwc">RandomNumberRedux</span> class <span class="kwb">methodsFor:</span> <span class="str">'class initialization'</span>!
+
+<span class="kwb">initialize</span>
+   <span class="kwc">FModulus</span> :<span class="kwb">=</span> <span class="num">139968.0</span>d0.
+   <span class="kwc">Increment</span> :<span class="kwb">=</span> <span class="num">29573</span>.
+   <span class="kwc">Modulus</span> :<span class="kwb">=</span> <span class="num">139968</span>.
+   <span class="kwc">Multiplier</span> :<span class="kwb">=</span> <span class="num">3877</span>.
+   <span class="kwc">SeedMax</span> :<span class="kwb">=</span> <span class="kwc">SmallInteger</span> maxVal <span class="kwb">-</span> <span class="kwc">Increment</span> <span class="kwb">//</span> <span class="kwc">Multiplier</span>.
+   <span class="kwc">NextSeedMax</span> :<span class="kwb">=</span> <span class="kwc">SeedMax</span> <span class="kwb">*</span> <span class="kwc">Multiplier</span> <span class="kwb">+</span> <span class="kwc">Increment</span> <span class="esc">\\</span> <span class="kwc">Modulus</span>.! !
+
+!<span class="kwc">RandomNumberRedux</span> class <span class="kwb">methodsFor:</span> <span class="str">'instance creation'</span>!
+
+<span class="kwb">to:</span> anInteger
+   ^<span class="kwa">self</span> basicNew <span class="kwb">to:</span> anInteger! !
+
+
+!<span class="kwc">RandomNumberRedux</span> <span class="kwb">methodsFor:</span> <span class="str">'private'</span>!
+
+<span class="kwb">to:</span> anInteger
+   seed :<span class="kwb">=</span> <span class="num">42</span>.
+   scale :<span class="kwb">=</span> anInteger <span class="kwb">/</span> <span class="kwc">FModulus</span>.
+   multiplier :<span class="kwb">=</span> <span class="kwc">Multiplier</span>.
+   increment :<span class="kwb">=</span> <span class="kwc">Increment</span>.
+   modulus :<span class="kwb">=</span> <span class="kwc">Modulus</span>.
+   seedMax :<span class="kwb">=</span> <span class="kwc">SeedMax</span>! !
+
+!<span class="kwc">RandomNumberRedux</span> <span class="kwb">methodsFor:</span> <span class="str">'accessing'</span>!
+
+<span class="kwb">next</span>
+   ^seed &gt; seedMax
+      <span class="kwb">ifTrue:</span> [scale <span class="kwb">*</span> (seed :<span class="kwb">=</span> seed <span class="kwb">-</span> seedMax <span class="kwb">*</span> multiplier <span class="kwb">+</span> <span class="kwc">NextSeedMax</span> <span class="esc">\\</span> modulus)]
+      <span class="kwb">ifFalse:</span> [scale <span class="kwb">*</span> (seed :<span class="kwb">=</span> seed <span class="kwb">*</span> multiplier <span class="kwb">+</span> increment <span class="esc">\\</span> modulus)]! !
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmark scripts'</span>!
+
+<span class="kwb">fastaredux</span>
+   <span class="kwa">self</span> <span class="kwb">fastaRedux:</span> <span class="kwa">self</span> arg <span class="kwb">to:</span> <span class="kwa">self</span> stdoutSpecial.
+   ^<span class="str">''</span>! !
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+
+<span class="kwb">writeFastaRedux:</span> aString <span class="kwb">from:</span> inStream <span class="kwb">to:</span> outStream <span class="kwb">lineLength:</span> lineLength
+   <span class="kwd">| i |</span>
+   outStream <span class="kwb">nextPut:</span> $&gt;; <span class="kwb">nextPutAll:</span> aString; nl.
+   i :<span class="kwb">=</span> <span class="num">0</span>.
+  [ [
+      outStream <span class="kwb">nextPut:</span> inStream next.
+     (i :<span class="kwb">=</span> i <span class="kwb">+</span> <span class="num">1</span>) <span class="kwb">==</span> lineLength <span class="kwb">ifTrue:</span> [outStream nl. i :<span class="kwb">=</span> <span class="num">0</span>]
+   ] repeat ]
+         <span class="kwb">on:</span> <span class="kwc">FastaReduxEnd</span> <span class="kwb">do:</span> [<span class="kwd">:ignoreThisException</span> | ].
+   i <span class="kwb">=</span> <span class="num">0</span> <span class="kwb">ifFalse:</span> [outStream nl]!
+
+<span class="kwb">fastaRedux:</span> n <span class="kwb">to:</span> out
+   <span class="kwd">| lineLength iub sapiens |</span>
+   lineLength :<span class="kwb">=</span> <span class="num">60</span>.
+   <span class="kwa">self</span>
+      <span class="kwb">writeFastaRedux:</span> <span class="str">'ONE Homo sapiens alu'</span>
+      <span class="kwb">from:</span>
+         ( <span class="kwc">RepeatStreamRedux</span>
+            <span class="kwb">to:</span> n<span class="kwb">*</span><span class="num">2</span>
+            <span class="kwb">on:</span><span class="str">'GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG'</span>,
+               <span class="str">'GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA'</span>,
+               <span class="str">'CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT'</span>,
+               <span class="str">'ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA'</span>,
+               <span class="str">'GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG'</span>,
+               <span class="str">'AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC'</span>,
+               <span class="str">'AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA'</span> )
+      <span class="kwb">to:</span> out
+      <span class="kwb">lineLength:</span> lineLength.
+
+   iub :<span class="kwb">=</span>  <span class="kwc">RandomStreamRedux</span>
+            <span class="kwb">to:</span> n<span class="kwb">*</span><span class="num">3</span>
+            <span class="kwb">on:</span> #(   #(<span class="num">$a 0.27</span>d0)
+                  #(<span class="num">$c 0.12</span>d0)
+                  #(<span class="num">$g 0.12</span>d0)
+                  #(<span class="num">$t 0.27</span>d0)
+
+                  #(<span class="num">$B 0.02</span>d0)
+                  #(<span class="num">$D 0.02</span>d0)
+                  #(<span class="num">$H 0.02</span>d0)
+                  #(<span class="num">$K 0.02</span>d0)
+                  #(<span class="num">$M 0.02</span>d0)
+                  #(<span class="num">$N 0.02</span>d0)
+                  #(<span class="num">$R 0.02</span>d0)
+                  #(<span class="num">$S 0.02</span>d0)
+                  #(<span class="num">$V 0.02</span>d0)
+                  #(<span class="num">$W 0.02</span>d0)
+                  #(<span class="num">$Y 0.02</span>d0)).
+   sapiens :<span class="kwb">=</span>  <span class="kwc">RandomStreamRedux</span>
+            <span class="kwb">to:</span> n<span class="kwb">*</span><span class="num">5</span>
+            <span class="kwb">on:</span> #(   #(<span class="num">$a 0.3029549426680</span>d0)
+                  #(<span class="num">$c 0.1979883004921</span>d0)
+                  #(<span class="num">$g 0.1975473066391</span>d0)
+                  #(<span class="num">$t 0.3015094502008</span>d0)).
+
+   sapiens <span class="kwb">random:</span> iub random. <span class="com">&quot;Share random sequence&quot;</span>
+
+   <span class="kwa">self</span>
+      <span class="kwb">writeFastaRedux:</span> <span class="str">'TWO IUB ambiguity codes'</span>
+      <span class="kwb">from:</span> iub
+      <span class="kwb">to:</span> out
+      <span class="kwb">lineLength:</span> lineLength.
+
+   <span class="kwa">self</span>
+      <span class="kwb">writeFastaRedux:</span> <span class="str">'THREE Homo sapiens frequency'</span>
+      <span class="kwb">from:</span> sapiens
+      <span class="kwb">to:</span> out
+      <span class="kwb">lineLength:</span> lineLength.
+
+   out flush.! !
+
+
+
+#{<span class="kwc">RandomStreamRedux</span>} initialize!
+
+#{<span class="kwc">RandomNumberRedux</span>} initialize!

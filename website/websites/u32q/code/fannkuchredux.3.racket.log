@@ -1,0 +1,9 @@
+
+Wed, 02 Sep 2015 22:11:58 GMT
+
+COMMAND LINE:
+/usr/local/src/racket-6.2.1/bin/racket  fannkuchredux.racket-3.racket 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

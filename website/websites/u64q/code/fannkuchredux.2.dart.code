@@ -1,0 +1,57 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Jos Hirth</span>
+<span class="com">   (previously used) warmup code suggested by Vyacheslav Egorov</span>
+<span class="com">   transliterated from Isaac Gouy's C# program,</span>
+<span class="com">   which was transliterated from Mike Pall's Lua program</span>
+<span class="com">*/</span>
+
+fannkuch(n) {
+  <span class="kwa">var</span> p = <span class="kwa">new</span> List&lt;<span class="kwb">int</span>&gt;(n), q = <span class="kwa">new</span> List&lt;<span class="kwb">int</span>&gt;(n), s = <span class="kwa">new</span> List&lt;<span class="kwb">int</span>&gt;(n);
+  <span class="kwb">int</span> sign = <span class="num">1</span>, maxflips = <span class="num">0</span>, sum = <span class="num">0</span>, m = n-<span class="num">1</span>;
+  <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; i++){ p[i] = i; q[i] = i; s[i] = i; }
+  <span class="kwa">do</span> {
+    <span class="slc">// Copy and flip.</span>
+    <span class="kwa">var</span> q0 = p[<span class="num">0</span>];                                     <span class="slc">// Cache 0th element.</span>
+    <span class="kwa">if</span> (q0 != <span class="num">0</span>){
+      <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">1</span>; i&lt;n; i++) q[i] = p[i];             <span class="slc">// Work on a copy.</span>
+      <span class="kwa">var</span> flips = <span class="num">1</span>;
+      <span class="kwa">do</span> {
+        <span class="kwa">var</span> qq = q[q0];
+        <span class="kwa">if</span> (qq == <span class="num">0</span>){                                <span class="slc">// ... until 0th element is 0.</span>
+          sum += sign*flips;
+          <span class="kwa">if</span> (flips &gt; maxflips) maxflips = flips;   <span class="slc">// New maximum?</span>
+          <span class="kwa">break</span>;
+        }
+        q[q0] = q0;
+        <span class="kwa">if</span> (q0 &gt;= <span class="num">3</span>){
+          <span class="kwb">int</span> i = <span class="num">1</span>, j = q0 - <span class="num">1</span>, t;
+          <span class="kwa">do</span> { t = q[i]; q[i] = q[j]; q[j] = t; i++; j--; } <span class="kwa">while</span> (i &lt; j);
+        }
+        q0 = qq; flips++;
+      } <span class="kwa">while</span> (<span class="kwa">true</span>);
+    }
+    <span class="slc">// Permute.</span>
+    <span class="kwa">if</span> (sign == <span class="num">1</span>){
+      <span class="kwa">var</span> t = p[<span class="num">1</span>]; p[<span class="num">1</span>] = p[<span class="num">0</span>]; p[<span class="num">0</span>] = t; sign = -<span class="num">1</span>; <span class="slc">// Rotate 0&lt;-1.</span>
+    } <span class="kwa">else</span> {
+      <span class="kwa">var</span> t = p[<span class="num">1</span>]; p[<span class="num">1</span>] = p[<span class="num">2</span>]; p[<span class="num">2</span>] = t; sign = <span class="num">1</span>;  <span class="slc">// Rotate 0&lt;-1 and 0&lt;-1&lt;-2.</span>
+      <span class="kwa">for</span>(<span class="kwb">int</span> i=<span class="num">2</span>; i&lt;n; i++){
+        <span class="kwa">var</span> sx = s[i];
+        <span class="kwa">if</span> (sx != <span class="num">0</span>){ s[i] = sx-<span class="num">1</span>; <span class="kwa">break</span>; }
+        <span class="kwa">if</span> (i == m) <span class="kwa">return</span> [sum,maxflips];  <span class="slc">// Out of permutations.</span>
+        s[i] = i;
+        <span class="slc">// Rotate 0&lt;-...&lt;-i+1.</span>
+        t = p[<span class="num">0</span>]; <span class="kwa">for</span>(<span class="kwb">int</span> j=<span class="num">0</span>; j&lt;=i; j++){ p[j] = p[j+<span class="num">1</span>]; } p[i+<span class="num">1</span>] = t;
+      }
+    }
+  } <span class="kwa">while</span> (<span class="kwa">true</span>);
+}
+
+<span class="kwa">void</span> main(args) {
+  <span class="kwb">int</span> n = args.length &gt; <span class="num">0</span> ? <span class="kwb">int</span>.parse(args[<span class="num">0</span>]) : <span class="num">7</span>;
+  <span class="kwa">var</span> pf = fannkuch(n);
+  print(<span class="str">&quot;${pf[0]}</span><span class="esc">\n</span><span class="str">Pfannkuchen($n) = ${pf[1]}&quot;</span>);
+}
+

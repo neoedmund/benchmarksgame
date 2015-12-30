@@ -1,0 +1,167 @@
+﻿<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Eamon Nerbonne</span>
+<span class="com">*/</span>
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.Collections.Concurrent;
+<span class="kwa">using</span> System.Collections.Generic;
+<span class="kwa">using</span> System.Diagnostics;
+<span class="kwa">using</span> System.Linq;
+<span class="kwa">using</span> System.Threading.Tasks;
+
+<span class="kwa">static class</span> Program {
+  <span class="kwb">const string</span> bases = <span class="str">&quot;ACGT&quot;</span>;
+  <span class="kwa">static</span> <span class="kwb">byte</span>?[] toBase = <span class="kwa">new</span> <span class="kwb">byte</span>?[<span class="str">'t'</span> + <span class="num">1</span>];
+
+  <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span>() {
+    <span class="kwa">for</span> (var i = <span class="num">0</span>; i &lt; <span class="num">4</span>; i++)
+      toBase[<span class="str">&quot;acgt&quot;</span>[i]] = (<span class="kwb">byte</span>)i;
+
+    <span class="slc">//Start concurrent workers that will count dna fragments</span>
+    var workers = <span class="kwa">new</span>[] { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>, <span class="num">6</span>, <span class="num">12</span>, <span class="num">18</span> }.<span class="kwd">Select</span>(len =&gt; {
+      var queue = <span class="kwa">new</span> BlockingCollection&lt;<span class="kwb">ulong</span>[]&gt;(<span class="num">2</span>);
+      <span class="kwa">return new</span> {
+        len,
+        queue,
+        task = Task.Factory.<span class="kwd">StartNew</span>(
+          () =&gt;
+            <span class="slc">//use a sparse hash (dictionary) for longer fragments</span>
+            len &gt; <span class="num">8</span> ? <span class="kwa">new</span> <span class="kwd">Sparse</span>(queue, len)
+            <span class="slc">//...and use a dense hash (aka array) for very short fragments.</span>
+            : (ICounter)<span class="kwa">new</span> <span class="kwd">Dense</span>(queue, len),
+          TaskCreationOptions.LongRunning)
+      };
+    }).<span class="kwd">ToArray</span>();
+
+    <span class="slc">//Read lines into chunks.  The exact size isn't that important.</span>
+    <span class="slc">//Smaller chunks are more concurrent but less CPU efficient.</span>
+    <span class="kwa">foreach</span> (var chunk <span class="kwa">in</span> <span class="kwd">LinesToChunks</span>(<span class="num">1</span> &lt;&lt; <span class="num">18</span>))
+      <span class="slc">//Pass chunks into concurrent consumers; add to last workers first</span>
+      <span class="slc">//as a minor threading optimization.</span>
+      <span class="kwa">foreach</span> (var w <span class="kwa">in</span> workers.<span class="kwd">Reverse</span>())
+        w.queue.<span class="kwd">Add</span>(chunk);
+
+    <span class="kwa">foreach</span> (var w <span class="kwa">in</span> workers.<span class="kwd">Reverse</span>())
+      w.queue.<span class="kwd">CompleteAdding</span>();
+
+    <span class="slc">//Show output for each consumer</span>
+    <span class="kwa">foreach</span> (var w <span class="kwa">in</span> workers) {
+      <span class="kwa">if</span> (w.len &lt; <span class="num">3</span>)
+        Console.<span class="kwd">WriteLine</span>(((Dense)w.task.Result).<span class="kwd">Summary</span>(w.len));
+      <span class="kwa">else</span> {
+        var dna = <span class="str">&quot;ggtattttaatttatagt&quot;</span>.<span class="kwd">Substring</span>(<span class="num">0</span>, w.len);
+        Console.<span class="kwd">WriteLine</span>(
+          w.task.Result.<span class="kwd">Count</span>(dna.<span class="kwd">Aggregate</span>(<span class="num">0ul</span>,
+              (v, c) =&gt; v &lt;&lt; <span class="num">2</span> | toBase[c].Value))
+          + <span class="str">&quot;</span><span class="esc">\t</span><span class="str">&quot;</span> + dna.<span class="kwd">ToUpper</span>()
+        );
+      }
+    }
+  }
+
+  <span class="kwa">static</span> IEnumerable&lt;<span class="kwb">ulong</span>[]&gt; <span class="kwd">LinesToChunks</span>(<span class="kwb">int</span> size) {
+    <span class="kwb">string</span> line;
+    <span class="kwa">while</span> ((line = Console.<span class="kwd">ReadLine</span>()) != <span class="kwa">null</span>)
+      <span class="kwa">if</span> (line.<span class="kwd">StartsWith</span>(<span class="str">&quot;&gt;THREE&quot;</span>))
+        <span class="kwa">break</span>;
+
+    <span class="slc">//we just skipped all lines upto section three</span>
+
+    <span class="kwb">int</span> i = <span class="num">0</span>;
+    var arr = <span class="kwa">new</span> <span class="kwb">ulong</span>[size];
+    <span class="kwb">ulong</span> dna = <span class="num">0</span>;
+
+    <span class="kwa">while</span> ((line = Console.<span class="kwd">ReadLine</span>()) != <span class="kwa">null</span>)
+      <span class="kwa">foreach</span> (var c <span class="kwa">in</span> line) {
+        dna = dna &lt;&lt; <span class="num">2</span> | toBase[c].Value;
+        arr[i++] = dna;
+        <span class="kwa">if</span> (i == size) {
+          <span class="slc">//ok, our batch is full, so yield it to consumers.</span>
+          <span class="kwa">yield return</span> arr;
+          i = <span class="num">0</span>;
+          arr = <span class="kwa">new</span> <span class="kwb">ulong</span>[size];
+        }
+      }
+
+    <span class="kwa">if</span> (i &gt; <span class="num">0</span>) {
+      <span class="slc">//last batch isn't entirely full, but don't forget it.</span>
+      Array.<span class="kwd">Resize</span>(<span class="kwa">ref</span> arr, i);
+      <span class="kwa">yield return</span> arr;
+    }
+  }
+
+  <span class="kwb">struct</span> Dense : ICounter {
+    <span class="kwa">public</span> <span class="kwd">Dense</span>(BlockingCollection&lt;<span class="kwb">ulong</span>[]&gt; seq, <span class="kwb">int</span> len) {
+      counts = <span class="kwa">new</span> <span class="kwb">int</span>[<span class="num">1</span> &lt;&lt; len * <span class="num">2</span>];
+      <span class="kwb">int</span> mask = (<span class="num">1</span> &lt;&lt; len * <span class="num">2</span>) - <span class="num">1</span>;
+      <span class="kwb">int</span> i = <span class="num">0</span>;
+
+      <span class="kwa">foreach</span> (var arr <span class="kwa">in</span> seq.<span class="kwd">GetConsumingEnumerable</span>())
+        <span class="kwa">foreach</span> (var dna <span class="kwa">in</span> arr) {
+          i++;
+          <span class="kwa">if</span> (i &gt;= len) <span class="slc">//only count dna if its already long enough</span>
+            counts[(<span class="kwb">int</span>)dna &amp; mask]++;
+        }
+    }
+    <span class="kwb">int</span>[] counts;
+    <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">Count</span>(<span class="kwb">ulong</span> dna) { <span class="kwa">return</span> counts[(<span class="kwb">int</span>)dna]; }
+    <span class="kwa">public</span> <span class="kwb">string</span> <span class="kwd">Summary</span>(<span class="kwb">int</span> len) {
+      var scale = <span class="num">100.0</span> / counts.<span class="kwd">Sum</span>();
+      <span class="kwa">return</span> <span class="kwb">string</span>.<span class="kwd">Concat</span>(
+        counts.<span class="kwd">Select</span>((c, dna) =&gt; <span class="kwa">new</span> {
+          p = c * scale,
+          dna = <span class="kwb">string</span>.<span class="kwd">Concat</span>(Enumerable.<span class="kwd">Range</span>(<span class="num">0</span>, len).<span class="kwd">Reverse</span>()
+                  .<span class="kwd">Select</span>(i =&gt; bases[dna &gt;&gt; i * <span class="num">2</span> &amp; <span class="num">3</span>]))
+        })
+          .<span class="kwd">OrderByDescending</span>(x =&gt; x.p).<span class="kwd">ThenBy</span>(x =&gt; x.dna)
+          .<span class="kwd">Select</span>(x =&gt; x.dna + <span class="str">&quot; &quot;</span> + x.p.<span class="kwd">ToString</span>(<span class="str">&quot;f3&quot;</span>) + <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)
+        );
+    }
+  }
+
+  <span class="kwb">struct</span> Sparse : ICounter {
+    <span class="kwa">public</span> <span class="kwd">Sparse</span>(BlockingCollection&lt;<span class="kwb">ulong</span>[]&gt; seq, <span class="kwb">int</span> len) {
+      var mask = (<span class="num">1ul</span> &lt;&lt; len * <span class="num">2</span>) - <span class="num">1</span>;
+      var first = seq.<span class="kwd">GetConsumingEnumerable</span>().<span class="kwd">First</span>();
+      
+      counts = Enumerable.<span class="kwd">Range</span>(<span class="num">0</span>, Environment.ProcessorCount+<span class="num">1</span>&gt;&gt;<span class="num">1</span>).<span class="kwd">Select</span>(p =&gt;
+        Task.Factory.<span class="kwd">StartNew</span>(() =&gt; {
+          var d = <span class="kwa">new</span> Dictionary&lt;<span class="kwb">ulong</span>, IntRef&gt;();
+          <span class="kwa">if</span> (p == <span class="num">0</span>)
+            <span class="kwa">foreach</span> (var dna <span class="kwa">in</span> first.<span class="kwd">Skip</span>(len - <span class="num">1</span>))
+              <span class="slc">//only count dna if its already long enough</span>
+              <span class="kwd">Add</span>(d, dna &amp; mask, <span class="num">1</span>);
+
+          <span class="kwa">foreach</span> (var arr <span class="kwa">in</span> seq.<span class="kwd">GetConsumingEnumerable</span>())
+            <span class="kwa">foreach</span> (var dna <span class="kwa">in</span> arr)
+              <span class="slc">//only count dna if its already long enough</span>
+              <span class="kwd">Add</span>(d, dna &amp; mask, <span class="num">1</span>);
+          <span class="kwa">return</span> d;
+        })
+      ).<span class="kwd">ToArray</span>().<span class="kwd">Select</span>(t =&gt; t.Result).<span class="kwd">Aggregate</span>((a, b) =&gt; {
+        <span class="kwa">foreach</span> (var kv <span class="kwa">in</span> b)
+          <span class="kwd">Add</span>(a, kv.Key, kv.Value.val);
+        <span class="kwa">return</span> a;
+      });
+    }
+    Dictionary&lt;<span class="kwb">ulong</span>, IntRef&gt; counts;
+    <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">Add</span>(Dictionary&lt;<span class="kwb">ulong</span>, IntRef&gt; dict, <span class="kwb">ulong</span> dna, <span class="kwb">int</span> x) {
+      IntRef count;
+      <span class="kwa">if</span> (!dict.<span class="kwd">TryGetValue</span>(dna, out count))
+        dict[dna] = <span class="kwa">new</span> IntRef { val = x };
+      <span class="kwa">else</span>
+        count.val += x;
+    }
+
+    <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">Count</span>(<span class="kwb">ulong</span> dna) {
+      IntRef count;
+      <span class="kwa">return</span> counts.<span class="kwd">TryGetValue</span>(dna, out count) ? count.val : <span class="num">0</span>;
+    }
+  }
+  <span class="kwa">class</span> IntRef { <span class="kwa">public</span> <span class="kwb">int</span> val; }
+  <span class="kwa">interface</span> ICounter {
+    <span class="slc">//void Add(ulong dna);</span>
+    <span class="kwb">int</span> <span class="kwd">Count</span>(<span class="kwb">ulong</span> dna);
+  }
+}

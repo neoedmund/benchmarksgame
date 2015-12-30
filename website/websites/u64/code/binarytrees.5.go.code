@@ -1,0 +1,163 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by The Go Authors.</span>
+<span class="com"> * based on C program by Kevin Carson</span>
+<span class="com"> * flag.Arg hack by Isaac Gouy</span>
+<span class="com"> * goroutines by Atom</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;flag&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+   <span class="str">&quot;strconv&quot;</span>
+)
+
+<span class="kwa">const</span> LOG2_N_CPU = <span class="num">2</span>
+<span class="kwa">const</span> N_CPU = (<span class="num">1</span> &lt;&lt; LOG2_N_CPU)
+<span class="kwa">const</span> LOG2_WORK_UNIT = <span class="num">8</span>
+
+<span class="kwa">type</span> Node <span class="kwa">struct</span> {
+   item        <span class="kwb">int</span>
+   left, right *Node
+}
+
+<span class="kwa">func</span> <span class="kwd">bottomUpTree</span>(item, depth <span class="kwb">int</span>) *Node {
+   <span class="kwa">if</span> depth &lt;= <span class="num">0</span> {
+      <span class="kwa">return</span> &amp;Node{item: item}
+   }
+   <span class="kwa">return</span> &amp;Node{item, <span class="kwd">bottomUpTree</span>(<span class="num">2</span>*item-<span class="num">1</span>, depth-<span class="num">1</span>), <span class="kwd">bottomUpTree</span>(<span class="num">2</span>*item, depth-<span class="num">1</span>)}
+}
+
+<span class="kwa">func</span> <span class="kwd">go_bottomUpTree</span>(item, depth <span class="kwb">int</span>, goroutine_depth <span class="kwb">int</span>) *Node {
+   <span class="kwa">if</span> depth &lt;= <span class="num">0</span> {
+      <span class="kwa">return</span> &amp;Node{item: item}
+   }
+
+   <span class="kwa">var</span> left, right *Node
+   <span class="kwa">if</span> goroutine_depth &lt;= <span class="num">0</span> {
+      left = <span class="kwd">bottomUpTree</span>(<span class="num">2</span>*item-<span class="num">1</span>, depth-<span class="num">1</span>)
+      right = <span class="kwd">bottomUpTree</span>(<span class="num">2</span>*item, depth-<span class="num">1</span>)
+   } <span class="kwa">else</span> {
+      left_chan := <span class="kwb">make</span>(<span class="kwa">chan</span> *Node)
+      right_chan := <span class="kwb">make</span>(<span class="kwa">chan</span> *Node)
+      <span class="kwa">go func</span>() {
+         left_chan &lt;- <span class="kwd">go_bottomUpTree</span>(<span class="num">2</span>*item-<span class="num">1</span>, depth-<span class="num">1</span>, goroutine_depth-<span class="num">1</span>)
+      }()
+      <span class="kwa">go func</span>() {
+         right_chan &lt;- <span class="kwd">go_bottomUpTree</span>(<span class="num">2</span>*item, depth-<span class="num">1</span>, goroutine_depth-<span class="num">1</span>)
+      }()
+      left, right = &lt;-left_chan, &lt;-right_chan
+   }
+
+   <span class="kwa">return</span> &amp;Node{item, left, right}
+}
+
+<span class="kwa">func</span> <span class="kwd">Go_bottomUpTree</span>(item, depth <span class="kwb">int</span>) *Node {
+   <span class="slc">// Not enough work per goroutine to amortize goroutine creation</span>
+   <span class="kwa">if</span> depth &lt; LOG2_N_CPU+LOG2_WORK_UNIT {
+      <span class="kwa">return</span> <span class="kwd">bottomUpTree</span>(item, depth)
+   }
+
+   <span class="kwa">return</span> <span class="kwd">go_bottomUpTree</span>(item, depth, LOG2_N_CPU)
+}
+
+<span class="kwa">func</span> (n *Node) <span class="kwd">itemCheck</span>() <span class="kwb">int</span> {
+   <span class="kwa">if</span> n.left == <span class="kwb">nil</span> {
+      <span class="kwa">return</span> n.item
+   }
+   <span class="kwa">return</span> n.item + n.left.<span class="kwd">itemCheck</span>() - n.right.<span class="kwd">itemCheck</span>()
+}
+
+<span class="kwa">func</span> (n *Node) <span class="kwd">go_itemCheck</span>(goroutine_depth <span class="kwb">int</span>) <span class="kwb">int</span> {
+   <span class="kwa">if</span> n.left == <span class="kwb">nil</span> {
+      <span class="kwa">return</span> n.item
+   }
+
+   <span class="kwa">var</span> left, right <span class="kwb">int</span>
+   <span class="kwa">if</span> goroutine_depth &lt;= <span class="num">0</span> {
+      left = n.left.<span class="kwd">itemCheck</span>()
+      right = n.right.<span class="kwd">itemCheck</span>()
+   } <span class="kwa">else</span> {
+      left_chan := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">int</span>)
+      right_chan := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">int</span>)
+      <span class="kwa">go func</span>() {
+         left_chan &lt;- n.left.<span class="kwd">go_itemCheck</span>(goroutine_depth - <span class="num">1</span>)
+      }()
+      <span class="kwa">go func</span>() {
+         right_chan &lt;- n.right.<span class="kwd">go_itemCheck</span>(goroutine_depth - <span class="num">1</span>)
+      }()
+      left, right = &lt;-left_chan, &lt;-right_chan
+   }
+   <span class="kwa">return</span> n.item + left - right
+}
+
+<span class="kwa">func</span> (n *Node) <span class="kwd">Go_itemCheck</span>() <span class="kwb">int</span> {
+   <span class="kwa">return</span> n.<span class="kwd">go_itemCheck</span>(LOG2_N_CPU)
+}
+
+<span class="kwa">var</span> total_goroutines <span class="kwb">uint32</span> = <span class="num">0</span>
+
+<span class="kwa">const</span> minDepth = <span class="num">4</span>
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   runtime.<span class="kwd">GOMAXPROCS</span>(N_CPU)
+
+   n := <span class="num">0</span>
+   flag.<span class="kwd">Parse</span>()
+   <span class="kwa">if</span> flag.<span class="kwd">NArg</span>() &gt; <span class="num">0</span> {
+      n, _ = strconv.<span class="kwd">Atoi</span>(flag.<span class="kwd">Arg</span>(<span class="num">0</span>))
+   }
+
+   maxDepth := n
+   <span class="kwa">if</span> minDepth+<span class="num">2</span> &gt; n {
+      maxDepth = minDepth + <span class="num">2</span>
+   }
+   stretchDepth := maxDepth + <span class="num">1</span>
+
+   {
+      check := <span class="kwd">Go_bottomUpTree</span>(<span class="num">0</span>, stretchDepth).<span class="kwd">Go_itemCheck</span>()
+      fmt.<span class="kwd">Printf</span>(<span class="str">&quot;stretch tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, stretchDepth, check)
+   }
+
+   longLivedTree := <span class="kwd">Go_bottomUpTree</span>(<span class="num">0</span>, maxDepth)
+
+   outputs := <span class="kwb">make</span>(<span class="kwa">map</span>[<span class="kwb">int</span>]<span class="kwa">chan</span> <span class="kwb">string</span>)
+   control := <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">byte</span>, N_CPU) <span class="slc">// This 'control' also puts a cap on memory usage</span>
+   <span class="kwa">for</span> _depth := minDepth; _depth &lt;= maxDepth; _depth += <span class="num">2</span> {
+      outputs[_depth] = <span class="kwb">make</span>(<span class="kwa">chan</span> <span class="kwb">string</span>, <span class="num">1</span>)
+      <span class="kwa">go func</span>(depth <span class="kwb">int</span>) {
+         control &lt;- <span class="num">0</span>
+
+         iterations := <span class="num">1</span> &lt;&lt; <span class="kwb">uint</span>(maxDepth-depth+minDepth)
+         check := <span class="num">0</span>
+
+         <span class="slc">// Avoid creating a lot of short-lived goroutines</span>
+         <span class="kwa">if</span> depth &lt;= LOG2_N_CPU+LOG2_WORK_UNIT {
+            <span class="slc">// No goroutines</span>
+            <span class="kwa">for</span> i := <span class="num">1</span>; i &lt;= iterations; i++ {
+               check += <span class="kwd">bottomUpTree</span>(i, depth).<span class="kwd">itemCheck</span>()
+               check += <span class="kwd">bottomUpTree</span>(-i, depth).<span class="kwd">itemCheck</span>()
+            }
+         } <span class="kwa">else</span> {
+            <span class="slc">// Use goroutines</span>
+            <span class="kwa">for</span> i := <span class="num">1</span>; i &lt;= iterations; i++ {
+               check += <span class="kwd">Go_bottomUpTree</span>(i, depth).<span class="kwd">Go_itemCheck</span>()
+               check += <span class="kwd">Go_bottomUpTree</span>(-i, depth).<span class="kwd">Go_itemCheck</span>()
+            }
+         }
+         outputs[depth] &lt;- fmt.<span class="kwd">Sprintf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">trees of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>,
+            iterations*<span class="num">2</span>, depth, check)
+
+         &lt;-control
+      }(_depth)
+   }
+   <span class="kwa">for</span> depth := minDepth; depth &lt;= maxDepth; depth += <span class="num">2</span> {
+      fmt.<span class="kwd">Print</span>(&lt;-outputs[depth])
+   }
+
+   fmt.<span class="kwd">Printf</span>(<span class="str">&quot;long lived tree of depth</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span> <span class="str">check:</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, maxDepth, longLivedTree.<span class="kwd">Go_itemCheck</span>())
+}

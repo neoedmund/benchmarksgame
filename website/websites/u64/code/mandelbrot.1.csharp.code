@@ -1,0 +1,110 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   Adapted by Antti Lankila from the earlier Isaac Gouy's implementation</span>
+<span class="com">   Add multithread &amp; tweaks from C++ by The Anh Tran</span>
+<span class="com">*/</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.Threading;
+<span class="kwa">using</span> System.IO;
+
+<span class="kwa">public class</span> MandelBrot
+{
+    <span class="kwa">private static</span> <span class="kwb">int</span>      N = <span class="num">200</span>;
+    <span class="kwa">private static</span> <span class="kwb">int</span>      width_bytes;
+    
+    <span class="kwa">private static</span> <span class="kwb">byte</span>[][] data;
+   <span class="kwa">private static</span> <span class="kwb">int</span>[]    nbyte_each_line;
+
+
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span> (String[] args)
+   {
+      <span class="kwa">if</span> (args.Length &gt; <span class="num">0</span>)
+         N = Int32.<span class="kwd">Parse</span>(args[<span class="num">0</span>]);
+      Console.Out.<span class="kwd">WriteLine</span>(<span class="str">&quot;P4</span><span class="esc">\n</span><span class="str"></span><span class="ipl">{0} {0}</span><span class="str">&quot;</span>, N);
+
+      width_bytes = N/<span class="num">8</span>;
+      <span class="kwa">if</span> (width_bytes*<span class="num">8</span> &lt; N)
+         width_bytes += <span class="num">1</span>;
+
+      nbyte_each_line = <span class="kwa">new</span> <span class="kwb">int</span>[N];
+
+        data = <span class="kwa">new</span> <span class="kwb">byte</span>[N][];
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; N; i++)
+            data[i] = <span class="kwa">new</span> <span class="kwb">byte</span>[width_bytes];
+
+      Thread[] threads = <span class="kwa">new</span> Thread[Environment.ProcessorCount];
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; threads.Length; i++)
+      {
+         threads[i] = <span class="kwa">new</span> <span class="kwd">Thread</span>(MandelBrot.Calculate);
+            threads[i].<span class="kwd">Start</span>();
+      }
+
+      <span class="kwa">foreach</span> (Thread t <span class="kwa">in</span> threads)
+         t.<span class="kwd">Join</span>();
+
+        Stream s = Console.<span class="kwd">OpenStandardOutput</span>();
+      <span class="kwa">for</span> (<span class="kwb">int</span> y = <span class="num">0</span>; y &lt; N; y++)
+         s.<span class="kwd">Write</span>( data[y], <span class="num">0</span>, nbyte_each_line[y]);
+   }
+
+
+   <span class="kwa">private static</span> <span class="kwb">int</span> current_line = -<span class="num">1</span>;
+
+   <span class="kwa">private static</span> <span class="kwb">void</span> <span class="kwd">Calculate</span>()
+   {
+      <span class="kwb">double</span> inverse_n = <span class="num">2.0</span> / N;
+
+      <span class="kwb">int</span> y;
+      <span class="kwa">while</span> ((y = Interlocked.<span class="kwd">Increment</span>(<span class="kwa">ref</span> current_line)) &lt; N) <span class="slc">// fetch a line</span>
+      {
+            <span class="kwb">byte</span>[] pdata = data[y];
+
+         <span class="kwb">int</span> byte_count  = <span class="num">0</span>;
+            <span class="kwb">int</span> bit_num     = <span class="num">0</span>;
+            <span class="kwb">int</span> byte_acc    = <span class="num">0</span>;
+
+            <span class="kwb">double</span> Civ = y * inverse_n - <span class="num">1.0</span>;
+
+         <span class="kwa">for</span> (<span class="kwb">int</span> x = <span class="num">0</span>; x &lt; N; x++)
+         {
+            <span class="kwb">double</span> Crv = x * inverse_n - <span class="num">1.5</span>;
+
+            <span class="kwb">double</span> Zrv   = Crv;
+            <span class="kwb">double</span> Ziv   = Civ;
+            <span class="kwb">double</span> Trv   = Crv * Crv;
+            <span class="kwb">double</span> Tiv   = Civ * Civ;
+
+            <span class="kwb">int</span> i = <span class="num">49</span>;
+            <span class="kwa">do</span>
+            {
+               Ziv = (Zrv*Ziv) + (Zrv*Ziv) + Civ;
+               Zrv = Trv - Tiv + Crv;
+
+               Trv = Zrv * Zrv;
+               Tiv = Ziv * Ziv;
+            }   <span class="kwa">while</span> ( ((Trv + Tiv) &lt;= <span class="num">4.0</span>) &amp;&amp; (--i &gt; <span class="num">0</span>) );
+
+            byte_acc &lt;&lt;= <span class="num">1</span>;
+            byte_acc |= (i == <span class="num">0</span>) ? <span class="num">1</span> : <span class="num">0</span>;
+
+            <span class="kwa">if</span> (++bit_num == <span class="num">8</span>)
+            {
+                    pdata[byte_count] = (<span class="kwb">byte</span>)byte_acc;
+               byte_count++;
+               bit_num = byte_acc = <span class="num">0</span>;
+            }
+         } <span class="slc">// end foreach (column)</span>
+
+         <span class="kwa">if</span> (bit_num != <span class="num">0</span>) <span class="slc">// write left over bits</span>
+         {
+            byte_acc &lt;&lt;= (<span class="num">8</span> - (N &amp; <span class="num">7</span>));
+            pdata[byte_count] = (<span class="kwb">byte</span>)byte_acc;
+            byte_count++;
+         }
+
+         nbyte_each_line[y] = byte_count;
+      }
+   }
+};

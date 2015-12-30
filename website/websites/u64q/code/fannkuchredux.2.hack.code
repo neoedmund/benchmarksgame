@@ -1,0 +1,68 @@
+&lt;?hh 
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   </span>
+<span class="com">   contributed by Isaac Gouy, transliterated from Mike Pall's Lua program </span>
+<span class="com">   further optimization by Oleksii Prudkyi</span>
+<span class="com">   PHP as HHVM/Hack by Isaac Gouy</span>
+<span class="com">*/</span>
+
+$n = (<span class="kwb">int</span>)$argv[<span class="num">1</span>];
+$s = <span class="kwd">range</span>(<span class="num">0</span>, $n - <span class="num">1</span>);
+$i = $maxflips = $checksum = <span class="num">0</span>; 
+$sign = <span class="num">1</span>; 
+$m = $n - <span class="num">1</span>;
+$p = $q = $s;
+<span class="kwa">do</span> {
+   <span class="slc">// Copy and flip.</span>
+   $q0 = $p[<span class="num">0</span>];
+   <span class="kwa">if</span> ($q0 != <span class="num">0</span>){
+      $q = $p;
+      $flips = <span class="num">1</span>;
+      <span class="kwa">do</span> { 
+         $qq = $q[$q0]; 
+         <span class="kwa">if</span> ($qq == <span class="num">0</span>){
+            $checksum += $sign*$flips;
+            <span class="kwa">if</span> ($flips &gt; $maxflips) $maxflips = $flips;
+            <span class="kwa">break</span>; 
+         } 
+         $q[$q0] = $q0; 
+         <span class="kwa">if</span> ($q0 &gt;= <span class="num">3</span>){
+            $i = <span class="num">1</span>; $j = $q0 - <span class="num">1</span>;
+            <span class="kwa">do</span> { 
+               $t = $q[$i]; 
+               $q[$i] = $q[$j]; 
+               $q[$j] = $t; 
+               ++$i;
+               --$j;
+            } <span class="kwa">while</span> ($i &lt; $j); 
+         }
+         $q0 = $qq; 
+         ++$flips;
+      } <span class="kwa">while</span> (true); 
+   }
+   <span class="slc">// Permute.</span>
+   <span class="kwa">if</span> ($sign == <span class="num">1</span>){
+      $t = $p[<span class="num">1</span>]; $p[<span class="num">1</span>] = $p[<span class="num">0</span>]; $p[<span class="num">0</span>] = $t; $sign = -<span class="num">1</span>; <span class="slc">// Rotate 0&lt;-1.</span>
+   } <span class="kwa">else</span> { 
+      $t = $p[<span class="num">1</span>]; $p[<span class="num">1</span>] = $p[<span class="num">2</span>]; $p[<span class="num">2</span>] = $t; $sign = <span class="num">1</span>;  <span class="slc">// Rotate 1&lt;-2.</span>
+      <span class="kwa">for</span>($i=<span class="num">2</span>; $i&lt;$n; ){ 
+         $sx = &amp;$s[$i];
+         <span class="kwa">if</span> ($sx != <span class="num">0</span>)
+         {
+            --$sx; 
+            <span class="kwa">break</span>; 
+         }
+         <span class="kwa">if</span> ($i == $m){
+            <span class="kwd">printf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">Pfannkuchen(</span><span class="ipl">%d</span><span class="str">) =</span> <span class="ipl">%d</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, $checksum, $n, $maxflips);<span class="slc">// Out of permutations.</span>
+            <span class="kwa">return</span>;
+         }
+         $s[$i] = $i;
+         <span class="slc">// Rotate 0&lt;-...&lt;-i+1.</span>
+         $t = $p[<span class="num">0</span>]; 
+         <span class="kwa">for</span>($j=<span class="num">0</span>; $j&lt;=$i; ){ $p[$j++] = $p[$j]; } 
+         ++$i;
+         $p[$i] = $t;
+      }
+   }
+} <span class="kwa">while</span> (true);

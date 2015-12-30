@@ -1,0 +1,72 @@
+<span class="com">&quot;* The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">   contributed by Eliot Miranda and Isaac Gouy *&quot;</span>!
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">reverseComplement:</span> sequence <span class="kwb">named:</span> sequenceName <span class="kwb">to:</span> output
+   <span class="kwd">| complement newline lineLength n |</span>
+   (sequenceName isNil) <span class="kwb">ifTrue:</span> [^<span class="kwa">self</span>].
+
+   complement :<span class="kwb">=</span> <span class="kwc">String</span> <span class="kwb">new:</span> <span class="num">128</span> <span class="kwb">withAll:</span> $<span class="kwb">*</span>.
+
+   <span class="str">'ABCDGHKMNRSTVWY'</span> <span class="kwb">with:</span> 
+   <span class="str">'TVGHCDMKNYSABWR'</span>
+      <span class="kwb">do:</span> [<span class="kwd">:a :b</span>|
+         complement <span class="kwb">at:</span> a asInteger <span class="kwb">put:</span> b.
+         complement <span class="kwb">at:</span> a asLowercase asInteger <span class="kwb">put:</span> b].
+
+   newline :<span class="kwb">=</span> <span class="kwc">Character</span> lf.
+   lineLength :<span class="kwb">=</span> <span class="num">60</span>.
+   n :<span class="kwb">=</span> sequence size.
+
+   output <span class="kwb">nextPutAll:</span> sequenceName; <span class="kwb">nextPut:</span> newline.
+
+   [n &gt; <span class="num">0</span>] <span class="kwb">whileTrue:</span> [ 
+         <span class="num">1</span> <span class="kwb">to:</span> ((n &lt; lineLength) <span class="kwb">ifTrue:</span> [n] <span class="kwb">ifFalse:</span> [lineLength]) <span class="kwb">do:</span>
+            [<span class="kwd">:i</span> | output <span class="kwb">nextPut:</span> 
+               (complement <span class="kwb">at:</span> (sequence <span class="kwb">at:</span> n <span class="kwb">-</span> i <span class="kwb">+</span> <span class="num">1</span>) asInteger)].
+         output <span class="kwb">nextPut:</span> newline.
+         n :<span class="kwb">=</span> n <span class="kwb">-</span> lineLength. 
+      ] ! !
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmarking'</span>!
+<span class="kwb">readFasta:</span> sequenceName <span class="kwb">from:</span> input
+   <span class="kwd">| prefix newline buffer description line char |</span>
+   prefix :<span class="kwb">=</span> <span class="str">'&gt;'</span>,sequenceName.
+   newline :<span class="kwb">=</span> <span class="kwc">Character</span> cr.
+
+   <span class="com">&quot;* find start of particular fasta sequence *&quot;</span>
+   [(input atEnd) <span class="kwb">or:</span> [
+         (input peek <span class="kwb">=</span> $&gt;) 
+            <span class="kwb">ifTrue:</span> [((line :<span class="kwb">=</span> input <span class="kwb">upTo:</span> newline) 
+               <span class="kwb">indexOfSubCollection:</span> prefix <span class="kwb">startingAt:</span> <span class="num">1</span>) <span class="kwb">=</span> <span class="num">1</span>]
+            <span class="kwb">ifFalse:</span> [input <span class="kwb">skipThrough:</span> newline. <span class="kwa">false</span>]]
+      ] whileFalse.
+
+   <span class="com">&quot;* line-by-line read - it would be a lot faster to block read *&quot;</span>
+   description :<span class="kwb">=</span> line.
+   buffer :<span class="kwb">=</span> <span class="kwc">ReadWriteStream</span> <span class="kwb">on:</span> (<span class="kwc">String</span> <span class="kwb">new:</span> <span class="num">1028</span>).
+   [(input atEnd) <span class="kwb">or:</span> [(char :<span class="kwb">=</span> input peek) <span class="kwb">=</span> $&gt;]] <span class="kwb">whileFalse:</span> [
+      (char <span class="kwb">=</span> $;) 
+         <span class="kwb">ifTrue:</span> [input <span class="kwb">upTo:</span> newline] 
+         <span class="kwb">ifFalse:</span> [buffer <span class="kwb">nextPutAll:</span> (input <span class="kwb">upTo:</span> newline)]
+      ].
+   ^<span class="kwc">Association</span> <span class="kwb">key:</span> description <span class="kwb">value:</span> buffer contents ! !
+
+
+!<span class="kwc">Tests</span> class <span class="kwb">methodsFor:</span> <span class="str">'benchmark scripts'</span>!
+<span class="kwb">revcomp</span>
+   <span class="kwd">| input output |</span>
+   input :<span class="kwb">=</span> <span class="kwa">self</span> stdinSpecial.
+   output :<span class="kwb">=</span> <span class="kwa">self</span> stdoutSpecial.
+
+   #(<span class="str">'ONE'</span> <span class="str">'TWO'</span> <span class="str">'THREE'</span>) <span class="kwb">do:</span>
+      [<span class="kwd">:sequenceName</span>|   <span class="kwd">| fasta |</span>
+         fasta :<span class="kwb">=</span> <span class="kwa">self</span> <span class="kwb">readFasta:</span> sequenceName <span class="kwb">from:</span> input.
+         <span class="kwa">self</span> <span class="kwb">reverseComplement:</span> fasta value <span class="kwb">named:</span> fasta key <span class="kwb">to:</span> output.
+      ].
+
+   output flush. 
+   ^<span class="str">''</span> ! !

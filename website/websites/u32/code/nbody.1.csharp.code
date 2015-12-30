@@ -1,0 +1,171 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Isaac Gouy </span>
+<span class="com">*/</span>
+
+<span class="kwa">using</span> System;
+
+<span class="kwa">class</span> NBody {
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(String[] args) {        
+      <span class="kwb">int</span> n = <span class="num">10000</span>;
+      <span class="kwa">if</span> (args.Length &gt; <span class="num">0</span>) n = Int32.<span class="kwd">Parse</span>(args[<span class="num">0</span>]);
+
+      NBodySystem bodies = <span class="kwa">new</span> <span class="kwd">NBodySystem</span>();
+
+      Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;{0:f9}&quot;</span>,bodies.<span class="kwd">Energy</span>());
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i&lt;n; i++) 
+         bodies.<span class="kwd">Advance</span>(<span class="num">0.01</span>);
+      Console.<span class="kwd">WriteLine</span>(<span class="str">&quot;{0:f9}&quot;</span>,bodies.<span class="kwd">Energy</span>());
+   }
+}
+
+
+<span class="kwa">class</span> NBodySystem {
+   <span class="kwa">private</span> Body[] bodies;
+	   	  	
+   <span class="kwa">public</span> <span class="kwd">NBodySystem</span>() {			
+      bodies = <span class="kwa">new</span> Body[]{
+         Body.<span class="kwd">Sun</span>(),		
+         Body.<span class="kwd">Jupiter</span>(),
+         Body.<span class="kwd">Saturn</span>(),
+         Body.<span class="kwd">Uranus</span>(),
+         Body.<span class="kwd">Neptune</span>()		      		      		      
+      };
+		
+      <span class="kwb">double</span> px = <span class="num">0.0</span>;
+      <span class="kwb">double</span> py = <span class="num">0.0</span>;	
+      <span class="kwb">double</span> pz = <span class="num">0.0</span>;				
+      <span class="kwa">foreach</span> (Body body <span class="kwa">in</span> bodies) {			   		         					
+         px += body.vx * body.mass;
+         py += body.vy * body.mass;		
+         pz += body.vz * body.mass;				
+      }		
+      bodies[<span class="num">0</span>].<span class="kwd">OffsetMomentum</span>(px,py,pz);
+   }
+						   	
+   <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">Advance</span>(<span class="kwb">double</span> dt) {
+      <span class="kwb">double</span> dx, dy, dz, distance, mag;	
+	
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i &lt; bodies.Length; i++) {
+         <span class="kwa">for</span> (<span class="kwb">int</span> j=i+<span class="num">1</span>; j &lt; bodies.Length; j++) {	
+            dx = bodies[i].x - bodies[j].x;
+            dy = bodies[i].y - bodies[j].y;
+            dz = bodies[i].z - bodies[j].z;
+				
+            distance = Math.<span class="kwd">Sqrt</span>(dx*dx + dy*dy + dz*dz);				   
+            mag = dt / (distance * distance * distance);
+				
+            bodies[i].vx -= dx * bodies[j].mass * mag;
+            bodies[i].vy -= dy * bodies[j].mass * mag;
+            bodies[i].vz -= dz * bodies[j].mass * mag;
+                                
+            bodies[j].vx += dx * bodies[i].mass * mag;
+            bodies[j].vy += dy * bodies[i].mass * mag;
+            bodies[j].vz += dz * bodies[i].mass * mag;
+         }
+      }		
+		
+      <span class="kwa">foreach</span> (Body body <span class="kwa">in</span> bodies) {
+         body.x += dt * body.vx;
+         body.y += dt * body.vy;
+         body.z += dt * body.vz;
+      }		
+   }			
+	
+   <span class="kwa">public</span> <span class="kwb">double</span> <span class="kwd">Energy</span>() {		
+      <span class="kwb">double</span> dx, dy, dz, distance;	
+      <span class="kwb">double</span> e = <span class="num">0.0</span>;		   
+		
+      <span class="kwa">for</span> (<span class="kwb">int</span> i=<span class="num">0</span>; i &lt; bodies.Length; i++) {
+         e += <span class="num">0.5</span> * bodies[i].mass * 
+            ( bodies[i].vx * bodies[i].vx 
+            + bodies[i].vy * bodies[i].vy 
+            + bodies[i].vz * bodies[i].vz );
+			   
+         <span class="kwa">for</span> (<span class="kwb">int</span> j=i+<span class="num">1</span>; j &lt; bodies.Length; j++) {
+            dx = bodies[i].x - bodies[j].x;
+            dy = bodies[i].y - bodies[j].y;
+            dz = bodies[i].z - bodies[j].z;
+                                
+            distance = Math.<span class="kwd">Sqrt</span>(dx*dx + dy*dy + dz*dz);
+            e -= (bodies[i].mass * bodies[j].mass) / distance;
+         }
+      }
+      <span class="kwa">return</span> e;
+   }		      	   	   	      	   		   														           		
+}
+
+
+<span class="kwa">class</span> Body {
+   <span class="kwb">const double</span> PI = <span class="num">3.141592653589793</span>;	
+   <span class="kwb">const double</span> SOLAR_MASS = <span class="num">4</span> * PI * PI;
+   <span class="kwb">const double</span> DAYS_PER_YEAR = <span class="num">365.24</span>;
+
+   <span class="kwa">public</span> <span class="kwb">double</span> x, y, z, vx, vy, vz, mass;
+	
+   <span class="kwa">public</span> <span class="kwd">Body</span>(){}	
+	
+   <span class="kwa">internal static</span> Body <span class="kwd">Jupiter</span>() {
+      Body p = <span class="kwa">new</span> <span class="kwd">Body</span>();
+      p.x = <span class="num">4.84143144246472090e+00</span>;
+      p.y = -<span class="num">1.16032004402742839e+00</span>;
+      p.z = -<span class="num">1.03622044471123109e-01</span>;
+      p.vx = <span class="num">1.66007664274403694e-03</span> * DAYS_PER_YEAR;
+      p.vy = <span class="num">7.69901118419740425e-03</span> * DAYS_PER_YEAR;
+      p.vz = -<span class="num">6.90460016972063023e-05</span> * DAYS_PER_YEAR;
+      p.mass = <span class="num">9.54791938424326609e-04</span> * SOLAR_MASS;	   	   	   
+      <span class="kwa">return</span> p;
+   }	
+	
+   <span class="kwa">internal static</span> Body <span class="kwd">Saturn</span>() {
+      Body p = <span class="kwa">new</span> <span class="kwd">Body</span>();
+      p.x = <span class="num">8.34336671824457987e+00</span>;
+      p.y = <span class="num">4.12479856412430479e+00</span>;
+      p.z = -<span class="num">4.03523417114321381e-01</span>;
+      p.vx = -<span class="num">2.76742510726862411e-03</span> * DAYS_PER_YEAR;
+      p.vy = <span class="num">4.99852801234917238e-03</span> * DAYS_PER_YEAR;
+      p.vz = <span class="num">2.30417297573763929e-05</span> * DAYS_PER_YEAR;
+      p.mass = <span class="num">2.85885980666130812e-04</span> * SOLAR_MASS;	   	   	   
+      <span class="kwa">return</span> p;
+   }	
+	
+   <span class="kwa">internal static</span> Body <span class="kwd">Uranus</span>() {
+      Body p = <span class="kwa">new</span> <span class="kwd">Body</span>();
+      p.x = <span class="num">1.28943695621391310e+01</span>;
+      p.y = -<span class="num">1.51111514016986312e+01</span>;
+      p.z = -<span class="num">2.23307578892655734e-01</span>;
+      p.vx = <span class="num">2.96460137564761618e-03</span> * DAYS_PER_YEAR;
+      p.vy = <span class="num">2.37847173959480950e-03</span> * DAYS_PER_YEAR;
+      p.vz = -<span class="num">2.96589568540237556e-05</span> * DAYS_PER_YEAR;
+      p.mass = <span class="num">4.36624404335156298e-05</span> * SOLAR_MASS;		   	   	   
+      <span class="kwa">return</span> p;
+   }		
+
+   <span class="kwa">internal static</span> Body <span class="kwd">Neptune</span>() {
+      Body p = <span class="kwa">new</span> <span class="kwd">Body</span>();
+      p.x = <span class="num">1.53796971148509165e+01</span>;
+      p.y = -<span class="num">2.59193146099879641e+01</span>;
+      p.z = <span class="num">1.79258772950371181e-01</span>;
+      p.vx = <span class="num">2.68067772490389322e-03</span> * DAYS_PER_YEAR;
+      p.vy = <span class="num">1.62824170038242295e-03</span> * DAYS_PER_YEAR;
+      p.vz = -<span class="num">9.51592254519715870e-05</span> * DAYS_PER_YEAR;
+      p.mass = <span class="num">5.15138902046611451e-05</span> * SOLAR_MASS;	   	   	   
+      <span class="kwa">return</span> p;
+   }
+	
+   <span class="kwa">internal static</span> Body <span class="kwd">Sun</span>() {
+      Body p = <span class="kwa">new</span> <span class="kwd">Body</span>();
+      p.mass = SOLAR_MASS;	   	   	   
+      <span class="kwa">return</span> p;
+   }			
+	
+   <span class="kwa">internal</span> Body <span class="kwd">OffsetMomentum</span>(<span class="kwb">double</span> px, <span class="kwb">double</span> py, <span class="kwb">double</span> pz) {
+      vx = -px / SOLAR_MASS;
+      vy = -py / SOLAR_MASS;
+      vz = -pz / SOLAR_MASS;	   
+      <span class="kwa">return this</span>;   
+   }			           			
+}
+
+

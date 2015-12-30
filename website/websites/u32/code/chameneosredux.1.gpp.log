@@ -1,0 +1,63 @@
+
+Mon, 26 Oct 2015 18:13:35 GMT
+
+MAKE:
+/usr/bin/g++ -c -pipe -O3 -fomit-frame-pointer -march=native  --std=c++11 -pthread chameneosredux.c++ -o chameneosredux.c++.o &&  \
+        /usr/bin/g++ chameneosredux.c++.o -o chameneosredux.gpp_run -lboost_thread -lboost_system 
+chameneosredux.c++:323:6: warning: ‘template<class> class std::auto_ptr’ is deprecated [-Wdeprecated-declarations]
+ std::auto_ptr<std::vector<cpu_set_t> >
+      ^
+In file included from /usr/include/c++/5/memory:81:0,
+                 from /usr/include/boost/config/no_tr1/memory.hpp:21,
+                 from /usr/include/boost/smart_ptr/shared_ptr.hpp:23,
+                 from /usr/include/boost/shared_ptr.hpp:17,
+                 from /usr/include/boost/xpressive/detail/detail_fwd.hpp:23,
+                 from /usr/include/boost/xpressive/regex_primitives.hpp:21,
+                 from /usr/include/boost/xpressive/xpressive_static.hpp:24,
+                 from chameneosredux.c++:33:
+/usr/include/c++/5/bits/unique_ptr.h:49:28: note: declared here
+   template<typename> class auto_ptr;
+                            ^
+chameneosredux.c++: In function ‘std::auto_ptr<std::vector<cpu_set_t> > GetAffinityList()’:
+chameneosredux.c++:367:9: warning: ‘template<class> class std::auto_ptr’ is deprecated [-Wdeprecated-declarations]
+    std::auto_ptr<std::vector<cpu_set_t> > aff(new std::vector<cpu_set_t>);
+         ^
+In file included from /usr/include/c++/5/memory:81:0,
+                 from /usr/include/boost/config/no_tr1/memory.hpp:21,
+                 from /usr/include/boost/smart_ptr/shared_ptr.hpp:23,
+                 from /usr/include/boost/shared_ptr.hpp:17,
+                 from /usr/include/boost/xpressive/detail/detail_fwd.hpp:23,
+                 from /usr/include/boost/xpressive/regex_primitives.hpp:21,
+                 from /usr/include/boost/xpressive/xpressive_static.hpp:24,
+                 from chameneosredux.c++:33:
+/usr/include/c++/5/bits/unique_ptr.h:49:28: note: declared here
+   template<typename> class auto_ptr;
+                            ^
+chameneosredux.c++: In function ‘int main(int, char**)’:
+chameneosredux.c++:389:12: warning: ‘template<class> class std::auto_ptr’ is deprecated [-Wdeprecated-declarations]
+       std::auto_ptr<std::vector<cpu_set_t> > affset( GetAffinityList() );
+            ^
+In file included from /usr/include/c++/5/memory:81:0,
+                 from /usr/include/boost/config/no_tr1/memory.hpp:21,
+                 from /usr/include/boost/smart_ptr/shared_ptr.hpp:23,
+                 from /usr/include/boost/shared_ptr.hpp:17,
+                 from /usr/include/boost/xpressive/detail/detail_fwd.hpp:23,
+                 from /usr/include/boost/xpressive/regex_primitives.hpp:21,
+                 from /usr/include/boost/xpressive/xpressive_static.hpp:24,
+                 from chameneosredux.c++:33:
+/usr/include/c++/5/bits/unique_ptr.h:49:28: note: declared here
+   template<typename> class auto_ptr;
+                            ^
+/usr/bin/ld: chameneosredux.c++.o: undefined reference to symbol 'pthread_setaffinity_np@@GLIBC_2.3.4'
+/lib/i386-linux-gnu/libpthread.so.0: error adding symbols: DSO missing from command line
+collect2: error: ld returned 1 exit status
+/home/dunham/benchmarksgame/nanobench/makefiles/u32.programs.Makefile:67: recipe for target 'chameneosredux.gpp_run' failed
+make: [chameneosredux.gpp_run] Error 1 (ignored)
+rm chameneosredux.c++
+24.93s to complete and log all make actions
+
+COMMAND LINE:
+./chameneosredux.gpp_run 60000
+
+MAKE ERROR 
+

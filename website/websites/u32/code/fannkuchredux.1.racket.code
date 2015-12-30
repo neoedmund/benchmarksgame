@@ -1,0 +1,75 @@
+#lang racket/base
+
+(<span class="kwa">require</span> racket/unsafe/ops)
+
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; Written by Dima Dorfman, 2004</span>
+<span class="slc">;; Slightly improved by Sven Hartrumpf, 2005-2006</span>
+<span class="slc">;; Ever-so-slightly tweaked for MzScheme by Brent Fulgham</span>
+<span class="slc">;; PLT-ized for v4.0 by Matthew</span>
+<span class="slc">;; Updated by Danny Yoo and Matthias Felleisen</span>
+
+(<span class="kwa">require</span> racket/cmdline)
+
+(<span class="kwa">define</span> (<span class="kwa">fannkuch</span> n)
+  (<span class="kwa">let</span> ([pi (<span class="kwa">list-</span>&gt;vector 
+             (<span class="kwa">for</span>/list ([i (<span class="kwa">in-range</span> n)]) i))]
+        [tmp (<span class="kwa">make-vector</span> n)]
+        [count (<span class="kwa">make-vector</span> n)])
+    (<span class="kwa">let</span> loop ([flips <span class="num">0</span>]
+               [perms <span class="num">0</span>]
+               [r n]
+               [checksum <span class="num">0</span>]
+               [even-parity? #t])
+      (<span class="kwa">for</span> ([i (<span class="kwa">in-range</span> r)])
+        (<span class="kwa">unsafe-vector-set</span>! count i (<span class="kwa">unsafe-fx</span>+ <span class="num">1</span> i)))
+      (<span class="kwa">let</span>* ((<span class="kwa">next-flips</span> (<span class="kwa">count-flips</span> pi tmp))
+             (<span class="kwa">flips2</span> (<span class="kwa">max</span> next-flips flips))
+             (<span class="kwa">next-checksum</span> (<span class="kwa">unsafe-fx</span>+ checksum (<span class="kwa">if</span> even-parity? next-flips (<span class="kwa">unsafe-fx-</span> <span class="num">0</span> next-flips)))))
+        (<span class="kwa">let</span> loop2 ([r <span class="num">1</span>])
+          (<span class="kwa">if</span> (<span class="kwa">unsafe-fx</span>= r n)
+              (<span class="kwa">values</span> flips2 next-checksum)
+              (<span class="kwa">let</span> ((<span class="kwa">perm0</span> (<span class="kwa">unsafe-vector-ref</span> pi <span class="num">0</span>)))
+                (<span class="kwa">for</span> ([i (<span class="kwa">in-range</span> r)])
+                  (<span class="kwa">unsafe-vector-set</span>! pi i (<span class="kwa">unsafe-vector-ref</span> pi (<span class="kwa">unsafe-fx</span>+ <span class="num">1</span> i))))
+                (<span class="kwa">unsafe-vector-set</span>! pi r perm0)
+                (<span class="kwa">unsafe-vector-set</span>! count r (<span class="kwa">unsafe-fx-</span> (<span class="kwa">unsafe-vector-ref</span> count r) <span class="num">1</span>))
+                (<span class="kwa">cond</span>
+                  [(&lt;= (<span class="kwa">unsafe-vector-ref</span> count r) <span class="num">0</span>)
+                   (<span class="kwa">loop2</span> (<span class="kwa">unsafe-fx</span>+ <span class="num">1</span> r))]
+                  [else (<span class="kwa">loop</span> flips2 
+                              (<span class="kwa">unsafe-fx</span>+ <span class="num">1</span> perms)
+                              r 
+                              next-checksum
+                              (<span class="kwa">not</span> even-parity?))]))))))))
+
+(<span class="kwa">define</span> (<span class="kwa">count-flips</span> pi rho)
+  (<span class="kwa">vector-copy</span>! rho <span class="num">0</span> pi)
+  (<span class="kwa">let</span> loop ([i <span class="num">0</span>])
+    (<span class="kwa">if</span> (<span class="kwa">unsafe-fx</span>= (<span class="kwa">unsafe-vector-ref</span> rho <span class="num">0</span>) <span class="num">0</span>)
+        i
+        (<span class="kwa">begin</span>
+          (<span class="kwa">vector-reverse-slice</span>! rho <span class="num">0</span> (<span class="kwa">unsafe-fx</span>+ <span class="num">1</span> (<span class="kwa">unsafe-vector-ref</span> rho <span class="num">0</span>)))
+          (<span class="kwa">loop</span> (<span class="kwa">unsafe-fx</span>+ <span class="num">1</span> i))))))
+
+(<span class="kwa">define</span> (<span class="kwa">vector-reverse-slice</span>! v i j)
+  (<span class="kwa">let</span> loop ([i i]
+             [j (<span class="kwa">unsafe-fx-</span> j <span class="num">1</span>)])
+    (<span class="kwa">when</span> (<span class="kwa">unsafe-fx</span>&gt; j i)
+      (<span class="kwa">vector-swap</span>! v i j)
+      (<span class="kwa">loop</span> (<span class="kwa">unsafe-fx</span>+ <span class="num">1</span> i) (<span class="kwa">unsafe-fx-</span> j <span class="num">1</span>)))))
+
+(<span class="kwa">define-syntax-rule</span> (<span class="kwa">vector-swap</span>! v i j)
+  (<span class="kwa">let</span> ((<span class="kwa">t</span> (<span class="kwa">unsafe-vector-ref</span> v i)))
+    (<span class="kwa">unsafe-vector-set</span>! v i (<span class="kwa">unsafe-vector-ref</span> v j))
+    (<span class="kwa">unsafe-vector-set</span>! v j t)))
+
+(<span class="kwa">command-line</span> #:args (<span class="kwa">n</span>)
+              (<span class="kwa">define-values</span> (<span class="kwa">answer</span> checksum)
+                (<span class="kwa">fannkuch</span> (<span class="kwa">string-</span>&gt;number n)))
+              (<span class="kwa">printf</span> <span class="str">&quot;~a</span><span class="esc">\n</span><span class="str">Pfannkuchen(~a) = ~a</span><span class="esc">\n</span><span class="str">&quot;</span> 
+                      checksum
+                      n 
+                      answer))

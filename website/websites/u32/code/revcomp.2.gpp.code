@@ -1,0 +1,182 @@
+<span class="com">/*</span>
+<span class="com">* The Computer Language Benchmarks Game</span>
+<span class="com">* http://benchmarksgame.alioth.debian.org</span>
+<span class="com">*</span>
+<span class="com">* Contributed by Paul Kitchin</span>
+<span class="com">* contributed by Bob W</span>
+<span class="com">* OpenMP by The Anh Tran</span>
+<span class="com">* Compile: g++ -O3 -fomit-frame-pointer -mtune=native -msse2 reverse.cpp -o reverse -fopenmp</span>
+<span class="com">*/</span>
+
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+<span class="ppc">#include &lt;omp.h&gt;</span>
+
+<span class="ppc">#define Z16</span>     <span class="pps">&quot;\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0&quot;</span><span class="ppc"></span>
+<span class="ppc">#define V32</span>     <span class="pps">&quot;\0TVGH\0\0CD\0\0M\0KN\0\0\0YSA\0BW\0R\0\0\0\0\0\0&quot;</span><span class="ppc"></span>
+<span class="ppc">#define VALL    Z16 Z16 Z16 Z16 V32 V32 Z16 Z16 Z16 Z16 Z16 Z16 Z16 Z16</span>
+
+<span class="slc">// char conversion table</span>
+<span class="kwb">const char</span> complement_table[] = VALL;
+
+<span class="kwc">template</span>&lt;typename T&gt;
+T <span class="kwd">min</span>(T v1, T v2)
+{
+	<span class="slc">// brand prediction</span>
+	<span class="kwa">if</span> (v2 &lt;= v1)
+		<span class="kwa">return</span> v2;
+	<span class="kwa">return</span> v1;
+}
+
+<span class="kwb">struct</span> Chunk
+{
+	<span class="kwb">char</span>* header;
+	<span class="kwb">long</span> header_len;
+	
+	<span class="kwb">char</span>* data;
+	<span class="kwb">long</span> data_len;
+	
+	Chunk* next;
+	Chunk* previous;
+
+	<span class="kwd">Chunk</span>(Chunk* pre)
+	{
+		header = data = <span class="num">0</span>;
+		header_len = data_len = <span class="num">0</span>;
+		next = <span class="num">0</span>;
+		previous = pre;
+	}
+};
+
+<span class="kwb">long</span> <span class="kwd">GetInputSize</span>()
+{
+	<span class="kwb">long</span> fsz = <span class="kwd">ftell</span>(stdin);
+
+	<span class="kwd">fseek</span>(stdin, <span class="num">0</span>, SEEK_END);
+	fsz = <span class="kwd">ftell</span>(stdin) - fsz;
+
+	<span class="kwd">fseek</span>(stdin, <span class="num">0</span>, SEEK_SET);
+	<span class="kwa">return</span> fsz;
+}
+
+<span class="kwb">char</span>* <span class="kwd">ReadInput</span>(<span class="kwb">long</span> size, Chunk* &amp;datamarker)
+{
+	Chunk* current_marker = <span class="num">0</span>;
+
+	<span class="kwb">char</span>* inp_buf = <span class="kwa">new</span> <span class="kwb">char</span>[size];
+	<span class="kwb">char</span>* cur_pos = inp_buf;
+	<span class="kwb">long</span> remainbytes = size - (cur_pos - inp_buf);
+
+	<span class="slc">// read line-by-line, according to game rule. Should be replaced by fread()</span>
+	<span class="kwa">while</span> (<span class="kwd">fgets_unlocked</span>(cur_pos, remainbytes, stdin) != <span class="num">0</span>)
+	{
+		<span class="kwb">long</span> len = <span class="kwd">__builtin_strlen</span>(cur_pos);
+
+		<span class="kwa">if</span> (cur_pos[<span class="num">0</span>] != <span class="str">'&gt;'</span>)
+		{
+			current_marker-&gt;data_len += len -<span class="num">1</span>;
+
+			cur_pos += len -<span class="num">1</span>;
+			remainbytes -= len -<span class="num">1</span>;
+		}
+		<span class="kwa">else</span>
+		{
+			Chunk* newmarker = <span class="kwa">new</span> <span class="kwd">Chunk</span>(current_marker);
+			<span class="kwa">if</span> (current_marker != <span class="num">0</span>)
+				current_marker-&gt;next = newmarker;
+			<span class="kwa">else</span>
+				datamarker = newmarker;
+			current_marker = newmarker;
+
+			current_marker-&gt;header = cur_pos;
+			current_marker-&gt;header_len = len;
+			current_marker-&gt;data = cur_pos + len;
+
+			cur_pos += len;
+			remainbytes -= len;
+		}
+	}
+
+	<span class="kwa">return</span> inp_buf;
+}
+
+<span class="kwb">void</span> <span class="kwd">PrintOutput</span>(<span class="kwb">const</span> Chunk* marker)
+{
+	<span class="kwa">while</span> (marker != <span class="num">0</span>)
+	{
+		<span class="kwd">fwrite_unlocked</span>(marker-&gt;header, marker-&gt;header_len, <span class="num">1</span>, stdout);
+
+		<span class="kwb">int</span> bytetoprint = <span class="kwd">min</span>(marker-&gt;data_len, <span class="num">60L</span>);
+		<span class="kwb">char</span>* current_position = marker-&gt;data;
+
+		<span class="kwa">while</span> (bytetoprint &gt; <span class="num">0</span>)
+		{
+			<span class="kwd">fwrite_unlocked</span>(current_position, bytetoprint, <span class="num">1</span>, stdout);
+			<span class="kwd">fputc_unlocked</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>, stdout);
+
+			current_position += bytetoprint;
+			bytetoprint = <span class="kwd">min</span>(marker-&gt;data_len - (current_position - marker-&gt;data), <span class="num">60L</span>);
+		}
+
+		marker = marker-&gt;next;
+	}
+}
+
+<span class="kwb">void</span> <span class="kwd">ReverseGame</span>(Chunk* marker)
+{
+	<span class="ppc">#pragma omp parallel default(shared)</span>
+	{
+		Chunk *m = marker;
+		<span class="kwa">while</span> (m != <span class="num">0</span>)
+		{
+			<span class="kwb">long</span> half = m-&gt;data_len/<span class="num">2</span>;
+
+			<span class="ppc">#pragma omp for schedule(static) nowait</span>
+			<span class="kwa">for</span> (<span class="kwb">long</span> i = <span class="num">0</span>; i &lt; half; i++)
+			{
+				<span class="kwb">char</span>* c1 = m-&gt;data + i;
+				<span class="kwb">char</span>* c2 = m-&gt;data + (m-&gt;data_len -<span class="num">1</span> -i);
+				
+				<span class="kwb">const char</span> rc1 = complement_table[ *c1 ];
+				<span class="kwb">const char</span> rc2 = complement_table[ *c2 ];
+
+				*c1 = rc2;
+				*c2 = rc1;
+			}
+
+			<span class="ppc">#pragma omp single nowait</span>
+			{
+				<span class="slc">// if datalen is odd</span>
+				<span class="kwa">if</span> ((half *<span class="num">2</span>) &lt; m-&gt;data_len)
+				{
+					<span class="kwb">char</span> c = m-&gt;data[half +<span class="num">1</span>];
+					m-&gt;data[half +<span class="num">1</span>] = complement_table[c];
+				}
+			}
+
+			m = m-&gt;next;
+		}
+	}
+}
+
+<span class="kwb">int</span> <span class="kwd">main</span> () 
+{
+	<span class="kwb">long</span> filesize = <span class="kwd">GetInputSize</span> ();
+	
+	Chunk* marker = <span class="num">0</span>;
+	<span class="kwb">char</span>* buffer = <span class="kwd">ReadInput</span> (filesize, marker);
+
+	<span class="kwd">ReverseGame</span>(marker);
+
+	<span class="kwd">PrintOutput</span>(marker);
+
+	<span class="kwa">delete</span> []buffer;
+	<span class="kwa">while</span> (marker != <span class="num">0</span>)
+	{
+		Chunk* m = marker;
+		marker = marker-&gt;next;
+		<span class="kwa">delete</span> m;
+	}
+
+	<span class="kwa">return</span> <span class="num">0</span>;
+}
+

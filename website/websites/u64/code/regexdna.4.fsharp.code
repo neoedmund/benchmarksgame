@@ -1,0 +1,88 @@
+﻿<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Contributed by David Grenier</span>
+
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Text</span>.<span class="kwd">RegularExpressions</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Threading</span>
+
+<span class="kwa">let inline</span> flip f a b = f b a
+<span class="kwa">let inline</span> curry f a b = f(a, b)
+
+<span class="kwa">let</span> regex s = <span class="kwd">Regex</span> (s, <span class="kwd">RegexOptions</span>.<span class="kwd">Compiled</span>)
+<span class="kwa">let</span> replace rx = ((regex rx).<span class="kwd">Replace</span> : <span class="kwb">string</span> * <span class="kwb">string</span> -&gt; <span class="kwb">string</span>) |&gt; curry |&gt; flip
+<span class="kwa">let</span> matchCount rx = (regex rx).<span class="kwd">Matches</span> &gt;&gt; <span class="kwa">fun</span> x -&gt; x.<span class="kwd">Count</span>
+
+<span class="kwa">let</span> input = stdin.<span class="kwd">ReadToEnd</span> ()
+<span class="kwa">let</span> text = input |&gt; replace <span class="str">&quot;&gt;.*</span><span class="esc">\n</span><span class="str">&quot;</span> <span class="str">&quot;&quot;</span> |&gt; replace <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span> <span class="str">&quot;&quot;</span>
+
+<span class="kwa">module</span> <span class="kwd">Array</span> =
+    <span class="kwa">module</span> <span class="kwd">Parallel</span> =
+        <span class="kwa">let</span> loop (count: <span class="kwb">int</span>) f =
+            <span class="kwa">let</span> count = <span class="kwb">ref</span> count
+            <span class="kwa">let rec</span> loop f =
+                async {
+                    <span class="kwa">match</span> <span class="kwd">Interlocked</span>.<span class="kwd">Decrement</span> count <span class="kwa">with</span>
+                    | i <span class="kwa">when</span> i &lt; <span class="num">0</span> -&gt; ()
+                    | i -&gt; f i; <span class="kwd">Async</span>.<span class="kwd">StartImmediate</span> (loop f)
+                }
+            <span class="kwd">Array</span>.init <span class="kwd">System</span>.<span class="kwd">Environment</span>.<span class="kwd">ProcessorCount</span> (<span class="kwa">fun</span> _ -&gt; loop f)
+            |&gt; <span class="kwd">Async</span>.<span class="kwd">Parallel</span>
+            |&gt; <span class="kwd">Async</span>.<span class="kwd">RunSynchronously</span>
+            |&gt; ignore
+
+
+        <span class="kwa">let</span> init len f =
+            <span class="kwa">let</span> result = <span class="kwd">Array</span>.zeroCreate len
+            loop len (<span class="kwa">fun</span> i -&gt; result.[i] &lt;- f i)
+            result
+
+        <span class="kwa">let</span> map f arr = init (<span class="kwd">Array</span>.length arr) (<span class="kwa">fun</span> i -&gt; f arr.[i])
+
+[|
+    <span class="str">&quot;agggtaaa|tttaccct&quot;</span>
+    <span class="str">&quot;[cgt]gggtaaa|tttaccc[acg]&quot;</span>
+    <span class="str">&quot;a[act]ggtaaa|tttacc[agt]t&quot;</span>
+    <span class="str">&quot;ag[act]gtaaa|tttac[agt]ct&quot;</span>
+    <span class="str">&quot;agg[act]taaa|ttta[agt]cct&quot;</span>
+    <span class="str">&quot;aggg[acg]aaa|ttt[cgt]ccct&quot;</span>
+    <span class="str">&quot;agggt[cgt]aa|tt[acg]accct&quot;</span>
+    <span class="str">&quot;agggta[cgt]a|t[acg]taccct&quot;</span>
+    <span class="str">&quot;agggtaa[cgt]|[acg]ttaccct&quot;</span>
+|]
+|&gt; <span class="kwd">Array</span>.<span class="kwd">Parallel</span>.map (<span class="kwa">fun</span> s -&gt; sprintf <span class="str">&quot;</span><span class="ipl">%s %d</span><span class="str">&quot;</span> s (matchCount s text))
+|&gt; <span class="kwd">Array</span>.iter (printfn <span class="str">&quot;</span><span class="ipl">%s</span><span class="str">&quot;</span>)
+
+<span class="kwa">let</span> chunkedMap windowCount f arr =
+    <span class="kwa">let</span> len = <span class="kwd">Array</span>.length arr
+    <span class="kwa">let</span> size = len / (windowCount - <span class="num">1</span>)
+    <span class="kwd">Array</span>.<span class="kwd">Parallel</span>.init windowCount (<span class="kwa">fun</span> i -&gt;
+        <span class="kwa">if</span> i + <span class="num">1</span> = windowCount <span class="kwa">then</span> len % (windowCount - <span class="num">1</span>) <span class="kwa">else</span> size
+        |&gt; <span class="kwd">Array</span>.sub arr (i * size)
+        |&gt; f
+    )
+
+<span class="kwa">let</span> applyPatterns =
+    [
+        replace <span class="str">&quot;B&quot;</span> <span class="str">&quot;(c|g|t)&quot;</span>
+        replace <span class="str">&quot;D&quot;</span> <span class="str">&quot;(a|g|t)&quot;</span>
+        replace <span class="str">&quot;H&quot;</span> <span class="str">&quot;(a|c|t)&quot;</span>
+        replace <span class="str">&quot;K&quot;</span> <span class="str">&quot;(g|t)&quot;</span>
+        replace <span class="str">&quot;M&quot;</span> <span class="str">&quot;(a|c)&quot;</span>
+        replace <span class="str">&quot;N&quot;</span> <span class="str">&quot;(a|c|g|t)&quot;</span>
+        replace <span class="str">&quot;R&quot;</span> <span class="str">&quot;(a|g)&quot;</span>
+        replace <span class="str">&quot;S&quot;</span> <span class="str">&quot;(c|g)&quot;</span>
+        replace <span class="str">&quot;V&quot;</span> <span class="str">&quot;(a|c|g)&quot;</span>
+        replace <span class="str">&quot;W&quot;</span> <span class="str">&quot;(a|t)&quot;</span>
+        replace <span class="str">&quot;Y&quot;</span> <span class="str">&quot;(c|t)&quot;</span>
+    ]
+    |&gt; <span class="kwd">List</span>.reduce (&gt;&gt;)
+
+text.<span class="kwd">ToCharArray</span>()
+|&gt; chunkedMap <span class="num">16</span> (<span class="kwa">fun</span> cs -&gt;
+    <span class="kwd">System</span>.<span class="kwd">String</span> cs
+    |&gt; applyPatterns
+    |&gt; <span class="kwd">String</span>.length
+)
+|&gt; <span class="kwd">Array</span>.sum
+|&gt; printfn <span class="str">&quot;</span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str"></span><span class="ipl">%i</span><span class="str">&quot;</span> input.<span class="kwd">Length</span> text.<span class="kwd">Length</span>

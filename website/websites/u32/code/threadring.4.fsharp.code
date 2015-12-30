@@ -1,0 +1,35 @@
+﻿<span class="com">(*  The Computer Language Benchmarks Game</span>
+<span class="com">    http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">    contributed by Jomo Fisher</span>
+<span class="com">    modified by Kostas Rontogiannis</span>
+<span class="com"></span>
+<span class="com">    Using an array of Async&lt;unit&gt; for the workers and</span>
+<span class="com">    a shared token between threads.</span>
+<span class="com"></span>
+<span class="com">    Compile : </span>
+<span class="com">        fsc --tailcalls+ -O --platform:x64 ThreadRingNew.fs -o ThreadRingNew.exe</span>
+<span class="com">    Execute :</span>
+<span class="com">        mono ThreadRingNew.exe 50000000</span>
+<span class="com">*)</span>
+
+<span class="kwa">let</span> <span class="kwd">NumberOfThreads</span> = <span class="num">503</span>
+
+<span class="kwa">let mutable</span> (workers : <span class="kwd">Async</span>&lt;<span class="kwb">unit</span>&gt;[]) = <span class="kwa">null</span>
+<span class="kwa">let mutable</span> token = -<span class="num">1</span>
+
+<span class="kwa">let</span> createWorker i = 
+    <span class="kwa">let</span> next = (i + <span class="num">1</span>) % <span class="kwd">NumberOfThreads</span>
+    async { <span class="kwa">if</span> token = <span class="num">0</span> <span class="kwa">then</span> 
+                printfn <span class="str">&quot;</span><span class="ipl">%d</span><span class="str">&quot;</span> (i + <span class="num">1</span>)
+                exit <span class="num">0</span> 
+            <span class="kwa">else</span> 
+                token &lt;- token - <span class="num">1</span>
+                return! workers.[next] }
+
+[&lt;<span class="kwd">EntryPoint</span>&gt;]
+<span class="kwa">let</span> main args = 
+    token   &lt;- <span class="kwb">int</span> args.[<span class="num">0</span>]
+    workers &lt;- <span class="kwd">Array</span>.init <span class="kwd">NumberOfThreads</span> createWorker
+    <span class="kwd">Async</span>.<span class="kwd">StartImmediate</span>(workers.[<span class="num">0</span>])
+    <span class="num">0</span>

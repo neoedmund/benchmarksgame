@@ -1,0 +1,74 @@
+<span class="com">(*</span>
+<span class="com"> * The Computer Language Benchmarks Game </span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Christophe TROESTLER</span>
+<span class="com"> * modified by Matthias Giovannini?</span>
+<span class="com"> * ported to Gmp by David Teller</span>
+<span class="com"> *)</span>
+<span class="kwa">open</span> <span class="kwd">Printf</span>
+<span class="kwa">open</span> <span class="kwc">Gmp</span>.<span class="kwd">Z2</span>
+<span class="kwa">open</span> <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.<span class="kwd">Infixes</span>
+
+<span class="kwa">let</span> big_0      = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.zero
+<span class="kwa">let</span> big_1      = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.one
+<span class="kwa">let</span> big_3      = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.of_int <span class="num">3</span>
+<span class="kwa">let</span> big_4      = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.of_int <span class="num">4</span>
+<span class="kwa">let</span> big_10     = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.of_int <span class="num">10</span>
+<span class="kwa">let</span> big_10_neg = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.of_int (-<span class="num">10</span>)
+
+<span class="kwa">let</span> q = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.of_int <span class="num">1</span> 
+<span class="kwa">and</span> r = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.of_int <span class="num">0</span>
+<span class="kwa">and</span> s = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.of_int <span class="num">0</span>
+<span class="kwa">and</span> t = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.of_int <span class="num">1</span>
+
+<span class="kwa">let</span> u = create () <span class="kwa">and</span> v = create () <span class="kwa">and</span> w = create ()
+
+<span class="kwa">let</span> k = <span class="kwb">ref</span> <span class="num">0</span> <span class="kwa">and</span> digit = create ()
+
+<span class="com">(* Entier part of the linear fractional transform qrst of x *)</span>
+<span class="kwa">let</span> extract x ~out:item= 
+  mul u q x;
+  add u u r;
+  mul v s x;
+  add v v t;
+  tdiv_q item u v
+
+<span class="kwa">let</span> next () = extract big_3 ~out:digit
+<span class="kwa">and</span> safe () = extract big_4 ~out:w; <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.equal w digit
+<span class="kwa">and</span> produce () = 
+  mul r r big_10;
+  mul w big_10_neg digit;
+  mul v t w;
+  add r r v;
+  mul q q big_10;  
+<span class="kwa">and</span> consume () =
+  incr k;
+  <span class="kwa">let</span> big_k = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.of_int !k <span class="kwa">in</span>
+  <span class="kwa">let</span> den = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.of_int (<span class="num">2</span> * !k + <span class="num">1</span>) <span class="kwa">in</span>
+  <span class="kwa">let</span> den2 = <span class="kwc">Gmp</span>.<span class="kwc">Z</span>.mul_2exp den <span class="num">1</span> <span class="kwa">in</span>
+  mul r r den;
+  mul u q den2;
+  add r r u;
+  mul t t den;
+  mul v s den2;
+  add t t v;
+  mul s s big_k;
+  mul q q big_k
+
+<span class="kwa">let</span> digits n = 
+  <span class="kwa">for</span> i = <span class="num">1</span> <span class="kwa">to</span> n <span class="kwa">do</span>
+    next ();
+    <span class="kwa">while</span> not (safe ()) <span class="kwa">do</span>
+      consume ();
+      next ();
+    <span class="kwa">done</span>;
+    produce ();
+    print_string (<span class="kwc">Gmp</span>.<span class="kwc">Z</span>.to_string digit);
+    <span class="kwa">if</span> i <span class="kwa">mod</span> <span class="num">10</span> = <span class="num">0</span> <span class="kwa">then</span> 
+      printf <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:</span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> i;
+  <span class="kwa">done</span>;
+  <span class="kwa">if</span> n <span class="kwa">mod</span> <span class="num">10</span> != <span class="num">0</span> <span class="kwa">then</span> 
+    printf <span class="str">&quot;%*s</span><span class="esc">\t</span><span class="str">:</span><span class="ipl">%i</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span> (<span class="num">10</span>- n <span class="kwa">mod</span> <span class="num">10</span>) <span class="str">&quot;&quot;</span> n
+
+<span class="kwa">let</span> () = digits (<span class="kwa">try</span> int_of_string (<span class="kwc">Array</span>.get <span class="kwc">Sys</span>.argv <span class="num">1</span>) <span class="kwa">with</span> _ -&gt; <span class="num">27</span>)

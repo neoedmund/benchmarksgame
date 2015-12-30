@@ -1,0 +1,123 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc"># contributed by Daniel Nanz 2008-04-10</span>
+<span class="slc"># 2to3</span>
+
+<span class="kwa">import</span> sys
+<span class="kwa">import</span> _thread
+<span class="kwa">import</span> time
+
+<span class="slc"># colors and matching</span>
+creature_colors = [<span class="str">'blue'</span>, <span class="str">'red'</span>, <span class="str">'yellow'</span>]
+
+<span class="kwa">def</span> <span class="kwd">complement</span>(c1, c2):
+
+    <span class="kwa">if</span> c1 == c2: <span class="kwa">return</span> c1
+    <span class="kwa">if</span> c1 == <span class="str">'blue'</span>:
+        <span class="kwa">if</span> c2 == <span class="str">'red'</span>: <span class="kwa">return</span> <span class="str">'yellow'</span>
+        <span class="kwa">return</span> <span class="str">'red'</span>
+    <span class="kwa">if</span> c1 == <span class="str">'red'</span>:
+        <span class="kwa">if</span> c2 == <span class="str">'blue'</span>: <span class="kwa">return</span> <span class="str">'yellow'</span>
+        <span class="kwa">return</span> <span class="str">'blue'</span>
+    <span class="kwa">if</span> c2 == <span class="str">'blue'</span>: <span class="kwa">return</span> <span class="str">'red'</span>
+    <span class="kwa">return</span> <span class="str">'blue'</span>
+
+
+compl_dict = <span class="kwb">dict</span>(((c1, c2), <span class="kwd">complement</span>(c1, c2))
+                  <span class="kwa">for</span> c1 <span class="kwa">in</span> creature_colors
+                  <span class="kwa">for</span> c2 <span class="kwa">in</span> creature_colors)
+
+
+<span class="kwa">def</span> <span class="kwd">check_complement</span>(colors=creature_colors, compl=compl_dict):
+
+    <span class="kwa">for</span> c1 <span class="kwa">in</span> colors:
+        <span class="kwa">for</span> c2 <span class="kwa">in</span> colors:
+            <span class="kwa">print</span>(<span class="str">'</span><span class="ipl">%s + %s -</span><span class="str">&gt;</span> <span class="ipl">%s</span><span class="str">'</span> % (c1, c2, compl[(c1, c2)]))
+    <span class="kwa">print</span>(<span class="str">''</span>)
+
+
+<span class="slc"># reporting</span>
+<span class="kwa">def</span> <span class="kwd">spellout</span>(n):
+    
+    numbers = [<span class="str">'zero'</span>, <span class="str">'one'</span>, <span class="str">'two'</span>, <span class="str">'three'</span>, <span class="str">'four'</span>,
+               <span class="str">'five'</span>, <span class="str">'six'</span>, <span class="str">'seven'</span>, <span class="str">'eight'</span>, <span class="str">'nine'</span>]
+    <span class="kwa">return</span> <span class="str">' '</span> + <span class="str">' '</span>.<span class="kwd">join</span>(numbers[<span class="kwb">int</span>(c)] <span class="kwa">for</span> c <span class="kwa">in</span> <span class="kwb">str</span>(n))
+
+
+<span class="kwa">def</span> <span class="kwd">report</span>(input_zoo, met, self_met):
+
+    <span class="kwa">print</span>(<span class="str">' '</span> + <span class="str">' '</span>.<span class="kwd">join</span>(input_zoo))
+    <span class="kwa">for</span> m, sm <span class="kwa">in</span> <span class="kwb">zip</span>(met, self_met):
+        <span class="kwa">print</span>(<span class="kwb">str</span>(m) + <span class="kwd">spellout</span>(sm))
+    <span class="kwa">print</span>(<span class="kwd">spellout</span>(<span class="kwb">sum</span>(met)) + <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+
+
+<span class="slc"># the zoo</span>
+<span class="kwa">def</span> <span class="kwd">creature</span>(my_id, venue, my_lock_acquire, in_lock_acquire, out_lock_release):
+
+    <span class="kwa">while True</span>:
+        <span class="kwd">my_lock_acquire</span>()   <span class="slc"># only proceed if not already at meeting place</span>
+        <span class="kwd">in_lock_acquire</span>()   <span class="slc"># only proceed when holding in_lock</span>
+        venue[<span class="num">0</span>] = my_id    <span class="slc"># register at meeting place</span>
+        <span class="kwd">out_lock_release</span>()  <span class="slc"># signal &quot;registration ok&quot;</span>
+
+
+<span class="kwa">def</span> <span class="kwd">let_them_meet</span>(meetings_left, input_zoo,
+                  compl=compl_dict, allocate=_thread.allocate_lock):
+    <span class="slc"># prepare</span>
+    c_no = <span class="kwb">len</span>(input_zoo)
+    venue = [-<span class="num">1</span>]
+    met = [<span class="num">0</span>] * c_no
+    self_met = [<span class="num">0</span>] * c_no
+    colors = input_zoo[:]
+    
+    in_lock = <span class="kwd">allocate</span>()
+    in_lock_acquire = in_lock.acquire     <span class="slc"># function aliases</span>
+    in_lock_release = in_lock.release     <span class="slc"># (minor performance gain)</span>
+    <span class="kwd">in_lock_acquire</span>()
+    out_lock = <span class="kwd">allocate</span>()
+    out_lock_release = out_lock.release
+    out_lock_acquire = out_lock.acquire
+    <span class="kwd">out_lock_acquire</span>()
+    locks = [<span class="kwd">allocate</span>() <span class="kwa">for</span> c <span class="kwa">in</span> input_zoo]
+    
+    <span class="slc"># let creatures wild</span>
+    <span class="kwa">for</span> ci <span class="kwa">in</span> <span class="kwb">range</span>(c_no):
+        args = (ci, venue, locks[ci].acquire, in_lock_acquire, out_lock_release)
+        new = _thread.<span class="kwd">start_new_thread</span>(creature, args)
+    time.<span class="kwd">sleep</span>(<span class="num">0.05</span>)     <span class="slc"># to reduce work-load imbalance</span>
+    
+    <span class="kwd">in_lock_release</span>()   <span class="slc"># signal &quot;meeting_place open for registration&quot;</span>
+    <span class="kwd">out_lock_acquire</span>()  <span class="slc"># only proceed with a &quot;registration ok&quot; signal</span>
+    id1 = venue[<span class="num">0</span>]
+    <span class="kwa">while</span> meetings_left &gt; <span class="num">0</span>:
+        <span class="kwd">in_lock_release</span>()
+        <span class="kwd">out_lock_acquire</span>()
+        id2 = venue[<span class="num">0</span>]
+        <span class="kwa">if</span> id1 != id2:
+            new_color = compl[(colors[id1], colors[id2])]
+            colors[id1] = new_color
+            colors[id2] = new_color
+            met[id1] += <span class="num">1</span>
+            met[id2] += <span class="num">1</span>
+        <span class="kwa">else</span>:
+            self_met[id1] += <span class="num">1</span>
+            met[id1] += <span class="num">1</span>
+        meetings_left -= <span class="num">1</span>
+        <span class="kwa">if</span> meetings_left &gt; <span class="num">0</span>:
+            locks[id1].<span class="kwd">release</span>()  <span class="slc"># signal &quot;you were kicked from meeting place&quot;</span>
+            id1 = id2
+        <span class="kwa">else</span>:
+            <span class="kwd">report</span>(input_zoo, met, self_met)
+
+           
+<span class="kwa">def</span> <span class="kwd">chameneosiate</span>(n):
+
+    <span class="kwd">check_complement</span>()
+    <span class="kwd">let_them_meet</span>(n, [<span class="str">'blue'</span>, <span class="str">'red'</span>, <span class="str">'yellow'</span>])
+    <span class="kwd">let_them_meet</span>(n, [<span class="str">'blue'</span>, <span class="str">'red'</span>, <span class="str">'yellow'</span>, <span class="str">'red'</span>, <span class="str">'yellow'</span>,
+                      <span class="str">'blue'</span>, <span class="str">'red'</span>, <span class="str">'yellow'</span>, <span class="str">'red'</span>, <span class="str">'blue'</span>])
+    <span class="slc">#print ''</span>
+
+
+<span class="kwd">chameneosiate</span>(<span class="kwb">int</span>(sys.argv[<span class="num">1</span>]))       

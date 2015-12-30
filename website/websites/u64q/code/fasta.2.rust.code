@@ -1,0 +1,221 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// contributed by the Rust Project Developers</span>
+<span class="slc">// contributed by TeXitoi</span>
+<span class="slc">// multi-threaded version contributed by Alisdair Owens</span>
+
+<span class="kwa">extern crate</span> num_cpus;
+
+<span class="kwa">use</span> std::cmp::min;
+<span class="kwa">use</span> std::io;
+<span class="kwa">use</span> std::io::{Write, BufWriter, ErrorKind};
+<span class="kwa">use</span> std::sync::{Mutex,Arc};
+<span class="kwa">use</span> std::thread;
+
+<span class="kwa">const</span> LINE_LENGTH: usize = <span class="num">60</span>;
+<span class="kwa">const</span> IM: u32 = <span class="num">139968</span>;
+<span class="kwa">const</span> LINES: usize = <span class="num">1024</span>;
+<span class="kwa">const</span> BLKLEN: usize = LINE_LENGTH * LINES;
+
+<span class="kwa">struct</span> MyStdOut {
+    thread_count: u16,
+    next_thread_num: u16,
+    stdout: io::Stdout,
+}
+
+<span class="kwa">struct</span> MyRandom {
+    last: u32,
+    count: usize,
+    thread_count: u16,
+    next_thread_num: u16,
+}
+
+<span class="kwa">impl</span> MyRandom {
+    <span class="kwa">fn</span> new(count: usize, thread_count: u16) -&gt; MyRandom {
+        MyRandom { 
+            last: <span class="num">42</span>,
+            count: count,
+            thread_count: thread_count,
+            next_thread_num: <span class="num">0</span>
+        }
+    }
+    
+    <span class="kwa">fn</span> normalize(p: f32) -&gt; u32 {(p * IM <span class="kwa">as</span> f32).floor() <span class="kwa">as</span> u32}
+
+    <span class="kwa">fn</span> reset(&amp;<span class="kwa">mut self</span>, count: usize) {
+        <span class="kwa">self</span>.next_thread_num = <span class="num">0</span>;
+        <span class="kwa">self</span>.count = count;
+    }
+
+    <span class="kwa">fn</span> gen(&amp;<span class="kwa">mut self</span>, buf: &amp;<span class="kwa">mut</span> [u32], cur_thread: u16) -&gt; Result&lt;usize,()&gt; {
+
+        <span class="kwa">if self</span>.next_thread_num != cur_thread {
+            <span class="kwa">return</span> Err(())
+        }
+
+        <span class="kwa">self</span>.next_thread_num+=<span class="num">1</span>;
+        <span class="kwa">if self</span>.next_thread_num == <span class="kwa">self</span>.thread_count {
+            <span class="kwa">self</span>.next_thread_num = <span class="num">0</span>;
+        }
+
+        <span class="kwa">let</span> to_gen = min(buf.len(), <span class="kwa">self</span>.count);
+        <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..to_gen {
+            <span class="kwa">self</span>.last = (<span class="kwa">self</span>.last * <span class="num">3877</span> + <span class="num">29573</span>) % IM;
+            buf[i] = <span class="kwa">self</span>.last;
+        }
+        <span class="kwa">self</span>.count -= to_gen;
+        Ok(to_gen)
+    }
+}
+
+<span class="kwa">impl</span> MyStdOut {
+    <span class="kwa">fn</span> new(thread_count: u16) -&gt; MyStdOut {
+        MyStdOut {
+            thread_count: thread_count,
+            next_thread_num: <span class="num">0</span>,
+            stdout: io::stdout() 
+        } 
+    }
+    <span class="kwa">fn</span> write(&amp;<span class="kwa">mut self</span>, data: &amp;[u8], cur_thread: u16) -&gt; io::Result&lt;()&gt; {
+        <span class="kwa">if self</span>.next_thread_num != cur_thread {
+            <span class="kwa">return</span> Err(io::Error::new(ErrorKind::Other, <span class="str">&quot;&quot;</span>));
+        }
+
+        <span class="kwa">self</span>.next_thread_num+=<span class="num">1</span>;
+        <span class="kwa">if self</span>.next_thread_num == <span class="kwa">self</span>.thread_count {
+            <span class="kwa">self</span>.next_thread_num = <span class="num">0</span>;
+        }
+
+        <span class="kwa">self</span>.stdout.write_all(data)
+    }
+}
+
+<span class="kwa">fn</span> make_random(data: &amp;[(char, f32)]) -&gt; Vec&lt;(u32, u8)&gt; {
+    <span class="kwa">let mut</span> acc = <span class="num">0</span>.;
+    data.iter()
+        .map(|&amp;(ch, p)| {
+            acc += p;
+            (MyRandom::normalize(acc), ch <span class="kwa">as</span> u8)
+        })
+        .collect()
+}
+
+<span class="kwa">fn</span> make_fasta2&lt;I: Iterator&lt;Item=u8&gt;&gt;(header: &amp;str, <span class="kwa">mut</span> it: I, <span class="kwa">mut</span> n: usize)
+    -&gt; io::Result&lt;()&gt; {
+    <span class="kwa">let mut</span> sysout = BufWriter::new(io::stdout());
+    try!(sysout.write_all(header.as_bytes()));
+    <span class="kwa">let mut</span> line = [<span class="num">0u8</span>; LINE_LENGTH + <span class="num">1</span>];
+    <span class="kwa">while</span> n &gt; <span class="num">0</span> {
+        <span class="kwa">let</span> nb = min(LINE_LENGTH, n);
+        <span class="kwa">for</span> i <span class="kwa">in</span> (<span class="num">0</span>..nb) {
+            line[i] = it.next().unwrap();
+        }
+        n -= nb;
+        line[nb] = '<span class="esc">\n</span>' <span class="kwa">as</span> u8;
+        try!(sysout.write_all(&amp;line[..(nb+<span class="num">1</span>)]));
+    }
+    Ok(())
+}
+
+<span class="kwa">fn</span> do_fasta(thread_num: u16, rng: Arc&lt;Mutex&lt;MyRandom&gt;&gt;,
+            wr: Arc&lt;Mutex&lt;MyStdOut&gt;&gt;, data: Vec&lt;(u32, u8)&gt;) {
+    
+    <span class="kwa">let mut</span> rng_buf = [<span class="num">0u32</span>; BLKLEN];
+    <span class="kwa">let mut</span> out_buf = [<span class="num">0u8</span>; BLKLEN + LINES];
+    <span class="kwa">let mut</span> count;
+    <span class="kwa">loop</span> {
+        <span class="kwa">loop</span> {
+            <span class="kwa">if let</span> Ok(x) = rng.lock().unwrap().gen(&amp;<span class="kwa">mut</span> rng_buf, thread_num) {
+                count = x;
+                <span class="kwa">break</span>;
+            }
+        };
+
+        <span class="kwa">if</span> count == <span class="num">0</span> {
+            <span class="kwa">break</span>;
+        }
+        <span class="kwa">let mut</span> line_count = <span class="num">0</span>;
+        <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span>..count {
+            <span class="kwa">if</span> i % LINE_LENGTH == <span class="num">0</span> &amp;&amp; i &gt; <span class="num">0</span> {
+                out_buf[i+line_count] = b'<span class="esc">\n</span>';
+                line_count += <span class="num">1</span>;
+            } 
+            <span class="kwa">let</span> rn = rng_buf[i];
+            <span class="kwa">for</span> j <span class="kwa">in</span> &amp;data {
+                <span class="kwa">if</span> j<span class="num">.0</span> &gt;= rn {
+                    out_buf[i+line_count] = j<span class="num">.1</span>;
+                    <span class="kwa">break</span>;
+                }
+            }
+        }
+        out_buf[count+line_count] = b'<span class="esc">\n</span>';
+
+        <span class="kwa">while let</span> Err(_) = wr.lock()
+                .unwrap()
+                .write(&amp;out_buf[..(count+line_count+<span class="num">1</span>)], thread_num) {};
+    }
+}
+
+<span class="kwa">fn</span> make_fasta(header: &amp;str, rng: Arc&lt;Mutex&lt;MyRandom&gt;&gt;,
+                 data: Vec&lt;(u32, u8)&gt;, num_threads: u16
+             ) -&gt; io::Result&lt;()&gt; {
+
+    <span class="kwa">let</span> stdout = Arc::new(Mutex::new(MyStdOut::new(num_threads)));
+    try!(io::stdout().write_all(header.as_bytes()));
+    <span class="kwa">let mut</span> threads = Vec::new();
+    <span class="kwa">for</span> thread <span class="kwa">in</span> <span class="num">0</span>..num_threads {
+        <span class="kwa">let</span> d = data.clone();
+        <span class="kwa">let</span> rng_clone = rng.clone();
+        <span class="kwa">let</span> stdout_clone = stdout.clone();
+        threads.push(thread::spawn(<span class="kwa">move</span> || {
+            do_fasta(thread, rng_clone, stdout_clone, d);
+        }));
+    }
+    <span class="kwa">for</span> thread_guard <span class="kwa">in</span> threads {
+        thread_guard.join().unwrap();
+    }
+    Ok(())
+}
+
+<span class="kwa">fn</span> main() {
+    <span class="kwa">let</span> n = std::env::args_os().nth(<span class="num">1</span>)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(<span class="num">1000</span>);
+    
+    <span class="kwa">let</span> num_threads: u16 = num_cpus::get() <span class="kwa">as</span> u16;
+
+    <span class="kwa">let</span> rng = Arc::new(Mutex::new(MyRandom::new(n*<span class="num">3</span>, num_threads)));
+    <span class="kwa">let</span> alu: &amp;[u8] = b<span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTT\</span>
+<span class="str">                       GGGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTC\</span>
+<span class="str">                       GAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACT\</span>
+<span class="str">                       AAAAATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTG\</span>
+<span class="str">                       TAATCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCT\</span>
+<span class="str">                       TGAACCCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCG\</span>
+<span class="str">                       CCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCT\</span>
+<span class="str">                       CAAAAA&quot;</span>;
+
+    <span class="kwa">let</span> iub = &amp;[('a', <span class="num">0.27</span>), ('c', <span class="num">0.12</span>), ('g', <span class="num">0.12</span>),
+                ('t', <span class="num">0.27</span>), ('B', <span class="num">0.02</span>), ('D', <span class="num">0.02</span>),
+                ('H', <span class="num">0.02</span>), ('K', <span class="num">0.02</span>), ('M', <span class="num">0.02</span>),
+                ('N', <span class="num">0.02</span>), ('R', <span class="num">0.02</span>), ('S', <span class="num">0.02</span>),
+                ('V', <span class="num">0.02</span>), ('W', <span class="num">0.02</span>), ('Y', <span class="num">0.02</span>)];
+
+    <span class="kwa">let</span> homosapiens = &amp;[('a', <span class="num">0.3029549426680</span>),
+                        ('c', <span class="num">0.1979883004921</span>),
+                        ('g', <span class="num">0.1975473066391</span>),
+                        ('t', <span class="num">0.3015094502008</span>)];
+
+    make_fasta2(<span class="str">&quot;&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">&quot;</span>,
+                    alu.iter().cycle().map(|c| *c), n * <span class="num">2</span>).unwrap();
+    make_fasta(<span class="str">&quot;&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">&quot;</span>,
+                    rng.clone(), make_random(iub), num_threads).unwrap();
+
+    rng.lock().unwrap().reset(n*<span class="num">5</span>);
+
+    make_fasta(<span class="str">&quot;&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">&quot;</span>,
+                    rng, make_random(homosapiens), num_threads).unwrap();
+
+    io::stdout().flush().unwrap();
+}

@@ -1,0 +1,50 @@
+<span class="slc">;;; The Computer Language Benchmarks Game</span>
+<span class="slc">;;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;;;</span>
+<span class="slc">;;; contributed by Witali Kusnezow 2008-12-19</span>
+<span class="slc">;;;     using semaphore synchronization</span>
+
+(<span class="kwa">defconstant</span>  +threads+ <span class="num">503</span>)
+(<span class="kwa">defparameter</span> *counter* <span class="num">0</span>)
+(<span class="kwa">defparameter</span> *current* <span class="num">0</span>)
+(<span class="kwa">defparameter</span> *semaphore* (<span class="kwa">sb-thread</span>:make-semaphore))
+(<span class="kwa">defparameter</span> *semaphores*
+  (<span class="kwa">make-array</span> +threads+
+              :initial-contents
+              (<span class="kwa">loop</span> for i of-type fixnum below +threads+
+                 collect (<span class="kwa">sb-thread</span>:make-semaphore))))
+
+(<span class="kwa">declaim</span> (<span class="kwa">type</span> fixnum *counter* *current*))
+
+(<span class="kwa">defmacro</span> wait   (<span class="kwa">semaphore</span>)
+  `(<span class="kwa">sb-thread</span>:wait-on-semaphore ,semaphore))
+(<span class="kwa">defmacro</span> wake (<span class="kwa">semaphore</span>)
+  `(<span class="kwa">sb-thread</span>:signal-semaphore  ,semaphore))
+(<span class="kwa">defmacro</span> kill   (<span class="kwa">thread</span>)
+  `(<span class="kwa">handler-case</span> (<span class="kwa">sb-thread</span>:terminate-thread ,thread)
+     (<span class="kwa">sb-thread</span>:interrupt-thread-error () nil)))
+
+(<span class="kwa">defun</span> thread-body ()
+  (<span class="kwa">let</span>* ((<span class="kwa">curr</span> (<span class="kwa">svref</span> *semaphores* *current*))
+         (<span class="kwa">next</span> (<span class="kwa">svref</span> *semaphores* (<span class="kwa">if</span> (= (<span class="kwa">incf</span> *current*) +threads+) <span class="num">0</span> *current*)))
+         (<span class="kwa">number</span> *current*))
+    (<span class="kwa">loop</span> do (<span class="kwa">wait</span> curr)
+       until (<span class="kwa">zerop</span> (<span class="kwa">decf</span> *counter*))
+       do (<span class="kwa">wake</span> next)
+       finally (<span class="kwa">format</span> t <span class="str">&quot;~d~%&quot;</span> number) (<span class="kwa">wake</span> *semaphore*))))
+
+(<span class="kwa">defun</span> start (<span class="kwa">n</span>)
+  (<span class="kwa">declare</span> (<span class="kwa">type</span> fixnum n))
+  (<span class="kwa">setq</span> *counter* (<span class="kwa">1</span>+ n) *current* <span class="num">0</span>)
+  (<span class="kwa">loop</span> for i of-type fixnum below +threads+
+     collect (<span class="kwa">sb-thread</span>:make-thread #'thread-body) into threads
+     finally
+       (<span class="kwa">wake</span> (<span class="kwa">svref</span> *semaphores* <span class="num">0</span>))
+       (<span class="kwa">wait</span> *semaphore*)
+       (<span class="kwa">dolist</span> (<span class="kwa">i</span> threads) (<span class="kwa">kill</span> i))))
+
+(<span class="kwa">defun</span> main ()
+  (<span class="kwa">let</span> ((<span class="kwa">n</span> (<span class="kwa">parse-integer</span> (<span class="kwa">or</span> (<span class="kwa">car</span> (<span class="kwa">last</span> #+sbcl sb-ext:*posix-argv*
+                                         #+cmu  extensions:*command-line-strings*
+                                         #+gcl  si::*command-args*)) <span class="str">&quot;1&quot;</span>))))
+    (<span class="kwa">start</span> n)))

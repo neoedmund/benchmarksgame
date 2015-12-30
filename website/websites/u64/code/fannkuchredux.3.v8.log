@@ -1,0 +1,9 @@
+
+Tue, 14 Jul 2015 20:25:39 GMT
+
+COMMAND LINE:
+/usr/local/src/v8/out/native/d8 --nodebugger fannkuchredux.v8-3.v8 -- 12
+
+PROGRAM OUTPUT:
+3968050
+Pfannkuchen(12) = 65

@@ -1,0 +1,28 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># Contributed by Peter Bjarke Olsen</span>
+<span class="slc"># Modified by Doug King</span>
+<span class="slc"># Modified by Joseph LaFata</span>
+
+seq=<span class="str">&quot;&quot;</span>
+
+<span class="kwa">def</span> <span class="kwd">revcomp</span>(seq<span class="opt">)</span>
+  seq.reverse!.tr!(<span class="str">'wsatugcyrkmbdhvnATUGCYRKMBDHVN'</span>,<span class="str">'WSTAACGRYMKVHDBNTAACGRYMKVHDBN'</span><span class="opt">)</span>
+  stringlen=seq.length-1
+  <span class="num">0</span>.<span class="kwd">step</span>(stringlen,<span class="num">60</span><span class="opt">)</span> {|x| print seq[x,60] , &quot;\n&quot;}
+<span class="kwa">end</span>
+
+<span class="kwc">STDIN</span>.each <span class="kwa">do</span> |line|
+  <span class="kwa">if</span> line.<span class="kwa">include</span>? <span class="str">'&gt;'</span>
+    <span class="kwa">if</span> !seq.empty?
+      <span class="kwd">revcomp</span>(seq<span class="opt">)</span>
+      seq=<span class="str">&quot;&quot;</span>
+    <span class="kwa">end</span>
+    puts line
+  <span class="kwa">else</span>
+    line.chomp!
+    seq &lt;&lt; line
+  <span class="kwa">end</span>
+<span class="kwa">end</span>
+<span class="kwd">revcomp</span>(seq<span class="opt">)</span>

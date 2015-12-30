@@ -1,0 +1,81 @@
+<span class="slc">;; The Computer Language Benchmarks Game</span>
+<span class="slc">;; http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">;</span>
+<span class="slc">;; Adapted from the Java -server version</span>
+<span class="slc">;</span>
+<span class="slc">;; contributed by Marko Kocic</span>
+<span class="slc">;; modified by Kenneth Jonsson, restructured to allow usage of 'pmap'</span>
+<span class="slc">;; modified by Andy Fingerhut to use faster primitive math ops, and</span>
+<span class="slc">;; deftype instead of defrecord for smaller tree nodes.</span>
+<span class="slc">;; modified by Mike Anderson to avoid boxing overheads</span>
+
+(ns binarytreesredux
+  (:gen-class))
+
+(set! *warn-on-reflection* true)
+
+<span class="slc">;; These TreeNode's take up noticeably less memory than a similar one</span>
+<span class="slc">;; implemented using defrecord.</span>
+
+(deftype TreeNode [left right ^int item])
+
+(<span class="kwa">defn</span> ^:static bottom-up-tree [^long item ^long depth]
+  (<span class="kwc">let</span> [int-item (int item)
+        int-depth (int depth)]
+    (<span class="kwc">if</span> (&lt;= depth <span class="num">0</span>)
+      (TreeNode. nil nil int-item)
+      (TreeNode.
+       (bottom-up-tree (unchecked-dec (unchecked-multiply (int <span class="num">2</span>) int-item))
+                       (unchecked-dec int-depth))
+       (bottom-up-tree (unchecked-multiply (int <span class="num">2</span>) int-item)
+                       (unchecked-dec int-depth))
+       int-item))))
+
+(<span class="kwa">defn</span> ^:static item-check ^long [^TreeNode node]
+  (<span class="kwc">let</span> [item (int (.item node))]
+	  (if-not (.left node)
+	    item
+	    (unchecked-add 
+         (unchecked-add 
+           item 
+           (unchecked-int (item-check (.left node))))
+	       (unchecked-negate 
+           (unchecked-int (item-check (.right node))))))))
+
+    
+(<span class="kwa">defn</span> ^:static check-trees [^long i ^long acc ^long d]    
+  (<span class="kwc">if</span> (&lt;= i <span class="num">0</span>)
+    acc
+    (<span class="kwc">let</span> [value (unchecked-add 
+                  (unchecked-int (item-check (bottom-up-tree i d)))
+                  (unchecked-int (item-check (bottom-up-tree (- i) d))))]
+      (<span class="kwb">recur</span> (dec i) (+ acc value) d))))
+
+(<span class="kwa">defn</span> iterate-trees 
+  ([mx mn d]
+    (<span class="kwc">let</span> [iterations (bit-shift-left <span class="num">1</span> (int (+ mx mn (- d))))]
+      (format <span class="str">&quot;%d</span><span class="esc">\t</span> <span class="str">trees of depth %d</span><span class="esc">\t</span> <span class="str">check: %d&quot;</span> (* <span class="num">2</span> iterations) d (check-trees iterations <span class="num">0</span> d)))))
+
+(<span class="kwa">def</span> min-depth <span class="num">4</span>)
+
+(<span class="kwa">defn</span> main [max-depth]
+  (<span class="kwc">let</span> [stretch-depth (long (inc max-depth))]
+    (<span class="kwc">let</span> [tree (bottom-up-tree <span class="num">0</span> stretch-depth)
+          <span class="kwc">check</span> (item-check tree)]
+      (println (format <span class="str">&quot;stretch tree of depth %d</span><span class="esc">\t</span> <span class="str">check: %d&quot;</span> stretch-depth <span class="kwc">check</span>)))
+    (<span class="kwc">let</span> [long-lived-tree (bottom-up-tree <span class="num">0</span> max-depth) ]
+      <span class="slc">;; The following line is where Kenneth Jonsson used pmap.  On a</span>
+      <span class="slc">;; 1-core machine, I have found significantly less user+system</span>
+      <span class="slc">;; CPU time used when it is map, and slightly less elapsed time</span>
+      <span class="slc">;; (at the cost of more user+system CPU time) when it is pmap.</span>
+      (<span class="kwb">doseq</span> [trees-nfo (<span class="kwd">map</span> (<span class="kwa">fn</span> [d]
+                                (iterate-trees max-depth min-depth d))
+			      (<span class="kwd">range</span> min-depth stretch-depth <span class="num">2</span>)) ]
+        (println trees-nfo))
+      (println (format <span class="str">&quot;long lived tree of depth %d</span><span class="esc">\t</span> <span class="str">check: %d&quot;</span> max-depth (item-check long-lived-tree))))))
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [n (<span class="kwc">if</span> (<span class="kwd">first</span> args) (Integer/parseInt (<span class="kwd">first</span> args)) <span class="num">0</span>)
+        max-depth (<span class="kwc">if</span> (&gt; (+ min-depth <span class="num">2</span>) n) (+ min-depth <span class="num">2</span>) n)]
+    (main max-depth)
+    (shutdown-agents)))

@@ -1,0 +1,25 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># Contributed by Sebastien Loisel</span>
+<span class="slc"># Fixed by Isaac Gouy</span>
+<span class="slc"># Sped up by Josh Goldfoot</span>
+<span class="slc"># Dirtily sped up by Simon Descarpentries</span>
+<span class="slc"># Sped up with numpy by Kittipong Piyawanno</span>
+<span class="slc"># 2to3</span>
+
+<span class="kwa">from</span> sys <span class="kwa">import</span> argv
+<span class="kwa">from</span> numpy <span class="kwa">import</span> *
+
+<span class="kwa">def</span> <span class="kwd">spectralnorm</span>(n):
+	u = <span class="kwd">matrix</span>(<span class="kwd">ones</span>(n))
+	j = <span class="kwd">arange</span>(n)
+	eval_func = <span class="kwa">lambda</span> i : <span class="num">1.0</span> / ((i + j) * (i + j + <span class="num">1</span>) / <span class="num">2</span> + i + <span class="num">1</span>)
+	M = <span class="kwd">matrix</span>([<span class="kwd">eval_func</span>(i) <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwd">arange</span>(n)])
+	MT = M.T
+	<span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span> (<span class="num">10</span>):
+		v = (u*MT)*M
+		u = (v*MT)*M
+	<span class="kwa">print</span>(<span class="str">&quot;</span><span class="ipl">%0</span><span class="str">.9f&quot;</span> % (<span class="kwb">sum</span>(u*v.T)/<span class="kwb">sum</span>(v*v.T))**<span class="num">0.5</span>)
+
+<span class="kwd">spectralnorm</span>(<span class="kwb">int</span>(argv[<span class="num">1</span>]))

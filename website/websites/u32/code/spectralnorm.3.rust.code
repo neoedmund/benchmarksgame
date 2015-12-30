@@ -1,0 +1,92 @@
+<span class="hl slc">// The Computer Language Benchmarks Game</span>
+<span class="hl slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="hl slc">//</span>
+<span class="hl slc">// contributed by the Rust Project Developers</span>
+<span class="hl slc">// contributed by TeXitoi</span>
+
+<span class="hl ppc">#![allow(non_snake_case)]</span>
+<span class="hl ppc">#![feature(unboxed_closures, overloaded_calls)]</span>
+
+use std<span class="hl opt">::</span>iter<span class="hl opt">::</span>AdditiveIterator<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>mem<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>os<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>raw<span class="hl opt">::</span>Repr<span class="hl opt">;</span>
+use std<span class="hl opt">::</span>simd<span class="hl opt">::</span>f64x2<span class="hl opt">;</span>
+
+fn <span class="hl kwd">main</span><span class="hl opt">() {</span>
+    let args <span class="hl opt">=</span> os<span class="hl opt">::</span><span class="hl kwd">args</span><span class="hl opt">();</span>
+    let answer <span class="hl opt">=</span> <span class="hl kwd">spectralnorm</span><span class="hl opt">(</span><span class="hl kwd">from_str</span><span class="hl opt">(</span>args<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">].</span><span class="hl kwd">as_slice</span><span class="hl opt">()).</span><span class="hl kwd">unwrap</span><span class="hl opt">());</span>
+    println<span class="hl opt">!(</span><span class="hl str">&quot;{:.9f}&quot;</span><span class="hl opt">,</span> answer<span class="hl opt">);</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">spectralnorm</span><span class="hl opt">(</span>n<span class="hl opt">:</span> uint<span class="hl opt">) -&gt;</span> f64 <span class="hl opt">{</span>
+    <span class="hl kwa">assert</span><span class="hl opt">!(</span>n <span class="hl opt">%</span> <span class="hl num">2</span> <span class="hl opt">==</span> <span class="hl num">0</span><span class="hl opt">,</span> <span class="hl str">&quot;only even lengths are accepted&quot;</span><span class="hl opt">);</span>
+    let mut u <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">from_elem</span><span class="hl opt">(</span>n<span class="hl opt">,</span> <span class="hl num">1.0</span><span class="hl opt">);</span>
+    let mut v <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">from_elem</span><span class="hl opt">(</span>n<span class="hl opt">,</span> <span class="hl num">1.0</span><span class="hl opt">);</span>
+    let mut tmp <span class="hl opt">=</span> Vec<span class="hl opt">::</span><span class="hl kwd">from_elem</span><span class="hl opt">(</span>n<span class="hl opt">,</span> <span class="hl num">1.0</span><span class="hl opt">);</span>
+    <span class="hl kwa">for</span> _ in <span class="hl kwd">range</span><span class="hl opt">(</span><span class="hl num">0u</span><span class="hl opt">,</span> <span class="hl num">10</span><span class="hl opt">) {</span>
+        <span class="hl kwd">mult_AtAv</span><span class="hl opt">(</span>u<span class="hl opt">.</span><span class="hl kwd">as_slice</span><span class="hl opt">(),</span> v<span class="hl opt">.</span><span class="hl kwd">as_mut_slice</span><span class="hl opt">(),</span> tmp<span class="hl opt">.</span><span class="hl kwd">as_mut_slice</span><span class="hl opt">());</span>
+        <span class="hl kwd">mult_AtAv</span><span class="hl opt">(</span>v<span class="hl opt">.</span><span class="hl kwd">as_slice</span><span class="hl opt">(),</span> u<span class="hl opt">.</span><span class="hl kwd">as_mut_slice</span><span class="hl opt">(),</span> tmp<span class="hl opt">.</span><span class="hl kwd">as_mut_slice</span><span class="hl opt">());</span>
+    <span class="hl opt">}</span>
+    <span class="hl opt">(</span><span class="hl kwd">dot</span><span class="hl opt">(</span>u<span class="hl opt">.</span><span class="hl kwd">as_slice</span><span class="hl opt">(),</span> v<span class="hl opt">.</span><span class="hl kwd">as_slice</span><span class="hl opt">()) /</span> <span class="hl kwd">dot</span><span class="hl opt">(</span>v<span class="hl opt">.</span><span class="hl kwd">as_slice</span><span class="hl opt">(),</span> v<span class="hl opt">.</span><span class="hl kwd">as_slice</span><span class="hl opt">())).</span><span class="hl kwd">sqrt</span><span class="hl opt">()</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">mult_AtAv</span><span class="hl opt">(</span>v<span class="hl opt">: &amp;[</span>f64<span class="hl opt">],</span> out<span class="hl opt">: &amp;</span>mut <span class="hl opt">[</span>f64<span class="hl opt">],</span> tmp<span class="hl opt">: &amp;</span>mut <span class="hl opt">[</span>f64<span class="hl opt">]) {</span>
+    <span class="hl kwd">mult_Av</span><span class="hl opt">(</span>v<span class="hl opt">,</span> tmp<span class="hl opt">);</span>
+    <span class="hl kwd">mult_Atv</span><span class="hl opt">(</span>tmp<span class="hl opt">,</span> out<span class="hl opt">);</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">mult_Av</span><span class="hl opt">(</span>v<span class="hl opt">: &amp;[</span>f64<span class="hl opt">],</span> out<span class="hl opt">: &amp;</span>mut <span class="hl opt">[</span>f64<span class="hl opt">]) {</span>
+    <span class="hl kwd">parallel</span><span class="hl opt">(</span>out<span class="hl opt">, |&amp;:</span> start<span class="hl opt">,</span> out<span class="hl opt">|</span> <span class="hl kwd">mult</span><span class="hl opt">(</span>v<span class="hl opt">,</span> out<span class="hl opt">,</span> start<span class="hl opt">, |</span>i<span class="hl opt">,</span> j<span class="hl opt">|</span> <span class="hl kwd">A</span><span class="hl opt">(</span>i<span class="hl opt">,</span> j<span class="hl opt">)));</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">mult_Atv</span><span class="hl opt">(</span>v<span class="hl opt">: &amp;[</span>f64<span class="hl opt">],</span> out<span class="hl opt">: &amp;</span>mut <span class="hl opt">[</span>f64<span class="hl opt">]) {</span>
+    <span class="hl kwd">parallel</span><span class="hl opt">(</span>out<span class="hl opt">, |&amp;:</span> start<span class="hl opt">,</span> out<span class="hl opt">|</span> <span class="hl kwd">mult</span><span class="hl opt">(</span>v<span class="hl opt">,</span> out<span class="hl opt">,</span> start<span class="hl opt">, |</span>i<span class="hl opt">,</span> j<span class="hl opt">|</span> <span class="hl kwd">A</span><span class="hl opt">(</span>j<span class="hl opt">,</span> i<span class="hl opt">)));</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">mult</span><span class="hl opt">(</span>v<span class="hl opt">: &amp;[</span>f64<span class="hl opt">],</span> out<span class="hl opt">: &amp;</span>mut <span class="hl opt">[</span>f64<span class="hl opt">],</span> start<span class="hl opt">:</span> uint<span class="hl opt">,</span> a<span class="hl opt">: |</span>uint<span class="hl opt">,</span> uint<span class="hl opt">| -&gt;</span> f64<span class="hl opt">) {</span>
+    <span class="hl kwa">for</span> <span class="hl opt">(</span>i<span class="hl opt">,</span> slot<span class="hl opt">)</span> in out<span class="hl opt">.</span><span class="hl kwd">iter_mut</span><span class="hl opt">().</span><span class="hl kwd">enumerate</span><span class="hl opt">().</span><span class="hl kwd">map</span><span class="hl opt">(|(</span>i<span class="hl opt">,</span> s<span class="hl opt">)| (</span>i <span class="hl opt">+</span> start<span class="hl opt">,</span> s<span class="hl opt">)) {</span>
+        let mut sum <span class="hl opt">=</span> <span class="hl kwd">f64x2</span><span class="hl opt">(</span><span class="hl num">0.0</span><span class="hl opt">,</span> <span class="hl num">0.0</span><span class="hl opt">);</span>
+        <span class="hl kwa">for</span> <span class="hl opt">(</span>j<span class="hl opt">,</span> chunk<span class="hl opt">)</span> in v<span class="hl opt">.</span><span class="hl kwd">chunks</span><span class="hl opt">(</span><span class="hl num">2</span><span class="hl opt">).</span><span class="hl kwd">enumerate</span><span class="hl opt">().</span><span class="hl kwd">map</span><span class="hl opt">(|(</span>j<span class="hl opt">,</span> s<span class="hl opt">)| (</span><span class="hl num">2</span> <span class="hl opt">*</span> j<span class="hl opt">,</span> s<span class="hl opt">)) {</span>
+            let top <span class="hl opt">=</span> <span class="hl kwd">f64x2</span><span class="hl opt">(</span>chunk<span class="hl opt">[</span><span class="hl num">0</span><span class="hl opt">],</span> chunk<span class="hl opt">[</span><span class="hl num">1</span><span class="hl opt">]);</span>
+            let bot <span class="hl opt">=</span> <span class="hl kwd">f64x2</span><span class="hl opt">(</span><span class="hl kwd">a</span><span class="hl opt">(</span>i<span class="hl opt">,</span> j<span class="hl opt">),</span> <span class="hl kwd">a</span><span class="hl opt">(</span>i<span class="hl opt">,</span> j <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">));</span>
+            sum <span class="hl opt">+=</span> top <span class="hl opt">/</span> bot<span class="hl opt">;</span>
+        <span class="hl opt">}</span>
+        let <span class="hl kwd">f64x2</span><span class="hl opt">(</span>a<span class="hl opt">,</span> b<span class="hl opt">) =</span> sum<span class="hl opt">;</span>
+        <span class="hl opt">*</span>slot <span class="hl opt">=</span> a <span class="hl opt">+</span> b<span class="hl opt">;</span>
+    <span class="hl opt">}</span>
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">A</span><span class="hl opt">(</span>i<span class="hl opt">:</span> uint<span class="hl opt">,</span> j<span class="hl opt">:</span> uint<span class="hl opt">) -&gt;</span> f64 <span class="hl opt">{</span>
+    <span class="hl opt">((</span>i <span class="hl opt">+</span> j<span class="hl opt">) * (</span>i <span class="hl opt">+</span> j <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">) /</span> <span class="hl num">2</span> <span class="hl opt">+</span> i <span class="hl opt">+</span> <span class="hl num">1</span><span class="hl opt">)</span> as f64
+<span class="hl opt">}</span>
+
+fn <span class="hl kwd">dot</span><span class="hl opt">(</span>v<span class="hl opt">: &amp;[</span>f64<span class="hl opt">],</span> u<span class="hl opt">: &amp;[</span>f64<span class="hl opt">]) -&gt;</span> f64 <span class="hl opt">{</span>
+    v<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">().</span><span class="hl kwd">zip</span><span class="hl opt">(</span>u<span class="hl opt">.</span><span class="hl kwd">iter</span><span class="hl opt">()).</span><span class="hl kwd">map</span><span class="hl opt">(|(</span>a<span class="hl opt">,</span> b<span class="hl opt">)| *</span>a <span class="hl opt">* *</span>b<span class="hl opt">).</span><span class="hl kwd">sum</span><span class="hl opt">()</span>
+<span class="hl opt">}</span>
+
+<span class="hl slc">// Executes a closure in parallel over the given mutable slice. The closure `f`</span>
+<span class="hl slc">// is run in parallel and yielded the starting index within `v` as well as a</span>
+<span class="hl slc">// sub-slice of `v`.</span>
+fn parallel<span class="hl opt">&lt;</span><span class="hl str">'a, T, F&gt;(v: &amp;'</span>a mut <span class="hl opt">[</span>T<span class="hl opt">],</span> f<span class="hl opt">:</span> F<span class="hl opt">)</span>
+                      where T<span class="hl opt">:</span> Send <span class="hl opt">+</span> Sync<span class="hl opt">,</span>
+                            F<span class="hl opt">:</span> <span class="hl kwd">Fn</span><span class="hl opt">(</span>uint<span class="hl opt">, &amp;</span><span class="hl str">'a mut [T]) + Sync {</span>
+<span class="hl str">    let (tx, rx) = channel();</span>
+<span class="hl str">    let size = v.len() / os::num_cpus() + 1;</span>
+<span class="hl str"></span>
+<span class="hl str">    for (i, chunk) in v.chunks_mut(size).enumerate() {</span>
+<span class="hl str">        let tx = tx.clone();</span>
+<span class="hl str"></span>
+<span class="hl str">        // Need to convert `f` and `chunk` to something that can cross the task</span>
+<span class="hl str">        // boundary.</span>
+<span class="hl str">        let f = &amp;f as *const _ as *const uint;</span>
+<span class="hl str">        let raw = chunk.repr();</span>
+<span class="hl str">        spawn(proc() {</span>
+<span class="hl str">            let f = f as *const F;</span>
+<span class="hl str">            unsafe { (*f)(i * size, mem::transmute(raw)) }</span>
+<span class="hl str">            drop(tx)</span>
+<span class="hl str">        });</span>
+<span class="hl str">    }</span>
+<span class="hl str">    drop(tx);</span>
+<span class="hl str">    for () in rx.iter() {}</span>
+<span class="hl str">}</span>

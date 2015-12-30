@@ -1,0 +1,19 @@
+
+Thu, 24 Dec 2015 02:17:21 GMT
+
+MAKE:
+/usr/local/src/swift-2.2-SNAPSHOT-2015-12-22-a-ubuntu15.10/usr/bin/swiftc mandelbrot.swift -Ounchecked -whole-module-optimization  -o mandelbrot.swift_run
+mandelbrot.swift:28:10: warning: '++' is deprecated: it will be removed in Swift 3
+         ++i
+         ^~
+             += 1
+mandelbrot.swift:38:7: warning: '++' is deprecated: it will be removed in Swift 3
+      ++bit_num
+      ^~
+                += 1
+0.83s to complete and log all make actions
+
+COMMAND LINE:
+./mandelbrot.swift_run 16000
+
+(BINARY) PROGRAM OUTPUT NOT SHOWN

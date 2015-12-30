@@ -1,0 +1,20 @@
+
+Tue, 28 Apr 2015 16:46:48 GMT
+
+MAKE:
+/usr/bin/g++ -c -pipe -O3 -fomit-frame-pointer -march=native  --std=c++11 -pthread chameneosredux.c++ -o chameneosredux.c++.o &&  \
+        /usr/bin/g++ chameneosredux.c++.o -o chameneosredux.gpp_run -Wl,--no-as-needed -lpthread 
+chameneosredux.c++:33:48: fatal error: boost/xpressive/xpressive_static.hpp: No such file or directory
+ #include <boost/xpressive/xpressive_static.hpp>
+                                                ^
+compilation terminated.
+/home/dunham/benchmarksgame/nanobench/makefiles/u32q.programs.Makefile:67: recipe for target 'chameneosredux.gpp_run' failed
+make: [chameneosredux.gpp_run] Error 1 (ignored)
+rm chameneosredux.c++
+0.48s to complete and log all make actions
+
+COMMAND LINE:
+./chameneosredux.gpp_run 60000
+
+MAKE ERROR 
+

@@ -1,0 +1,324 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Daryl Griffith </span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.io.Closeable;
+<span class="kwa">import</span> java.io.IOException;
+<span class="kwa">import</span> java.io.InputStream;
+
+<span class="kwa">public class</span> knucleotide {
+
+    <span class="kwa">static final</span> HashTable MAP = <span class="kwa">new</span> <span class="kwd">HashTable</span>();
+    <span class="kwa">static final</span> <span class="kwb">int</span>[] SEQUENCES1 = {<span class="num">1</span>, <span class="num">2</span>};
+    <span class="kwa">static final</span> <span class="kwb">int</span>[] SEQUENCES2 = {<span class="num">3</span>, <span class="num">4</span>, <span class="num">6</span>, <span class="num">12</span>, <span class="num">18</span>};
+    <span class="kwa">static final</span> <span class="kwb">int</span> LINE_LENGTH = <span class="num">60</span>;
+    <span class="kwa">static final</span> <span class="kwb">int</span> EOF = -<span class="num">1</span>;
+    <span class="kwa">static</span> <span class="kwb">byte</span>[] nucleotides;
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) {
+        <span class="kwa">try</span> (LineInputStream <span class="kwa">in</span> = <span class="kwa">new</span> <span class="kwd">LineInputStream</span>(System.<span class="kwa">in</span>)) {
+            <span class="kwa">final</span> <span class="kwb">byte</span>[] temp = <span class="kwa">new</span> <span class="kwb">byte</span>[LINE_LENGTH];
+            <span class="kwa">final</span> <span class="kwb">byte</span>[] buffer = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">125</span>_000_000];
+            <span class="kwa">final</span> <span class="kwb">byte</span>[] species = <span class="str">&quot;&gt;TH&quot;</span>.<span class="kwd">getBytes</span>();
+            <span class="kwb">int</span> n;
+            <span class="kwb">int</span> i;
+
+            outer:
+            <span class="kwa">for</span> (;;) {
+                n = <span class="kwa">in</span>.<span class="kwd">readLine</span>(temp);
+                <span class="kwa">if</span> (n == EOF) {
+                    <span class="kwa">return</span>;
+                }
+                <span class="kwa">if</span> (n != LINE_LENGTH) {
+                    <span class="kwa">for</span> (i = <span class="num">0</span>; i &lt; species.length; i++) {
+                        <span class="kwa">if</span> (temp[i] != species[i]) {
+                            <span class="kwa">continue</span> outer;
+                        }
+                    }
+                    <span class="kwa">break</span>;
+                }
+            }
+            i = <span class="num">0</span>;
+            <span class="kwa">for</span> (;;) {
+                n = <span class="kwa">in</span>.<span class="kwd">readLine</span>(temp);
+                <span class="kwa">if</span> (n == EOF) {
+                    <span class="kwa">break</span>;
+                }
+                <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; n; i++, j++) {
+                    buffer[i] = <span class="kwd">translate</span>(temp[j]);
+                }
+            }
+            <span class="kwa">if</span> (i == buffer.length) {
+                nucleotides = buffer;
+            } <span class="kwa">else</span> {
+                nucleotides = <span class="kwa">new</span> <span class="kwb">byte</span>[i];
+                System.<span class="kwd">arraycopy</span>(buffer, <span class="num">0</span>, nucleotides, <span class="num">0</span>, i);
+            }
+        } <span class="kwa">catch</span> (IOException e) {
+        }
+        <span class="kwd">countSequences</span>(SEQUENCES1);
+        <span class="kwd">printSequence</span>(<span class="num">4</span>, <span class="num">8</span>);
+        <span class="kwd">printSequence</span>(<span class="num">16</span>, <span class="num">32</span>);
+        <span class="kwd">countSequences</span>(SEQUENCES2);
+        {
+            <span class="kwa">final</span> String[] SPICIFIC_SEQUENCES = <span class="kwa">new</span> String[] {<span class="str">&quot;GGT&quot;</span>
+                    , <span class="str">&quot;GGTA&quot;</span>
+                    , <span class="str">&quot;GGTATT&quot;</span>
+                    , <span class="str">&quot;GGTATTTTAATT&quot;</span>
+                    , <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>};
+            <span class="kwa">final</span> Entry key = <span class="kwa">new</span> <span class="kwd">Entry</span>();
+
+            <span class="kwa">for</span> (String sequence : SPICIFIC_SEQUENCES) {
+                key.<span class="kwd">setKey</span>(sequence);
+                System.out.<span class="kwd">print</span>(MAP.<span class="kwd">get</span>(key).count);
+                System.out.<span class="kwd">print</span>(<span class="str">'</span><span class="esc">\t</span><span class="str">'</span>);
+                System.out.<span class="kwd">println</span>(sequence);
+            }
+        }
+    }
+
+    <span class="kwa">static</span> <span class="kwb">byte</span> <span class="kwd">translate</span>(<span class="kwb">byte</span> b) {
+        <span class="kwa">return</span> (<span class="kwb">byte</span>) ((b &gt;&gt; <span class="num">1</span>) &amp; <span class="num">3</span>);
+    }
+
+    <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">countSequences</span>(<span class="kwb">int</span>[] sequences) {
+        <span class="kwa">for</span> (<span class="kwb">int</span> sequence : sequences) {
+            <span class="kwd">updateHashtable</span>(sequence);
+        }
+    }
+
+    <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">updateHashtable</span>(<span class="kwb">int</span> sequence) {
+        Entry key = <span class="kwa">new</span> <span class="kwd">Entry</span>();
+        Entry value;
+        <span class="kwa">final</span> <span class="kwb">long</span> sentinal = <span class="num">1L</span> &lt;&lt; (sequence &lt;&lt; <span class="num">1</span>);
+        <span class="kwa">final</span> <span class="kwb">long</span> mask = sentinal - <span class="num">1L</span>;
+
+        key.<span class="kwd">setKey</span>(nucleotides.length - sequence + <span class="num">1</span>);
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = nucleotides.length - sequence; i &gt;= <span class="num">0</span>; i--) {
+            key.<span class="kwd">shiftKey</span>(i, mask, sentinal);
+            value = MAP.<span class="kwd">get</span>(key);
+            <span class="kwa">if</span> (value != null) {
+                value.count++;
+                <span class="kwa">continue</span>;
+            }
+            MAP.<span class="kwd">put</span>(key);
+        }
+    }
+
+    <span class="kwa">static</span> <span class="kwb">void</span> <span class="kwd">printSequence</span>(<span class="kwb">int</span> start, <span class="kwb">int</span> end) {
+        Entry[] sorted = <span class="kwa">new</span> Entry[end - start];
+        Entry key = <span class="kwa">new</span> <span class="kwd">Entry</span>();
+        Entry value;
+        <span class="kwb">int</span> k = <span class="num">0</span>;
+        <span class="kwb">int</span> sum = <span class="num">0</span>;
+
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = start; i &lt; end; i++) {
+            key.key = i;
+            value = MAP.<span class="kwd">get</span>(key);
+            <span class="kwa">if</span> (value != null) {
+                sum += value.count;
+                sorted[k++] = value;
+                <span class="kwa">for</span> (i++ ; i &lt; end; i++) {
+                    key.key = i;
+                    value = MAP.<span class="kwd">get</span>(key);
+                    <span class="kwa">if</span> (value != null) {
+                        <span class="kwb">int</span> j;
+
+                        sum += value.count;
+                        <span class="kwa">for</span> (j = k++; j &gt; <span class="num">0</span> &amp;&amp; value.<span class="kwd">lessthan</span>(sorted[j - <span class="num">1</span>]); j--) {
+                            sorted[j] = sorted[j - <span class="num">1</span>];
+                        }
+                        sorted[j] = value;
+                    }
+                }
+                <span class="kwa">break</span>;
+            }
+        }
+        <span class="kwa">for</span> (<span class="kwb">int</span> j = <span class="num">0</span>; j &lt; k; j++) {
+            value = sorted[j];
+            System.out.<span class="kwd">format</span>(<span class="str">&quot;%s %.3f</span><span class="esc">\n</span><span class="str">&quot;</span>, value, value.count * <span class="num">100</span>f / sum);
+        }
+        System.out.<span class="kwd">println</span>();
+    }
+
+    <span class="kwa">static class</span> LineInputStream <span class="kwa">implements</span> Closeable {
+
+        <span class="kwa">static final</span> <span class="kwb">int</span> LF = <span class="num">10</span>;
+        <span class="kwa">final</span> <span class="kwb">byte</span>[] buf = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">8192</span>];
+        <span class="kwa">final</span> InputStream <span class="kwa">in</span>;
+        <span class="kwb">int</span> pos = <span class="num">0</span>;
+        <span class="kwb">int</span> end = <span class="num">0</span>;
+
+        <span class="kwa">public</span> <span class="kwd">LineInputStream</span>(InputStream <span class="kwa">in</span>) {
+            <span class="kwa">this</span>.<span class="kwa">in</span> = <span class="kwa">in</span>;
+        }
+
+        <span class="kwc">&#64;Override</span>
+        <span class="kwa">public</span> <span class="kwb">void</span> <span class="kwd">close</span>() <span class="kwa">throws</span> IOException {
+            <span class="kwa">in</span>.<span class="kwd">close</span>();
+        }
+
+        <span class="kwa">public</span> <span class="kwb">int</span> <span class="kwd">readLine</span>(<span class="kwb">byte</span>[] b) <span class="kwa">throws</span> IOException {
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = pos; i &lt; end; i++) {
+                <span class="kwa">if</span> (buf[i] == LF) {
+                    <span class="kwa">if</span> (i - pos == LINE_LENGTH) {
+                        System.<span class="kwd">arraycopy</span>(buf, pos, b, <span class="num">0</span>, LINE_LENGTH);
+                        pos += LINE_LENGTH + <span class="num">1</span>;
+                        <span class="kwa">return</span> LINE_LENGTH;
+                    }
+                    <span class="kwb">int</span> size = i - pos;
+
+                    System.<span class="kwd">arraycopy</span>(buf, pos, b, <span class="num">0</span>, size);
+                    pos += size + <span class="num">1</span>;
+                    <span class="kwa">return</span> size;
+                }
+            }
+            end = end - pos;
+            System.<span class="kwd">arraycopy</span>(buf, pos, buf, <span class="num">0</span>, end);
+            pos = <span class="num">0</span>;
+            <span class="kwb">int</span> n = <span class="kwa">in</span>.<span class="kwd">read</span>(buf, end, buf.length - end);
+
+            <span class="kwa">if</span> (n == EOF) {
+                <span class="kwa">if</span> (end &gt; <span class="num">0</span>) {
+                    System.<span class="kwd">arraycopy</span>(buf, pos, b, <span class="num">0</span>, end);
+                    pos = end;
+                    <span class="kwa">return</span> end;
+                }
+                <span class="kwa">return</span> EOF;
+            }
+            end += n;
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = pos; i &lt; end; i++) {
+                <span class="kwa">if</span> (buf[i] == LF) {
+                    <span class="kwa">if</span> (i - pos == LINE_LENGTH) {
+                        System.<span class="kwd">arraycopy</span>(buf, pos, b, <span class="num">0</span>, LINE_LENGTH);
+                        pos += LINE_LENGTH + <span class="num">1</span>;
+                        <span class="kwa">return</span> LINE_LENGTH;
+                    }
+                    <span class="kwb">int</span> size = i - pos;
+
+                    System.<span class="kwd">arraycopy</span>(buf, pos, b, <span class="num">0</span>, size);
+                    pos += size + <span class="num">1</span>;
+                    <span class="kwa">return</span> size;
+                }
+            }
+            <span class="kwa">return</span> EOF;
+        }
+    }
+
+    <span class="kwa">static class</span> Entry <span class="kwa">implements</span> Cloneable {
+
+        <span class="kwb">long</span> key;
+        <span class="kwb">int</span> count = <span class="num">1</span>;
+        Entry next;
+
+        <span class="kwc">&#64;Override</span>
+        <span class="kwa">protected</span> Entry <span class="kwd">clone</span>() <span class="kwa">throws</span> CloneNotSupportedException {
+            <span class="kwa">return</span> (Entry) <span class="kwa">super</span>.<span class="kwd">clone</span>();
+        }
+
+        <span class="kwb">int</span> <span class="kwd">hash</span>() {
+            <span class="kwa">return</span> (<span class="kwb">int</span>) (key ^ (key &gt;&gt;&gt; <span class="num">18</span>));
+        }
+
+        <span class="kwb">boolean</span> <span class="kwd">lessthan</span>(Entry entry) {
+            <span class="kwa">if</span> (count != entry.count) {
+                <span class="kwa">return</span> count &gt; entry.count;
+            }
+            <span class="kwa">return</span> key &gt; entry.key;
+        }
+
+        <span class="kwb">void</span> <span class="kwd">setKey</span>(<span class="kwb">int</span> index) {
+            key = <span class="num">1</span>;
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = nucleotides.length - <span class="num">1</span>; i &gt;= index; i--) {
+                key = (key &lt;&lt; <span class="num">2</span>) | nucleotides[i];
+            }
+        }
+
+        <span class="kwb">void</span> <span class="kwd">setKey</span>(String species) {
+            key = <span class="num">1</span>;
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = species.<span class="kwd">length</span>() - <span class="num">1</span>; i &gt;= <span class="num">0</span>; i--) {
+                key = (key &lt;&lt; <span class="num">2</span>) | <span class="kwd">translate</span>((<span class="kwb">byte</span>) species.<span class="kwd">charAt</span>(i));
+            }
+        }
+
+        <span class="kwb">void</span> <span class="kwd">shiftKey</span>(<span class="kwb">int</span> index, <span class="kwb">long</span> mask, <span class="kwb">long</span> sentinal) {
+            key = ((key &lt;&lt; <span class="num">2</span>) &amp; mask) | nucleotides[index] | sentinal;
+       }
+
+        <span class="kwc">&#64;Override</span>
+        <span class="kwa">public</span> String <span class="kwd">toString</span>() {
+            <span class="kwa">final</span> <span class="kwb">char</span>[] name 
+                    = <span class="kwa">new</span> <span class="kwb">char</span>[(<span class="num">63</span> - Long.<span class="kwd">numberOfLeadingZeros</span>(key)) / <span class="num">2</span>];
+            <span class="kwb">long</span> temp = key;
+
+            <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; temp &gt; <span class="num">1</span>; temp &gt;&gt;= <span class="num">2</span>, i++) {
+                name[i] = (<span class="kwb">char</span>) (((temp &amp; <span class="num">3</span>) &lt;&lt; <span class="num">1</span>) | <span class="str">'A'</span>);
+                <span class="kwa">if</span> (name[i] == <span class="str">'E'</span>) {
+                    name[i] = <span class="str">'T'</span>;
+                }
+            }
+            <span class="kwa">return new</span> <span class="kwd">String</span>(name);
+        }
+    }
+
+    <span class="kwa">static class</span> HashTable {
+
+        <span class="kwa">static final</span> <span class="kwb">int</span> LOAD_FACTOR = <span class="num">0xc</span>;
+        Entry[] table = <span class="kwa">new</span> Entry[<span class="num">1</span> &lt;&lt; <span class="num">4</span>];
+        <span class="kwb">int</span> mask = table.length - <span class="num">1</span>;
+        <span class="kwb">int</span> size = <span class="num">0</span>;
+
+        Entry <span class="kwd">get</span>(Entry key) {
+            Entry entry = table[key.<span class="kwd">hash</span>() &amp; mask];
+
+            <span class="kwa">while</span> (entry != null &amp;&amp; entry.key != key.key) {
+                entry = entry.next;
+            }
+            <span class="kwa">return</span> entry;
+        }
+
+        <span class="kwb">void</span> <span class="kwd">put</span>(Entry entry) {
+            <span class="kwa">if</span> (((size &lt;&lt; <span class="num">4</span>) / table.length) &gt; LOAD_FACTOR) {
+                <span class="kwd">resize</span>();
+            }
+            <span class="kwa">try</span> {
+                <span class="kwd">putImpl</span>(entry.<span class="kwd">clone</span>());
+            } <span class="kwa">catch</span> (CloneNotSupportedException ex) {
+            }
+            size++;
+        }
+
+        <span class="kwb">void</span> <span class="kwd">putImpl</span>(Entry entry) {
+            Entry e = table[entry.<span class="kwd">hash</span>() &amp; mask];
+            Entry d;
+
+            <span class="kwa">if</span> (e == null) {
+                table[entry.<span class="kwd">hash</span>() &amp; mask] = entry;
+                <span class="kwa">return</span>;
+            }
+            <span class="kwa">do</span> {
+                d = e;
+                e = e.next;
+            } <span class="kwa">while</span> (e != null);
+            d.next = entry;
+        }
+
+        <span class="kwb">void</span> <span class="kwd">resize</span>() {
+            <span class="kwa">final</span> Entry[] oldTable = table;
+            Entry e;
+
+            table = <span class="kwa">new</span> Entry[table.length &lt;&lt; <span class="num">1</span>];
+            mask = table.length - <span class="num">1</span>;
+            <span class="kwa">for</span> (Entry entry : oldTable) {
+                <span class="kwa">while</span> (entry != null) {
+                    e = entry.next;
+                    entry.next = null;
+                    <span class="kwd">putImpl</span>(entry);
+                    entry = e;
+                }
+            }
+        }
+    }
+}

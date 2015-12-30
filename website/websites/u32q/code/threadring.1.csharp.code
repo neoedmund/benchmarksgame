@@ -1,0 +1,59 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> * contributed by Isaac Gouy</span>
+<span class="com"> */</span>
+
+<span class="kwa">using</span> System;
+<span class="kwa">using</span> System.Threading;
+
+
+<span class="kwa">internal class</span> NamedThread
+{
+   <span class="kwa">private</span> <span class="kwb">int</span> name;
+   <span class="kwa">private</span> AutoResetEvent signal = <span class="kwa">new</span> <span class="kwd">AutoResetEvent</span>(<span class="kwa">false</span>);
+   <span class="kwa">private</span> <span class="kwb">int</span> token = <span class="num">0</span>;
+
+   <span class="kwa">internal</span> <span class="kwd">NamedThread</span>(<span class="kwb">int</span> name) {
+      <span class="kwa">this</span>.name = name;
+   }
+
+   <span class="kwa">internal</span> <span class="kwb">void</span> <span class="kwd">Run</span>() {
+      <span class="kwa">while</span> (<span class="kwd">TokenNotDone</span>()) 
+         <span class="kwd">NextThread</span>().<span class="kwd">TakeToken</span>(token-<span class="num">1</span>);
+
+      <span class="kwa">if</span> (token == <span class="num">0</span>) Console.<span class="kwd">WriteLine</span>(name);
+      <span class="kwd">NextThread</span>().<span class="kwd">TakeToken</span>(-<span class="num">1</span>);
+   }
+
+   <span class="kwa">private</span> <span class="kwb">bool</span> <span class="kwd">TokenNotDone</span>() {
+      signal.<span class="kwd">WaitOne</span>();
+      <span class="kwa">return</span> token &gt; <span class="num">0</span>;
+   }
+
+   <span class="kwa">internal</span> NamedThread <span class="kwd">NextThread</span>() {
+      <span class="kwa">return</span> ThreadRing.threadRing[ name % ThreadRing.numberOfThreads ];
+   }
+
+   <span class="kwa">internal</span> <span class="kwb">void</span> <span class="kwd">TakeToken</span>(<span class="kwb">int</span> x) {
+      token = x;
+      signal.<span class="kwd">Set</span>();
+   }
+}
+
+
+<span class="kwa">public class</span> ThreadRing
+{
+   <span class="kwa">internal</span> <span class="kwb">const int</span> numberOfThreads = <span class="num">503</span>;
+   <span class="kwa">internal static</span> NamedThread[] threadRing = <span class="kwa">new</span> NamedThread[<span class="num">503</span>];
+
+   <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">Main</span>(<span class="kwb">string</span>[] args) {
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; numberOfThreads; i++){ 
+         threadRing[i] = <span class="kwa">new</span> <span class="kwd">NamedThread</span>(i+<span class="num">1</span>);
+      }
+
+      <span class="kwa">foreach</span> (NamedThread t <span class="kwa">in</span> threadRing) 
+         <span class="kwa">new</span> <span class="kwd">Thread</span>(<span class="kwa">new</span> <span class="kwd">ThreadStart</span>(t.Run)).<span class="kwd">Start</span>(); 
+
+      threadRing[<span class="num">0</span>].<span class="kwd">TakeToken</span>( <span class="kwb">int</span>.<span class="kwd">Parse</span>(args[<span class="num">0</span>]) );
+   }
+}

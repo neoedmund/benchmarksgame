@@ -1,0 +1,210 @@
+<span class="slc"># The Computer Language Benchmarks Game</span>
+<span class="slc"># http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">#</span>
+<span class="slc"># submitted by Joerg Baumann</span>
+
+<span class="kwa">from</span> bisect <span class="kwa">import</span> bisect
+<span class="kwa">from</span> contextlib <span class="kwa">import</span> closing, contextmanager
+<span class="kwa">from</span> itertools <span class="kwa">import</span> accumulate, chain, islice, zip_longest
+<span class="kwa">from</span> multiprocessing <span class="kwa">import</span> Lock, RawValue, Process
+<span class="kwa">from</span> os <span class="kwa">import</span> cpu_count
+<span class="kwa">from</span> re <span class="kwa">import</span> sub
+<span class="kwa">from</span> sys <span class="kwa">import</span> argv, stdout
+
+write = stdout.<span class="kwb">buffer</span>.write
+
+<span class="kwa">def</span> <span class="kwd">acquired_lock</span>():
+    lock = <span class="kwd">Lock</span>()
+    lock.<span class="kwd">acquire</span>()
+    <span class="kwa">return</span> lock
+
+<span class="kwa">def</span> <span class="kwd">started_process</span>(target, args):
+    process = <span class="kwd">Process</span>(target=target, args=args)
+    process.<span class="kwd">start</span>()
+    <span class="kwa">return</span> process
+
+<span class="kwb">&#64;contextmanager</span>
+<span class="kwa">def</span> <span class="kwd">lock_pair</span>(pre_lock=<span class="kwa">None</span>, post_lock=<span class="kwa">None</span>, locks=<span class="kwa">None</span>):
+    pre, post = locks <span class="kwa">if</span> locks <span class="kwa">else</span> (pre_lock, post_lock)
+    <span class="kwa">if</span> pre:
+        pre.<span class="kwd">acquire</span>()
+    <span class="kwa">yield</span>
+    <span class="kwa">if</span> post:
+        post.<span class="kwd">release</span>()
+
+<span class="kwa">def</span> <span class="kwd">write_lines</span>(
+        sequence, n, width, lines_per_block=<span class="num">10000</span>, newline=b<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>, table=<span class="kwa">None</span>):
+    i = <span class="num">0</span>
+    blocks = (n - width) // width // lines_per_block
+    <span class="kwa">if</span> blocks:
+        <span class="kwa">for</span> _ <span class="kwa">in</span> <span class="kwb">range</span>(blocks):
+            output = <span class="kwd">bytearray</span>()
+            <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(i, i + width * lines_per_block, width):
+                output += sequence[i:i + width] + newline
+            <span class="kwa">else</span>:
+                i += width
+            <span class="kwa">if</span> table:
+                <span class="kwd">write</span>(output.<span class="kwd">translate</span>(table))
+            <span class="kwa">else</span>:
+                <span class="kwd">write</span>(output)
+
+    output = <span class="kwd">bytearray</span>()
+    <span class="kwa">if</span> i &lt; n - width:
+        <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(i, n - width, width):
+            output += sequence[i:i + width] + newline
+        <span class="kwa">else</span>:
+            i += width
+    output += sequence[i:n] + newline
+    <span class="kwa">if</span> table:
+        <span class="kwd">write</span>(output.<span class="kwd">translate</span>(table))
+    <span class="kwa">else</span>:
+        <span class="kwd">write</span>(output)
+    stdout.<span class="kwb">buffer</span>.<span class="kwd">flush</span>()
+
+<span class="kwa">def</span> <span class="kwd">cumulative_probabilities</span>(alphabet, factor=<span class="num">1.0</span>):
+    probabilities = <span class="kwb">tuple</span>(<span class="kwd">accumulate</span>(p * factor <span class="kwa">for</span> _, p <span class="kwa">in</span> alphabet))
+
+    table = bytearray.<span class="kwd">maketrans</span>(
+                <span class="kwd">bytes</span>(<span class="kwd">chain</span>(<span class="kwb">range</span>(<span class="kwb">len</span>(alphabet)), [<span class="num">255</span>])),
+                <span class="kwd">bytes</span>(<span class="kwd">chain</span>((<span class="kwb">ord</span>(c) <span class="kwa">for</span> c, _ <span class="kwa">in</span> alphabet), [<span class="num">10</span>]))
+            )
+
+    <span class="kwa">return</span> probabilities, table
+
+<span class="kwa">def</span> <span class="kwd">copy_from_sequence</span>(header, sequence, n, width, locks=<span class="kwa">None</span>):
+    sequence = <span class="kwd">bytearray</span>(sequence, encoding=<span class="str">'utf8'</span>)
+    <span class="kwa">while</span> <span class="kwb">len</span>(sequence) &lt; n:
+        sequence.<span class="kwd">extend</span>(sequence)
+
+    with <span class="kwd">lock_pair</span>(locks=locks):
+        <span class="kwd">write</span>(header)
+        <span class="kwd">write_lines</span>(sequence, n, width)
+
+<span class="kwa">def</span> <span class="kwd">lcg</span>(seed, im, ia, ic):
+    local_seed = seed.value
+    <span class="kwa">try</span>:
+        <span class="kwa">while True</span>:
+            local_seed = (local_seed * ia + ic) % im
+            <span class="kwa">yield</span> local_seed
+    <span class="kwa">finally</span>:
+        seed.value = local_seed
+
+<span class="kwa">def</span> <span class="kwd">lookup</span>(probabilities, values):
+    <span class="kwa">for</span> value <span class="kwa">in</span> values:
+        <span class="kwa">yield</span> <span class="kwd">bisect</span>(probabilities, value)
+
+<span class="kwa">def</span> <span class="kwd">lcg_lookup_slow</span>(probabilities, seed, im, ia, ic):
+    with <span class="kwd">closing</span>(<span class="kwd">lcg</span>(seed, im, ia, ic)) <span class="kwa">as</span> prng:
+        <span class="kwa">yield from</span> <span class="kwd">lookup</span>(probabilities, prng)
+
+<span class="kwa">def</span> <span class="kwd">lcg_lookup_fast</span>(probabilities, seed, im, ia, ic):
+    local_seed = seed.value
+    <span class="kwa">try</span>:
+        <span class="kwa">while True</span>:
+            local_seed = (local_seed * ia + ic) % im
+            <span class="kwa">yield</span> <span class="kwd">bisect</span>(probabilities, local_seed)
+    <span class="kwa">finally</span>:
+        seed.value = local_seed
+
+<span class="kwa">def</span> <span class="kwd">lookup_and_write</span>(
+        header, probabilities, table, values, start, stop, width, locks=<span class="kwa">None</span>):
+    <span class="kwa">if</span> <span class="kwb">isinstance</span>(values, bytearray):
+        output = values
+    <span class="kwa">else</span>:
+        output = <span class="kwd">bytearray</span>()
+        output[:stop - start] = <span class="kwd">lookup</span>(probabilities, values)
+
+    with <span class="kwd">lock_pair</span>(locks=locks):
+        <span class="kwa">if</span> start == <span class="num">0</span>:
+            <span class="kwd">write</span>(header)
+        <span class="kwd">write_lines</span>(output, <span class="kwb">len</span>(output), width, newline=b<span class="str">'</span><span class="esc">\xff</span><span class="str">'</span>, table=table)
+
+<span class="kwa">def</span> <span class="kwd">random_selection</span>(header, alphabet, n, width, seed, locks=<span class="kwa">None</span>):
+    im = <span class="num">139968.0</span>
+    ia = <span class="num">3877.0</span>
+    ic = <span class="num">29573.0</span>
+
+    probabilities, table = <span class="kwd">cumulative_probabilities</span>(alphabet, im)
+
+    <span class="kwa">if not</span> locks:
+        with <span class="kwd">closing</span>(<span class="kwd">lcg_lookup_fast</span>(probabilities, seed, im, ia, ic)) <span class="kwa">as</span> prng:
+            output = <span class="kwd">bytearray</span>(<span class="kwd">islice</span>(prng, n))
+
+        <span class="kwd">lookup_and_write</span>(header, probabilities, table, output, <span class="num">0</span>, n, width)
+    <span class="kwa">else</span>:
+        pre_seed, post_seed, pre_write, post_write = locks
+
+        m = <span class="kwd">cpu_count</span>() * <span class="num">3</span> <span class="kwa">if</span> n &gt; width * <span class="num">15</span> <span class="kwa">else</span> <span class="num">1</span>
+        partitions = [n // (width * m) * width * i <span class="kwa">for</span> i <span class="kwa">in</span> <span class="kwb">range</span>(<span class="num">1</span>, m)]
+
+        processes = []
+        pre = pre_write
+
+        with <span class="kwd">lock_pair</span>(locks=(pre_seed, post_seed)):
+            with <span class="kwd">closing</span>(<span class="kwd">lcg</span>(seed, im, ia, ic)) <span class="kwa">as</span> prng:
+                <span class="kwa">for</span> start, stop <span class="kwa">in</span> <span class="kwb">zip</span>([<span class="num">0</span>] + partitions, partitions + [n]):
+                    values = <span class="kwb">list</span>(<span class="kwd">islice</span>(prng, stop - start))
+
+                    post = <span class="kwd">acquired_lock</span>() <span class="kwa">if</span> stop &lt; n <span class="kwa">else</span> post_write
+
+                    processes.<span class="kwd">append</span>(<span class="kwd">started_process</span>(
+                        lookup_and_write,
+                        (header, probabilities, table, values,
+                         start, stop, width, (pre, post))
+                    ))
+
+                    pre = post
+
+        <span class="kwa">for</span> p <span class="kwa">in</span> processes:
+            p.<span class="kwd">join</span>()
+
+<span class="kwa">def</span> <span class="kwd">fasta</span>(n):
+    alu = <span class="kwd">sub</span>(r<span class="str">'\s+'</span>, <span class="str">''</span>, <span class="str">&quot;&quot;&quot;</span>
+<span class="str">GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGA</span>
+<span class="str">TCACCTGAGGTCAGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACT</span>
+<span class="str">AAAAATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCAGCTACTCGGGAG</span>
+<span class="str">GCTGAGGCAGGAGAATCGCTTGAACCCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCG</span>
+<span class="str">CCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA</span>
+<span class="str">&quot;&quot;&quot;</span>)
+
+    iub = <span class="kwb">list</span>(<span class="kwd">zip_longest</span>(<span class="str">'acgtBDHKMNRSVWY'</span>,
+                           (<span class="num">.27</span>, <span class="num">.12</span>, <span class="num">.12</span>, <span class="num">.27</span>), fillvalue=<span class="num">.02</span>))
+
+    homosapiens = <span class="kwb">list</span>(<span class="kwb">zip</span>(<span class="str">'acgt'</span>, (<span class="num">0.3029549426680</span>, <span class="num">0.1979883004921</span>,
+                                    <span class="num">0.1975473066391</span>, <span class="num">0.3015094502008</span>)))
+
+    seed = <span class="kwd">RawValue</span>(<span class="str">'f'</span>, <span class="num">42</span>)
+    width = <span class="num">60</span>
+    tasks = [
+        (copy_from_sequence,
+         [b<span class="str">'&gt;ONE Homo sapiens alu</span><span class="esc">\n</span><span class="str">'</span>, alu, n * <span class="num">2</span>, width]),
+        (random_selection,
+         [b<span class="str">'&gt;TWO IUB ambiguity codes</span><span class="esc">\n</span><span class="str">'</span>, iub, n * <span class="num">3</span>, width, seed]),
+        (random_selection,
+         [b<span class="str">'&gt;THREE Homo sapiens frequency</span><span class="esc">\n</span><span class="str">'</span>, homosapiens, n * <span class="num">5</span>, width, seed]),
+    ]
+
+    <span class="kwa">if</span> <span class="kwd">cpu_count</span>() &lt; <span class="num">2</span>:
+        <span class="kwa">for</span> func, args <span class="kwa">in</span> tasks:
+            <span class="kwd">func</span>(*args)
+    <span class="kwa">else</span>:
+        written_1 = <span class="kwd">acquired_lock</span>()
+        seeded_2 = <span class="kwd">acquired_lock</span>()
+        written_2 = <span class="kwd">acquired_lock</span>()
+
+        locks_sets = [
+            (<span class="kwa">None</span>, written_1),
+            (<span class="kwa">None</span>, seeded_2, written_1, written_2),
+            (seeded_2, <span class="kwa">None</span>, written_2, <span class="kwa">None</span>),
+        ]
+
+        processes = [
+            <span class="kwd">started_process</span>(target, args + [locks_sets[i]])
+                <span class="kwa">for</span> i, (target, args) <span class="kwa">in</span> <span class="kwb">enumerate</span>(tasks)
+        ]
+
+        <span class="kwa">for</span> p <span class="kwa">in</span> processes:
+            p.<span class="kwd">join</span>()
+
+<span class="kwa">if</span> __name__ == <span class="str">&quot;__main__&quot;</span>:
+    <span class="kwd">fasta</span>(<span class="kwb">int</span>(argv[<span class="num">1</span>]))

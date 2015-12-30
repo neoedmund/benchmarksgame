@@ -1,0 +1,189 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"> *</span>
+<span class="com"> * contributed by Tylor Arndt</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> main
+
+<span class="kwa">import</span> (
+   <span class="str">&quot;bufio&quot;</span>
+   <span class="str">&quot;bytes&quot;</span>
+   <span class="str">&quot;fmt&quot;</span>
+   <span class="str">&quot;io/ioutil&quot;</span>
+   <span class="str">&quot;log&quot;</span>
+   <span class="str">&quot;os&quot;</span>
+   <span class="str">&quot;runtime&quot;</span>
+   <span class="str">&quot;sort&quot;</span>
+   <span class="str">&quot;sync&quot;</span>
+)
+
+<span class="kwa">func</span> <span class="kwd">main</span>() {
+   runtime.<span class="kwd">GOMAXPROCS</span>(<span class="num">4</span>)
+   dna := <span class="kwd">readEncDNA</span>()
+   <span class="kwa">var</span> wgs [<span class="num">7</span>]*sync.WaitGroup
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; <span class="num">7</span>; i++ {
+      wgs[i] = <span class="kwb">new</span>(sync.WaitGroup)
+   }
+   <span class="kwd">report</span>(dna, <span class="num">1</span>, <span class="kwb">nil</span>, wgs[<span class="num">0</span>])
+   <span class="kwd">report</span>(dna, <span class="num">2</span>, wgs[<span class="num">0</span>], wgs[<span class="num">1</span>])
+   <span class="kwd">report</span>(dna, <span class="num">3</span>, wgs[<span class="num">1</span>], wgs[<span class="num">2</span>])
+   <span class="kwd">report</span>(dna, <span class="num">4</span>, wgs[<span class="num">2</span>], wgs[<span class="num">3</span>])
+   <span class="kwd">report</span>(dna, <span class="num">6</span>, wgs[<span class="num">3</span>], wgs[<span class="num">4</span>])
+   <span class="kwd">report</span>(dna, <span class="num">12</span>, wgs[<span class="num">4</span>], wgs[<span class="num">5</span>])
+   <span class="kwd">report</span>(dna, <span class="num">18</span>, wgs[<span class="num">5</span>], wgs[<span class="num">6</span>])
+   wgs[<span class="num">6</span>].<span class="kwd">Wait</span>()
+}
+
+<span class="kwa">func</span> <span class="kwd">readEncDNA</span>() []<span class="kwb">byte</span> {
+   in, startTok := bufio.<span class="kwd">NewReader</span>(os.Stdin), []<span class="kwb">byte</span>(<span class="str">&quot;&gt;THREE &quot;</span>)
+   <span class="kwa">for</span> line, err := in.<span class="kwd">ReadSlice</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>); !bytes.<span class="kwd">HasPrefix</span>(line, startTok); line, err = in.<span class="kwd">ReadSlice</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) {
+      <span class="kwa">if</span> err != <span class="kwb">nil</span> {
+         log.<span class="kwd">Panicf</span>(<span class="str">&quot;Error: Could not read input from stdin; Details:</span> <span class="ipl">%s</span><span class="str">&quot;</span>, err)
+      }
+   }
+   ascii, err := ioutil.<span class="kwd">ReadAll</span>(in)
+   <span class="kwa">if</span> err != <span class="kwb">nil</span> {
+      log.<span class="kwd">Panicf</span>(<span class="str">&quot;Error: Could not read input from stdin; Details:</span> <span class="ipl">%s</span><span class="str">&quot;</span>, err)
+   }
+   j := <span class="num">0</span>
+   <span class="kwa">for</span> i, c, asciic := <span class="num">0</span>, <span class="kwb">byte</span>(<span class="num">0</span>), <span class="kwb">len</span>(ascii); i &lt; asciic; i++ {
+      c = ascii[i]
+      <span class="kwa">switch</span> c {
+      <span class="kwa">case</span> <span class="str">'a'</span>, <span class="str">'A'</span>:
+         c = <span class="num">0</span>
+      <span class="kwa">case</span> <span class="str">'t'</span>, <span class="str">'T'</span>:
+         c = <span class="num">1</span>
+      <span class="kwa">case</span> <span class="str">'g'</span>, <span class="str">'G'</span>:
+         c = <span class="num">2</span>
+      <span class="kwa">case</span> <span class="str">'c'</span>, <span class="str">'C'</span>:
+         c = <span class="num">3</span>
+      <span class="kwa">case</span> <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>:
+         <span class="kwa">continue</span>
+      <span class="kwa">default</span>:
+         log.<span class="kwd">Fatalf</span>(<span class="str">&quot;Error: Invalid nucleotide value: '</span><span class="ipl">%c</span><span class="str">'&quot;</span>, ascii[i])
+      }
+      ascii[j] = c
+      j++
+   }
+   <span class="kwa">return</span> ascii[:j+<span class="num">1</span>]
+}
+
+<span class="kwa">var</span> targSeqs = []<span class="kwb">string</span>{<span class="num">3</span>: <span class="str">&quot;GGT&quot;</span>, <span class="num">4</span>: <span class="str">&quot;GGTA&quot;</span>, <span class="num">6</span>: <span class="str">&quot;GGTATT&quot;</span>, <span class="num">12</span>: <span class="str">&quot;GGTATTTTAATT&quot;</span>, <span class="num">18</span>: <span class="str">&quot;GGTATTTTAATTTATAGT&quot;</span>}
+
+<span class="kwa">func</span> <span class="kwd">report</span>(dna []<span class="kwb">byte</span>, n <span class="kwb">int</span>, prev, done *sync.WaitGroup) {
+   done.<span class="kwd">Add</span>(<span class="num">1</span>)
+   <span class="kwa">go func</span>() {
+      tbl, output := <span class="kwd">count</span>(dna, n), <span class="str">&quot;&quot;</span>
+      <span class="kwa">switch</span> n {
+      <span class="kwa">case</span> <span class="num">1</span>, <span class="num">2</span>:
+         output = <span class="kwd">freqReport</span>(tbl, n)
+      <span class="kwa">default</span>:
+         targ := targSeqs[n]
+         output = fmt.<span class="kwd">Sprintf</span>(<span class="str">&quot;</span><span class="ipl">%d</span><span class="str"></span><span class="esc">\t</span><span class="str"></span><span class="ipl">%s</span><span class="str"></span><span class="esc">\n</span><span class="str">&quot;</span>, tbl[<span class="kwd">compStr</span>(targ)], targ)
+      }
+      <span class="kwa">if</span> prev != <span class="kwb">nil</span> {
+         prev.<span class="kwd">Wait</span>()
+      }
+      fmt.<span class="kwd">Print</span>(output)
+      done.<span class="kwd">Done</span>()
+   }()
+}
+
+<span class="kwa">func</span> <span class="kwd">count</span>(dna []<span class="kwb">byte</span>, n <span class="kwb">int</span>) <span class="kwa">map</span>[<span class="kwb">uint64</span>]<span class="kwb">uint64</span> {
+   tbl := <span class="kwb">make</span>(<span class="kwa">map</span>[<span class="kwb">uint64</span>]<span class="kwb">uint64</span>, (<span class="num">2</span>&lt;&lt;<span class="num">16</span>)+<span class="num">1</span>)
+   <span class="kwa">for</span> i, end := <span class="num">0</span>, <span class="kwb">len</span>(dna)-n; i &lt; end; i++ {
+      tbl[<span class="kwd">compress</span>(dna[i:i+n])]++
+   }
+   <span class="kwa">return</span> tbl
+}
+
+<span class="kwa">func</span> <span class="kwd">compress</span>(dna []<span class="kwb">byte</span>) <span class="kwb">uint64</span> {
+   <span class="kwa">var</span> val <span class="kwb">uint64</span>
+   <span class="kwa">for</span> i, dnac := <span class="num">0</span>, <span class="kwb">len</span>(dna); i &lt; dnac; i++ {
+      val = (val &lt;&lt; <span class="num">2</span>) | <span class="kwb">uint64</span>(dna[i])
+   }
+   <span class="kwa">return</span> val
+}
+
+<span class="kwa">func</span> <span class="kwd">compStr</span>(dna <span class="kwb">string</span>) <span class="kwb">uint64</span> {
+   raw := []<span class="kwb">byte</span>(dna)
+   <span class="kwa">for</span> i, rawc, c := <span class="num">0</span>, <span class="kwb">len</span>(raw), <span class="kwb">byte</span>(<span class="num">0</span>); i &lt; rawc; i++ {
+      c = raw[i]
+      <span class="kwa">switch</span> c {
+      <span class="kwa">case</span> <span class="str">'A'</span>:
+         c = <span class="num">0</span>
+      <span class="kwa">case</span> <span class="str">'T'</span>:
+         c = <span class="num">1</span>
+      <span class="kwa">case</span> <span class="str">'G'</span>:
+         c = <span class="num">2</span>
+      <span class="kwa">case</span> <span class="str">'C'</span>:
+         c = <span class="num">3</span>
+      }
+      raw[i] = c
+   }
+   <span class="kwa">return</span> <span class="kwd">compress</span>(raw)
+}
+
+<span class="kwa">func</span> <span class="kwd">decompToBytes</span>(compDNA <span class="kwb">uint64</span>, n <span class="kwb">int</span>) []<span class="kwb">byte</span> {
+   buf := bytes.<span class="kwd">NewBuffer</span>(<span class="kwb">make</span>([]<span class="kwb">byte</span>, <span class="num">0</span>, n))
+   <span class="kwa">var</span> c <span class="kwb">byte</span>
+   <span class="kwa">for</span> i := <span class="num">0</span>; i &lt; n; i++ {
+      <span class="kwa">switch</span> compDNA &amp; <span class="num">3</span> {
+      <span class="kwa">case</span> <span class="num">0</span>:
+         c = <span class="str">'A'</span>
+      <span class="kwa">case</span> <span class="num">1</span>:
+         c = <span class="str">'T'</span>
+      <span class="kwa">case</span> <span class="num">2</span>:
+         c = <span class="str">'G'</span>
+      <span class="kwa">case</span> <span class="num">3</span>:
+         c = <span class="str">'C'</span>
+      }
+      buf.<span class="kwd">WriteByte</span>(c)
+      compDNA = compDNA &gt;&gt; <span class="num">2</span>
+   }
+   <span class="kwa">if</span> n &gt; <span class="num">1</span> {
+      <span class="kwa">return</span> <span class="kwd">reverse</span>(buf.<span class="kwd">Bytes</span>())
+   }
+   <span class="kwa">return</span> buf.<span class="kwd">Bytes</span>()
+}
+
+<span class="kwa">func</span> <span class="kwd">reverse</span>(s []<span class="kwb">byte</span>) []<span class="kwb">byte</span> {
+   <span class="kwa">for</span> i, j := <span class="num">0</span>, <span class="kwb">len</span>(s)-<span class="num">1</span>; i &lt; j; i, j = i+<span class="num">1</span>, j-<span class="num">1</span> {
+      s[i], s[j] = s[j], s[i]
+   }
+   <span class="kwa">return</span> s
+}
+
+<span class="kwa">func</span> <span class="kwd">freqReport</span>(tbl <span class="kwa">map</span>[<span class="kwb">uint64</span>]<span class="kwb">uint64</span>, n <span class="kwb">int</span>) <span class="kwb">string</span> {
+   seqs := <span class="kwb">make</span>(seqSlice, <span class="num">0</span>, <span class="kwb">len</span>(tbl))
+   <span class="kwa">var</span> val, count, sum <span class="kwb">uint64</span>
+   <span class="kwa">for</span> val, count = <span class="kwa">range</span> tbl {
+      seqs = <span class="kwd">append</span>(seqs, seq{nuc: <span class="kwd">decompToBytes</span>(val, n), n: count})
+      sum += count
+   }
+   sort.<span class="kwd">Sort</span>(seqs)
+   <span class="kwa">var</span> buf bytes.Buffer
+   sumFloat, entry := <span class="kwb">float64</span>(sum), seq{}
+   <span class="kwa">for</span> _, entry = <span class="kwa">range</span> seqs {
+      fmt.<span class="kwd">Fprintf</span>(&amp;buf, <span class="str">&quot;</span><span class="ipl">%s</span> <span class="str">%.3f</span><span class="esc">\n</span><span class="str">&quot;</span>, entry.nuc, (<span class="num">100</span>*<span class="kwb">float64</span>(entry.n))/sumFloat)
+   }
+   buf.<span class="kwd">WriteByte</span>(<span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+   <span class="kwa">return</span> buf.<span class="kwd">String</span>()
+}
+
+<span class="kwa">type</span> seq <span class="kwa">struct</span> {
+   nuc []<span class="kwb">byte</span>
+   n   <span class="kwb">uint64</span>
+}
+
+<span class="kwa">type</span> seqSlice []seq
+
+<span class="kwa">func</span> (seq seqSlice) <span class="kwd">Len</span>() <span class="kwb">int</span>      { <span class="kwa">return</span> <span class="kwb">len</span>(seq) }
+<span class="kwa">func</span> (seq seqSlice) <span class="kwd">Swap</span>(i, j <span class="kwb">int</span>) { seq[i], seq[j] = seq[j], seq[i] }
+<span class="kwa">func</span> (seq seqSlice) <span class="kwd">Less</span>(i, j <span class="kwb">int</span>) <span class="kwb">bool</span> {
+   <span class="kwa">if</span> seq[i].n == seq[j].n {
+      <span class="kwa">return</span> bytes.<span class="kwd">Compare</span>(seq[i].nuc, seq[j].nuc) &lt; <span class="num">0</span>
+   }
+   <span class="kwa">return</span> seq[i].n &gt; seq[j].n
+}

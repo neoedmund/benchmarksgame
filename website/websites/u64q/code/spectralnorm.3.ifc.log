@@ -1,0 +1,17 @@
+
+Tue, 24 Mar 2015 21:37:09 GMT
+
+MAKE:
+/usr/local/src/intel/bin/ifort -O3 -fast -openmp spectralnorm.ifc-3.f90 -o spectralnorm.ifc-3.ifc_run
+ipo: warning #11021: unresolved omp_get_num_threads
+        Referenced in /tmp/ipo_ifortt9uQsK.o
+ipo: warning #11021: unresolved omp_get_thread_num
+        Referenced in /tmp/ipo_ifortt9uQsK.o
+rm spectralnorm.ifc-3.f90
+0.44s to complete and log all make actions
+
+COMMAND LINE:
+./spectralnorm.ifc-3.ifc_run 5500
+
+PROGRAM OUTPUT:
+1.274224153

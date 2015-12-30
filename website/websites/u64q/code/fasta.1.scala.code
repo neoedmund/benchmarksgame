@@ -1,0 +1,121 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com">  contributed by Isaac Gouy</span>
+<span class="com">  updated for 2.8 and modified by Rex Kerr</span>
+<span class="com">*/</span>
+
+<span class="kwa">import</span> java.io._
+
+<span class="kwa">object</span> fasta {
+  <span class="kwa">val</span> ALU =
+    <span class="str">&quot;GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG&quot;</span> +
+    <span class="str">&quot;GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA&quot;</span> +
+    <span class="str">&quot;CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT&quot;</span> +
+    <span class="str">&quot;ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA&quot;</span> +
+    <span class="str">&quot;GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG&quot;</span> +
+    <span class="str">&quot;AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC&quot;</span> +
+    <span class="str">&quot;AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA&quot;</span>
+
+  <span class="kwa">val</span> IUB = (<span class="kwd">Array</span>( (<span class="str">'a'</span>,<span class="num">0.27</span>), (<span class="str">'c'</span>,<span class="num">0.12</span>), (<span class="str">'g'</span>,<span class="num">0.12</span>), (<span class="str">'t'</span>,<span class="num">0.27</span>) ) ++
+    <span class="str">&quot;BDHKMNRSVWY&quot;</span>.<span class="kwd">map</span>(c =&gt; (c,<span class="num">0.02</span>))
+  ).<span class="kwd">scanLeft</span>( (<span class="num">0</span>:Byte,<span class="num">0.0</span>) )( (l,r) =&gt; (r._1.toByte, l._2+r._2) ).tail
+
+  <span class="kwa">val</span> HomoSapiens = <span class="kwd">Array</span>(
+    (<span class="str">'a'</span>, <span class="num">0.3029549426680</span>),
+    (<span class="str">'c'</span>, <span class="num">0.1979883004921</span>),
+    (<span class="str">'g'</span>, <span class="num">0.1975473066391</span>),
+    (<span class="str">'t'</span>, <span class="num">0.3015094502008</span>)
+  ).<span class="kwd">scanLeft</span>( (<span class="num">0</span>:Byte,<span class="num">0.0</span>) )( (l,r) =&gt; (r._1.toByte, l._2+r._2) ).tail
+
+  <span class="kwa">def</span> <span class="kwd">main</span>(args: Array[String]) = {
+    <span class="kwa">val</span> n = <span class="kwd">args</span>(<span class="num">0</span>).toInt
+    <span class="kwa">val</span> s = <span class="kwa">new</span> <span class="kwd">FastaOutputStream</span>(System.out)
+
+    s.<span class="kwd">writeDescription</span>(<span class="str">&quot;ONE Homo sapiens alu&quot;</span>)
+    s.<span class="kwd">writeRepeatingSequence</span>(ALU,n*<span class="num">2</span>)
+
+    s.<span class="kwd">writeDescription</span>(<span class="str">&quot;TWO IUB ambiguity codes&quot;</span>)
+    s.<span class="kwd">writeRandomSequence</span>(IUB,n*<span class="num">3</span>)
+
+    s.<span class="kwd">writeDescription</span>(<span class="str">&quot;THREE Homo sapiens frequency&quot;</span>)
+    s.<span class="kwd">writeRandomSequence</span>(HomoSapiens,n*<span class="num">5</span>)
+
+    s.close
+  }
+}
+
+
+<span class="slc">// extend the Java BufferedOutputStream class</span>
+
+<span class="kwa">class</span> <span class="kwd">FastaOutputStream</span>(out: OutputStream) <span class="kwa">extends</span> <span class="kwd">BufferedOutputStream</span>(out) {
+  <span class="kwa">private val</span> LineLength = <span class="num">60</span>
+  <span class="kwa">private val</span> nl = <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>.toByte
+
+  <span class="kwa">def</span> <span class="kwd">writeDescription</span>(desc: String) = { <span class="kwd">write</span>( (<span class="str">&quot;&gt;&quot;</span> + desc + <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>).getBytes ) }
+
+  <span class="kwa">def</span> <span class="kwd">writeRepeatingSequence</span>(_alu: String, length: Int) = {
+    <span class="kwa">val</span> alu = _alu.getBytes
+    <span class="kwa">var</span> n = length; <span class="kwa">var</span> k = <span class="num">0</span>; <span class="kwa">val</span> kn = alu.length;
+
+    <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+      <span class="kwa">val</span> m = <span class="kwa">if</span> (n &lt; LineLength) n <span class="kwa">else</span> LineLength
+
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt; m){
+        <span class="kwa">if</span> (k == kn) k = <span class="num">0</span>
+        <span class="kwa">val</span> b = <span class="kwd">alu</span>(k)
+        <span class="kwa">if</span> (count &lt; buf.length){ <span class="kwd">buf</span>(count) = b; count += <span class="num">1</span> }
+        <span class="kwa">else</span> { <span class="kwd">write</span>(b) } <span class="slc">// flush buffer</span>
+        k += <span class="num">1</span>
+        i += <span class="num">1</span>
+      }
+
+      <span class="kwd">write</span>(nl)
+      n -= LineLength
+    }
+  }
+
+  <span class="kwa">def</span> <span class="kwd">writeRandomSequence</span>(distribution: Array[(Byte,Double)], length: Int) = {
+    <span class="kwa">var</span> n = length
+    <span class="kwa">while</span> (n &gt; <span class="num">0</span>) {
+      <span class="kwa">val</span> m = <span class="kwa">if</span> (n &lt; LineLength) n <span class="kwa">else</span> LineLength
+
+      <span class="kwa">var</span> i = <span class="num">0</span>
+      <span class="kwa">while</span> (i &lt; m){
+        <span class="kwa">val</span> b = <span class="kwd">selectRandom</span>(distribution)
+        <span class="kwa">if</span> (count &lt; buf.length) { <span class="kwd">buf</span>(count) = b; count += <span class="num">1</span> }
+        <span class="kwa">else</span> { <span class="kwd">write</span>(b) } <span class="slc">// flush buffer</span>
+        i += <span class="num">1</span>
+      }
+
+      <span class="kwa">if</span> (count &lt; buf.length){ <span class="kwd">buf</span>(count) = nl; count += <span class="num">1</span> }
+      <span class="kwa">else</span> { <span class="kwd">write</span>(nl) } <span class="slc">// flush buffer</span>
+      n -= LineLength
+    }
+  }
+
+  <span class="kwa">private def</span> <span class="kwd">selectRandom</span>(distribution: Array[(Byte,Double)]): Byte = {
+    <span class="kwa">val</span> n = distribution.length
+    <span class="kwa">val</span> r = RandomNumber <span class="kwd">scaledTo</span>(<span class="num">1.0</span>)
+
+    <span class="kwa">var</span> i = <span class="num">0</span>
+    <span class="kwa">while</span> (i &lt; n) {
+      <span class="kwa">if</span> (r &lt; <span class="kwd">distribution</span>(i)._2) <span class="kwa">return</span> <span class="kwd">distribution</span>(i)._1
+      i = i+<span class="num">1</span>
+    }
+    <span class="kwa">return</span> <span class="kwd">distribution</span>(n-<span class="num">1</span>)._1
+  }
+}
+
+
+<span class="kwa">object</span> RandomNumber {
+  <span class="kwa">val</span> IM = <span class="num">139968</span>
+  <span class="kwa">val</span> IA = <span class="num">3877</span>
+  <span class="kwa">val</span> IC = <span class="num">29573</span>
+  <span class="kwa">private var</span> seed = <span class="num">42</span>
+
+  <span class="kwa">def</span> <span class="kwd">scaledTo</span>(max: Double) = {
+    seed = (seed * IA + IC) % IM
+    max * seed / IM
+  }
+}

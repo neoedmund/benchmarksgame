@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+   <url>
+      <loc>http://benchmarksgame.alioth.debian.org/</loc>
+   </url>
+   <url>
+      <loc>http://benchmarksgame.alioth.debian.org/play.html</loc>
+   </url>
+   <url>
+      <loc>http://benchmarksgame.alioth.debian.org/u32/</loc>
+   </url>
+</urlset>

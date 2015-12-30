@@ -1,0 +1,318 @@
+<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">// Copy task division idea from Java entry, contributed by James McIlree</span>
+<span class="slc">// Contributed by The Anh Tran</span>
+
+<span class="ppc">#include &lt;omp.h&gt;</span>
+<span class="ppc">#include &lt;sched.h&gt;</span>
+
+<span class="ppc">#include &lt;algorithm&gt;</span>
+<span class="ppc">#include &lt;vector&gt;</span>
+<span class="ppc">#include &lt;iostream&gt;</span>
+<span class="ppc">#include &lt;sstream&gt;</span>
+<span class="ppc">#include &lt;stdio.h&gt;</span>
+
+<span class="slc">//#include &lt;ext/hash_map&gt;</span>
+<span class="slc">//#include &lt;boost/unordered_map.hpp&gt;</span>
+<span class="ppc">#include &lt;ext/pb_ds/assoc_container.hpp&gt;</span>
+<span class="ppc">#include &lt;ext/pb_ds/hash_policy.hpp&gt;</span>
+
+<span class="ppc">#include &lt;boost/algorithm/string/case_conv.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/lambda/lambda.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/lambda/bind.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/format.hpp&gt;</span>
+<span class="ppc">#include &lt;boost/foreach.hpp&gt;</span>
+<span class="ppc">#define foreach BOOST_FOREACH</span>
+
+
+<span class="kwc">typedef</span> <span class="kwb">unsigned int</span>   uint;
+
+<span class="kwb">int const</span> MAX_CORE = <span class="num">16</span>;
+uint <span class="kwb">const</span> SEED = <span class="num">183</span>; <span class="slc">//183 193 405 &lt;= zero collision for hashing algorithm</span>
+
+
+<span class="slc">// Hash_table key type, with key's length = reading_frame_size</span>
+<span class="kwc">template</span> &lt;<span class="kwb">int</span> frm_sz&gt;
+<span class="kwb">struct</span> Key_T
+{
+   uint   hash_value;
+   <span class="kwb">char</span>   key[frm_sz +<span class="num">1</span>];
+
+   <span class="kwd">Key_T</span>()             {   <span class="kwd">memset</span>(<span class="kwa">this</span>, <span class="num">0</span>, <span class="kwa">sizeof</span>(*<span class="kwa">this</span>));      }
+   <span class="kwd">Key_T</span>(Key_T <span class="kwb">const</span>&amp; k)   {   <span class="kwd">memcpy</span>(<span class="kwa">this</span>, &amp;k, <span class="kwa">sizeof</span>(*<span class="kwa">this</span>));   }
+   <span class="kwd">Key_T</span>(<span class="kwb">char const</span> * str)   {   <span class="kwd">ReHash</span> (str);   }
+
+   <span class="kwb">void</span> 
+   <span class="kwd">ReHash</span>(<span class="kwb">char const</span> *str)
+   {
+      <span class="slc">// naive hashing algorithm.</span>
+      hash_value = <span class="num">0</span>;
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; frm_sz; ++i)
+      {
+         key[i] = str[i];
+         hash_value = (hash_value * SEED) + str[i];
+      }
+   }
+
+
+   <span class="slc">// Hash functor Hash&lt;HKey_T&gt;</span>
+   uint 
+   <span class="kwc">operator</span>() (<span class="kwb">const</span> Key_T &amp;k) <span class="kwb">const</span>   {   <span class="kwa">return</span> k.hash_value;   }
+
+
+   <span class="slc">// Comparison functor equal_to&lt;HKey_T&gt;(Left, Right)</span>
+   <span class="kwb">bool</span> 
+   <span class="kwc">operator</span>() (<span class="kwb">const</span> Key_T &amp;k1, <span class="kwb">const</span> Key_T &amp;k2) <span class="kwb">const</span>
+   {
+      <span class="kwa">if</span> (k1.hash_value == k2.hash_value)
+      {
+         <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; frm_sz; ++i)
+         {
+            <span class="kwa">if</span> ( <span class="kwd">__builtin_expect</span>((k1.key[i] != k2.key[i]), <span class="kwa">false</span>) )
+            {
+               <span class="slc">//++collision;</span>
+               <span class="kwa">return false</span>;   
+            }
+         }
+         <span class="kwa">return true</span>;
+      }
+      <span class="kwa">return false</span>;
+   }
+};
+
+
+<span class="slc">// Game's rule: function to update hashtable</span>
+<span class="kwc">template</span> &lt;<span class="kwb">int</span> hash_len, <span class="kwb">bool</span> MT, typename Input_T, typename HTable_T&gt;
+<span class="kwb">void</span> 
+<span class="kwd">calculate_frequency</span>(Input_T <span class="kwb">const</span> &amp;input, HTable_T&amp; hash_table)
+{
+   hash_table.<span class="kwd">clear</span>();
+   <span class="kwb">int   const</span> total_length = <span class="kwa">static_cast</span>&lt;<span class="kwb">int</span>&gt;(input.<span class="kwd">size</span>() - hash_len +<span class="num">1</span>);
+
+   <span class="kwc">typedef</span> typename Input_T::const_pointer   Ite_T;
+   Ite_T <span class="kwb">const</span>   ite_beg   = &amp;(input[<span class="num">0</span>]);
+   Ite_T <span class="kwb">const</span>   ite_end   = &amp;(input[<span class="num">0</span>]) + total_length;
+
+   typename HTable_T::key_type key;
+
+   <span class="kwa">if</span> (MT)
+   {
+      <span class="kwb">static int</span> char_done[hash_len] = {<span class="num">0</span>};
+      <span class="kwb">int const</span> chunk_sz = std::<span class="kwd">max</span>(<span class="num">512</span>, std::<span class="kwd">min</span>(<span class="num">1024</span>*<span class="num">1024</span>, total_length / <span class="kwd">omp_get_num_threads</span>() / <span class="num">128</span>));
+      <span class="kwb">int</span> ichunk;
+
+      <span class="kwa">for</span>(<span class="kwb">int</span> offset = <span class="num">0</span>; offset &lt; hash_len; ++offset)
+      {
+         <span class="slc">// Fetch task. Each thread hashes a block, which block size = chunk</span>
+         <span class="kwa">while</span> ( (ichunk = <span class="kwd">__sync_fetch_and_add</span>(char_done + offset, chunk_sz)) &lt; total_length )
+         {
+            Ite_T ite   = ite_beg + ichunk + offset;
+            Ite_T end   = std::<span class="kwd">min</span>(ite_beg + ichunk + chunk_sz, ite_end);
+         
+            <span class="kwa">for</span> (; ite &lt; end; ite += hash_len)
+            {
+               key.<span class="kwd">ReHash</span>(ite);
+               ++(hash_table[key]);
+            }
+         }
+      }
+   }
+   <span class="kwa">else</span>
+   {
+      <span class="kwa">for</span>(<span class="kwb">int</span> offset = <span class="num">0</span>; offset &lt; hash_len; ++offset)
+      {
+         <span class="kwa">for</span> (Ite_T index = ite_beg + offset; index &lt; ite_end; index += hash_len)
+         {
+            key.<span class="kwd">ReHash</span>(index);
+            ++(hash_table[key]);
+         }
+      }
+   }
+}
+
+
+<span class="slc">// Build a hash_table, count all key with hash_len = 1, 2</span>
+<span class="slc">// write the code and percentage frequency</span>
+<span class="kwc">template</span> &lt;<span class="kwb">int</span> hash_len, typename Input_T&gt;
+<span class="kwb">void</span> 
+<span class="kwd">write_frequencies</span>(Input_T <span class="kwb">const</span> &amp;input, std::ostream &amp;output)
+{
+   <span class="kwc">typedef</span> Key_T&lt;hash_len&gt;         HKey_T;
+
+   <span class="slc">//typedef __gnu_cxx::hash_map &lt;</span>
+   <span class="slc">//typedef boost::unordered_map &lt;</span>
+   <span class="kwc">typedef</span> __gnu_pbds::cc_hash_table   &lt;
+                                 HKey_T,   <span class="slc">// key type</span>
+                                 uint,   <span class="slc">// map type</span>
+                                 HKey_T,   <span class="slc">// hash functor</span>
+                                 HKey_T   <span class="slc">// equal_to functor</span>
+                              &gt;    HTable_T;
+
+
+   <span class="kwb">static</span> HTable_T hash_table[MAX_CORE];
+
+   <span class="slc">// parallel hashing. Each thread updates its own hash_table.</span>
+   <span class="kwa">if</span> (<span class="kwd">omp_get_num_threads</span>() &gt; <span class="num">1</span>)
+      calculate_frequency&lt;hash_len, <span class="kwa">true</span>&gt;(input, hash_table[<span class="kwd">omp_get_thread_num</span>()]);
+   <span class="kwa">else</span>
+      calculate_frequency&lt;hash_len, <span class="kwa">false</span>&gt;(input, hash_table[<span class="kwd">omp_get_thread_num</span>()]);
+
+
+   <span class="slc">// only the last thread, reaching this code block, to process result</span>
+   <span class="kwb">static int</span> thread_passed = <span class="num">0</span>;
+   <span class="kwa">if</span> (<span class="kwd">__sync_add_and_fetch</span>(&amp;thread_passed, <span class="num">1</span>) == <span class="kwd">omp_get_num_threads</span>())
+   {
+      <span class="slc">// merge thread local results to main hash_table</span>
+      HTable_T &amp;<span class="kwd">merge_table</span> (hash_table[<span class="num">0</span>]);
+
+      <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">1</span>; i &lt; <span class="kwd">omp_get_num_threads</span>(); ++i)
+      {
+         <span class="kwd">foreach</span> (typename HTable_T::value_type <span class="kwb">const</span> &amp; e, hash_table[i])
+            merge_table[e.first] += e.second;
+      }
+      
+   
+      <span class="kwc">typedef</span> std::pair&lt;HKey_T, uint&gt;   HValue_T;
+      <span class="kwc">typedef</span> std::vector&lt;HValue_T&gt;    List_T;
+
+      <span class="slc">// Copy results from hash_table to list</span>
+      List_T <span class="kwd">order_table</span>(merge_table.<span class="kwd">begin</span>(), merge_table.<span class="kwd">end</span>());
+
+      {
+         <span class="slc">// Sort with descending frequency</span>
+         <span class="kwa">using namespace</span> boost::lambda;
+         std::<span class="kwd">sort</span>(   order_table.<span class="kwd">begin</span>(), order_table.<span class="kwd">end</span>(),
+            ( !(<span class="kwd">bind</span>(&amp;HValue_T::second, _1) &lt; <span class="kwd">bind</span>(&amp;HValue_T::second, _2)) )   );
+      }
+
+      <span class="kwb">float const</span> total_char = <span class="kwa">static_cast</span>&lt;<span class="kwb">float</span>&gt;(input.<span class="kwd">size</span>() - hash_len +<span class="num">1</span>);
+      boost::format <span class="kwd">fmt</span>(<span class="str">&quot;%|1$s| %|2$0.3f|</span><span class="esc">\n</span><span class="str">&quot;</span>);
+
+      <span class="kwd">foreach</span>(typename List_T::value_type &amp;e, order_table)
+      {
+         e.first.key[hash_len] = <span class="num">0</span>; <span class="slc">// ensure proper null terminated</span>
+         boost::<span class="kwd">to_upper</span>(e.first.key);
+
+         <span class="kwb">float</span> percent = <span class="kwa">static_cast</span>&lt;<span class="kwb">float</span>&gt;(e.second) * <span class="num">100.0</span>f / total_char;
+         fmt % e.first.key % percent;
+
+         output &lt;&lt; fmt;
+      }
+
+      output &lt;&lt; std::endl;
+      thread_passed = <span class="num">0</span>;
+   }
+}
+
+
+<span class="slc">// Build a hash_table, count all key with hash_len = 3, 4, 6, 12, 18</span>
+<span class="slc">// Then print a specific sequence's count</span>
+<span class="kwc">template</span> &lt;<span class="kwb">int</span> hash_len, typename Input_T&gt;
+<span class="kwb">void</span> 
+<span class="kwd">write_frequencies</span>(Input_T <span class="kwb">const</span> &amp;input, std::ostream &amp;output, <span class="kwb">char const</span> *specific)
+{
+   <span class="kwc">typedef</span> Key_T&lt;hash_len&gt;      HKey_T;
+   <span class="kwc">typedef</span> __gnu_pbds::cc_hash_table   &lt;
+                                 HKey_T,   <span class="slc">// key type</span>
+                                 uint,   <span class="slc">// map type</span>
+                                 HKey_T,   <span class="slc">// hash functor</span>
+                                 HKey_T   <span class="slc">// equal_to functor</span>
+                              &gt;    HTable_T;
+
+   HTable_T local_table;   <span class="slc">// private for each thread</span>
+   <span class="kwa">if</span> (<span class="kwd">omp_get_num_threads</span>() &gt; <span class="num">1</span>)
+      calculate_frequency&lt;hash_len, <span class="kwa">true</span>&gt;(input, local_table);   <span class="slc">// parallel hash</span>
+   <span class="kwa">else</span>
+      calculate_frequency&lt;hash_len, <span class="kwa">false</span>&gt;(input, local_table);   <span class="slc">// parallel hash</span>
+
+   <span class="slc">// Build hash key for searching</span>
+   HKey_T <span class="kwd">printkey</span>(specific);
+
+   <span class="slc">// count how many matched for specific sequence</span>
+   <span class="kwb">static</span> uint total_matched = <span class="num">0</span>;
+   
+   {
+      <span class="slc">// parallel look up</span>
+      uint match = local_table[printkey];
+      <span class="ppc">#pragma omp atomic</span>
+      total_matched += match;
+   }
+
+   <span class="slc">// The last thread, reaching this code block, will print result</span>
+   <span class="kwb">static int</span> thread_passed = <span class="num">0</span>;
+   <span class="kwa">if</span> (<span class="kwd">__sync_add_and_fetch</span>(&amp;thread_passed, <span class="num">1</span>) == <span class="kwd">omp_get_num_threads</span>())
+   {
+      printkey.key[hash_len] = <span class="num">0</span>; <span class="slc">// null terminated</span>
+      boost::<span class="kwd">to_upper</span>(printkey.key);
+
+      boost::format <span class="kwd">fmt</span>(<span class="str">&quot;%1%</span><span class="esc">\t</span><span class="str">%2%</span><span class="esc">\n</span><span class="str">&quot;</span>);
+      fmt % total_matched % printkey.key;
+      output &lt;&lt; fmt;
+
+      thread_passed = <span class="num">0</span>;
+      total_matched = <span class="num">0</span>;
+   }
+}
+
+<span class="kwb">int</span> 
+<span class="kwd">GetThreadCount</span>()
+{
+   cpu_set_t cs;
+   <span class="kwd">CPU_ZERO</span>(&amp;cs);
+   <span class="kwd">sched_getaffinity</span>(<span class="num">0</span>, <span class="kwa">sizeof</span>(cs), &amp;cs);
+
+   <span class="kwb">int</span> count = <span class="num">0</span>;
+   <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; MAX_CORE; ++i)
+   {
+      <span class="kwa">if</span> (<span class="kwd">CPU_ISSET</span>(i, &amp;cs))
+         ++count;
+   }
+   <span class="kwa">return</span> count;
+}
+
+<span class="kwb">int</span> 
+<span class="kwd">main</span>()
+{
+   <span class="kwc">typedef</span> std::vector&lt;<span class="kwb">char</span>&gt; Input_T;
+   Input_T input;
+   input.<span class="kwd">reserve</span>(<span class="num">256</span>*<span class="num">1024</span>*<span class="num">1024</span>); <span class="slc">// 256MB</span>
+
+   <span class="kwb">char</span> buffer[<span class="num">64</span>];
+
+   <span class="slc">// rule: read line-by-line</span>
+   <span class="kwa">while</span> (<span class="kwd">fgets</span>(buffer, <span class="kwa">sizeof</span>(buffer), stdin))
+   {
+      <span class="kwa">if</span>(<span class="kwd">strncmp</span>(buffer, <span class="str">&quot;&gt;THREE&quot;</span>, <span class="num">6</span>) == <span class="num">0</span>)
+         <span class="kwa">break</span>;
+   }
+
+   std::back_insert_iterator&lt;Input_T&gt; <span class="kwd">back_ite</span> (input);
+   <span class="kwa">while</span> (<span class="kwd">fgets</span>(buffer, <span class="kwa">sizeof</span>(buffer), stdin))
+   {
+      <span class="kwb">size_t</span> sz = <span class="kwd">strlen</span>(buffer);
+      <span class="kwa">if</span> (buffer[sz -<span class="num">1</span>] == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+         --sz;
+
+      std::<span class="kwd">copy</span>(buffer, buffer + sz, back_ite);
+   }
+
+   std::ostringstream output[<span class="num">7</span>];
+   <span class="ppc">#pragma omp parallel num_threads(GetThreadCount()) default(shared)</span>
+   {
+      write_frequencies&lt;<span class="num">18</span>&gt;( input, output[<span class="num">6</span>], <span class="str">&quot;ggtattttaatttatagt&quot;</span> );
+      write_frequencies&lt;<span class="num">12</span>&gt;( input, output[<span class="num">5</span>], <span class="str">&quot;ggtattttaatt&quot;</span> );
+      write_frequencies&lt; <span class="num">6</span>&gt;( input, output[<span class="num">4</span>], <span class="str">&quot;ggtatt&quot;</span> );
+      write_frequencies&lt; <span class="num">4</span>&gt;( input, output[<span class="num">3</span>], <span class="str">&quot;ggta&quot;</span> );
+      write_frequencies&lt; <span class="num">3</span>&gt;( input, output[<span class="num">2</span>], <span class="str">&quot;ggt&quot;</span> );
+      write_frequencies&lt; <span class="num">2</span>&gt;( input, output[<span class="num">1</span>] );
+      write_frequencies&lt; <span class="num">1</span>&gt;( input, output[<span class="num">0</span>] );
+   }
+
+   <span class="kwd">foreach</span>(std::ostringstream <span class="kwb">const</span>&amp; s, output)
+      std::cout &lt;&lt; s.<span class="kwd">str</span>();
+      
+   <span class="kwa">return</span> <span class="num">0</span>;
+}
+

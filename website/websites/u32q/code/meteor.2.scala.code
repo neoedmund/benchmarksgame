@@ -1,0 +1,334 @@
+<span class="com">/* The Computer Language Benchmarks Game</span>
+<span class="com">   http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com">   contributed by Olof Kraigher</span>
+<span class="com">   modified by Sam Thomson</span>
+<span class="com"> */</span>
+
+<span class="kwa">package</span> meteor
+
+<span class="kwa">import</span> java.lang.Long._
+
+
+<span class="kwa">object</span> Meteor <span class="kwa">extends</span> App {
+    <span class="kwa">val</span> oNum = args.headOption.<span class="kwd">map</span>(_.toInt)
+    <span class="kwa">val</span> allSolutions = Solver.solve
+    <span class="kwa">val</span> truncated = oNum.<span class="kwd">fold</span>(allSolutions)(num =&gt; allSolutions.<span class="kwd">take</span>(num))
+    <span class="kwa">val</span> (len, min, max) = Solver.<span class="kwd">calculateLenMinMax</span>(truncated)
+    <span class="kwd">println</span>(len + <span class="str">&quot; solutions found</span><span class="esc">\n</span><span class="str">&quot;</span>)
+    <span class="kwd">println</span>(min)
+    <span class="kwd">println</span>(max)
+}
+
+<span class="kwa">case class</span> <span class="kwd">Pos</span>(x: Int, y: Int) {
+    <span class="kwa">import</span> meteor.MaskTools.{height, width}
+    <span class="kwa">import</span> meteor.HexDirection._
+
+    <span class="com">/** Move in the given direction, if possible */</span>
+    <span class="kwa">def</span> <span class="kwd">move</span>(dir: HexDirection): Option[Pos] = {
+        <span class="kwa">val</span> yMod2 = y % <span class="num">2</span>
+        <span class="kwa">val</span> (nx, ny) = dir match {
+            <span class="kwa">case</span> E  =&gt; (x + <span class="num">1</span>, y)
+            <span class="kwa">case</span> W  =&gt; (x - <span class="num">1</span>, y)
+            <span class="kwa">case</span> NE =&gt; (x + yMod2,     y - <span class="num">1</span>)
+            <span class="kwa">case</span> NW =&gt; (x + yMod2 - <span class="num">1</span>, y - <span class="num">1</span>)
+            <span class="kwa">case</span> SE =&gt; (x + yMod2,     y + <span class="num">1</span>)
+            <span class="kwa">case</span> SW =&gt; (x + yMod2 - <span class="num">1</span>, y + <span class="num">1</span>)
+        }
+        <span class="kwd">Pos</span>(nx, ny).checkBounds
+    }
+
+    <span class="kwc">&#64;inline</span>
+    <span class="kwa">private def</span> checkBounds: Option[Pos] = {
+        <span class="kwa">if</span> (<span class="num">0</span> &lt;= x &amp;&amp; x &lt; width &amp;&amp;
+            <span class="num">0</span> &lt;= y &amp;&amp; y &lt; height) {
+            <span class="kwd">Some</span>(<span class="kwa">this</span>)
+        } <span class="kwa">else</span> {
+            None
+        }
+    }
+
+    <span class="kwc">&#64;inline</span>
+    <span class="kwa">def</span> bit: Long = <span class="num">1L</span> &lt;&lt; (width * y + x)
+}
+
+<span class="kwa">case class</span> <span class="kwd">HexDirection</span>(<span class="kwa">private val</span> id: Int) {
+    <span class="kwa">import</span> meteor.HexDirection.numDirections
+
+    <span class="com">/** Rotate a specific amount clockwise */</span>
+    <span class="kwa">def</span> <span class="kwd">rotate</span>(amount : Int): HexDirection = {
+        <span class="kwd">HexDirection</span>((id + amount) % numDirections)
+    }
+
+    <span class="com">/** Flip a direction */</span>
+    <span class="kwa">def</span> flip: HexDirection = <span class="kwd">HexDirection</span>(numDirections - <span class="num">1</span> - id)
+}
+<span class="kwa">object</span> HexDirection {
+    <span class="kwa">val</span> numDirections = <span class="num">6</span>
+
+    <span class="kwa">val</span> NW = <span class="kwd">HexDirection</span>(<span class="num">0</span>)
+    <span class="kwa">val</span> W = <span class="kwd">HexDirection</span>(<span class="num">1</span>)
+    <span class="kwa">val</span> SW = <span class="kwd">HexDirection</span>(<span class="num">2</span>)
+    <span class="kwa">val</span> SE = <span class="kwd">HexDirection</span>(<span class="num">3</span>)
+    <span class="kwa">val</span> E = <span class="kwd">HexDirection</span>(<span class="num">4</span>)
+    <span class="kwa">val</span> NE = <span class="kwd">HexDirection</span>(<span class="num">5</span>)
+}
+
+<span class="com">/**</span>
+<span class="com"> * A game piece, given as a sequence of relative HexDirections between its</span>
+<span class="com"> * cells</span>
+<span class="com"> */</span>
+<span class="kwa">case class</span> <span class="kwd">Piece</span>(dirs: List[HexDirection], id: Char) {
+    <span class="kwa">private</span> lazy <span class="kwa">val</span> numRotations: Int = <span class="kwa">if</span> (id == <span class="str">'0'</span>) {
+        <span class="slc">// we can rotate any solution 180 degrees to get a new solution.</span>
+        <span class="slc">// so we only calculate the solutions where piece 0 is rotated 1, 2,</span>
+        <span class="slc">// or 3, and reverse them to generate the solutions where</span>
+        <span class="slc">// piece 0 is rotated 3, 4, and 5</span>
+        HexDirection.numDirections / <span class="num">2</span>
+    } <span class="kwa">else</span> {
+        HexDirection.numDirections
+    }
+
+    <span class="com">/** Rotate a specific amount clockwise */</span>
+    <span class="kwa">def</span> <span class="kwd">rotate</span>(amount: Int): Piece = <span class="kwd">Piece</span>(dirs.<span class="kwd">map</span>(_.<span class="kwd">rotate</span>(amount)), id)
+
+    <span class="kwa">def</span> flip: Piece = <span class="kwd">Piece</span>(dirs.<span class="kwd">map</span>(_.flip), id)
+
+    <span class="com">/* Create all rotated/flipped variations of a piece */</span>
+    lazy <span class="kwa">val</span> allVariations: List[Piece] = {
+        <span class="kwa">for</span> (
+            maybeFlipped &lt;- <span class="kwd">List</span>(<span class="kwa">this</span>, flip);
+            r &lt;- <span class="num">0</span> until numRotations
+        ) <span class="kwa">yield</span> {
+            maybeFlipped.<span class="kwd">rotate</span>(r)
+        }
+    }
+    <span class="com">/*</span>
+<span class="com">     * Create all rotated/flipped/transposed masks of a piece</span>
+<span class="com">     * grouped by the position of the first 1-bit.</span>
+<span class="com">     */</span>
+    lazy <span class="kwa">val</span> allMasks: Map[Int, List[Long]] = {
+        <span class="kwa">import</span> meteor.MaskTools.{fromLong, height, width}
+
+        <span class="kwa">val</span> all: List[Long] =
+            <span class="kwa">for</span> (variation &lt;- allVariations;
+                 x &lt;- <span class="num">0</span> until width;
+                 y &lt;- <span class="num">0</span> until height;
+                 mask &lt;- variation.<span class="kwd">toMask</span>(<span class="kwd">Pos</span>(x,y))
+                 <span class="kwa">if</span> mask.noBadIslands
+            ) <span class="kwa">yield</span> {
+                mask
+            }
+        all.<span class="kwd">groupBy</span>(mask =&gt; (~mask).<span class="kwd">firstZero</span>())
+    }
+
+    <span class="com">/** convert to a bitmask from a starting position */</span>
+    <span class="kwa">def</span> <span class="kwd">toMask</span>(startPos: Pos): Option[Long] = {
+        <span class="kwd">positions</span>(startPos).<span class="kwd">map</span>(ps =&gt; ps.<span class="kwd">foldLeft</span>(<span class="num">0L</span>)(_ | _.bit))
+    }
+
+    <span class="kwa">def</span> <span class="kwd">positions</span>(startPos: Pos): Option[List[Pos]] = {
+        dirs.<span class="kwd">foldLeft</span>(<span class="kwd">Option</span>(<span class="kwd">List</span>(startPos))) {
+            <span class="kwa">case</span> (None, dir) =&gt; None
+            <span class="kwa">case</span> (<span class="kwd">Some</span>(ps), dir) =&gt; ps.head.<span class="kwd">move</span>(dir).<span class="kwd">map</span>(_ :: ps)
+        }
+    }
+}
+<span class="kwa">object</span> Piece {
+    <span class="kwa">import</span> meteor.HexDirection._
+    
+    <span class="kwa">val</span> size = <span class="num">5</span>
+
+    <span class="kwa">val</span> pieces: List[Piece] = <span class="kwd">List</span>(
+        <span class="kwd">List</span>(E,  E,  E,  SE),
+        <span class="kwd">List</span>(SE, SW, W,  SW),
+        <span class="kwd">List</span>(W,  W,  SW, SE),
+        <span class="kwd">List</span>(E,  E,  SW, SE),
+        <span class="kwd">List</span>(NW, W,  NW, SE, SW),
+        <span class="kwd">List</span>(E,  E,  NE, W),
+        <span class="kwd">List</span>(NW, NE, NE, W),
+        <span class="kwd">List</span>(NE, SE, E,  NE),
+        <span class="kwd">List</span>(SE, SE, E,  SE),
+        <span class="kwd">List</span>(E,  NW, NW, NW)
+    ).zipWithIndex.<span class="kwd">map</span>({
+        <span class="kwa">case</span> (d, i) =&gt; <span class="kwd">Piece</span>(d, (i + <span class="str">'0'</span>).toChar)
+    })
+}
+
+<span class="com">/** Methods to manipulate Longs as bit masks */</span>
+<span class="kwa">case class</span> <span class="kwd">MaskTools</span>(mask: Long) {
+    <span class="kwa">import</span> meteor.MaskTools.{fromLong, height, size, width}
+
+    <span class="com">/** Find the position of the first zero bit in mask */</span>
+    <span class="kwc">&#64;inline</span>
+    <span class="kwa">def</span> <span class="kwd">firstZero</span>(lowerBound: Int = <span class="num">0</span>): Int = {
+        <span class="kwd">numberOfTrailingZeros</span>(~mask &gt;&gt; lowerBound) + lowerBound
+    }
+
+    <span class="com">/**</span>
+<span class="com">     * Flood fill starting at the seed, this mask is</span>
+<span class="com">     * used as the boundary</span>
+<span class="com">     */</span>
+    <span class="kwc">&#64;inline</span> <span class="kwa">def</span> <span class="kwd">floodFill</span>(seed: Long): Long = {
+        <span class="kwa">import</span> meteor.MaskTools.fromLong
+        <span class="kwa">var</span> region = <span class="num">0L</span>
+        <span class="kwa">var</span> growth = seed
+        <span class="kwa">do</span> {
+            region = growth
+            growth = region.expand &amp; ~mask
+        } <span class="kwa">while</span> (growth != region)
+        growth
+    }
+
+    <span class="com">/** Check that the mask contains no islands of size not divisible by 5 */</span>
+    <span class="kwc">&#64;inline</span> <span class="kwa">def</span> noBadIslands: Boolean = {
+        <span class="kwa">var</span> m = mask
+        <span class="kwa">var</span> lastZero = -<span class="num">1</span>
+        <span class="kwa">while</span> (m != MaskTools.full) {
+            lastZero = m.<span class="kwd">firstZero</span>(lastZero + <span class="num">1</span>)
+            <span class="kwa">val</span> growth = m.<span class="kwd">floodFill</span>(<span class="num">1L</span> &lt;&lt; lastZero)
+            <span class="kwa">if</span> (<span class="kwd">bitCount</span>(growth) % Piece.size != <span class="num">0</span>) {
+                <span class="kwa">return</span> false
+            }
+            m = m | growth
+        }
+        true
+    }
+
+    <span class="com">/** Expand mask by growing it in every direction */</span>
+    <span class="kwa">def</span> expand: Long = {
+        <span class="kwa">import</span> meteor.MaskTools._
+        <span class="kwa">val</span> evens = mask &amp; evenRows
+        <span class="kwa">val</span> odds = mask &amp; oddRows
+        <span class="kwa">val</span> toE = (mask &amp; ~eastBorder) &lt;&lt; <span class="num">1</span>
+        <span class="kwa">val</span> toW = (mask &amp; ~westBorder) &gt;&gt; <span class="num">1</span>
+        <span class="kwa">val</span> toNW = (odds &gt;&gt; width)  | ((evens &amp; ~westBorder) &gt;&gt; (width + <span class="num">1</span>))
+        <span class="kwa">val</span> toNE = (evens &gt;&gt; width ) | ((odds &amp; ~eastBorder) &gt;&gt; (width - <span class="num">1</span>))
+        <span class="kwa">val</span> toSW = (odds &lt;&lt; width)  | ((evens &amp; ~westBorder) &lt;&lt; (width - <span class="num">1</span>))
+        <span class="kwa">val</span> toSE = (evens &lt;&lt; width) | ((odds &amp; ~eastBorder) &lt;&lt; (width + <span class="num">1</span>))
+        (mask | toE | toW | toNW | toNE | toSW | toSE) &amp; full
+    }
+
+    <span class="kwa">def</span> rotate180: Long = {
+        <span class="slc">// just reverse the order of the bits</span>
+        <span class="kwa">val</span> lengthLess1: Int = size - <span class="num">1</span>
+        <span class="kwa">val</span> reversed: Iterator[Long] =
+            <span class="kwa">for</span> (idx &lt;- (<span class="num">0</span> until size).iterator) <span class="kwa">yield</span> {
+                ((mask &gt;&gt; idx) &amp; <span class="num">1</span>) &lt;&lt; (lengthLess1 - idx)
+            }
+        reversed.<span class="kwd">foldLeft</span>(<span class="num">0L</span>)(_ | _)
+    }
+
+    <span class="kwa">def</span> nonZeroPositions: Iterator[Pos] = {
+        <span class="kwa">for</span> (x &lt;- (<span class="num">0</span> until width).iterator;
+             y &lt;- (<span class="num">0</span> until height).iterator
+             <span class="kwa">if</span> (mask &amp; <span class="kwd">Pos</span>(x, y).bit) != <span class="num">0</span>) <span class="kwa">yield</span> {
+            <span class="kwd">Pos</span>(x, y)
+        }
+    }
+
+    <span class="kwa">override def</span> toString: String = {
+        <span class="kwd">Solution</span>(<span class="kwd">Map</span>(<span class="str">'1'</span> -&gt; mask)).toString
+    }
+
+    implicit <span class="kwa">def</span> toLong: Long = mask
+}
+
+<span class="kwa">object</span> MaskTools {
+    <span class="kwa">val</span> width = <span class="num">5</span>
+    <span class="kwa">val</span> height = <span class="num">10</span>
+    <span class="kwa">val</span> size = width * height
+
+    <span class="kwa">val</span> empty = <span class="num">0L</span>
+    <span class="kwa">val</span> full = (<span class="num">1L</span> &lt;&lt; size) - <span class="num">1</span>
+    <span class="kwa">val</span> firstRow: Long = (<span class="num">1</span> &lt;&lt; width) - <span class="num">1</span>
+    <span class="kwa">val</span> evenRows = {
+        <span class="kwa">val</span> evens =
+            <span class="kwa">for</span> (rowIdx &lt;- <span class="num">0</span> until height by <span class="num">2</span>) <span class="kwa">yield</span> {
+                firstRow &lt;&lt; (rowIdx * width)
+            }
+        evens.<span class="kwd">foldLeft</span>(<span class="num">0L</span>)(_ | _)
+    }
+    <span class="kwa">val</span> oddRows = evenRows &lt;&lt; width
+<span class="slc">//    val westBorder = {</span>
+<span class="slc">//        val westBorderBits =</span>
+<span class="slc">//            for (rowIdx &lt;- 0 until height) yield {</span>
+<span class="slc">//                1L &lt;&lt; (rowIdx * width)</span>
+<span class="slc">//            }</span>
+<span class="slc">//        westBorderBits.foldLeft(0L)(_ | _)</span>
+<span class="slc">//    }</span>
+    <span class="kwa">val</span> westBorder = <span class="num">0x210842108421</span>L
+    <span class="kwa">val</span> eastBorder = westBorder &lt;&lt; (width - <span class="num">1</span>)
+
+    implicit <span class="kwa">def</span> <span class="kwd">fromLong</span>(mask: Long): MaskTools = <span class="kwd">MaskTools</span>(mask)
+}
+
+<span class="kwa">case class</span> <span class="kwd">Solution</span>(pieces: Map[Char, Long]) {
+    <span class="kwa">import</span> meteor.MaskTools.{fromLong, height, width}
+
+    <span class="kwa">def</span> rotate180: Solution = <span class="kwd">Solution</span>(pieces.<span class="kwd">mapValues</span>(_.rotate180))
+
+    <span class="kwa">override def</span> toString: String = {
+        <span class="kwa">val</span> board : Array[Array[Char]] =
+            Array.<span class="kwd">fill</span>(height, width)(<span class="str">'-'</span>)
+        <span class="kwa">for</span> ((piece, mask) &lt;- pieces;
+             <span class="kwd">Pos</span>(x, y) &lt;- mask.nonZeroPositions) {
+            <span class="kwd">board</span>(y)(x) = piece
+        }
+        board.zipWithIndex.<span class="kwd">map</span>({
+            <span class="kwa">case</span> (row, i) =&gt; Solution.<span class="kwd">indent</span>(i) + row.<span class="kwd">mkString</span>(<span class="str">&quot; &quot;</span>)
+        }).<span class="kwd">mkString</span>(<span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>) + <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>
+    }
+}
+<span class="kwa">object</span> Solution {
+    <span class="com">/** Indent odd rows */</span>
+    <span class="kwc">&#64;inline</span> <span class="kwa">private def</span> <span class="kwd">indent</span>(y : Int) = <span class="kwa">if</span> (y % <span class="num">2</span> == <span class="num">1</span>) <span class="str">&quot; &quot;</span> <span class="kwa">else</span> <span class="str">&quot;&quot;</span>
+}
+
+<span class="com">/** Solves the meteor puzzle */</span>
+<span class="kwa">object</span> Solver {
+    <span class="kwa">import</span> meteor.MaskTools.fromLong
+
+    <span class="com">/** Solve the meteor puzzle */</span>
+    <span class="kwc">&#64;inline</span> <span class="kwa">def</span> solve: Iterator[Solution] = {
+        <span class="kwd">solveAux</span>(MaskTools.empty, <span class="num">0</span>, <span class="kwd">Solution</span>(<span class="kwd">Map</span>()), Piece.pieces)
+    }
+
+    <span class="com">/** Recursive search */</span>
+    <span class="kwa">private def</span> <span class="kwd">solveAux</span>(boardState: Long,
+                         firstZeroLowerBound: Int,
+                         partialSoln: Solution,
+                         piecesRemaining: List[Piece]): Iterator[Solution] = {
+        <span class="slc">// try to fill empty spots in order</span>
+        <span class="kwa">val</span> firstZeroIdx = boardState.<span class="kwd">firstZero</span>(firstZeroLowerBound)
+        <span class="kwa">if</span> (piecesRemaining.isEmpty) {
+            <span class="slc">// done</span>
+            <span class="kwd">Iterator</span>(partialSoln, partialSoln.rotate180)
+        } <span class="kwa">else</span> {
+            piecesRemaining.zipWithIndex.iterator flatMap {
+                <span class="kwa">case</span> (piece, pIdx) =&gt;
+                    <span class="kwa">val</span> remaining = piecesRemaining.<span class="kwd">slice</span>(<span class="num">0</span>, pIdx) ++
+                        piecesRemaining.<span class="kwd">slice</span>(pIdx + <span class="num">1</span>, piecesRemaining.size)
+                    <span class="kwa">for</span> (mask &lt;- piece.allMasks.<span class="kwd">getOrElse</span>(firstZeroIdx, Nil)
+                         <span class="kwa">if</span> (boardState &amp; mask) == <span class="num">0L</span>;
+                         newBoardState = boardState | mask;
+<span class="slc">//                         if newBoardState.noIslands;</span>
+                         solution &lt;- <span class="kwd">solveAux</span>(
+                                newBoardState,
+                                firstZeroIdx + <span class="num">1</span>,
+                                <span class="kwd">Solution</span>(partialSoln.pieces + (piece.id -&gt; mask)),
+                                remaining)
+                    ) <span class="kwa">yield</span> {
+                        solution
+                    }
+            }
+        }
+    }
+
+    <span class="kwc">&#64;inline</span> <span class="kwa">def</span> <span class="kwd">calculateLenMinMax</span>(solutions: Iterator[Solution]): (Int, String, String) = {
+        solutions.<span class="kwd">foldLeft</span> (<span class="num">0</span>, <span class="str">&quot;9&quot;</span>, <span class="str">&quot;0&quot;</span>) { <span class="kwa">case</span> ((l, mn, mx), solution) =&gt;
+            <span class="kwa">val</span> solutionStr = solution.toString
+            (l + <span class="num">1</span>, <span class="kwd">Seq</span>(mn, solutionStr).min, <span class="kwd">Seq</span>(mx, solutionStr).max)
+        }
+    }
+}

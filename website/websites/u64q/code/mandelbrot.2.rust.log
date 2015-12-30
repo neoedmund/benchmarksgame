@@ -1,0 +1,18 @@
+
+Thu, 10 Dec 2015 17:33:31 GMT
+
+MAKE:
+/usr/local/src/rust-1.5.0/bin/rustc -C opt-level=3 -C target-cpu=core2  mandelbrot.rs -o mandelbrot.rust-2.rust_run
+mandelbrot.rs:105:32: 105:34 error: unary negation of unsigned integers may be removed in the future
+mandelbrot.rs:105                 field.push(res^-1);
+                                                 ^~
+error: aborting due to previous error
+/home/dunham/benchmarksgame/nanobench/makefiles/u64q.programs.Makefile:627: recipe for target 'mandelbrot.rust-2.rust_run' failed
+make: [mandelbrot.rust-2.rust_run] Error 101 (ignored)
+0.24s to complete and log all make actions
+
+COMMAND LINE:
+./mandelbrot.rust-2.rust_run 1000
+
+MAKE ERROR 
+

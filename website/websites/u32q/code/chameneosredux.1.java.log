@@ -1,0 +1,47 @@
+
+Mon, 18 May 2015 22:06:40 GMT
+
+MAKE:
+mv chameneosredux.java chameneosredux.java
+mv: ‘chameneosredux.java’ and ‘chameneosredux.java’ are the same file
+/home/dunham/benchmarksgame/nanobench/makefiles/u32q.programs.Makefile:307: recipe for target 'chameneosredux.java_run' failed
+make: [chameneosredux.java_run] Error 1 (ignored)
+/usr/local/src/jdk1.8.0_45/bin/javac chameneosredux.java
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 
+0.83s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/jdk1.8.0_45/bin/java  -server -XX:+TieredCompilation -XX:+AggressiveOpts chameneosredux 6000000
+
+PROGRAM OUTPUT:
+blue + blue -> blue
+blue + red -> yellow
+blue + yellow -> red
+red + blue -> yellow
+red + red -> red
+red + yellow -> blue
+yellow + blue -> red
+yellow + red -> blue
+yellow + yellow -> yellow
+
+ blue red yellow
+3985107 zero
+3917247 zero
+4097646 zero
+ one two zero zero zero zero zero zero
+
+ blue red yellow red yellow blue red yellow red blue
+1277880 zero
+1148143 zero
+1241607 zero
+1166383 zero
+1204943 zero
+1054700 zero
+1263313 zero
+1170580 zero
+1444959 zero
+1027492 zero
+ one two zero zero zero zero zero zero
+
+
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/usr/share/java/jayatanaag.jar 

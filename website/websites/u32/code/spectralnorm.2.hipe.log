@@ -1,0 +1,13 @@
+
+Sat, 18 Jul 2015 20:19:59 GMT
+
+MAKE:
+mv spectralnorm.hipe-2.hipe spectralnorm.erl
+/usr/local/src/otp_src_18.0_nosmp/bin/erlc +native +"{hipe, [o3]}"  spectralnorm.erl
+1.22s to complete and log all make actions
+
+COMMAND LINE:
+/usr/local/src/otp_src_18.0_nosmp/bin/erl -smp disable -noshell -run  spectralnorm main 5500
+
+PROGRAM OUTPUT:
+1.274224153

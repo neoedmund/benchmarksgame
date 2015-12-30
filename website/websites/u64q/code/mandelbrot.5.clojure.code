@@ -1,0 +1,150 @@
+<span class="slc">;;   The Computer Language Benchmarks Game</span>
+<span class="slc">;;   http://benchmarksgame.alioth.debian.org/</span>
+
+<span class="slc">;; contributed by Andy Fingerhut</span>
+
+<span class="slc">;; The function 'dot' is based on suggestions and improvements made by</span>
+<span class="slc">;; these people posting to the Clojure Google group in April, 2009:</span>
+<span class="slc">;; dmitri.sotnikov, William D. Lipe, Paul Stadig, michael.messinides</span>
+<span class="slc">;; David Sletten, John Harrop</span>
+
+<span class="slc">;; change by Marko Kocic</span>
+<span class="slc">;; reduced code size by removing functions already present in Clojure</span>
+
+<span class="slc">;; change by Andy Fingerhut</span>
+<span class="slc">;; Use Java primitive double arrays instead of Clojure sequences in a</span>
+<span class="slc">;; few inner loops.  This is a sequential version using map instead of</span>
+<span class="slc">;; pmap, since sequential code tends to use less CPU time on 1-core</span>
+<span class="slc">;; machines.</span>
+
+(ns mandelbrot
+  (:gen-class)
+  (:import (java.io BufferedOutputStream)))
+
+(set! *warn-on-reflection* true)
+
+<span class="slc">;; Handle slight difference in function name between Clojure 1.2.0 and</span>
+<span class="slc">;; 1.3.0-alpha* ability to use type hints to infer fast bit</span>
+<span class="slc">;; operations.</span>
+(<span class="kwa">defmacro</span> my-unchecked-add-int [&amp; args]
+  (<span class="kwc">if</span> (and (== (*clojure-version* :major) <span class="num">1</span>)
+           (== (*clojure-version* :minor) <span class="num">2</span>))
+    `(unchecked-add ~&#64;args)
+    `(unchecked-add-int ~&#64;args)))
+
+(<span class="kwa">defmacro</span> my-unchecked-dec-int [&amp; args]
+  (<span class="kwc">if</span> (and (== (*clojure-version* :major) <span class="num">1</span>)
+           (== (*clojure-version* :minor) <span class="num">2</span>))
+    `(unchecked-dec ~&#64;args)
+    `(unchecked-dec-int ~&#64;args)))
+
+(<span class="kwa">defmacro</span> my-unchecked-divide-int [&amp; args]
+  (<span class="kwc">if</span> (and (== (*clojure-version* :major) <span class="num">1</span>)
+           (== (*clojure-version* :minor) <span class="num">2</span>))
+    `(unchecked-divide ~&#64;args)
+    `(unchecked-divide-int ~&#64;args)))
+
+(<span class="kwa">defmacro</span> my-unchecked-inc-int [&amp; args]
+  (<span class="kwc">if</span> (and (== (*clojure-version* :major) <span class="num">1</span>)
+           (== (*clojure-version* :minor) <span class="num">2</span>))
+    `(unchecked-inc ~&#64;args)
+    `(unchecked-inc-int ~&#64;args)))
+
+
+(<span class="kwa">def</span> max-iterations <span class="num">50</span>)
+(<span class="kwa">def</span> limit-square (double <span class="num">4.0</span>))
+
+(<span class="kwa">defn</span> dot [r i]
+  (<span class="kwc">let</span> [f2 (double <span class="num">2.0</span>)
+        limit-square (double limit-square)
+        iterations-remaining (int max-iterations)
+        pr (double r)
+        pi (double i)]
+    <span class="slc">;; The loop below is similar to the one in the Perl subroutine dot</span>
+    <span class="slc">;; in mandelbrot.perl, with these name correspondences:</span>
+    <span class="slc">;; pr &lt;-&gt; Cr, pi &lt;-&gt; Ci, zi &lt;-&gt; Zi, zr &lt;-&gt; Zr, zr2 &lt;-&gt; Tr, zi2 &lt;-&gt; Ti</span>
+    (<span class="kwb">loop</span> [zr (double <span class="num">0.0</span>)
+           zi (double <span class="num">0.0</span>)
+           i (int (my-unchecked-inc-int iterations-remaining))]
+      (<span class="kwc">let</span> [zr2 (* zr zr)
+            zi2 (* zi zi)]
+        (<span class="kwc">if</span> (and (not (zero? i))
+                 (&lt; (+ zr2 zi2) limit-square))
+          (<span class="kwb">recur</span> (+ (- zr2 zi2) pr)
+                 (+ (* (* f2 zr) zi) pi)
+                 (my-unchecked-dec-int i))
+          (zero? i))))))
+
+
+(<span class="kwa">defn</span> index-to-val [i scale-fac offset]
+  (+ (* i scale-fac) offset))
+
+
+(<span class="kwa">defn</span> ubyte [val]
+  (<span class="kwc">if</span> (&gt;= val <span class="num">128</span>)
+    (byte (- val <span class="num">256</span>))
+    (byte val)))
+
+
+(<span class="kwa">defn</span> compute-row [#^doubles x-vals y]
+  (<span class="kwc">let</span> [y (double y)
+        n (int (alength x-vals))
+        num-bytes-out (int (my-unchecked-divide-int (my-unchecked-add-int n <span class="num">7</span>) <span class="num">8</span>))
+        #^bytes result (byte-array num-bytes-out)
+        zero (int <span class="num">0</span>)
+        one (int <span class="num">1</span>)]
+    (<span class="kwb">loop</span> [i (int zero)
+           b (int zero)
+           num-filled-bits zero
+           result-idx (int zero)]
+      (<span class="kwc">if</span> (== i n)
+        (do
+          (<span class="kwc">when</span> (not (zero? num-filled-bits))
+            (<span class="kwc">let</span> [last-byte-val
+                  (byte (ubyte (bit-shift-left b (- <span class="num">8</span> num-filled-bits))))]
+            (aset result result-idx last-byte-val)))
+          result)
+        <span class="slc">;; else</span>
+        (<span class="kwc">let</span> [new-bit (int (<span class="kwc">if</span> (dot (aget x-vals i) y) one zero))
+              new-b (int (my-unchecked-add-int (bit-shift-left b one) new-bit))]
+          (<span class="kwc">if</span> (== num-filled-bits <span class="num">7</span>)
+            (<span class="kwc">let</span> [byte-val (byte (ubyte new-b))]
+              (aset result result-idx byte-val)
+              (<span class="kwb">recur</span> (my-unchecked-inc-int i)
+                     zero
+                     zero
+                     (my-unchecked-inc-int result-idx)))
+            (<span class="kwb">recur</span> (my-unchecked-inc-int i)
+                   new-b
+                   (my-unchecked-inc-int num-filled-bits)
+                   result-idx)))))))
+
+
+(<span class="kwa">defn</span> compute-rows [size]
+  (<span class="kwc">let</span> [two-over-size (double (/ <span class="num">2.0</span> size))
+        x-offset (double -<span class="num">1.5</span>)
+        y-offset (double -<span class="num">1.0</span>)
+        x-vals (double-array size (<span class="kwd">map</span> #(index-to-val % two-over-size x-offset)
+                                       (<span class="kwd">range</span> size)))
+        y-vals (double-array size (<span class="kwd">map</span> #(index-to-val % two-over-size y-offset)
+                                       (<span class="kwd">range</span> size)))]
+    (<span class="kwd">map</span> #(compute-row x-vals (aget y-vals %))
+         (<span class="kwd">range</span> size))))
+
+
+(<span class="kwa">defn</span> do-mandelbrot [size]
+  (<span class="kwc">let</span> [rows (compute-rows size)]
+    (printf <span class="str">&quot;P4</span><span class="esc">\n</span><span class="str">&quot;</span>)
+    (printf <span class="str">&quot;%d %d</span><span class="esc">\n</span><span class="str">&quot;</span> size size)
+    (flush)
+    (<span class="kwc">let</span> [ostream (BufferedOutputStream. System/out)]
+      (<span class="kwb">doseq</span> [r rows]
+        (. ostream write r <span class="num">0</span> (count r)))
+      (. ostream close))
+    (flush)))
+
+
+(<span class="kwa">defn</span> -main [&amp; args]
+  (<span class="kwc">let</span> [size (. Integer valueOf (nth args <span class="num">0</span>) <span class="num">10</span>)]
+    (do-mandelbrot size)
+    (shutdown-agents)))

@@ -1,0 +1,98 @@
+﻿<span class="slc">// The Computer Language Benchmarks Game</span>
+<span class="slc">// http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">//</span>
+<span class="slc">// Based on C# version by Isaac Gouy, The Anh Tran, Alan McGovern</span>
+<span class="slc">// Contributed by Don Syme</span>
+
+<span class="kwa">open</span> <span class="kwd">System</span>
+<span class="kwa">open</span> <span class="kwd">System</span>.<span class="kwd">Threading</span>
+
+<span class="kwa">type</span> <span class="kwd">BarrierHandle</span>(threads:<span class="kwb">int</span>) = 
+    <span class="kwa">let mutable</span> current = threads
+    <span class="kwa">let mutable</span> handle = <span class="kwa">new</span> <span class="kwd">ManualResetEvent</span>(<span class="kwa">false</span>)
+
+    <span class="kwa">member</span> x.<span class="kwd">WaitOne</span>() =
+        <span class="kwa">let</span> h = handle
+        <span class="kwa">if</span> <span class="kwd">Interlocked</span>.<span class="kwd">Decrement</span>(&amp;current) &gt; <span class="num">0</span> <span class="kwa">then</span> 
+            h.<span class="kwd">WaitOne</span>() |&gt; ignore;
+        <span class="kwa">else</span>
+            handle &lt;- <span class="kwa">new</span> <span class="kwd">ManualResetEvent</span>(<span class="kwa">false</span>);
+            <span class="kwd">Interlocked</span>.<span class="kwd">Exchange</span>(&amp;current, threads) |&gt; ignore;
+            h.<span class="kwd">Set</span>() |&gt; ignore;
+            h.<span class="kwd">Close</span>();
+
+<span class="kwa">let</span> <span class="kwd">Approximate</span>(u:double[], v:double[], tmp:double[], rbegin, rend, barrier: <span class="kwd">BarrierHandle</span>) =
+
+    <span class="kwa">let mutable</span> vBv = <span class="num">0.0</span>
+    <span class="kwa">let mutable</span> vv = <span class="num">0.0</span>
+
+    <span class="slc">// return element i,j of infinite matrix A </span>
+    <span class="kwa">let</span> <span class="kwd">A</span> i j = <span class="num">1.0</span> / <span class="kwb">float</span>((i + j) * (i + j + <span class="num">1</span>) / <span class="num">2</span> + i + <span class="num">1</span>)
+
+    <span class="slc">// multiply vector v by matrix A </span>
+    <span class="kwa">let</span> multiplyAv(v:double[], <span class="kwd">Av</span>:double[]) =
+        <span class="kwa">for</span> i = rbegin <span class="kwa">to</span> rend - <span class="num">1</span> <span class="kwa">do</span> 
+            <span class="kwa">let mutable</span> sum = <span class="num">0.0</span>;
+            <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> v.<span class="kwd">Length</span> - <span class="num">1</span> <span class="kwa">do</span> 
+                sum &lt;- sum + <span class="kwd">A</span> i j * v.[j];
+            <span class="kwd">Av</span>.[i] &lt;- sum
+
+    <span class="slc">// multiply vector v by matrix A transposed </span>
+    <span class="kwa">let</span> multiplyAtv(v:double[], atv:double[]) =
+        <span class="kwa">for</span> i = rbegin <span class="kwa">to</span> rend - <span class="num">1</span> <span class="kwa">do</span>
+            <span class="kwa">let mutable</span> sum = <span class="num">0.0</span>
+            <span class="kwa">for</span> j = <span class="num">0</span> <span class="kwa">to</span> v.<span class="kwd">Length</span> - <span class="num">1</span> <span class="kwa">do</span> 
+                sum &lt;- sum + <span class="kwd">A</span> j i * v.[j];
+            atv.[i] &lt;- sum;
+
+    <span class="slc">// multiply vector v by matrix A and then by matrix A transposed </span>
+    <span class="kwa">let</span> multiplyatAv(v:double[], tmp:double[], atAv:double[]) =
+        multiplyAv(v, tmp);
+        barrier.<span class="kwd">WaitOne</span>();
+
+        multiplyAtv(tmp, atAv);
+        barrier.<span class="kwd">WaitOne</span>();
+
+    <span class="kwa">for</span> i = <span class="num">0</span> <span class="kwa">to</span> <span class="num">9</span> <span class="kwa">do</span> 
+        multiplyatAv(u, tmp, v);
+        multiplyatAv(v, tmp, u);
+
+    <span class="kwa">for</span> i = rbegin <span class="kwa">to</span> rend - <span class="num">1</span> <span class="kwa">do</span>
+        vBv &lt;- vBv + u.[i] * v.[i];
+        vv &lt;- vv + v.[i] * v.[i];
+
+    (vBv, vv)
+
+
+<span class="kwa">let</span> <span class="kwd">RunGame</span> n = 
+    <span class="slc">// create unit vector</span>
+    <span class="kwa">let</span> u = <span class="kwd">Array</span>.create n <span class="num">1.0</span>
+    <span class="kwa">let</span> tmp = <span class="kwd">Array</span>.zeroCreate n 
+    <span class="kwa">let</span> v = <span class="kwd">Array</span>.zeroCreate n 
+
+    <span class="kwa">let</span> nthread = <span class="kwd">Environment</span>.<span class="kwd">ProcessorCount</span>;
+
+    <span class="kwa">let</span> barrier = <span class="kwa">new</span> <span class="kwd">BarrierHandle</span>(nthread);
+        <span class="slc">// create thread and hand out tasks</span>
+    <span class="kwa">let</span> chunk = n / nthread;
+        <span class="slc">// objects contain result of each thread</span>
+    <span class="kwa">let</span> aps = 
+        <span class="kwd">Async</span>.<span class="kwd">Parallel</span> 
+          [ <span class="kwa">for</span> i <span class="kwa">in</span> <span class="num">0</span> .. nthread - <span class="num">1</span> <span class="kwa">do</span>
+                <span class="kwa">let</span> r1 = i * chunk;
+                <span class="kwa">let</span> r2 = <span class="kwa">if</span> (i &lt; (nthread - <span class="num">1</span>)) <span class="kwa">then</span> r1 + chunk <span class="kwa">else</span> n
+                yield async { return <span class="kwd">Approximate</span>(u, v, tmp, r1, r2, barrier) } ]
+         |&gt; <span class="kwd">Async</span>.<span class="kwd">RunSynchronously</span>
+
+    <span class="kwa">let</span> vBv = aps |&gt; <span class="kwd">Array</span>.sumBy fst
+    <span class="kwa">let</span> vv = aps |&gt; <span class="kwd">Array</span>.sumBy snd
+
+    <span class="kwd">Math</span>.<span class="kwd">Sqrt</span>(vBv / vv);
+
+[&lt;<span class="kwd">EntryPoint</span>&gt;]
+<span class="kwa">let</span> main args =
+    <span class="kwa">let</span> n = <span class="kwa">try</span> <span class="kwb">int</span> &lt;| args.[<span class="num">0</span>] <span class="kwa">with</span> _ -&gt; <span class="num">2500</span>
+
+    <span class="kwd">System</span>.<span class="kwd">Console</span>.<span class="kwd">WriteLine</span>(<span class="str">&quot;{0:f9}&quot;</span>, <span class="kwd">RunGame</span> n);
+    <span class="num">0</span>
+

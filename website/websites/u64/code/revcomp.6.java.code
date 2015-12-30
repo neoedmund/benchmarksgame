@@ -1,0 +1,83 @@
+<span class="com">/*</span>
+<span class="com"> * The Computer Language Benchmarks Game</span>
+<span class="com"> * http://benchmarksgame.alioth.debian.org/</span>
+<span class="com"></span>
+<span class="com"> * contributed by Jon Edvardsson</span>
+<span class="com"> * added parallel processing to the original</span>
+<span class="com"> * program by Anthony Donnefort and Enotus.</span>
+<span class="com"> */</span>
+
+<span class="kwa">import</span> java.io.IOException;
+<span class="kwa">import</span> java.util.LinkedList;
+<span class="kwa">import</span> java.util.List;
+<span class="kwa">import</span> java.util.concurrent.ForkJoinPool;
+<span class="kwa">import</span> java.util.concurrent.RecursiveAction;
+
+<span class="kwa">public final class</span> revcomp {
+
+    <span class="kwa">static final</span> ForkJoinPool fjPool = <span class="kwa">new</span> <span class="kwd">ForkJoinPool</span>();
+
+    <span class="kwa">static final</span> <span class="kwb">byte</span>[] map = <span class="kwa">new</span> <span class="kwb">byte</span>[<span class="num">128</span>];
+
+    <span class="kwa">static</span> {
+        String[] mm = {<span class="str">&quot;ACBDGHK</span><span class="esc">\n</span><span class="str">MNSRUTWVYacbdghkmnsrutwvy&quot;</span>,
+                       <span class="str">&quot;TGVHCDM</span><span class="esc">\n</span><span class="str">KNSYAAWBRTGVHCDMKNSYAAWBR&quot;</span>};
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; mm[<span class="num">0</span>].<span class="kwd">length</span>(); i++)
+            map[mm[<span class="num">0</span>].<span class="kwd">charAt</span>(i)] = (<span class="kwb">byte</span>) mm[<span class="num">1</span>].<span class="kwd">charAt</span>(i);
+    }
+
+    <span class="kwa">private static class</span> Reverse <span class="kwa">extends</span> RecursiveAction {
+        <span class="kwa">private</span> <span class="kwb">byte</span>[] buf;
+        <span class="kwa">private</span> <span class="kwb">int</span> begin;
+        <span class="kwa">private</span> <span class="kwb">int</span> end;
+
+        <span class="kwa">public</span> <span class="kwd">Reverse</span>(<span class="kwb">byte</span>[] buf, <span class="kwb">int</span> begin, <span class="kwb">int</span> end) {
+            <span class="kwa">this</span>.buf = buf;
+            <span class="kwa">this</span>.begin = begin;
+            <span class="kwa">this</span>.end = end;
+        }
+
+        <span class="kwa">protected</span> <span class="kwb">void</span> <span class="kwd">compute</span>() {
+            <span class="kwb">byte</span>[] buf = <span class="kwa">this</span>.buf;
+            <span class="kwb">int</span> begin = <span class="kwa">this</span>.begin;
+            <span class="kwb">int</span> end = <span class="kwa">this</span>.end;
+
+            <span class="kwa">while</span> (true) {
+                <span class="kwb">byte</span> bb = buf[begin];
+                <span class="kwa">if</span> (bb == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+                    bb = buf[++begin];
+                <span class="kwb">byte</span> be = buf[end];
+                <span class="kwa">if</span> (be == <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>)
+                    be = buf[--end];
+                <span class="kwa">if</span> (begin &gt; end)
+                    <span class="kwa">break</span>;
+                buf[begin++] = be;
+                buf[end--] = bb;
+            }
+        }
+    }
+
+    <span class="kwa">public static</span> <span class="kwb">void</span> <span class="kwd">main</span>(String[] args) <span class="kwa">throws</span> IOException, InterruptedException {
+        <span class="kwa">final</span> <span class="kwb">byte</span>[] buf = <span class="kwa">new</span> <span class="kwb">byte</span>[System.<span class="kwa">in</span>.<span class="kwd">available</span>()];
+        System.<span class="kwa">in</span>.<span class="kwd">read</span>(buf);
+        List&lt;Reverse&gt; tasks = <span class="kwa">new</span> LinkedList&lt;Reverse&gt;();
+
+        <span class="kwa">for</span> (<span class="kwb">int</span> i = <span class="num">0</span>; i &lt; buf.length; ) {
+            <span class="kwa">while</span> (buf[i++] != <span class="str">'</span><span class="esc">\n</span><span class="str">'</span>) ;
+            <span class="kwb">int</span> data = i;
+            <span class="kwb">byte</span> b;
+            <span class="kwa">while</span> (i &lt; buf.length &amp;&amp; (b = buf[i++]) != <span class="str">'&gt;'</span>) {
+                buf[i-<span class="num">1</span>] = map[b];
+            }
+            Reverse task = <span class="kwa">new</span> <span class="kwd">Reverse</span>(buf, data, i - <span class="num">2</span>);
+            fjPool.<span class="kwd">execute</span>(task);
+            tasks.<span class="kwd">add</span>(task);
+        }
+        <span class="kwa">for</span> (Reverse task : tasks) {
+            task.<span class="kwd">join</span>();
+        }
+
+        System.out.<span class="kwd">write</span>(buf);
+    }
+}
+

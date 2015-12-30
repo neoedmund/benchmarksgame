@@ -1,0 +1,104 @@
+<span class="slc">-- The Computer Language Benchmarks Game</span>
+<span class="slc">-- http://benchmarksgame.alioth.debian.org/</span>
+<span class="slc">-- contributed by Mike Pall</span>
+
+<span class="slc">-- Start of dynamically compiled chunk.</span>
+<span class="kwa">local</span> chunk = [=[
+
+<span class="slc">-- Factory function for multi-precision number (mpn) operations.</span>
+<span class="kwa">local function</span> <span class="kwd">fmm</span>(fa, fb)
+  <span class="kwa">return</span> <span class="kwd">loadstring</span>(<span class="str">[[</span>
+<span class="str">    return function(y, a, ka, b, kb)</span>
+<span class="str">      local carry, n = 0, #a ]]</span>..(fb == <span class="num">0</span> <span class="kwa">and</span> <span class="str">&quot;&quot;</span> <span class="kwa">or</span> <span class="str">[[</span>
+<span class="str">      local na, nb = n, #b -- Need to adjust lengths. 1 element suffices here.</span>
+<span class="str">      if na &gt; nb then b[na] = 0 elseif na &lt; nb then a[nb] = 0; n = nb end</span>
+<span class="str">    ]]</span>)..<span class="str">[[</span>
+<span class="str">      for i=1,n do -- Sum up all elements and propagate carry.</span>
+<span class="str">        local x = a[i] ]]</span>..(fa == <span class="num">2</span> <span class="kwa">and</span> <span class="str">&quot;*ka&quot;</span> <span class="kwa">or</span> <span class="str">&quot;&quot;</span>)..
+          (fb == <span class="num">2</span> <span class="kwa">and</span> <span class="str">&quot;+b[i]*kb&quot;</span> <span class="kwa">or</span> (fb == <span class="num">1</span> <span class="kwa">and</span> <span class="str">&quot;+b[i]&quot;</span> <span class="kwa">or</span> <span class="str">&quot;&quot;</span>))..<span class="str">[[ + carry</span>
+<span class="str">        if x &lt; RADIX and x &gt;= 0 then carry = 0; y[i] = x -- Check for overflow.</span>
+<span class="str">        else local d = x % RADIX; carry = (x-d) / RADIX; y[i] = d end</span>
+<span class="str">      end</span>
+<span class="str">      y[n+1] = nil -- Truncate target. 1 element suffices here.</span>
+<span class="str">      if carry == 0 then while n &gt; 0 and y[n] == 0 do y[n] = nil end</span>
+<span class="str">      elseif carry == -1 then y[n] = y[n] - RADIX else y[n+1] = carry end</span>
+<span class="str">    ]]</span>..(fb == <span class="num">0</span> <span class="kwa">and</span> <span class="str">&quot;&quot;</span> <span class="kwa">or</span> <span class="str">[[ -- Undo length adjustment.</span>
+<span class="str">      if na &gt; nb then b[na] = nil elseif na &lt; nb and y ~= a then a[nb] = nil end</span>
+<span class="str">    ]]</span>)..<span class="str">[[</span>
+<span class="str">      return y</span>
+<span class="str">    end]]</span>)()
+<span class="kwa">end</span>
+
+<span class="slc">-- Generate needed mpn functions.</span>
+<span class="kwa">local</span> mm_kk, mm_k1, mm_k0, mm_11 = <span class="kwd">fmm</span>(<span class="num">2</span>, <span class="num">2</span>), <span class="kwd">fmm</span>(<span class="num">2</span>, <span class="num">1</span>), <span class="kwd">fmm</span>(<span class="num">2</span>, <span class="num">0</span>), <span class="kwd">fmm</span>(<span class="num">1</span>, <span class="num">1</span>)
+
+<span class="slc">-- Choose the most efficient mpn function for y = a*ka + b*kb at run-time.</span>
+<span class="kwa">local function</span> <span class="kwd">mm</span>(y, a, ka, b, kb)
+  <span class="kwa">local</span> f = mm_kk
+  <span class="kwa">if</span> kb == <span class="num">0</span> <span class="kwa">or</span> #b == <span class="num">0</span> <span class="kwa">then if</span> ka == <span class="num">1</span> <span class="kwa">then return</span> a <span class="kwa">else</span> f = mm_k0 <span class="kwa">end</span>
+  <span class="kwa">elseif</span> kb == <span class="num">1</span> <span class="kwa">then if</span> ka == <span class="num">1</span> <span class="kwa">then</span> f = mm_11 <span class="kwa">else</span> f = mm_k1 <span class="kwa">end end</span>
+  <span class="kwa">return</span> <span class="kwd">f</span>(y, a, ka, b, kb)
+<span class="kwa">end</span>
+
+<span class="slc">-- Compose matrix with numbers on the right.</span>
+<span class="kwa">local function</span> <span class="kwd">compose_r</span>(aq,ar,as,at, bq,br,bs,bt)
+  <span class="kwd">mm</span>(ar, ar,bq, at,br) <span class="kwd">mm</span>(at, at,bt, ar,bs)
+  <span class="kwd">mm</span>(as, as,bt, aq,bs) <span class="kwd">mm</span>(aq, aq,bq, <span class="kwa">nil</span>,<span class="num">0</span>)
+<span class="kwa">end</span>
+
+<span class="slc">-- Compose matrix with numbers on the left.</span>
+<span class="kwa">local function</span> <span class="kwd">compose_l</span>(aq,ar,as,at, bq,br,bs,bt)
+  <span class="kwd">mm</span>(ar, ar,bt, aq,br) <span class="kwd">mm</span>(at, at,bt, as,br)
+  <span class="kwd">mm</span>(as, as,bq, at,bs) <span class="kwd">mm</span>(aq, aq,bq, <span class="kwa">nil</span>,<span class="num">0</span>)
+<span class="kwa">end</span>
+
+<span class="slc">-- Extract one digit.</span>
+<span class="kwa">local</span> u, v, jj = {}, {}, <span class="num">0</span>
+<span class="kwa">local function</span> <span class="kwd">extract</span>(q,r,s,t, j)
+  <span class="kwa">local</span> u = j == jj + <span class="num">1</span> <span class="kwa">and</span> <span class="kwd">mm</span>(u, u,<span class="num">1</span>, q,<span class="num">1</span>) <span class="kwa">or</span> <span class="kwd">mm</span>(u, q,j, r,<span class="num">1</span>); jj = j
+  <span class="kwa">local</span> v = <span class="kwd">mm</span>(v, t,<span class="num">1</span>, s,j)
+  <span class="kwa">local</span> nu, nv, y = #u, #v
+  <span class="kwa">if</span> nu == nv <span class="kwa">then</span>
+    <span class="kwa">if</span> nu == <span class="num">1</span> <span class="kwa">then</span> y = u[<span class="num">1</span>] / v[<span class="num">1</span>]
+    <span class="kwa">else</span> y = (u[nu]*RADIX + u[nu-<span class="num">1</span>]) / (v[nv]*RADIX + v[nv-<span class="num">1</span>]) <span class="kwa">end</span>
+  <span class="kwa">elseif</span> nu == nv+<span class="num">1</span> <span class="kwa">then</span> y = (u[nu]*RADIX + u[nv]) / v[nv]
+  <span class="kwa">else return</span> <span class="num">0</span> <span class="kwa">end</span>
+  <span class="kwa">return</span> math.<span class="kwb">floor</span>(y)
+<span class="kwa">end</span>
+
+<span class="slc">-- Coroutine which yields successive digits of PI.</span>
+<span class="kwa">return</span> coroutine.<span class="kwd">wrap</span>(<span class="kwa">function</span>()
+  <span class="kwa">local</span> q, r, s, t, k = {<span class="num">1</span>}, {}, {}, {<span class="num">1</span>}, <span class="num">1</span>
+  <span class="kwa">repeat</span>
+    <span class="kwa">local</span> y = <span class="kwd">extract</span>(q,r,s,t, <span class="num">3</span>)
+    <span class="kwa">if</span> y == <span class="kwd">extract</span>(q,r,s,t, <span class="num">4</span>) <span class="kwa">then</span>
+      coroutine.<span class="kwd">yield</span>(y)
+      <span class="kwd">compose_r</span>(q,r,s,t,  <span class="num">10</span>, -<span class="num">10</span>*y, <span class="num">0</span>, <span class="num">1</span>)
+    <span class="kwa">else</span>
+      <span class="kwd">compose_l</span>(q,r,s,t,   k, <span class="num">4</span>*k+<span class="num">2</span>, <span class="num">0</span>, <span class="num">2</span>*k+<span class="num">1</span>)
+      k = k + <span class="num">1</span>
+    <span class="kwa">end</span>
+  <span class="kwa">until false</span>
+<span class="kwa">end</span>)
+
+]=] <span class="slc">-- End of dynamically compiled chunk.</span>
+
+<span class="kwa">local</span> N = <span class="kwb">tonumber</span>(arg <span class="kwa">and</span> arg[<span class="num">1</span>]) <span class="kwa">or</span> <span class="num">27</span>
+<span class="kwa">local</span> RADIX = N &lt; <span class="num">6500</span> <span class="kwa">and</span> <span class="num">2</span>^<span class="num">36</span> <span class="kwa">or</span> <span class="num">2</span>^<span class="num">32</span> <span class="slc">-- Avoid overflow.</span>
+
+<span class="slc">-- Substitute radix and compile chunk.</span>
+<span class="kwa">local</span> pidigit = <span class="kwd">loadstring</span>(<span class="kwb">string</span>.<span class="kwb">gsub</span>(chunk, <span class="str">&quot;RADIX&quot;</span>, <span class="kwb">tostring</span>(RADIX)))()
+
+<span class="slc">-- Print lines with 10 digits.</span>
+<span class="kwa">for</span> i=<span class="num">10</span>,N,<span class="num">10</span> <span class="kwa">do</span>
+  <span class="kwa">for</span> j=<span class="num">1</span>,<span class="num">10</span> <span class="kwa">do</span> io.<span class="kwb">write</span>(<span class="kwd">pidigit</span>()) <span class="kwa">end</span>
+  io.<span class="kwb">write</span>(<span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>, i, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)
+<span class="kwa">end</span>
+
+<span class="slc">-- Print remaining digits (if any).</span>
+<span class="kwa">local</span> n10 = N % <span class="num">10</span>
+<span class="kwa">if</span> n10 ~= <span class="num">0</span> <span class="kwa">then</span>
+  <span class="kwa">for</span> i=<span class="num">1</span>,n10 <span class="kwa">do</span> io.<span class="kwb">write</span>(<span class="kwd">pidigit</span>()) <span class="kwa">end</span>
+  io.<span class="kwb">write</span>(<span class="kwb">string</span>.<span class="kwd">rep</span>(<span class="str">&quot; &quot;</span>, <span class="num">10</span>-n10), <span class="str">&quot;</span><span class="esc">\t</span><span class="str">:&quot;</span>, N, <span class="str">&quot;</span><span class="esc">\n</span><span class="str">&quot;</span>)
+<span class="kwa">end</span>
+

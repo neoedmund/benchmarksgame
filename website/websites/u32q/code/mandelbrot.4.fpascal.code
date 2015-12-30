@@ -1,0 +1,118 @@
+<span class="com">{ The Computer Language Benchmarks Game</span>
+<span class="com">  http://benchmarksgame.alioth.debian.org</span>
+<span class="com"></span>
+<span class="com">  contributed by Ales Katona</span>
+<span class="com">  modified by Vincent Snijders</span>
+<span class="com">  optimized and multithreaded by Jean de La Taille</span>
+<span class="com">  modified by Jeppe Johansen</span>
+<span class="com">}</span>
+
+<span class="kwa">program</span> mandelbrot;
+
+<span class="kwa">uses</span>
+  <span class="com">{$ifdef unix}</span>cthreads,<span class="com">{$endif}</span>
+  sysUtils, math;
+
+<span class="kwa">const</span>
+  Limit = <span class="num">4.0</span>;
+  ThreadCount = <span class="num">4</span>;
+
+<span class="kwa">var</span>
+  n, dimx : <span class="kwb">longint</span>;
+  nInv: <span class="kwb">double</span>;
+  TextBuf: pbyte;
+
+  yCounter: <span class="kwb">longint</span>;
+
+<span class="kwa">function</span> <span class="kwd">subThread</span>(p: <span class="kwb">pointer</span>) : ptrint;
+<span class="kwa">var</span>
+  x, y, i, bits, bit, buf_index: <span class="kwb">Longint</span>;
+  Zr, Zi, Ti, Tr, Cr, Ci : <span class="kwb">Double</span>;
+<span class="kwa">begin</span>
+  <span class="kwc">while</span> <span class="kwb">true</span> <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    y := <span class="kwd">interlockedincrement</span>(yCounter)-<span class="num">1</span>;
+
+    <span class="kwc">if</span> y &gt;= n <span class="kwc">then</span> break;
+
+    buf_index := y*dimx;
+
+    <span class="kwd">prefetch</span>(TextBuf[buf_index]);
+
+    bit := <span class="num">128</span>; <span class="slc">// 1000 0000</span>
+
+    bits := <span class="num">0</span>;
+    Ci := ((y + y) * nInv) - <span class="num">1.0</span>;
+    <span class="kwc">for</span> x := <span class="num">0</span> <span class="kwc">to</span> n-<span class="num">1</span> <span class="kwc">do</span>
+    <span class="kwa">begin</span>
+      <span class="slc">//---------------------------</span>
+
+      Zr := <span class="num">0</span>;
+      Zi := <span class="num">0</span>;
+      Tr := <span class="num">0</span>;
+      Ti := <span class="num">0</span>;
+      Cr := ((x + x) * nInv) - <span class="num">1.5</span>;
+      <span class="kwc">for</span> i := <span class="num">1</span> <span class="kwc">to</span> <span class="num">50</span> <span class="kwc">do</span>
+      <span class="kwa">begin</span>
+        Zi := <span class="num">2.0</span> * Zr * Zi + Ci;
+        Zr := Tr - Ti + Cr;
+        Ti := Zi * Zi;
+        Tr := Zr * Zr;
+        <span class="kwc">if</span> ((Tr + Ti) &gt; limit) <span class="kwc">then</span>
+        <span class="kwa">begin</span>
+          bits := bits <span class="kwa">or</span> bit;
+          break;
+        <span class="kwa">end</span>;
+      <span class="kwa">end</span>;
+      <span class="slc">//---------------------------</span>
+
+      bit := bit &gt;&gt; <span class="num">1</span>;
+      <span class="kwc">if</span> (bit = <span class="num">0</span>) <span class="kwc">then</span>
+      <span class="kwa">begin</span>
+        TextBuf[buf_index] := <span class="kwa">not</span> bits;
+        <span class="kwd">inc</span>(buf_index);
+
+        bits := <span class="num">0</span>;
+        bit := <span class="num">128</span>;
+      <span class="kwa">end</span>;
+    <span class="kwa">end</span>;
+  <span class="kwa">end</span>;
+  subThread := <span class="num">0</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">procedure</span> run;
+<span class="kwa">var</span>
+  i, t, buf_index: <span class="kwb">Longint</span>;
+  tt : <span class="kwa">array</span>[<span class="num">0</span>..ThreadCount-<span class="num">1</span>] <span class="kwa">of</span> TThreadID;
+<span class="kwa">begin</span>
+  nInv := <span class="num">1</span>/n;
+
+  <span class="kwc">for</span> i := <span class="num">0</span> <span class="kwc">to</span> ThreadCount-<span class="num">1</span> <span class="kwc">do</span>
+    tt[i] := <span class="kwd">BeginThread</span>(&#64;subThread, <span class="kwa">nil</span>);
+
+  <span class="kwc">for</span> i := <span class="num">0</span> <span class="kwc">to</span> ThreadCount-<span class="num">1</span> <span class="kwc">do</span>
+    <span class="kwd">WaitForThreadTerminate</span>(tt[i], <span class="num">0</span>);
+
+  buf_index := <span class="num">0</span>;
+  i := n*dimx;
+  <span class="kwc">while</span> buf_index &lt; i <span class="kwc">do</span>
+  <span class="kwa">begin</span>
+    t := <span class="kwd">FileWrite</span>(StdOutputHandle, TextBuf[buf_index], i-buf_index);;
+    <span class="kwc">if</span> t &gt;= <span class="num">0</span> <span class="kwc">then</span>
+      buf_index := buf_index + t;
+  <span class="kwa">end</span>;
+<span class="kwa">end</span>;
+
+<span class="kwa">begin</span>
+  <span class="kwd">Val</span>(<span class="kwd">ParamStr</span>(<span class="num">1</span>), n);
+  <span class="kwd">write</span>(<span class="str">'P4'</span>, <span class="kwd">chr</span>(<span class="num">10</span>), n, <span class="str">' '</span>, n, <span class="kwd">chr</span>(<span class="num">10</span>));
+  <span class="kwd">Flush</span>(output);
+
+  dimx := <span class="kwd">Ceil</span>(n / <span class="num">8</span>);
+
+  TextBuf := <span class="kwd">GetMem</span>(dimx*n);
+
+  run;
+
+  <span class="kwd">freemem</span>(textbuf);
+<span class="kwa">end</span>.

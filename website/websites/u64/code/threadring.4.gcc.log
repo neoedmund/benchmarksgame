@@ -1,0 +1,45 @@
+
+Wed, 20 May 2015 10:12:22 GMT
+
+MAKE:
+/usr/bin/gcc -pipe -Wall -O3 -fomit-frame-pointer -march=native -pthread threadring.gcc-4.c -o threadring.gcc-4.gcc_run 
+threadring.gcc-4.c: In function ‘CreateThread’:
+threadring.gcc-4.c:43:33: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘thread’
+    struct thread_data* restrict thread;
+                                 ^
+threadring.gcc-4.c:43:33: error: ‘thread’ undeclared (first use in this function)
+threadring.gcc-4.c:43:33: note: each undeclared identifier is reported only once for each function it appears in
+threadring.gcc-4.c:52:4: error: incompatible type for argument 1 of ‘__sync_fetch_and_or’
+    __sync_fetch_and_or(&thread->flags, THREAD_CREATED);
+    ^
+threadring.gcc-4.c: In function ‘PerformPass’:
+threadring.gcc-4.c:57:33: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘thread’
+    struct thread_data* restrict thread;
+                                 ^
+threadring.gcc-4.c:57:33: error: ‘thread’ undeclared (first use in this function)
+threadring.gcc-4.c:58:33: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘next_thread’
+    struct thread_data* restrict next_thread;
+                                 ^
+threadring.gcc-4.c:58:33: error: ‘next_thread’ undeclared (first use in this function)
+threadring.gcc-4.c:77:10: error: incompatible type for argument 1 of ‘__sync_fetch_and_or’
+          thread_ready = __sync_fetch_and_or(&next_thread->flags, 0);
+          ^
+threadring.gcc-4.c: In function ‘main’:
+threadring.gcc-4.c:99:33: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘initial_thread’
+    struct thread_data* restrict initial_thread;
+                                 ^
+threadring.gcc-4.c:99:33: error: ‘initial_thread’ undeclared (first use in this function)
+threadring.gcc-4.c:110:4: error: ‘for’ loop initial declarations are only allowed in C99 or C11 mode
+    for(unsigned int index = 1; index < THREAD_COUNT; index++)
+    ^
+threadring.gcc-4.c:110:4: note: use option -std=c99, -std=gnu99, -std=c11 or -std=gnu11 to compile your code
+/home/dunham/benchmarksgame/nanobench/makefiles/u64.programs.Makefile:54: recipe for target 'threadring.gcc-4.gcc_run' failed
+make: [threadring.gcc-4.gcc_run] Error 1 (ignored)
+rm threadring.gcc-4.c
+0.05s to complete and log all make actions
+
+COMMAND LINE:
+./threadring.gcc-4.gcc_run 500000
+
+MAKE ERROR 
+
